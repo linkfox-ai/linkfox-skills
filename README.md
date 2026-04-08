@@ -18,26 +18,26 @@ Make sure you have [Node.js](https://nodejs.org/) installed (provides `npx`).
 ### Install all skills
 
 ```bash
-npx skills add Jiangrb/test_skill
+npx skills add linkfox-ai/linkfox-skills
 ```
 
 ### Install specific skills
 
 ```bash
-npx skills add Jiangrb/test_skill --skill linkfox-amazon-search linkfox-keepa-product-search
+npx skills add linkfox-ai/linkfox-skills --skill linkfox-amazon-search linkfox-keepa-product-search
 ```
 
 ### List available skills
 
 ```bash
-npx skills add Jiangrb/test_skill --list
+npx skills add linkfox-ai/linkfox-skills --list
 ```
 
 ### Install for a specific agent
 
 ```bash
-npx skills add Jiangrb/test_skill --agent claude-code
-npx skills add Jiangrb/test_skill --agent cursor
+npx skills add linkfox-ai/linkfox-skills --agent claude-code
+npx skills add linkfox-ai/linkfox-skills --agent cursor
 ```
 
 ## Setup
