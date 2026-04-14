@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Open%20Standard-orange)](https://agentskills.io)
-[![Skills](https://img.shields.io/badge/skills-54-brightgreen)](#skills-catalog)
+[![Skills](https://img.shields.io/badge/skills-57-brightgreen)](#skills-catalog)
 
-**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 55 API-driven skills covering product research, competitor analysis, keyword tracking, patent search, compliance detection, and more.
+**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 57 API-driven skills covering product research, competitor analysis, keyword tracking, patent search, compliance detection, and more.
 
 Built on the [Agent Skills](https://agentskills.io) open standard, compatible with Claude Code, Cursor, GitHub Copilot, and 30+ AI agent platforms.
 
@@ -129,6 +129,19 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-sif-asin-summary` | Analyze ASIN traffic sources and distribution |
 | `linkfox-sif-keyword-overview` | Get keyword search volume, competition, and CPC overview |
 | `linkfox-sif-keyword-traffic` | Analyze keyword traffic trends and seasonal patterns |
+
+### Sorftime
+
+| Skill | Description |
+| --- | --- |
+| `linkfox-sorftime-product-search` | Search and filter Amazon products with Sorftime data (BSR, sales, price, historical snapshots) |
+| `linkfox-sorftime-product-detail` | Get Amazon product detail and historical trends by ASIN via Sorftime (sales, price, BSR history) |
+
+### Shopee (YouYing)
+
+| Skill | Description |
+| --- | --- |
+| `linkfox-youying-shopee-product-search` | Search and filter Shopee products across 11 marketplaces with YouYing data |
 
 ### Compliance (Ruiguan)
 
