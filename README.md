@@ -57,11 +57,12 @@ Get your API key and configure the environment before using any skill.
 
 | Skill | Description |
 | --- | --- |
-| `linkfox-amazon-search` | Search Amazon products by keyword with real-time ranking data |
+| `linkfox-aba-data-explorer` | Explore Amazon Brand Analytics (ABA) search term data and trends |
+| `linkfox-amazon-opportunity-report` | Generate AI-powered Amazon opportunity reports with market potential, pricing, reviews, and trend analysis |
 | `linkfox-amazon-product-detail` | Get detailed Amazon product info by ASIN (price, BSR, bullets, etc.) |
 | `linkfox-amazon-reviews` | Retrieve and analyze Amazon product reviews |
+| `linkfox-amazon-search` | Search Amazon products by keyword with real-time ranking data |
 | `linkfox-amazon-search-by-image` | Find similar Amazon products using image-based search |
-| `linkfox-aba-data-explorer` | Explore Amazon Brand Analytics (ABA) search term data and trends |
 
 ### 1688
 
@@ -93,8 +94,8 @@ Get your API key and configure the environment before using any skill.
 
 | Skill | Description |
 | --- | --- |
-| `linkfox-fastmoss-top-selling` | Browse TikTok top-selling product rankings by day, week, or month |
 | `linkfox-fastmoss-product-search` | Search TikTok products with keyword, category, sales, and creator filters |
+| `linkfox-fastmoss-top-selling` | Browse TikTok top-selling product rankings by day, week, or month |
 
 ### Google Trends
 
@@ -107,9 +108,9 @@ Get your API key and configure the environment before using any skill.
 
 | Skill | Description |
 | --- | --- |
-| `linkfox-keepa-product-search` | Advanced Amazon product search with Keepa data (BSR, sales, price filters) |
 | `linkfox-keepa-product-detail` | Get Keepa-powered product details including monthly sales estimates |
 | `linkfox-keepa-product-history` | View historical price, BSR, and sales trends from Keepa |
+| `linkfox-keepa-product-search` | Advanced Amazon product search with Keepa data (BSR, sales, price filters) |
 
 ### Jiimore
 
@@ -120,6 +121,17 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-jiimore-niche-info` | Get niche market size, competition level, and growth trends |
 | `linkfox-jiimore-niche-review` | Analyze review sentiment and pain points in a niche |
 | `linkfox-jiimore-product-discovery` | Discover profitable products with FBA profitability screening |
+
+### JungleScout
+
+| Skill | Description |
+| --- | --- |
+| `linkfox-junglescout-keyword-by-asin` | Junglescout Keyword By Asin |
+| `linkfox-junglescout-keyword-by-keyword` | Junglescout Keyword By Keyword |
+| `linkfox-junglescout-keyword-history` | Junglescout Keyword History |
+| `linkfox-junglescout-keyword-share-of-voice` | Junglescout Keyword Share Of Voice |
+| `linkfox-junglescout-product-database` | Junglescout Product Database |
+| `linkfox-junglescout-sales-estimates` | Junglescout Sales Estimates |
 
 ### SellerSprite
 
@@ -141,8 +153,8 @@ Get your API key and configure the environment before using any skill.
 
 | Skill | Description |
 | --- | --- |
-| `linkfox-sorftime-product-search` | Search and filter Amazon products with Sorftime data (BSR, sales, price, historical snapshots) |
 | `linkfox-sorftime-product-detail` | Get Amazon product detail and historical trends by ASIN via Sorftime (sales, price, BSR history) |
+| `linkfox-sorftime-product-search` | Search and filter Amazon products with Sorftime data (BSR, sales, price, historical snapshots) |
 
 ### Shopee (YouYing)
 
@@ -180,6 +192,20 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-zhihuiya-patent-image-search` | Search patents by image similarity |
 | `linkfox-zhihuiya-pdf` | Download patent full-text PDF document |
 | `linkfox-zhihuiya-simple-bibliography` | Get simplified patent metadata (title, date, status) |
+
+### Eureka Patent
+
+| Skill | Description |
+| --- | --- |
+| `linkfox-eureka-abstract-image` | Eureka Abstract Image |
+| `linkfox-eureka-abstract-translated` | Eureka Abstract Translated |
+| `linkfox-eureka-bibliography` | Eureka Bibliography |
+| `linkfox-eureka-claim-data` | Eureka Claim Data |
+| `linkfox-eureka-claim-translated` | Eureka Claim Translated |
+| `linkfox-eureka-description` | Eureka Description |
+| `linkfox-eureka-description-translated` | Eureka Description Translated |
+| `linkfox-eureka-patent-family` | Eureka Patent Family |
+| `linkfox-eureka-patent-image-search` | Eureka Patent Image Search |
 
 ### AI Multimodal
 
