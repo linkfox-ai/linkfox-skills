@@ -1,5 +1,7 @@
 ---
 name: linkfox-aba-data-explorer
+version: 1.0.1
+category: product-sourcing
 description: 亚马逊ABA（品牌分析）搜索词数据的查询与分析，涵盖15个站点近3年的周维度数据。当用户提到ABA数据、亚马逊搜索词分析、关键词挖掘、搜索排名趋势、市场机会分析、季节性关键词、高点击低转化分析、蓝海词发现、竞品关键词分析、ABA data, search term report, keyword mining, search ranking trends, blue ocean keywords, click share, conversion share, seasonal keywords, market opportunity analysis, competitor keywords时触发此技能。即使用户未明确提及"ABA"，只要其需求涉及亚马逊搜索词数据和排名分析，也应触发此技能。
 ---
 
@@ -29,7 +31,7 @@ ABA (Amazon Brand Analytics) Search Term Report is official Amazon search behavi
 
 ## Supported Marketplaces
 
-US (United States), DE (Germany), BR (Brazil), CA (Canada), AU (Australia), JP (Japan), AE (United Arab Emirates), ES (Spain), FR (France), IT (Italy), SA (Saudi Arabia), TR (Turkey), MX (Mexico), SE (Sweden), NL (Netherlands)
+US (United States), DE (Germany), BR (Brazil), CA (Canada), AU (Australia), JP (Japan), AE (United Arab Emirates), ES (Spain), FR (France), IT (Italy), SA (Saudi Arabia), TR (Turkey), MX (Mexico), SE (Sweden), NL (Netherlands) 
 
 Default marketplace is **US**. Use US when the user doesn't specify a marketplace.
 
