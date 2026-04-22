@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Jungle Scout — 关键词市场份额 Share of Voice - LinkFox Skill
-Calls the junglescout/keywords/share-of-voice API endpoint
+Calls the tool-jungle-scout/keywords/share-of-voice API endpoint
 
 Usage:
   python junglescout_keyword_sov.py '{"marketplace": "us", "keyword": "portable charger"}'
@@ -14,7 +14,7 @@ from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
 
-API_URL = "https://tool-gateway.linkfox.com/junglescout/keywords/share-of-voice"
+API_URL = "https://tool-gateway.linkfox.com/tool-jungle-scout/keywords/share-of-voice"
 
 VALID_MARKETPLACES = {"us", "uk", "de", "in", "ca", "fr", "it", "es", "mx", "jp"}
 

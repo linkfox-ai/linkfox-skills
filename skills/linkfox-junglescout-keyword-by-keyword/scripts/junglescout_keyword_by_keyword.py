@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Jungle Scout — 根据关键词扩展关键词信息 (Keyword by Keyword) - LinkFox Skill
-Calls the junglescout/keywords/by-keyword API endpoint
+Calls the tool-jungle-scout/keywords/by-keyword API endpoint
 
 Usage:
   python junglescout_keyword_by_keyword.py '{"marketplace": "us", "searchTerms": "yoga mat"}'
@@ -15,7 +15,7 @@ from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
 
-API_URL = "https://tool-gateway.linkfox.com/junglescout/keywords/by-keyword"
+API_URL = "https://tool-gateway.linkfox.com/tool-jungle-scout/keywords/by-keyword"
 
 REQUIRED_PARAMS = ["marketplace", "searchTerms"]
 

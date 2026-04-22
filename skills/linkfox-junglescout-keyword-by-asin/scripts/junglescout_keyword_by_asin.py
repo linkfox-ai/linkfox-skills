@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Jungle Scout — 根据 ASIN 反查关键词 - LinkFox Skill
-Calls the junglescout/keywords/by-asin API endpoint
+Calls the tool-jungle-scout/keywords/by-asin API endpoint
 
 Usage:
   python junglescout_keyword_by_asin.py '{"marketplace": "us", "asins": ["B0DXXXXXXX"], "needCount": 50}'
@@ -14,7 +14,7 @@ from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
 
-API_URL = "https://tool-gateway.linkfox.com/junglescout/keywords/by-asin"
+API_URL = "https://tool-gateway.linkfox.com/tool-jungle-scout/keywords/by-asin"
 
 REQUIRED_PARAMS = ["marketplace", "asins"]
 

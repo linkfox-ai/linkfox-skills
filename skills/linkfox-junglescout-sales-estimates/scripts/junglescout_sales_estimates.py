@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Jungle Scout — ASIN 销售估算 - LinkFox Skill
-Calls the junglescout/sales-estimates/query API endpoint
+Calls the tool-jungle-scout/sales-estimates/query API endpoint
 
 Usage:
   python junglescout_sales_estimates.py '{"marketplace": "us", "asin": "B0CXXX1234", "startDate": "2026-03-01", "endDate": "2026-03-31"}'
@@ -14,7 +14,7 @@ from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
 
-API_URL = "https://tool-gateway.linkfox.com/junglescout/sales-estimates/query"
+API_URL = "https://tool-gateway.linkfox.com/tool-jungle-scout/sales-estimates/query"
 
 REQUIRED_PARAMS = ["marketplace", "asin", "startDate", "endDate"]
 

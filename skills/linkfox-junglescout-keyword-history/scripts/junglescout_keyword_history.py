@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Jungle Scout — 关键词历史搜索量 - LinkFox Skill
-Calls the junglescout/keywords/historical-search-volume API endpoint
+Calls the tool-jungle-scout/keywords/historical-search-volume API endpoint
 
 Usage:
   python junglescout_keyword_history.py '{"marketplace": "us", "keyword": "yoga mat", "startDate": "2025-10-01", "endDate": "2026-03-31"}'
@@ -14,7 +14,7 @@ from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
 
-API_URL = "https://tool-gateway.linkfox.com/junglescout/keywords/historical-search-volume"
+API_URL = "https://tool-gateway.linkfox.com/tool-jungle-scout/keywords/historical-search-volume"
 
 REQUIRED_PARAMS = ["marketplace", "keyword", "startDate", "endDate"]
 

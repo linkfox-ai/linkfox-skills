@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Jungle Scout — 产品数据库查询 - LinkFox Skill
-Calls the junglescout/product-database/query API endpoint
+Calls the tool-jungle-scout/product-database/query API endpoint
 
 Usage:
   python junglescout_product_database.py '{"marketplace": "us", "includeKeywords": "yoga mat", "minSales": 300, "sort": "-sales", "needCount": 20}'
@@ -14,7 +14,7 @@ from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
 
-API_URL = "https://tool-gateway.linkfox.com/junglescout/product-database/query"
+API_URL = "https://tool-gateway.linkfox.com/tool-jungle-scout/product-database/query"
 
 VALID_MARKETPLACES = {"us", "uk", "de", "in", "ca", "fr", "it", "es", "mx", "jp"}
 

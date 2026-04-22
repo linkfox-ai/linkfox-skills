@@ -2,7 +2,7 @@
 
 ## 调用规范
 
-- **请求地址**：`https://tool-gateway.linkfox.com/junglescout/keywords/historical-search-volume`
+- **请求地址**：`https://tool-gateway.linkfox.com/tool-jungle-scout/keywords/historical-search-volume`
 - **请求方式**：POST，Content-Type: application/json
 - **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOXAGENT_API_KEY` 读取（如未配置，提示用户前往 https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre 申请）
 
@@ -71,7 +71,7 @@ POST Body（JSON）：
 ## curl 示例
 
 ```bash
-curl -X POST https://tool-gateway.linkfox.com/junglescout/keywords/historical-search-volume \
+curl -X POST https://tool-gateway.linkfox.com/tool-jungle-scout/keywords/historical-search-volume \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"marketplace": "us", "keyword": "yoga mat", "startDate": "2025-10-01", "endDate": "2026-03-31"}'
