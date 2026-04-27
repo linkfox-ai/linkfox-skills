@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-opportunity-report
-version: 0.0.1
-category: product-sourcing
 description: 按关键词查询亚马逊商业洞察报告，涵盖市场潜力、产品特征、用户评论、客户画像、搜索趋势、定价分析六大维度的AI
   综合分析。当用户提到亚马逊商业洞察、市场洞察报告、选品报告、市场机会分析、竞争格局、消费者画像、定价分析、细分市场调研、Amazon opportunity report, market insight, business insight, market potential, competitive landscape, consumer behavior, pricing analysis, product selection report, niche analysis时触发此技能。即使用户未明确说"商业洞察"，只要其需求涉及对某个亚马逊关键词做全面的市场机会评估或综合性报告生成，也应触发此技能。
 ---

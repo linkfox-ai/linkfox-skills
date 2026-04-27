@@ -63,6 +63,8 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-amazon-reviews` | Retrieve and analyze Amazon product reviews |
 | `linkfox-amazon-search` | Search Amazon products by keyword with real-time ranking data |
 | `linkfox-amazon-search-by-image` | Find similar Amazon products using image-based search |
+| `linkfox-amazon-spapi-auth` | Amazon Spapi Auth |
+| `linkfox-amazon-spapi-report` | Amazon Spapi Report |
 
 ### 1688
 
@@ -138,7 +140,10 @@ Get your API key and configure the environment before using any skill.
 | Skill | Description |
 | --- | --- |
 | `linkfox-sellersprite-competitor` | Reverse ASIN lookup for competitor sales and keyword data |
+| `linkfox-sellersprite-market-research` | Sellersprite Market Research |
+| `linkfox-sellersprite-market-statistics` | Sellersprite Market Statistics |
 | `linkfox-sellersprite-product-search` | Search and filter Amazon products using SellerSprite analytics |
+| `linkfox-sellersprite-traffic-keyword` | Sellersprite Traffic Keyword |
 
 ### SIF (Search Intelligence)
 
