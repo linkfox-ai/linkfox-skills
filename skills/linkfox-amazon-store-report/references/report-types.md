@@ -2,7 +2,9 @@
 
 This document lists ALL report types available in Amazon Selling Partner API, organized by category.
 
-**Total**: 95+ Report Types
+**Total**：本页表格共 **109** 个 `reportType` 枚举（与 `report-requests/types/` 专页一一对应）；Amazon 文档中可能另有增减，以 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 为准。
+
+**全覆盖请求说明**：下表每一个 `Report Type` 在仓库中均有独立专页（CreateReport 要点、是否有官方 JSON Schema、链到 GitHub `schemas/reports` 专页等）→ [`report-requests/types/README.md`](report-requests/types/README.md)（按 `reportType` 字母/索引表浏览），或直接打开 [`report-requests/types/<REPORT_TYPE>.md`](report-requests/types)。
 
 ---
 

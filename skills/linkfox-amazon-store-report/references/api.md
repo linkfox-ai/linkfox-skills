@@ -51,6 +51,50 @@
 
 ---
 
+## createReport 请求体（`POST reports/2021-06-30/reports`）
+
+`developerProxy` 的 `body` 为 **JSON 字符串**，反序列化后与 Amazon **CreateReport** 请求体一致。
+
+### 通用字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| reportType | string | 是 | 报告类型枚举，见 `references/report-types.md` |
+| marketplaceIds | array[string] | 是 | 站点 ID 列表（多数报告至少一个） |
+| dataStartTime | string | 视报告 | ISO 8601；部分 schema 仅使用日期部分 `YYYY-MM-DD` |
+| dataEndTime | string | 视报告 | 同上 |
+| lastUpdatedDate | string | 视报告 | 部分 Vendor 报告要求，与日期字段组合以官方 schema 为准 |
+| reportOptions | object | 视报告 | **Brand Analytics、销售流量、促销/优惠券、部分 Vendor** 等必填；键与枚举见各报告专页 |
+
+### 与官方 JSON Schema 的对应关系
+
+Amazon 在仓库 [amzn/selling-partner-api-models/schemas/reports](https://github.com/amzn/selling-partner-api-models/tree/main/schemas/reports) 中为 **带 JSON 结果包裹** 的报告提供了 Schema（含 `reportSpecification` 示例与结果字段定义）。
+
+本 skill 在 `references/report-requests/` 下为 **每个 `*.json` 维护一份同名 `*.md`**，内容包括：
+
+- 上游 Raw 链接与摘要说明  
+- 从 schema 提取的 **`reportType`** 与 **`reportSpecification` 官方示例**（可直接作为 `body` 模板）  
+- **`reportOptions`** 键表（若有）  
+- 结果文档结构说明要点  
+
+**入口索引**：[report-requests/README.md](./report-requests/README.md)  
+**按 `reportType` 全覆盖（109 个）**：[report-requests/types/README.md](./report-requests/types/README.md)
+
+> 大量 **Flat File**（订单、库存等 TSV）报告在官方仓库中**无**独立 `schemas/reports/*.json` 时，请求体通常为 `reportType` + `marketplaceIds` + 可选 `dataStartTime`/`dataEndTime`，详见 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values)。
+
+### 脚本参数映射（`scripts/get_report.py`）
+
+| JSON 参数 | 写入 createReport 体 |
+|-----------|------------------------|
+| reportType | reportType |
+| marketplaceIds | marketplaceIds |
+| dataStartTime | dataStartTime |
+| dataEndTime | dataEndTime |
+| lastUpdatedDate | lastUpdatedDate |
+| reportOptions | reportOptions（对象原样合并） |
+
+---
+
 ## 与依赖 skill 的接力关系
 
 下面是典型调用序列（本 skill + `linkfox-amazon-store-auth`）：
@@ -178,6 +222,8 @@ curl -X POST https://tool-gateway.linkfox.com/spApi/developerProxy \
 
 ---
 
-## 复用的报告报告类型
+## 报告类型索引
 
 完整列表见 `references/report-types.md`（95+ 种）。精简摘要见 `references/report-types-basic.md`。
+
+**带 schema 的请求/结果格式**：`references/report-requests/README.md`（与 [GitHub schemas/reports](https://github.com/amzn/selling-partner-api-models/tree/main/schemas/reports) 一一对应）。

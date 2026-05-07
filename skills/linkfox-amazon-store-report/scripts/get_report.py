@@ -11,6 +11,8 @@ Usage:
 Optional parameters:
   - dataStartTime:  ISO 8601 format (e.g., "2024-01-01T00:00:00Z")
   - dataEndTime:    ISO 8601 format
+  - lastUpdatedDate: ISO 8601 (some Vendor reports; merged into create body when set)
+  - reportOptions:  object (e.g. Brand Analytics: reportPeriod, asin/asins; Sales & Traffic: dateGranularity, asinGranularity)
   - pollInterval:   Seconds between status checks (default: 30)
   - maxAttempts:    Maximum polling attempts (default: 20)
   - skipDepCheck:   (boolean) skip the dependency check (default: false)
@@ -173,8 +175,16 @@ def developer_proxy_call(region: str, path: str, method: str, access_token: str,
     return call_api(DEVELOPER_PROXY_ENDPOINT, params)
 
 
-def create_report(region: str, access_token: str, report_type: str, marketplace_ids: list,
-                  data_start_time: str = None, data_end_time: str = None) -> dict:
+def create_report(
+    region: str,
+    access_token: str,
+    report_type: str,
+    marketplace_ids: list,
+    data_start_time: str = None,
+    data_end_time: str = None,
+    report_options: dict = None,
+    last_updated_date: str = None,
+) -> dict:
     """Request a new report from Amazon."""
     print(f"📊 Requesting report: {report_type}", file=sys.stderr)
 
@@ -186,6 +196,10 @@ def create_report(region: str, access_token: str, report_type: str, marketplace_
         body_data["dataStartTime"] = data_start_time
     if data_end_time:
         body_data["dataEndTime"] = data_end_time
+    if last_updated_date:
+        body_data["lastUpdatedDate"] = last_updated_date
+    if report_options and isinstance(report_options, dict):
+        body_data["reportOptions"] = report_options
 
     result = developer_proxy_call(
         region=region,
@@ -349,6 +363,8 @@ def main():
     marketplace_ids = params["marketplaceIds"]
     data_start_time = params.get("dataStartTime")
     data_end_time = params.get("dataEndTime")
+    last_updated_date = params.get("lastUpdatedDate")
+    report_options = params.get("reportOptions")
     poll_interval = params.get("pollInterval", DEFAULT_POLL_INTERVAL)
     max_attempts = params.get("maxAttempts", DEFAULT_MAX_ATTEMPTS)
 
@@ -362,8 +378,16 @@ def main():
     print("✓ Access token retrieved", file=sys.stderr)
 
     # Step 2: Create report request
-    create_result = create_report(region, access_token, report_type, marketplace_ids,
-                                   data_start_time, data_end_time)
+    create_result = create_report(
+        region,
+        access_token,
+        report_type,
+        marketplace_ids,
+        data_start_time,
+        data_end_time,
+        report_options if isinstance(report_options, dict) else None,
+        last_updated_date if isinstance(last_updated_date, str) else None,
+    )
 
     if "error" in create_result:
         print(f"❌ Failed to create report: {create_result}", file=sys.stderr)

@@ -66,6 +66,34 @@ python get_report.py '{
 }'
 ```
 
+#### `reportOptions` / Brand Analytics / Sales & Traffic（见 `references/report-requests/`）
+
+```bash
+python get_report.py '{
+  "sellerId": "A1EC6SZ7XAMURH",
+  "region": "NA",
+  "reportType": "GET_SALES_AND_TRAFFIC_REPORT",
+  "marketplaceIds": ["ATVPDKIKX0DER"],
+  "dataStartTime": "2024-06-01T00:00:00Z",
+  "dataEndTime": "2024-06-07T23:59:59Z",
+  "reportOptions": {"dateGranularity": "DAY", "asinGranularity": "SKU"}
+}'
+```
+
+```bash
+python get_report.py '{
+  "sellerId": "A1EC6SZ7XAMURH",
+  "region": "NA",
+  "reportType": "GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT",
+  "marketplaceIds": ["ATVPDKIKX0DER"],
+  "dataStartTime": "2025-01-05",
+  "dataEndTime": "2025-01-11",
+  "reportOptions": {"reportPeriod": "WEEK", "asin": "B123456789"}
+}'
+```
+
+（`reportPeriod` 与 `dataStartTime`/`dataEndTime` 的周起止须符合官方 schema，见 [sellingPartnerSearchQueryPerformanceReport.md](../references/report-requests/sellingPartnerSearchQueryPerformanceReport.md)。）
+
 #### Custom Polling
 
 ```bash
@@ -89,6 +117,8 @@ python get_report.py '{
 | marketplaceIds | array | Yes | 目标 marketplace IDs |
 | dataStartTime | string | No | ISO 8601 |
 | dataEndTime | string | No | ISO 8601 |
+| lastUpdatedDate | string | No | 部分 Vendor 报告；写入 createReport 请求体 |
+| reportOptions | object | No | 与 SP-API `reportOptions` 一致；键见 `references/report-requests/*.md` |
 | pollInterval | int | No | 轮询间隔秒数（默认 30） |
 | maxAttempts | int | No | 最大轮询次数（默认 20） |
 | skipDepCheck | bool | No | 跳过依赖检查（仅在确认依赖已满足时使用） |
