@@ -127,6 +127,7 @@ Get your API key and configure the environment before using any skill.
 
 | Skill | Description |
 | --- | --- |
+| `linkfox-google-aimodel-search` | Google AI Mode search with optional multi-turn follow-up prompts; returns Markdown AI Overview with citations for cross-border deep research |
 | `linkfox-google-trends-keyword` | Analyze Google Trends data for specific keywords |
 | `linkfox-google-trends-rising` | Discover rising and breakout search queries on Google Trends |
 
