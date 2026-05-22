@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-store-customer-feedback
-version: 0.0.1
-category: product-sourcing
 description: 亚马逊店铺买家反馈洞察（与 linkfox-amazon-store-auth 等同系列），经 /spApi/developerProxy 调用 SP-API Customer Feedback v2024-06-01：getItemReviewTopics、getItemBrowseNode、getBrowseNodeReviewTopics、getItemReviewTrends、getBrowseNodeReviewTrends、getBrowseNodeReturnTopics、getBrowseNodeReturnTrends。当用户提到评论主题、评价趋势、退货主题、browse node 反馈、Customer Feedback API、MENTIONS、STAR_RATING_IMPACT、ASIN 评论洞察、类目节点评价 时触发。
 ---
 

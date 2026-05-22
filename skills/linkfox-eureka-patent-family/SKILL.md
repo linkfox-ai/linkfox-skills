@@ -1,7 +1,5 @@
 ---
 name: linkfox-eureka-patent-family
-version: 1.0.1
-category: product-sourcing
 description: 通过Eureka专利数据平台查询专利家族信息，包括简单同族、INPADOC同族和PatSnap同族。当用户提到专利家族、专利家族搜索、简单同族、INPADOC同族、PatSnap家族、同族专利查找、专利等同、家族成员、查找跨国相关专利、Eureka专利家族、patent family, family patents, patent equivalents, cross-border patents, Eureka, INPADOC family, simple family时触发此技能。即使用户未明确说"专利家族"，只要其需求涉及查询一项或多项专利的家族成员、等同专利或相关跨国申请，也应触发此技能。
 ---
 

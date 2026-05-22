@@ -1,0 +1,161 @@
+# E4 行为评估各子项评分标准
+# 5 个子分 → behavior_score
+
+version: 1
+
+weights:
+  coverage_pct: 0.30
+  rule_compliance_pct: 0.25
+  boundary_recognition_pct: 0.20
+  script_used_pct: 0.15
+  order_correctness_pct: 0.10
+
+formula: |
+  behavior_score =
+      0.30 × coverage_pct
+    + 0.25 × rule_compliance_pct
+    + 0.20 × boundary_recognition_pct
+    + 0.15 × script_used_pct
+    + 0.10 × order_correctness_pct
+
+sub_scores:
+
+  - id: coverage_pct
+    name: "流程覆盖率"
+    formula: "unique_steps_in_trace / total_steps_in_process × 100"
+    data_source: "trace:step 块的 STEP 字段 ∪ trace:summary 的 steps 列表"
+    denominator: "interview-record.process[] 的 step 数（或等价的 workflow.md 声明数）"
+    edge_cases:
+      - case: "STEP 字段不匹配任何 process step id"
+        handling: "不计入 unique_steps"
+      - case: "process 总步数 ≤ 2"
+        handling: "coverage 按比例算；报告提示'流程步数偏少'"
+    min: 0
+    max: 100
+
+  - id: rule_compliance_pct
+    name: "规则遵守率"
+    formula: "complied_rules / total_rules × 100"
+    judgment:
+      complied:
+        - 该 rule.id 出现在至少一个相关 step 的 RULES_CHECKED 列表
+        - 对应 step 的 ACTION/OUTPUT 无违反该规则的迹象
+      violated:
+        - 轨迹中某 step 的行为明显触犯
+        - 一次都没出现在 RULES_CHECKED 且主 agent 能推断出"这一步本该考虑它"
+    denominator: "interview-record.rules[] 全部（hard + soft）"
+    edge_cases:
+      - case: "rules 全空"
+        handling: "本子分置 N/A，权重转嫁"
+      - case: "某 rule 的判定歧义（是否 violated 不明）"
+        handling: "保守判 complied，但 evidence 中记录'模糊'，不改 rule_compliance 分"
+    min: 0
+    max: 100
+
+  - id: boundary_recognition_pct
+    name: "边界识别率"
+    formula: "handled_counter_examples / total_counter_examples × 100"
+    handled_definition: |
+      反例被"正确处理"的 3 种合法响应：
+        1. 识别为不适用场景并拒绝
+        2. 命中对应规则并按规则执行
+        3. 命中对应踩坑并按踩坑避免方法执行
+    not_handled_definition: |
+      - 按正常流程硬跑
+      - 识别但判错方向
+    data_source: "子 agent D 对每条 counter_example 的轨迹 + 最终 final_output"
+    denominator: "counter_examples 总数（pitfalls + boundaries + inferred）"
+    edge_cases:
+      - case: "counter_examples 总数 = 0（pitfalls、boundaries 全空、无 hard rule 可推导）"
+        handling: "置 N/A，权重转嫁"
+    min: 0
+    max: 100
+
+  - id: script_used_pct
+    name: "脚本真实调用率"
+    formula: "invoked_scripts / total_deterministic_steps × 100"
+    invoked_definition: |
+      一个 deterministic step 的脚本算"真实调用"当：
+        - trace:step.SCRIPT_USED = true
+        - 且 Bash 工具历史中有 python scripts/<name>.py 执行记录（双源）
+    denominator: "interview-record.process[] 中 deterministic=true 的 step 总数"
+    cross_validation:
+      - source_primary: "trace:step.SCRIPT_USED"
+      - source_secondary: "Agent 工具 returned transcript 中的 Bash 调用"
+      - conflict_resolution: "以 Bash 记录为准，bypass_reason 记录差异"
+      - both_unavailable: "script_verification: self_reported_only"
+    edge_cases:
+      - case: "deterministic steps = 0"
+        handling: "置 N/A，权重转嫁"
+      - case: "子 agent 跑失败 / 未到对应 step"
+        handling: "该 step 不算 invoked，对整体 pct 拉低"
+    min: 0
+    max: 100
+
+  - id: order_correctness_pct
+    name: "流程顺序正确率"
+    formula: "correct_adjacent_pairs / total_adjacent_pairs × 100"
+    judgment: |
+      扫描轨迹的 STEP 序列 [s1, s2, s3, ...]
+      对每对 (s_i, s_{i+1})：
+        - 在 process.md 中 s_i 的顺序号 < s_{i+1} 的顺序号 → correct
+        - 否则 → out_of_order
+      总对数 = len(STEP 序列) - 1
+    edge_cases:
+      - case: "轨迹只有 1 个 step"
+        handling: "置 100（无对比对）"
+      - case: "skip 了中间 step（如 1 → 3 跳过了 2）"
+        handling: "不算 out_of_order，但 coverage_pct 会下降反映此问题"
+      - case: "process 中允许分支并行（步骤可跳）"
+        handling: "若 workflow.md 明确允许，标注后记 correct；否则按顺序判"
+    min: 0
+    max: 100
+
+# behavior_score 判定
+interpretation:
+  - range: [90, 100]
+    label: "行为高度符合"
+  - range: [75, 90]
+    label: "主流程符合，反例有漏"
+  - range: [60, 75]
+    label: "流程基本跑通，但规则或脚本化有缺陷"
+  - range: [40, 60]
+    label: "多项子分偏低，skill 实际可用性低"
+  - range: [0, 40]
+    label: "严重偏离 skill 定义"
+
+# 权重转嫁规则
+weight_redistribution:
+  rule: |
+    若某子分置 N/A：
+      1. 从 weights 中移除该项
+      2. 剩余子分按原比例重新归一化
+      3. 报告 behavior_score 时附 weights_adjusted: true
+  example:
+    original: "coverage 0.30 + rule 0.25 + boundary 0.20 + script 0.15 + order 0.10"
+    if_boundary_NA: "coverage 0.375 + rule 0.3125 + script 0.1875 + order 0.125"
+
+# 数据获取优先级
+data_priority:
+  - "trace:summary JSON（最可靠，结构化）"
+  - "trace:step 块聚合（解析后等价 summary）"
+  - "Agent 工具的 transcript（Bash 历史等 secondary 数据）"
+  - "主 agent 从子 agent 最终文本答复推断（最弱，标记 degraded）"
+
+# 失败处理
+failure_modes:
+  - case: "E4 完全跑不起来（C/D 工具均不可用）"
+    handling:
+      - behavior 置 skipped
+      - overall_score 计算时 behavior 权重转嫁给 fidelity + readability + contract
+      - publish_advice 降一档（若原本 ok → warn；若原本 warn → 保持 warn）
+  - case: "子 agent C 超时"
+    handling:
+      - 只有合成任务受影响
+      - 尝试用部分轨迹算能算出的子分
+      - 报告 synthetic_task.status = timeout
+  - case: "trace 格式无法解析"
+    handling:
+      - 降级为主 agent 从子 agent 文本答复推断
+      - 所有子分标 degraded
+      - behavior_score 置信度降低

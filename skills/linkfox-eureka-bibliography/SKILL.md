@@ -1,7 +1,5 @@
 ---
 name: linkfox-eureka-bibliography
-version: 1.0.1
-category: product-sourcing
 description: 从Eureka专利数据库查询专利著录项目（Bibliography）信息，包括标题、摘要、申请人、发明人、分类号、优先权、引用文献等。当用户提到专利著录项目、专利基本信息、专利标题摘要、专利申请人发明人、专利分类号、IPC分类、CPC分类、专利代理、审查员、优先权、引用文献、关联文件、预估到期日、patent bibliography, patent basic info, patent title and abstract, patent applicant/inventor, patent classification, IPC/CPC, patent agent, patent examiner, priority claims, cited references, related documents, estimated expiry, Eureka patent data时触发此技能。即使用户未明确提及"Eureka"或"著录项目"，只要其需求涉及查询专利的基础著录信息（标题、摘要、申请人、分类号等），也应触发此技能。
 ---
 

@@ -1,7 +1,5 @@
 ---
 name: linkfox-eureka-description
-version: 1.0.1
-category: product-sourcing
 description: 通过Eureka专利数据平台获取专利说明书（描述）数据。当用户提到专利说明书、专利全文、专利技术描述、专利实施方式详情、Eureka说明书数据、patent specification, patent full text, technical description, embodiment details, Eureka, patent detailed description, patent description data时触发此技能。即使用户未明确说"Eureka"，只要其需要查看一项或多项专利的完整说明书/描述内容，也应触发此技能。
 ---
 

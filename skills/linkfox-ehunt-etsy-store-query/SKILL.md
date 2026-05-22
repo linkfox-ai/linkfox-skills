@@ -1,5 +1,7 @@
 ---
 name: linkfox-ehunt-etsy-store-query
+version: 1.0.0
+category: product-sourcing
 description: 通过 EHunt MCP 工具 `_ehunt_storeQuery`（展示名「Etsy店铺查询」）按多维度筛选 Etsy 店铺（销量、收藏、评论、开店时间、国家、主营类目、Raving/星标等）。当用户提到 EHunt Etsy 店铺、Etsy 店搜、Etsy seller、Etsy 店铺排行、Etsy 周销量店铺、ehunt stores、Etsy店铺查询、_ehunt_storeQuery 时触发。即使用户未写 EHunt，只要在 Etsy 上找店铺、筛店铺数据或分析店铺表现，也应触发此技能。
 ---
 

@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-store-aplus-content
-version: 0.0.1
-category: product-sourcing
 description: 亚马逊店铺 A+ Content（增强图文页）管理（与 linkfox-amazon-store-auth / linkfox-amazon-store-listings 同系列），经 LinkFox /spApi/developerProxy 调用 SP-API A+ Content Management v2020-11-01：searchContentDocuments、createContentDocument、getContentDocument、updateContentDocument、list/post ContentDocument ASIN 关联、validateContentDocumentAsinRelations、searchContentPublishRecords、提交审核 postContentDocumentApprovalSubmission、暂停展示 postContentDocumentSuspendSubmission。当用户提到 A+ 页面、A+ Content、增强品牌内容、EBC、图文详情、searchContentDocuments、getContentDocument、contentReferenceKey、A+ 审核、A+ 发布记录、contentPublishRecords 时触发。
 ---
 

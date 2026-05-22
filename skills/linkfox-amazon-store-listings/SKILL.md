@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-store-listings
-version: 0.0.1
-category: product-sourcing
 description: 亚马逊店铺 Listing 与刊登相关定义/限制（与 linkfox-amazon-store-auth / linkfox-amazon-store-report 同系列），经 LinkFox /spApi/developerProxy 调用 SP-API：Listings Items（get/search/patch/put/delete）、Listings Restrictions（getListingsRestrictions）、Product Type Definitions（searchDefinitionsProductTypes、getDefinitionsProductType）。当用户提到获取或删除 Listing、刊登限制、ASIN 能否卖、product type 定义、JSON Schema 刊登属性、searchDefinitionsProductTypes、getDefinitionsProductType、getListingsRestrictions、Listings Restrictions、亚马逊刊登列表 时触发。
 ---
 

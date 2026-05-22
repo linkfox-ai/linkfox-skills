@@ -1,7 +1,5 @@
 ---
 name: linkfox-eureka-abstract-translated
-version: 1.0.1
-category: product-sourcing
 description: 通过Eureka专利数据平台获取专利标题和摘要的翻译版本。当用户要求专利摘要翻译、专利标题翻译、翻译后的专利摘要、其他语言的专利内容、中文/英文/日文的专利摘要，或需要通过专利ID或公开号查询特定专利的摘要、标题、Eureka专利摘要、patent abstract translation, patent title translation, Eureka patent, patent translation, abstract lookup时触发此技能。当用户提到Eureka或专利摘要查询时也应触发，即使未明确说"翻译"。
 ---
 

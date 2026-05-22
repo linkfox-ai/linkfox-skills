@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-store-pricing
-version: 0.0.1
-category: product-sourcing
 description: 亚马逊店铺商品定价（与 linkfox-amazon-store-auth / linkfox-amazon-store-report / linkfox-amazon-store-listings 同系列），经 /spApi/developerProxy 调用 SP-API Product Pricing：v0 的 getPricing、getCompetitivePricing、getListingOffers、getItemOffers、getItemOffersBatch、getListingOffersBatch；2022-05-01 的 getFeaturedOfferExpectedPriceBatch、getCompetitiveSummary。含 ASIN/SKU 单条与批量、FOEP、竞争摘要。当用户提到亚马逊定价、比价、低价报价、listing/item offers、batch pricing、FOEP、featured offer、competitive summary、Product Pricing、SP-API 价格 时触发。
 ---
 

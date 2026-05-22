@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-store-orders
-version: 0.0.1
-category: product-sourcing
 description: 亚马逊店铺订单（与 linkfox-amazon-store-auth / report / listings / pricing 同系列），经 /spApi/developerProxy 调用 SP-API Orders：v2026-01-01 的 searchOrders、getOrder；v0 的 getOrderBuyerInfo、getOrderAddress、getOrderItems、getOrderItemsBuyerInfo、updateShipmentStatus、getOrderRegulatedInfo、updateVerificationStatus、confirmShipment。当用户提到亚马逊订单、searchOrders、getOrder、订单列表、订单详情、买家信息、收货地址、订单行、发货确认、管制订单、核验状态、Orders API、SP-API 订单 时触发。
 ---
 

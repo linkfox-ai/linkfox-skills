@@ -1,0 +1,149 @@
+# E3 契约检查（与 CLI linter 同源）
+# 用途：声明 E3 的 10 项 check 定义，供主评估 agent 对 linter JSON 做结构化消费
+# 实施：由 linkfox-skills-cli/src/lib/skill-linter.js 实现；本 yaml 是声明，不是实现
+
+version: 1
+implemented_by: "linkfox-skills-cli >= 1.2.0"
+invocation: "linkfoxskill skill lint <name> --json"
+
+checks:
+  - id: C1
+    name: "SKILL.md frontmatter 合法"
+    severity: error
+    scope: "SKILL.md"
+    criteria:
+      - name 字段存在
+      - name 以 linkfox- 开头
+      - name 符合 kebab-case（小写 + 连字符）
+      - description 字段存在
+      - description 非空且 ≥ 50 字
+      - frontmatter 本身可解析（YAML 合法 / --- 正确闭合）
+    fail_examples:
+      - name 缺失
+      - name 为 LinkfoxAmazon（大写）
+      - description 只有 20 字
+
+  - id: C2
+    name: "SKILL.md 主体 ≤ 200 行"
+    severity: error
+    scope: "SKILL.md"
+    criteria:
+      - 整个文件总行数（含 frontmatter 与末行）≤ 200
+    fail_examples:
+      - 文件 250 行
+
+  - id: C3
+    name: "interview-record 存在且 schema 合法"
+    severity: error
+    scope: "references/interview-record.md"
+    criteria:
+      - 文件存在
+      - frontmatter 含 schema_version: 1
+      - 必要字段存在：scenario / inputs / process / rules / boundaries / pitfalls
+      - process[] 每项含 name / inputs / outputs / decisions / deterministic / expert_verbatim
+      - rules[] 每项含 id / text / type / expert_verbatim
+      - boundaries[] 每项含 scenario / why_not_applicable / expert_verbatim
+    fail_examples:
+      - interview-record.md 不存在
+      - schema_version: 2
+      - process 数组为空
+      - 某条 process 无 deterministic 字段
+
+  - id: C4
+    name: "references 无孤儿"
+    severity: error
+    scope: "references/**"
+    criteria:
+      - references/ 下每个 .md 文件都被 SKILL.md 或其他 reference 字符串引用
+    fail_examples:
+      - references/extra-notes.md 没任何地方引用
+
+  - id: C5
+    name: "deterministic step 对应 script 存在"
+    severity: error
+    scope: "scripts/**"
+    criteria:
+      - interview-record 的 process[] 中所有 deterministic: true 的 step
+      - 对应的 scripts/<name>.py 必须存在
+      - name 匹配规则：workflow.md 中声明的 script 路径
+    fail_examples:
+      - step_2.deterministic=true 但 scripts/check-brand.py 不存在
+
+  - id: C6
+    name: "scripts 无孤儿"
+    severity: error
+    scope: "scripts/**"
+    criteria:
+      - scripts/ 下每个 .py 文件都在 SKILL.md 或 workflow.md 中被引用
+    fail_examples:
+      - scripts/helper.py 存在但无任何文档引用
+
+  - id: C7
+    name: "script docstring 非空"
+    severity: error
+    scope: "scripts/**"
+    criteria:
+      - 每个 scripts/*.py 的模块级 docstring（文件开头三引号块）非空且 > 5 字
+    fail_examples:
+      - scripts/check-brand.py 开头没有 """ ... """
+
+  - id: C8
+    name: "requirements.txt 可解析"
+    severity: error
+    scope: "scripts/requirements.txt"
+    criteria:
+      - 文件若存在
+      - 每行格式合法（pkg==x.y.z / pkg>=x / pkg）
+      - 无语法错误
+    fail_examples:
+      - 某行 "foo bar baz" 不符合 PEP 508
+    note: "文件不存在时视为通过（N/A）"
+
+  - id: C9
+    name: "无无关杂项"
+    severity: error
+    scope: "整个 skill 目录"
+    criteria:
+      - 不含 desktop.ini / .DS_Store / Thumbs.db / *.tmp / *.bak / .linkfox-bak
+    fail_examples:
+      - scripts/.DS_Store 存在
+      - SKILL.md.bak 存在
+    note: ".linkfox-bak 是 hint 系统的备份文件，不应出现在 skill 里"
+
+  - id: C10
+    name: "frontmatter 元字段"
+    severity: error
+    scope: "SKILL.md"
+    criteria:
+      - authored_by 字段等于 "linkfox-skill-creator"
+      - interview_record 字段存在，值形如 references/interview-record.md
+    fail_examples:
+      - authored_by 字段缺失
+      - authored_by 字段为 "human"（则 E3 整体 fail，告知用户本 skill 非 Creator 产出）
+
+# Hard gate
+gate:
+  any_fail: true              # 任一 C1-C10 fail → E3 fail → 整体评估终止
+
+# 降级
+degradation:
+  cli_unavailable:
+    action: "Evaluator 不自行实现这 10 项；告知用户 CLI 不可用，终止评估"
+    rationale: "主 agent 另起一套 checker 会导致 CLI 和 Evaluator 双源矛盾；统一由 CLI 提供"
+
+# 推荐修复优先级（报告 recommended_fixes 中 E3 部分按此排序）
+fix_priority:
+  critical:
+    - C1  # 元数据坏了，skill 入口不可用
+    - C3  # 访谈记录缺失 / 格式错 → 忠实度无法评估
+    - C10 # 不是 Creator 产出 → 正式评估不应走到这里
+  high:
+    - C5  # 脚本化契约 → 影响 E4
+    - C2  # SKILL.md 超长 → 影响可读性
+  medium:
+    - C4
+    - C6
+    - C7
+  low:
+    - C8
+    - C9

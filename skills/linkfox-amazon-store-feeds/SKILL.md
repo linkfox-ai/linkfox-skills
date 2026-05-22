@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-store-feeds
-version: 0.0.1
-category: product-sourcing
 description: 亚马逊店铺 Feeds（与 linkfox-amazon-store-auth / report / listings / pricing / orders 同系列），经 /spApi/developerProxy 调用 SP-API Feeds v2021-06-30：createFeedDocument、getFeedDocument、createFeed、getFeed、getFeeds、cancelFeed；另含 upload_feed_document 向预签名 URL 上传内容。当用户提到亚马逊 Feed、提交库存/Listing Feed、POST_FLAT_FILE、feedType、feedDocumentId、feedId、取消 Feed、查询 Feed 处理状态、Feeds API、SP-API 上传文件 时触发。
 ---
 

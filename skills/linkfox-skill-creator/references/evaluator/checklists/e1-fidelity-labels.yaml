@@ -1,0 +1,129 @@
+# E1 忠实度标签体系（机读版）
+# 用途：主评估 agent 比对 skill 与 interview-record 时，按本表给每条 process/rule 打标签
+# 每项说明：
+#   id: 标签名
+#   penalty: 扣分（累加到满分 100）
+#   criteria: 判定为这个标签的条件（必须满足）
+#   anti_criteria: 不能是什么（反面证据）
+#   example: 典型例子
+#   note: 特殊处理
+
+version: 1
+
+labels:
+  - id: match
+    penalty: 0
+    criteria:
+      - skill 中的这条与 interview-record 中某条有一一对应
+      - 意图、细节、deterministic 类型均一致（针对 process）
+      - text 基本一致或改动极小（针对 rule）
+    example:
+      skill_process: "step_2: 品牌关键词扫描，deterministic=true"
+      interview_process: "step_2: 品牌关键词扫描（按品牌库精确匹配），deterministic=true"
+    note: "deterministic 字段若一处为 true 一处为 false，即使 name 一致也不算 match"
+
+  - id: drift
+    penalty: 5
+    criteria:
+      - 意图一致
+      - 用词或某些细节被改动，但不涉及规则弱化
+      - 能从字面推断出大意相同
+    example:
+      skill_process: "品牌关键词扫描"
+      interview_process: "品牌关键字识别"
+      reason: "扫描/识别、关键词/关键字，无本质差异"
+    note: "drift 是轻度扣分，大量 drift 累加会拖低分数"
+
+  - id: over_generalized
+    penalty: 10
+    criteria:
+      - skill 版本比 interview-record 版本语义更宽、更模糊
+      - 导致执行 agent 可能做出专家不期望的行为
+      - 丢失了原话中的关键限定词
+    example:
+      skill_process: "品牌扫描"
+      interview_process: "按品牌库精确匹配关键词"
+      reason: "丢失了'品牌库'和'精确匹配'两个关键限定"
+    note: "hard 规则被 over_generalize 危害尤大，报告建议优先修复"
+
+  - id: missing
+    penalty: 15
+    criteria:
+      - interview-record 中存在
+      - skill 的任何文件（SKILL.md / references/*）中均无对应条目
+      - 非 drift 也非 over_generalized，就是整条丢失
+    example:
+      interview_rule: "R4: title 出现 'FDA Registered' 必须标违规"
+      skill_rules: "未找到任何涉及 FDA 的规则"
+    note: |
+      缺失 hard 规则：报告中重点标红
+      缺失 soft 规则：重要性次之，但仍算 missing（专家说过就是该有）
+
+  - id: hallucinated
+    penalty: 15
+    criteria:
+      - skill 中存在
+      - interview-record 中找不到任何可对应的条目（id、text、语义）
+      - 不是 drift（因为 drift 必有对应源）
+    example:
+      skill_rule: "R_extra: title 不能超过 80 字"
+      interview_rules: "未涉及字数限制"
+    note: |
+      hallucinated 条目可能是：
+        (a) Creator 误加 / 从通识或常见习惯推断
+        (b) 专家访谈中口头补充但未更新 interview-record
+      报告中附提示，请专家确认来源
+
+# 匹配顺序（主 agent 按此决策树打标签）
+matching_decision_tree:
+  - step: 1
+    action: "按 id 直接匹配（如 step_1 ↔ step_1，R1 ↔ R1）"
+    on_match: "进入内容比对"
+    on_no_match: "进入步骤 2"
+
+  - step: 2
+    action: "按 name / text 模糊匹配（去空格、去标点、小写）"
+    on_match: "进入内容比对"
+    on_no_match: "进入步骤 3"
+
+  - step: 3
+    action: "按语义内容匹配（description + inputs/outputs 或 text 的语义相似度）"
+    on_match: "进入内容比对"
+    on_no_match: "标 hallucinated（skill 有，interview 无）"
+
+  - step: 4  # 内容比对
+    action: |
+      比较 skill 版本与 interview 版本的内容：
+      - 意图一致 + 细节基本一致 → match
+      - 意图一致 + 用词变化 → drift
+      - skill 更宽泛，丢失关键限定 → over_generalized
+      - skill 更严格、加了没说过的限制 → 也算 hallucinated（不算 drift）
+
+  - step: 5  # 反向扫描
+    action: |
+      从 interview-record 出发，逐条扫描是否在 skill 中找到对应
+      找不到 → 标 missing
+
+# 评分公式
+scoring:
+  formula: "fidelity_score = max(0, 100 - (drift×5 + over_generalized×10 + missing×15 + hallucinated×15))"
+  bounds:
+    min: 0
+    max: 100
+
+# 报告优先级（recommended_fixes 中按此排序）
+fix_priority:
+  - high: [missing, hallucinated]     # 影响忠实度核心
+  - medium: [over_generalized]        # 可能导致执行偏差
+  - low: [drift]                      # 字面差异，优先级低
+
+# 边界
+edge_cases:
+  - case: interview-record 为空或缺失
+    handling: "E3 的 C3 会 fail，不会走到 E1。若走到了说明 C3 检查有漏，评估终止"
+  - case: skill 和 interview 都空
+    handling: "fidelity_score 置 N/A；overall 中 fidelity 权重转嫁"
+  - case: skill 条目远多于 interview（大量 hallucinated）
+    handling: "正常扣分，但 evidence 中提示'是否有未更新的访谈记录'"
+  - case: interview 条目远多于 skill（大量 missing）
+    handling: "正常扣分，evidence 提示'Creator 生成阶段可能过度筛选'"

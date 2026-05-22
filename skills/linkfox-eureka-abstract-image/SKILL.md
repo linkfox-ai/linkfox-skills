@@ -1,7 +1,5 @@
 ---
 name: linkfox-eureka-abstract-image
-version: 1.0.1
-category: product-sourcing
 description: 通过Eureka专利数据平台获取专利摘要附图。当用户提到专利摘要附图、专利图纸、专利示意图、专利图片、摘要附图检索、专利图片查询、Eureka摘要附图、patent abstract images, patent drawings, patent illustrations, Eureka, abstract image lookup, patent figure时触发此技能。即使用户未明确说"摘要附图"，只要其需要查看专利文件中的图纸或示意图，也应触发此技能。
 ---
 

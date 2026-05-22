@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-store-catalog
-version: 0.0.1
-category: product-sourcing
 description: 亚马逊店铺商品目录 Catalog（与 linkfox-amazon-store-auth / report / listings / pricing / orders / feeds 同系列），经 /spApi/developerProxy 调用 SP-API Catalog Items：v0 listCatalogCategories；v2022-04-01（默认）或 v2020-12-01 的 searchCatalogItems、getCatalogItem。当用户提到亚马逊目录、Catalog Items、listCatalogCategories、searchCatalogItems、getCatalogItem、按 ASIN 查目录、关键词搜商品目录、类目节点、includedData、summaries/images 时触发。
 ---
 

@@ -1,7 +1,5 @@
 ---
 name: linkfox-eureka-claim-data
-version: 1.0.1
-category: product-sourcing
 description: 从Eureka专利数据库查询专利权利要求（Claims）信息。当用户提到专利权利要求、权利要求书、专利Claims、独立权利要求、从属权利要求、权利要求数量、专利保护范围、patent claims, claim data, independent claims, dependent claims, claim count, patent claim text, patent protection scope, Eureka patent claims时触发此技能。即使用户未明确提及"Eureka"或"权利要求"，只要其需求涉及获取专利的权利要求全文或权利要求数量，也应触发此技能。
 ---
 

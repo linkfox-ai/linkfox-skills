@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-store-uploads
-version: 0.0.1
-category: product-sourcing
 description: 亚马逊店铺文件上传（与 linkfox-amazon-store-auth 等同系列），经 /spApi/developerProxy 调用 Uploads API v2020-11-01 的 createUploadDestinationForResource，再向返回 URL 上传文件，供 A+ Content、Messaging 等 API 使用。当用户提到上传文件、createUploadDestinationForResource、upload destination、contentMD5、预签名上传、SP-API 上传、A+ 图片上传、Messaging 附件上传 时触发。
 ---
 

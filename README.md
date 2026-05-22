@@ -255,6 +255,7 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-ehunt-etsy-store-query` | Ehunt Etsy Store Query |
 | `linkfox-lingxing-erp` | Lingxing Erp |
 | `linkfox-product-title-analyze` | Analyze and optimize Amazon product listing titles |
+| `linkfox-skill-creator` | Skill Creator |
 | `linkfox-tsearch-web-search` | Search the web for market research and trending topics |
 | `linkfox-wallysmarter-product-detail` | Walmart product detail with historical pricing and sales trends via WallySmarter |
 

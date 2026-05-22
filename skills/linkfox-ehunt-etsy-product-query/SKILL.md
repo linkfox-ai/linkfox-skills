@@ -1,5 +1,7 @@
 ---
 name: linkfox-ehunt-etsy-product-query
+version: 1.0.0
+category: product-sourcing
 description: 通过 EHunt MCP 工具 `_ehunt_productQuery`（展示名「Etsy商品查询」）按多维度筛选 Etsy 商品（关键词/URL、价格、销量、收藏、评论、上架时间、类目、手工/复古等类型、Pick/Bestsell/Raving 等）。当用户提到 EHunt Etsy 商品、Etsy listing、Etsy 选品、Etsy 爆款、Etsy handmade、Etsy vintage、ehunt items、Etsy商品查询、_ehunt_productQuery 时触发。即使用户未写 EHunt，只要在 Etsy 上搜商品、看销量/价格/标签或筛品，也应触发此技能。
 ---
 
