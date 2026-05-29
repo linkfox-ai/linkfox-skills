@@ -61,11 +61,11 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-amazon-ads-auth` | Amazon Ads OAuth authorization, profile discovery, and access-token management |
 | `linkfox-amazon-ads-entity` | List Amazon Ads SP/SB entities (campaigns, ad groups, keywords, product ads, targets) |
 | `linkfox-amazon-ads-report` | One-stop Amazon Ads SP/SB reporting: request, poll, download, and auto-extract |
-| `linkfox-amazon-alexa-for-shopping` | Conversational Amazon shopping via Alexa: multi-turn Q\{{SKILLS_TABLE}}A returning recommended ASINs and follow-up questions |
+| `linkfox-amazon-alexa-for-shopping` | Conversational Amazon shopping via Alexa: multi-turn Q&A returning recommended ASINs and follow-up questions |
 | `linkfox-amazon-help-doc-changes` | Monitor AI-curated valuable changes to Amazon Seller Central help docs, with change summaries and latest full document |
 | `linkfox-amazon-opportunity-report` | Generate AI-powered Amazon opportunity reports with market potential, pricing, reviews, and trend analysis |
 | `linkfox-amazon-opportunity-screener` | Reverse-screen Amazon niches and keywords by 30+ business metrics (market size, growth, competition, pricing, demographics, review themes) |
-| `linkfox-amazon-policy-news` | Browse Amazon Seller News policy \{{SKILLS_TABLE}} compliance announcements by site/date/keyword and read full article bodies |
+| `linkfox-amazon-policy-news` | Browse Amazon Seller News policy & compliance announcements by site/date/keyword and read full article bodies |
 | `linkfox-amazon-product-detail` | Get detailed Amazon product info by ASIN (price, BSR, bullets, etc.) |
 | `linkfox-amazon-reviews` | Retrieve and analyze Amazon product reviews |
 | `linkfox-amazon-search` | Search Amazon products by keyword with real-time ranking data |
@@ -253,6 +253,7 @@ Get your API key and configure the environment before using any skill.
 
 | Skill | Description |
 | --- | --- |
+| `linkfox-cross-border-toolkit` | Cross Border Toolkit |
 | `linkfox-ehunt-etsy-category-search` | Ehunt Etsy Category Search |
 | `linkfox-ehunt-etsy-product-query` | Ehunt Etsy Product Query |
 | `linkfox-ehunt-etsy-store-query` | Ehunt Etsy Store Query |
@@ -288,6 +289,7 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-tsearch-web-search` | Search the web for market research and trending topics |
 | `linkfox-wallysmarter-product-detail` | Walmart product detail with historical pricing and sales trends via WallySmarter |
 | `linkfox-xiyou-dongcha` | Xiyou Insights Amazon ASIN and keyword analytics via LinkFox gateway (traffic scores, reverse ASIN lookup, rank trends, ABA weekly data) |
+
 
 ## Requirements
 

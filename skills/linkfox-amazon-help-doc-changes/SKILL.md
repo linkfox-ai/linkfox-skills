@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-help-doc-changes
-version: 1.0.0
-category: product-sourcing
 description: 监控亚马逊卖家帮助文档（帮助中心）的内容变更，经 AI 筛选后返回对卖家有价值的改动，支持按变更时间区间、标题关键词分页检索，并按变更记录 ID 获取 AI 变更摘要、具体改动点与最新文档全文。当用户提到亚马逊帮助文档变更、帮助中心更新、规则变动监控、政策/费用文档调整、合规预警、文档改了什么、最新文档全文，或 Amazon help doc changes, Seller Central help center updates, policy/fee documentation changes, compliance alert 时触发此技能。即使用户未明确提及"帮助文档变更"，只要其需求涉及亚马逊帮助中心文档的更新监控及变更详情，也应触发此技能。
 ---
 
