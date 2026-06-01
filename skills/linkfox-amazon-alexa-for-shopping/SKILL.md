@@ -1,7 +1,5 @@
 ---
 name: linkfox-amazon-alexa-for-shopping
-version: 1.0.0
-category: product-sourcing
 description: 通过亚马逊前台的 Alexa 购物助手发起自然语言问答，获取与问题相关的导购回答、推荐商品分组、ASIN 列表，以及可继续追问的问题。支持在同一次调用中传入多条 prompts 模拟连续多轮对话，并可用 url 补充亚马逊页面上下文。当用户提到亚马逊 Alexa、Alexa 购物助手、亚马逊智能助手、AI 导购、对话式选品、自然语言购物、亚马逊聊天问答、Amazon Alexa shopping, conversational shopping, AI shopping assistant, follow-up questions、产品推荐对话、上下文追问等场景时触发此技能。即使用户未明确提及"Alexa"，只要其需求是"在亚马逊前台用自然语言问出商品推荐 + 多轮追问"，也应触发此技能。
 ---
 
