@@ -2,7 +2,7 @@
 
 按 Amazon Ads 广告产品分类维护。
 
-| 广告产品 | 脚本子目录 | 详细参考 |
+| 广告产品 | 脚本子目录 | 查询参考 |
 |---------|-----------|---------|
 | **Sponsored Products (SP)** — v3 | `scripts/sp/` | [api/sp.md](./api/sp.md) |
 | **Sponsored Brands (SB)** — v4 | `scripts/sb/` | [api/sb.md](./api/sb.md) |

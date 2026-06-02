@@ -614,3 +614,42 @@ def list_sd_entities(region: str, profile_id: int, access_token: str,
         "pagesFetched": pages,
         "truncated": truncated,
     }
+
+
+# ---------- Mutation (POST create / PUT update) ----------
+
+def mutate_entity(region: str, profile_id: int, access_token: str,
+                  path: str, method: str, content_type: str,
+                  payload) -> dict:
+    """POST (create) or PUT (update) an entity batch via developerProxy.
+
+    Returns either:
+        {"success": True, "httpStatus": N, "data": <parsed response>}
+    or:
+        {"error": "...", ...}
+    """
+    body_str = json.dumps(payload) if payload is not None else None
+
+    resp = _developer_proxy_call(
+        region=region,
+        path=path,
+        method=method,
+        access_token=access_token,
+        profile_id=profile_id,
+        body=body_str,
+        content_type=content_type,
+        query_string=None,
+    )
+
+    if "error" in resp:
+        return resp
+
+    http_status = resp.get("httpStatus")
+    body_raw = resp.get("body") or ""
+
+    try:
+        parsed = json.loads(body_raw) if body_raw else {}
+    except (json.JSONDecodeError, TypeError):
+        parsed = body_raw
+
+    return {"success": True, "httpStatus": http_status, "data": parsed}

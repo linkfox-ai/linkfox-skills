@@ -106,3 +106,5 @@ python sb/list_ads.py '{"profileId":1111111111,"region":"NA",
 | 过滤器 | Object / Array / Scalar / Text / Client 5 类 | 主要 Object + Text；暂未见到 Array/Scalar 需求 |
 | 响应分页 | `nextToken` | `nextToken` + `totalCount`（SB 特有） |
 | 客户端过滤 | `asinFilter` / `skuFilter`（productAds） | 暂无 |
+
+

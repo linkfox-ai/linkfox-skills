@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Open%20Standard-orange)](https://agentskills.io)
-[![Skills](https://img.shields.io/badge/skills-70-brightgreen)](#skills-catalog)
+[![Skills](https://img.shields.io/badge/skills-77-brightgreen)](#skills-catalog)
 
-**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 70 API-driven skills covering product research, competitor analysis, keyword tracking, Amazon Ads reporting, patent search, compliance detection, and more.
+**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 77 API-driven skills covering product research, competitor analysis, keyword tracking, Amazon Ads reporting, patent search, compliance detection, and more.
 
 Built on the [Agent Skills](https://agentskills.io) open standard, compatible with Claude Code, Cursor, GitHub Copilot, and 30+ AI agent platforms.
 

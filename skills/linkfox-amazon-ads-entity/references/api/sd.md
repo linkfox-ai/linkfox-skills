@@ -1,6 +1,6 @@
 # Sponsored Display (SD) 实体查询 — 参数与字段参考
 
-覆盖 SD v3 的 6 个只读 list 端点。通用约定、共用参数、错误码见 `../api.md`。
+覆盖 SD v3 的 6 个 list 端点的查询参数与字段定义。通用约定、共用参数、错误码见 `../api.md`；写操作（create/update）通过 `scripts/sd/create_*.py` 与 `scripts/sd/update_*.py` 调用，payload 透传 Amazon 原生格式。
 
 ## 可用脚本
 
@@ -146,3 +146,5 @@ python sd/list_creatives.py '{"profileId":1111111111,"region":"NA",
 | `stateFilter` 实参 | 大写 ENUM | 大写 ENUM | 接口端要求小写串，脚本会自动转换 |
 | 扩展字段 | `includeExtendedDataFields:true` 标志 | `includeExtendedDataFields:true` 标志 | 路径切换 `/sd/<entity>/extended` |
 | Client-side filter | `asinFilter` / `skuFilter`（productAds） | 暂无 | `asinFilter` / `skuFilter`（productAds） |
+
+
