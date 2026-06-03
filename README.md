@@ -264,6 +264,7 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-ehunt-temu-store-query` | Ehunt Temu Store Query |
 | `linkfox-lingxing-erp` | Lingxing Erp |
 | `linkfox-product-title-analyze` | Analyze and optimize Amazon product listing titles |
+| `linkfox-skill-creator` | Skill Creator |
 | `linkfox-temu-add-product-us` | Temu Add Product Us |
 | `linkfox-temu-ads-eu` | Temu Ads Eu |
 | `linkfox-temu-ads-global` | Temu Ads Global |

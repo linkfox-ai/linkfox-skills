@@ -1,0 +1,163 @@
+# E2 可读性 10 项机读清单
+# 每项 10 分，通过项数 × 10 = readability_score
+# Hard gate 阈值：60（至少通过 6 项）
+
+version: 1
+threshold: 60                    # readability_score < 60 → 终止评估
+max_score: 100
+
+checks:
+  - id: 1
+    name: "何时触发三问准确"
+    dimension: sub_agent_answer
+    weight: 10
+    pass_criteria:
+      - 子 agent B 阶段一"什么情况下调用"的答案与 SKILL.md description + "何时使用"段意图 ≥ 80% 一致
+      - 子 agent B 未编造 SKILL.md 里没写的触发场景
+    fail_criteria:
+      - 子 agent B 明确说"SKILL.md 没说清楚"
+      - 子 agent B 答的场景是 SKILL.md 里完全没提到的
+    evidence_source: "子 agent B 阶段一返回 + SKILL.md 对应段"
+
+  - id: 2
+    name: "先读哪个文件明确"
+    dimension: sub_agent_answer
+    weight: 10
+    pass_criteria:
+      - 子 agent B 阶段一问 2 答出了具体文件名（如 references/00-workflow-overview.md）
+      - 该文件名在 SKILL.md 正文或"相关资料"段有指向
+    fail_criteria:
+      - 子 agent B 说"不确定"
+      - 答案指向不存在的文件
+    evidence_source: "子 agent B 阶段一返回 + SKILL.md"
+
+  - id: 3
+    name: "最易出错点命中 D5"
+    dimension: sub_agent_answer
+    weight: 10
+    pass_criteria:
+      - 子 agent B 阶段一问 3 的答案与 rules-and-boundaries.md 或 SKILL.md 踩坑章节中某一具体条目有直接对应
+    fail_criteria:
+      - 答案是泛泛的"可能理解错业务" / "可能误判"
+      - 答案与任何具体踩坑/边界条目无对应
+    evidence_source: "子 agent B 阶段一返回 + rules-and-boundaries.md"
+
+  - id: 4
+    name: "执行图 ≥ 3 步"
+    dimension: sub_agent_answer
+    weight: 10
+    pass_criteria:
+      - 子 agent B 阶段二画出的主流程步骤 ≥ 3 步
+      - 每步有明确的 name 或编号
+    fail_criteria:
+      - 步骤数 < 3
+      - 某步只有"……" / 空白
+    evidence_source: "子 agent B 阶段二返回"
+
+  - id: 5
+    name: "执行图决策分支无歧义"
+    dimension: sub_agent_answer
+    weight: 10
+    pass_criteria:
+      - 子 agent B 阶段二返回中未出现"这里不清楚" / "看不出下一步"
+      - 主 agent 对照 workflow.md 未发现关键分支遗漏
+    fail_criteria:
+      - 子 agent 声明有不清楚的地方
+      - 主 agent 发现 workflow.md 中的某主分支未在执行图中体现
+    evidence_source: "子 agent B 阶段二返回 + workflow.md"
+
+  - id: 6
+    name: "SKILL.md / workflow.md / rules-and-boundaries.md 内部一致"
+    dimension: static_cross_check
+    weight: 10
+    pass_criteria:
+      - step id 三处一致
+      - rule id 三处一致
+      - scripts 路径字符串三处一致（大小写、连字符）
+      - references 相互引用的路径都能找到
+    fail_criteria:
+      - 任一 id 在 A 处叫 step_2、B 处叫 step2
+      - 任一 script 路径 A 写 scripts/check-brand.py、B 写 scripts/check_brand.py
+      - SKILL.md 引用了不存在的 references/*.md
+    evidence_source: "静态扫描：主 agent 读 3 个文件做字符串对照"
+
+  - id: 7
+    name: "SKILL.md 行数 ≤ 200"
+    dimension: static_check
+    weight: 10
+    pass_criteria:
+      - SKILL.md 文件总行数 ≤ 200
+    fail_criteria:
+      - > 200 行
+    evidence_source: "文件行数"
+    note: "与 E3 的 C2 重合，但 E2 独立再查一次（防止 E3 之后 skill 被改过）"
+
+  - id: 8
+    name: "SKILL.md 无技术术语泄漏"
+    dimension: static_check
+    weight: 10
+    pass_criteria:
+      - SKILL.md 正文中未出现黑名单词（见 blacklist）
+    fail_criteria:
+      - 黑名单词命中（代码块内 / 路径名中的出现不算）
+    blacklist:
+      - prompt
+      - frontmatter
+      - tokens
+      - LLM
+      - JSON
+      - API
+      - regex
+      - parse
+      - YAML
+      - schema
+      - markdown
+    allowed:
+      - "agent（在 'spawn 子 agent' 等评估器语境下允许）"
+    evidence_source: "SKILL.md 全文扫描"
+
+  - id: 9
+    name: "scripts 调用点有'何时调/参数/输出'三件说明"
+    dimension: static_check
+    weight: 10
+    pass_criteria:
+      - SKILL.md 或 workflow.md 中，每个 scripts/*.py 都对应三件说明：何时调用 / 输入参数 / 如何读输出
+    fail_criteria:
+      - 某脚本只被提到名字但没说怎么用
+      - 说了调用但没说输出怎么读
+    evidence_source: "SKILL.md + workflow.md + scripts/ 目录交叉"
+    note: "若 skill 没有任何脚本，本项自动通过（N/A 视为 pass）"
+
+  - id: 10
+    name: "触发语覆盖 ≥ 6 种口语表达"
+    dimension: static_check
+    weight: 10
+    pass_criteria:
+      - description 字段"触发："部分 + "何时使用"段落的口语短语 ≥ 6 种去重后不同
+    fail_criteria:
+      - < 6 种
+      - 所有触发语都是同一动词的变体（如"查一下/查查/帮我查/查一查"算 1 种）
+    evidence_source: "SKILL.md frontmatter + 何时使用段"
+
+# 子 agent B 的两次 spawn 必须独立
+sub_agent_b_discipline:
+  stage_1:
+    readable: ["SKILL.md"]
+    forbidden: ["references/**", "scripts/**", ".eval/**"]
+  stage_2:
+    readable: ["SKILL.md", "references/*.md（不含 interview-record.md）"]
+    forbidden: ["references/interview-record.md", ".eval/**", "linkfox-skill-evaluator/**"]
+  spawn_separately: true       # 两阶段必须独立 spawn，不复用上下文
+
+# 评分
+scoring:
+  formula: "readability_score = passed_count × 10"
+  hard_gate: 60
+  on_hard_gate_fail: "终止评估，写部分报告（E3 + E2），publish_advice=block"
+
+# 违规处理
+isolation_violation:
+  if_b_reads_interview_record:
+    - 标记 isolation: violated
+    - E2 作废
+    - readability 权重转嫁给其他维度

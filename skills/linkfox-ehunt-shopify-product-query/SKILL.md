@@ -1,7 +1,5 @@
 ---
 name: linkfox-ehunt-shopify-product-query
-version: 1.0.0
-category: product-sourcing
 description: 通过 EHunt Shopify 商品查询（网关路由 `ehunt/shopify/productQuery`）按多维度筛选独立站 Shopify 商品（关键词/URL、价格、周销量、上架时间、Facebook 广告、竞争度、是否有货源、发货国家等）。当用户提到 EHunt Shopify 商品、Shopify 选品、独立站选品、Shopify 爆款、Shopify dropshipping、独立站铺货、Facebook 广告商品、Shopify product query、shopify items 时触发。即使用户未写 EHunt，只要在 Shopify 独立站上搜商品、看周销量/销售额/竞争度或筛品，也应触发此技能。
 ---
 

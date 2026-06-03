@@ -1,0 +1,153 @@
+# D1-D7 维度判定清单（机读版）
+# 用途：
+#   · Creator 阶段 2 自检
+#   · Evaluator E1/E2 判定参考
+# 每项说明：
+#   id: 维度号
+#   required: 是否必挖（true/false）
+#   min_items: 最少内容条数
+#   pass_criteria: 判定为"挖够了"需要同时满足的条件
+#   fail_hints: 未挖够时 Creator 应追问的方向
+
+version: 1
+
+dimensions:
+  - id: D1
+    name: 业务情境
+    required: true
+    min_items: 1
+    pass_criteria:
+      - scenario.description 非空且 ≥ 15 字
+      - scenario.primary_user 非空
+      - scenario.typical_trigger_moment 非空
+      - scenario.success_criteria 至少 1 条
+    fail_hints:
+      - 若 description 模糊 → 追问"具体在什么业务环节会用到"
+      - 若 primary_user 缺失 → 追问"这个能力是谁在用"
+      - 若 typical_trigger_moment 缺失 → 追问"平常什么时刻会想起来用"
+      - 若 success_criteria 为空 → 追问"用完之后您希望得到什么结果"
+
+  - id: D2
+    name: 输入形态
+    required: true
+    min_items: 1
+    pass_criteria:
+      - inputs 至少 1 条
+      - 每条 inputs 的 type 字段非空
+      - 每条 inputs 的 example 或 notes 至少一个非空
+    fail_hints:
+      - 输入模糊 → 追问"您用这个能力时手头一般有什么具体资料"
+      - 只有 type 没有 example → "能举个最近的例子吗"
+
+  - id: D3
+    name: 核心流程
+    required: true
+    min_items: 3
+    pass_criteria:
+      - process 至少 3 个步骤
+      - 每步 name / inputs / outputs / decisions 都非空
+      - 每步 execution_type 字段明确为 script / llm / delegate 之一（不能缺）
+      - 每个 execution_type=script 步骤有 script 字段指向 scripts/*.py
+      - 每个 execution_type=delegate 步骤有 delegates_to + delegate_inputs_mapping + delegate_confirmed_at + delegate_expert_quote
+      - 每个 delegate 步骤的 delegates_to 值出现在顶层 depends_on 数组
+      - 每步 expert_verbatim 至少 10 字
+      - 若步骤描述含已知平台关键词（卖家精灵/Keepa/ABA/Helium10/Jiimore/Ruiguan/Zhihuiya 等），该步 execution_type 必须是 delegate，或 delegate_search_log 中有对应步骤的搜索记录（专家拒绝）
+    fail_hints:
+      - 步骤数 < 3 → "从您拿到输入到出结论，中间还有别的步骤吗"
+      - 某步 execution_type 未判定 → 走 D3 追问三分法：先问有无现成工具 → 再问固定规则 vs 经验判断
+      - execution_type=script 但 expert_verbatim 缺失 → "能用您自己的话说一下这一步的判断标准吗"
+      - execution_type=delegate 但 delegate_expert_quote 为空 → 回头找专家确认或降级到 script/llm
+      - 涉及平台关键词但 execution_type=script → 提示"这步应该先搜索是否有现成 skill"
+
+  - id: D4
+    name: 关键规则
+    required: true
+    min_items: 3
+    pass_criteria:
+      - rules 至少 3 条
+      - 每条 text 非空
+      - 每条 type 为 hard 或 soft
+      - 至少 1 条 hard + 至少 1 条 soft（推荐，非强制）
+      - 每条 expert_verbatim 非空
+    fail_hints:
+      - 规则 < 3 条 → "除了刚说的这几条，还有什么规则是您一定会遵守的"
+      - 全是 hard 没有 soft → "有没有'大多数时候这样，但偶尔例外'的规则"
+      - 全是 soft 没有 hard → "有没有什么情况下您宁可少做一步也绝不违反的"
+      - soft 规则没有 counter_example → "您能想起一个反例吗"
+
+  - id: D5
+    name: 边界与踩坑
+    required: true
+    min_items: 3  # boundaries ≥ 2 + pitfalls ≥ 1
+    pass_criteria:
+      - boundaries 至少 2 条
+      - pitfalls 至少 1 条
+      - 每条有 scenario + why_not_applicable / why_wrong
+      - 每条 expert_verbatim 非空
+    fail_hints:
+      - boundaries < 2 → "什么情况下这个能力不应该用"
+      - pitfalls 缺失 → "您见过新人用这个方法翻车的例子吗"
+
+  - id: D6
+    name: 输出形态偏好
+    required: false
+    min_items: 0
+    pass_criteria:
+      - 若 output_preferences 存在，format 和 style 至少一个非空
+    fail_hints:
+      - 不触发追问，用默认值即可
+
+  - id: D7
+    name: 外部依赖（仅 script 自封装场景）
+    required: false
+    min_items: 0
+    pass_criteria:
+      - 若 external_dependencies 存在，每项 service / purpose 非空
+      - 每项 auth_type 明确
+    fail_hints:
+      - 若涉及 API 调用但字段缺失 → "需要调哪个平台的接口，需要授权吗"
+      - 若该步骤其实有现成 skill 可用 → 先走 delegate，不要自封装
+
+# D3 内置：委托候选搜索与确认（详见 references/06-delegate-discovery.md）
+delegate_discovery:
+  triggers:
+    - step_mentions_platform: [卖家精灵, SellerSprite, Keepa, ABA, Helium10, Jiimore, Ruiguan, Zhihuiya, Google Trends, Echotik, TSearch, DLD]
+    - step_verb_plus_object:
+        verbs: [查, 筛, 采, 找, 评估, 对比, 挖掘, 分析]
+        objects: [商品, 关键词, 评论, 竞品, 品牌, 类目, 广告, 专利, 商标]
+    - expert_says: "一般我用 XX 工具看"
+  search_cascade:
+    - layer: ecommerce
+      cmd: linkfoxskill search <关键词>
+    - layer: general
+      cmd: /find-skills
+    - layer: expert_ask
+      question: "没找到现成工具，您希望 (a) 自己写程序 (b) 临场判断 (c) 换工具名再搜"
+  expert_confirmation_rules:
+    - single_candidate_still_needs_expert: true
+    - default_is_reject: true
+    - hesitation_equals_reject: true
+  log_to: delegate_search_log
+
+# 质量分级判定
+quality_levels:
+  ready:
+    description: 全部必挖维度达标 + assumed_fields 已确认
+    conditions:
+      - all_required_dimensions_pass
+      - no_pending_assumed_fields
+      - final_review_passed: true
+
+  partial:
+    description: 部分维度降级，skill 可生成但有短板
+    conditions:
+      - at_least_one_required_dimension_below_min_items
+      - or: final_review_skipped_by_user
+      - or: assumptions_skipped_by_user
+
+  draft:
+    description: 未达到可评估状态
+    conditions:
+      - skill_name_starts_with_linkfox_draft
+      - or: any_required_dimension_refused
+      - or: status != complete

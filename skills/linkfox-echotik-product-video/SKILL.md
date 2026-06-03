@@ -1,7 +1,5 @@
 ---
 name: linkfox-echotik-product-video
-version: 1.0.0
-category: product-sourcing
 description: 查询TikTok商品的关联带货视频数据，包括播放量、点赞、评论、分享、视频销量与GMV，分析商品的视频营销表现与达人内容效果。当用户提到TikTok商品视频、TikTok带货视频、商品关联视频、视频营销分析、达人视频表现、TikTok视频销量、TikTok video sales, product video analysis, influencer video performance, TikTok promotional videos, product marketing videos时触发此技能。即使用户未明确提及"EchoTik"或"商品视频"，只要其需求涉及查看某个TikTok商品有哪些带货视频、视频的播放和转化数据，也应触发此技能。
 ---
 
