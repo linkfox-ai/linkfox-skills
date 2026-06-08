@@ -59,7 +59,7 @@ Get your API key and configure the environment before using any skill.
 | --- | --- |
 | `linkfox-aba-data-explorer` | Explore Amazon Brand Analytics (ABA) search term data and trends |
 | `linkfox-amazon-ads-auth` | Amazon Ads OAuth authorization, profile discovery, and access-token management |
-| `linkfox-amazon-ads-entity` | List Amazon Ads SP/SB entities (campaigns, ad groups, keywords, product ads, targets) |
+| `linkfox-amazon-ads-manager` | Manage Amazon Ads SP/SB/SD entities: list, create, and update campaigns, ad groups, keywords, targets, product ads, and budget rules |
 | `linkfox-amazon-ads-report` | One-stop Amazon Ads SP/SB reporting: request, poll, download, and auto-extract |
 | `linkfox-amazon-alexa-for-shopping` | Conversational Amazon shopping via Alexa: multi-turn Q&A returning recommended ASINs and follow-up questions |
 | `linkfox-amazon-opportunity-report` | Generate AI-powered Amazon opportunity reports with market potential, pricing, reviews, and trend analysis |

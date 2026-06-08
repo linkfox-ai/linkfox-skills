@@ -2,7 +2,7 @@
 
 Amazon Ads 授权、已授权账号列表、profile 管理、令牌读取与刷新。
 
-下游实体查询见 `linkfox-amazon-ads-entity`；SP 报告见 `linkfox-amazon-ads-report`。
+下游实体查询见 `linkfox-amazon-ads-manager`；SP 报告见 `linkfox-amazon-ads-report`。
 
 ## 通用约定
 

@@ -1,6 +1,6 @@
 # linkfox-amazon-ads-report — 参数与字段参考
 
-Amazon Ads 报告自动化获取（SP / SB 覆盖；SD / ST / DSP 暂未覆盖）。授权见 `linkfox-amazon-ads-auth`；基础实体见 `linkfox-amazon-ads-entity`。
+Amazon Ads 报告自动化获取（SP / SB 覆盖；SD / ST / DSP 暂未覆盖）。授权见 `linkfox-amazon-ads-auth`；广告管理见 `linkfox-amazon-ads-manager`。
 
 > **📌 报告类型的真相源**：每个 `reportTypeId` 的完整规格（可用 columns / groupBy / filters / timeUnit / 日期约束 / 官方示例）在 `references/report-types/<adProduct-dir>/<reportTypeId>.md`，**按 adProduct 分目录**：
 > - `report-types/sp/`（Sponsored Products）

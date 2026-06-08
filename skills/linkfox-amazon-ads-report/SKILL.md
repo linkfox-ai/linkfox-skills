@@ -197,7 +197,7 @@ python scripts/get_report.py '{
 
 - Brand Analytics / Retail Analytics / Attribution 报告 → 不在本 skill
 - 报告删除 / 修改 / 定时任务 → 不在本 skill
-- 实体元数据（campaign 名、keyword 匹配类型等）→ `linkfox-amazon-ads-entity`
+- 实体元数据（campaign 名、keyword 匹配类型等）→ `linkfox-amazon-ads-manager`
 - 授权 / token → `linkfox-amazon-ads-auth`
 
 **Feedback:**
