@@ -1,0 +1,238 @@
+---
+name: linkfox-1688-search-by-image
+description: 1688平台以图搜图，通过商品图片精准检索外观相似或同款的1688货源，返回标题、价格、起批量、月销量、复购率、交易评分等核心数据。当用户提到1688以图搜图、1688找货源、以图找同款、跨境找工厂、1688识图、图片找货源、找相似货源、image search 1688、find supplier by image时触发此技能。即使用户未明确提及"以图搜图"，只要用户提供了图片URL并希望在1688上查找匹配或相似的货源商品，也应触发此技能。
+---
+
+# 1688 Image-Based Product Search
+
+This skill performs visual product searches on the 1688 platform using an image URL, helping cross-border sellers find visually similar supplier products for sourcing.
+
+## Core Concepts
+
+1688 Image Search uses visual recognition to find products with similar appearance on the 1688 wholesale marketplace. It returns supplier product data including title, price, minimum order quantity, monthly sales, repurchase rate, trade score, and seller identity badges.
+
+## Data Fields
+
+| Field | Description |
+|-------|-------------|
+| offerId | Product ID on 1688 |
+| title | Product title |
+| imageUrl | Product main image |
+| price | Wholesale price (CNY) |
+| consignPrice | Dropship price (CNY) |
+| salesQuantity | Monthly sales volume |
+| estimatedSalesAmount | Estimated monthly revenue |
+| quantityBegin | Minimum order quantity |
+| repurchaseRate | Repurchase rate |
+| tradeScore | Product trade score |
+| compositeServiceScore | Composite service experience score |
+| sellerIdentities | Seller identity (超级工厂/实力商家/诚信通会员) |
+| offerIdentities | Product badge (严选) |
+| sendGoodsAddressText | Shipping origin |
+| deliveryTime | Delivery time (24/48 hours) |
+| isOnePsale | Supports dropshipping (是/否) |
+| isJxhy | Premium sourcing (是/否) |
+| hasPromotion | Has promotion (是/否) |
+| isPatentProduct | Patent product (是/否) |
+
+## Parameter Guide
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| imageUrl | Conditional | - | Public image URL (max 1000 chars). One of imageUrl/imageBase64/imageId required |
+| imageBase64 | Conditional | - | Base64 encoded image (used when imageUrl is empty) |
+| imageId | Conditional | - | 1688 image ID from previous search result (speeds up pagination) |
+| page | No | 1 | Page number, starting from 1 |
+| pageSize | No | 20 | Results per page (1-50) |
+| priceStart | No | - | Min price filter (CNY) |
+| priceEnd | No | - | Max price filter (CNY) |
+| filter | No | - | Filter conditions, comma-separated (see supported filters below) |
+| sort | No | {"monthSold":"desc"} | Sort as JSON: {field: direction} (see supported sort fields below) |
+| keyword | No | - | Keyword to further filter results |
+| productCollectionId | No | - | Product collection ID (see supported IDs below) |
+
+### Supported Filters
+
+Multiple filters can be combined with commas (e.g. `1688Selection,totalEpScoreLv1,qrr0`).
+
+| Filter Value | Description |
+|--------------|-------------|
+| 1688Selection | 1688严选 |
+| certifiedFactory | 认证工厂 |
+| totalEpScoreLv1 | 综合体验分5星 |
+| totalEpScoreLv2 | 综合体验分4星 |
+| totalEpScoreLv3 | 综合体验分3星 |
+| totalEpScoreLv4 | 综合体验分2星 |
+| qrr0 | 无品质退款 |
+| qrr1 | 品质退款率<1% |
+| qrr5 | 品质退款率<5% |
+| qrr10 | 品质退款率<10% |
+| shipInToday | 当日发货 |
+| shipIn24Hours | 24小时发货 |
+| shipIn48Hours | 48小时发货 |
+| noReason7DReturn | 7天无理由退货 |
+| isOnePsale | 一件代发 |
+| isOnePsaleFreePost | 一件代发包邮 |
+| new7 | 7天内新品 |
+| new30 | 30天内新品 |
+| isQqyx | 全球严选 |
+| JPFL | 日本专线 |
+| USFL | 美国专线 |
+| KRFL | 韩国专线 |
+| VNFL | 越南专线 |
+| SAFL | 沙特专线 |
+| RUFL | 俄罗斯专线 |
+| KZFL | 哈萨克斯坦专线 |
+| HKFL | 香港专线 |
+| MOFL | 澳门专线 |
+| TWFL | 台湾专线 |
+
+### Supported Sort Fields
+
+| Field | Direction | Description |
+|-------|-----------|-------------|
+| price | asc/desc | Price ascending/descending |
+| monthSold | asc/desc | Monthly sales ascending/descending |
+| rePurchaseRate | asc/desc | Repurchase rate ascending/descending |
+
+Sort format example: `{"price":"asc"}` for price low to high.
+
+### Supported Product Collection IDs
+
+| ID | Usage |
+|----|-------|
+| 262105288 | 跨境货盘 |
+| 262105286 | 跨境货盘 |
+| 262105253 | 跨境货盘 |
+| 262105281 | 跨境货盘 |
+| 262105280 | 跨境货盘 |
+| 262105277 | 跨境货盘 |
+| 262105276 | 跨境货盘 |
+| 262105274 | 跨境货盘 |
+| 262105269 | 跨境货盘 |
+| 262185282 | 跨境货盘 |
+
+## API Usage
+
+This tool calls the LinkFox tool gateway API. See `references/api.md` for calling conventions, request parameters, and response structure. You can also execute `scripts/alibaba1688_image_search.py` directly to run queries.
+
+## Local Image Upload
+
+This tool requires a **publicly accessible image URL**. If the user provides a local image file path, you must upload it first to obtain a public URL.
+
+Run the upload script:
+```bash
+python scripts/upload_image.py /path/to/local/image.png
+```
+
+The script will return a public URL (valid for 24 hours) that can be used as the imageUrl parameter.
+
+## Usage Examples
+
+**1. Basic image search**
+```
+在1688搜索与图片相似的商品，图片地址为 https://m.media-amazon.com/images/I/719mRAn2VrL._AC_SL1500_.jpg
+```
+
+**2. Search with filters**
+```
+在1688搜索与图片相似的商品，图片地址为 https://m.media-amazon.com/images/I/719mRAn2VrL._AC_SL1500_.jpg，查询第1页，筛选1688严选，并按价格从高到低排序
+```
+
+**3. Search with sorting**
+```
+在1688搜索与图片相似的商品，图片地址为 https://example.com/product.jpg，按价格从高到低排序
+```
+
+**4. Paginated search**
+```
+在1688搜索与图片相似的商品，图片地址为 https://example.com/product.jpg，查询第2页，每页50条
+```
+
+**5. Price range filter**
+```
+在1688搜索与图片相似的商品，图片地址为 https://example.com/product.jpg，价格区间10-100元
+```
+
+## Display Rules
+
+1. **Present data clearly**: Show results in a structured table with key columns: product image, title, price, dropship price, monthly sales, minimum order quantity, repurchase rate, and seller identity
+2. **Image display**: When the response includes imageUrl for products, display them inline for visual comparison
+3. **Price display**: Always show price in CNY (¥) format
+4. **Seller badges**: Display seller identity badges (超级工厂/实力商家/诚信通会员) and product badges (严选) prominently
+5. **Result count**: Always inform the user of total results and current page/total pages
+6. **Pagination hint**: When more pages are available, suggest the user can request the next page
+7. **Filter/sort limitation**: If the user requests a sort or filter not in the supported list, do NOT attempt any workaround. Inform the user of the supported options
+8. **No secondary processing**: Results are real-time and not stored in a database, so secondary SQL/data processing is not available
+
+## Important Limitations
+
+1. **Data real-time nature**: Results are live searches, not stored in any database. Cannot use `_dataQuery_executeDynamicQuery` for secondary processing.
+2. **Logic constraint**: If the user requests sort or filter conditions not in the preset supported list, do NOT call any other tool or logic to compensate.
+3. **Image input**: One of imageUrl, imageBase64, or imageId is required. For page > 1, prefer passing imageId from the first page result to speed up queries.
+4. **Page size**: Maximum 50 results per page.
+
+## User Expression & Scenario Quick Reference
+
+**Applicable** -- Visual product sourcing scenarios on 1688:
+
+| User Says | Scenario |
+|-----------|----------|
+| "1688以图搜图" / "用图片找1688货源" | Basic image search |
+| "帮我在1688找这个图片的同款" | Find same-style products |
+| "跨境找工厂，图片是..." | Cross-border supplier sourcing |
+| "这个Amazon产品在1688有没有货源" | Reverse sourcing from Amazon image |
+| "筛选1688严选的相似商品" | Filtered image search |
+| "按月销量排序找相似货源" | Sorted image search |
+| "查看第2页结果" | Pagination |
+
+**Not applicable** -- Needs beyond 1688 image search:
+
+- Text/keyword-based 1688 search (use 店雷达-1688选品库)
+- 1688 product rankings/trending (use 店雷达-1688商品榜单)
+- Amazon image search (use 亚马逊前端-以图搜图)
+- Image generation or editing
+- Product review analysis
+- Price history or trend analysis
+
+**Boundary judgment**: When users say "找货源" or "找同款", if they provide an image URL and the intent is to find visually similar products on 1688, this skill applies. If they want keyword-based search or ranking data on 1688, use the 店雷达 tools instead.
+
+**Feedback:**
+
+Auto-detect and report feedback via the Feedback API when any of the following apply:
+1. The functionality or purpose described in this skill does not match actual behavior
+2. The skill's results do not match the user's intent
+3. The user expresses dissatisfaction or praise about this skill
+4. Anything you believe could be improved
+
+Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+
+<!-- LF_LARGE_RESPONSE_BLOCK -->
+## Handling Large Responses
+
+To avoid overflowing the agent context, persist the response to disk and extract only the fields you need:
+
+```
+python scripts/response_io.py run --script scripts/alibaba1688_image_search.py --out-dir <DIR> '<params>'
+python scripts/response_io.py read <file> --fields "<paths>"   # or --path "<JMESPath>"
+```
+
+> Pick `--out-dir` outside any git working tree (e.g. `/tmp/...` on Unix, `%TEMP%/...` on Windows). Persisted responses may contain PII, pricing, or auth-sensitive data — do not commit them. Files are not auto-deleted; clean up when the task is done.
+
+> This skill exposes multiple entry scripts: `alibaba1688_image_search.py`, `upload_image.py`. Pass `--script scripts/<name>.py` to choose the one you need.
+
+`run` writes the full response to a file and emits only a schema preview + file path. `read` projects specific fields, with `--limit/--offset` for slicing and `--format json|jsonl|csv|table` for output.
+
+**When to prefer this pattern** — apply your judgment based on the response characteristics, e.g.:
+- High field count per record, or fields you don't need
+- Batch/paginated results (multiple items per call)
+- Long-text fields (descriptions, reviews, HTML, time series)
+- Output reused across later steps rather than consumed immediately
+
+For small, single-use responses, calling the main script directly is fine.
+
+⚠️ The preview is a truncated schema + sample, not the full data. Any field-level decision must read from the persisted file via `read`.
+<!-- /LF_LARGE_RESPONSE_BLOCK -->
+
+---
+*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
