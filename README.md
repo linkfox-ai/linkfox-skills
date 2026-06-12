@@ -44,7 +44,7 @@ npx skills add linkfox-ai/linkfox-skills --agent cursor
 
 Get your API key and configure the environment before using any skill.
 
-1. Follow the [LinkFoxAgent API Setup Guide](https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre) to obtain your key.
+1. Follow the [LinkFoxAgent API Setup Guide](https://skill.linkfox.com/linkfoxskills/guide.htm) to obtain your key.
 2. Set the environment variable:
    ```bash
    export LINKFOXAGENT_API_KEY=your-key-here

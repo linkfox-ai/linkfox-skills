@@ -88,3 +88,30 @@ python scripts/us_self_fulfilled_logistics_shipment_shippingtype_update.py '{
 ```
 
 **Feedback：** `skillName`：`linkfox-temu-fulfillment-us`
+
+<!-- LF_LARGE_RESPONSE_BLOCK -->
+## Handling Large Responses
+
+To avoid overflowing the agent context, persist the response to disk and extract only the fields you need:
+
+```
+python scripts/response_io.py run --script scripts/check_linkfox_token.py --out-dir <DIR> '<params>'
+python scripts/response_io.py read <file> --fields "<paths>"   # or --path "<JMESPath>"
+```
+
+> Pick `--out-dir` outside any git working tree (e.g. `/tmp/...` on Unix, `%TEMP%/...` on Windows). Persisted responses may contain PII, pricing, or auth-sensitive data — do not commit them. Files are not auto-deleted; clean up when the task is done.
+
+> This skill exposes multiple entry scripts: `check_linkfox_token.py`, `get_temu_access_token.py`, `list_temu_access_tokens.py`, `save_temu_access_token.py`, `temu_file_download.py`, `temu_proxy.py`, `temu_token_guide.py`, `temu_us_file_download.py`, `temu_us_proxy.py`, `us_buy_shipping_logistics_candidate_scanform_list_get.py`, `us_buy_shipping_logistics_label_list_get.py`, `us_buy_shipping_logistics_scanform_create.py`, `us_buy_shipping_logistics_scanform_document_get.py`, `us_buy_shipping_logistics_scanform_get.py`, `us_buy_shipping_logistics_shiplogisticstype_get.py`, `us_buy_shipping_logistics_shipment_create.py`, `us_buy_shipping_logistics_shipment_document_get.py`, `us_buy_shipping_logistics_shipment_pickup_reservation_cancel.py`, `us_buy_shipping_logistics_shipment_pickup_reservation_create.py`, `us_buy_shipping_logistics_shipment_pickup_reservation_result_get.py`, `us_buy_shipping_logistics_shipment_result_get.py`, `us_buy_shipping_logistics_shipment_update.py`, `us_buy_shipping_logistics_shipped_package_confirm.py`, `us_buy_shipping_logistics_shippingservices_get.py`, `us_buy_shipping_logistics_warehouse_list_get.py`, `us_buy_shipping_order_unshipped_package_get.py`, `us_co_warehouse_cooperativewarehouse_fulfill_cancel.py`, `us_co_warehouse_cooperativewarehouse_fulfill_submit.py`, `us_co_warehouse_cooperativewarehouse_provider_list.py`, `us_co_warehouse_cooperativewarehouse_token_authorization.py`, `us_self_fulfilled_logistics_companies_get.py`, `us_self_fulfilled_logistics_shipment_shippingtype_update.py`, `us_self_fulfilled_logistics_shipment_sub_confirm.py`, `us_self_fulfilled_logistics_shipment_v2_confirm.py`, `us_self_fulfilled_logistics_shipment_v2_get.py`, `us_tracking_track_trackinginfo_get.py`. Pass `--script scripts/<name>.py` to choose the one you need.
+
+`run` writes the full response to a file and emits only a schema preview + file path. `read` projects specific fields, with `--limit/--offset` for slicing and `--format json|jsonl|csv|table` for output.
+
+**When to prefer this pattern** — apply your judgment based on the response characteristics, e.g.:
+- High field count per record, or fields you don't need
+- Batch/paginated results (multiple items per call)
+- Long-text fields (descriptions, reviews, HTML, time series)
+- Output reused across later steps rather than consumed immediately
+
+For small, single-use responses, calling the main script directly is fine.
+
+⚠️ The preview is a truncated schema + sample, not the full data. Any field-level decision must read from the persisted file via `read`.
+<!-- /LF_LARGE_RESPONSE_BLOCK -->

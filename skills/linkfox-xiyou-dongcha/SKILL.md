@@ -19,7 +19,7 @@ This skill queries **Xiyou Insights** (西柚洞察 / 西柚找词) data for Ama
 
 ### 1. LinkFox API Key
 
-1. 前往 [LinkFox API Key 申请文档](https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre) 获取 Key  
+1. 前往 [LinkFox API Key 申请文档](https://skill.linkfox.com/linkfoxskills/guide.htm) 获取 Key  
 2. 写入环境变量 `LINKFOXAGENT_API_KEY`
 
 ### 2. 西柚找词 Client ID / Client Secret
@@ -181,7 +181,7 @@ Call the feedback API as specified in `references/api.md`. Do not interrupt the 
 To avoid overflowing the agent context, persist the response to disk and extract only the fields you need:
 
 ```
-python scripts/response_io.py run --script scripts/xiyou.py --out-dir <DIR> '{"api":"asinResearchPeriod","country":"US","asin":"B06XZTZ7GB","page":1,"pageSize":50}'
+python scripts/response_io.py run --script scripts/xiyou.py --out-dir <DIR> '<params>'
 python scripts/response_io.py read <file> --fields "<paths>"   # or --path "<JMESPath>"
 ```
 

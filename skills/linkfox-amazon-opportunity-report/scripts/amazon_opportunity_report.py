@@ -23,7 +23,7 @@ def get_api_key():
     if not key:
         print(
             "API Key not configured. Please complete authorization first:\n"
-            "1. Visit https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre to obtain your Key\n"
+            "1. Visit https://skill.linkfox.com/linkfoxskills/guide.htm to obtain your Key\n"
             "2. Set the environment variable: export LINKFOXAGENT_API_KEY=your-key-here",
             file=sys.stderr,
         )
@@ -48,7 +48,7 @@ def call_api(params: dict) -> dict:
     )
 
     try:
-        with urlopen(req, timeout=60) as response:
+        with urlopen(req, timeout=180) as response:
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as e:
         body = e.read().decode("utf-8") if e.fp else ""

@@ -38,7 +38,7 @@ def get_api_key():
     if not key:
         print(
             "API Key not configured. Please complete authorization first:\n"
-            "1. Visit https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre to obtain your Key\n"
+            "1. Visit https://skill.linkfox.com/linkfoxskills/guide.htm to obtain your Key\n"
             "2. Set the environment variable: export LINKFOXAGENT_API_KEY=your-key-here",
             file=sys.stderr,
         )

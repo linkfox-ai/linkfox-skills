@@ -14,6 +14,14 @@ Usage:
 
 from __future__ import annotations
 
+import sys
+if sys.version_info < (3, 10):
+    sys.exit(
+        "Error: Python 3.10+ required (current: "
+        f"{sys.version_info.major}.{sys.version_info.minor}). "
+        "Please upgrade Python."
+    )
+
 import argparse
 import csv
 import io
@@ -22,7 +30,6 @@ import os
 import re
 import secrets
 import subprocess
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any

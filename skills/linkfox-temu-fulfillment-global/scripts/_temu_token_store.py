@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Local Temu accessToken storage (manual authorization from seller console)."""
 
+from __future__ import annotations
+
 import json
 import os
 from datetime import datetime, timezone

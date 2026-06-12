@@ -74,7 +74,7 @@
 
 - **网关**：`https://tool-gateway.linkfox.com`（可用 `LINKFOX_TOOL_GATEWAY_BASE` 覆盖根 URL）
 - **默认路径段**：`ehunt/shopify/storeQuery`（可用 `LINKFOX_EHUNT_SHOPIFY_STORE_QUERY_PATH` 覆盖，不含域名）
-- **鉴权**：环境变量 `LINKFOXAGENT_API_KEY`（与其他 `linkfox-*` skill 相同；申请见 https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre ）
+- **鉴权**：环境变量 `LINKFOXAGENT_API_KEY`（与其他 `linkfox-*` skill 相同；申请见 https://skill.linkfox.com/linkfoxskills/guide.htm ）
 
 ```bash
 export LINKFOXAGENT_API_KEY="<your-key>"

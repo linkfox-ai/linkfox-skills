@@ -11,7 +11,7 @@ GATEWAY_BASE = "https://tool-gateway.linkfox.com/xiyou"
 TIMEOUT_SEC = 60
 
 LINKFOX_KEY_DOC = (
-    "https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre"
+    "https://skill.linkfox.com/linkfoxskills/guide.htm"
 )
 XIYOU_OPENAPI_PORTAL = (
     "https://www.xydc.com/openapi?xiyou-insights-web=%2Fopenapi"

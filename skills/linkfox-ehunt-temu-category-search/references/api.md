@@ -46,7 +46,7 @@
 
 - **网关**：`https://tool-gateway.linkfox.com`（可用 `LINKFOX_TOOL_GATEWAY_BASE` 覆盖）
 - **默认路径段**：`ehunt/temu/temuCategorySearch`（可用 `LINKFOX_EHUNT_TEMU_CATEGORY_SEARCH_PATH` 覆盖）
-- **鉴权**：`LINKFOXAGENT_API_KEY`（申请见 https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre ）
+- **鉴权**：`LINKFOXAGENT_API_KEY`（申请见 https://skill.linkfox.com/linkfoxskills/guide.htm ）
 
 ```bash
 export LINKFOXAGENT_API_KEY="<your-key>"

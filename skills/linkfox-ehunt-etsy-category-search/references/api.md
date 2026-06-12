@@ -38,7 +38,7 @@
 仓库内提供 **`scripts/ehunt_etsy_category_search.py`**（Python 3，仅标准库）。
 
 - **默认路径段**：`ehunt/etsy/etsyCategorySearch`（可用 `LINKFOX_EHUNT_ETSY_CATEGORY_SEARCH_PATH` 覆盖）
-- **网关**：`https://tool-gateway.linkfox.com`（可用 `LINKFOX_TOOL_GATEWAY_BASE` 覆盖）；**鉴权**：`LINKFOXAGENT_API_KEY`（申请见 https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre ）
+- **网关**：`https://tool-gateway.linkfox.com`（可用 `LINKFOX_TOOL_GATEWAY_BASE` 覆盖）；**鉴权**：`LINKFOXAGENT_API_KEY`（申请见 https://skill.linkfox.com/linkfoxskills/guide.htm ）
 
 ```bash
 export LINKFOXAGENT_API_KEY="<your-key>"

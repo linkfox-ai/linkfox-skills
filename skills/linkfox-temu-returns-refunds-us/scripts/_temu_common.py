@@ -36,7 +36,7 @@ def get_linkfox_token(params=None) -> str:
     if not key:
         print(
             "LinkFox user Token not configured. Same as linkfox-amazon-store-auth:\n"
-            "1. Visit https://yxgb3sicy7.feishu.cn/wiki/GIkkweGghiyzkqkRXQKc2n0Tnre to obtain your Key\n"
+            "1. Visit https://skill.linkfox.com/linkfoxskills/guide.htm to obtain your Key\n"
             "2. export LINKFOXAGENT_API_KEY=your-key-here\n"
             "   Or pass \"token\" in the JSON parameters of proxy/fileDownload scripts.",
             file=sys.stderr,
