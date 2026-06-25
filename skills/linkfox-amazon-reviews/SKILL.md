@@ -34,6 +34,11 @@ All 15 marketplaces (including US) use a single unified endpoint:
 | reviewerType | string | No | Main endpoint | `all_reviews` or `avp_only_reviews` (verified only) | `all_reviews` |
 | mediaType | string | No | Main endpoint | `all_contents` or `media_reviews_only` | `all_contents` |
 
+### Star Count Defaults
+
+- If no star count fields are provided, `star1Num` to `star5Num` all default to `10`.
+- If any star count field is provided, unspecified star counts default to `0`.
+
 ## Supported Marketplaces
 
 | Marketplace | Code |
@@ -71,6 +76,11 @@ Use `domainCode` for every supported marketplace. Always confirm the user's inte
 **3. Fetch 5-star reviews with media (Japan)**
 ```json
 {"asin": "B08N5WRWNW", "domainCode": "co.jp", "star5Num": 50, "star1Num": 0, "star2Num": 0, "star3Num": 0, "star4Num": 0, "sortBy": "helpful", "mediaType": "media_reviews_only"}
+```
+
+**4. Fetch only 3-star reviews (explicit star mode)**
+```json
+{"asin": "B0FP5C63HZ", "domainCode": "com", "star3Num": 100}
 ```
 
 ## Display Rules

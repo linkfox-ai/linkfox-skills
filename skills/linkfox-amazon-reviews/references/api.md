@@ -25,6 +25,7 @@ POST Body（JSON）：
 | mediaType | string | 否 | 媒体类型：`all_contents`（所有内容）或 `media_reviews_only`（仅包含媒体的评论），默认 `all_contents`                                                    |
 | formatType | string | 否 | 格式类型：`current_format`（当前格式）或 `all_formats`（所有格式），默认 `current_format`                                                           |
 
+说明：若 `star1Num` ~ `star5Num` 均未传，则 1~5 星默认各抓取 `10` 条；若已传任意一个星级数量，则其它未传星级默认 `0`。
 
 ## 响应结构
 
