@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Etsy 类目检索（`_ehunt_etsyCategorySearch`） - LinkFox Skill
+Etsy 类目检索
 调用 /ehunt/etsy/etsyCategorySearch 接口。
 
 Usage:

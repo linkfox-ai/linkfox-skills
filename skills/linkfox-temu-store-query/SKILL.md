@@ -1,9 +1,9 @@
 ---
 name: linkfox-temu-store-query
-description: 通过 Temu 店铺查询（网关路由 `ehunt/temu/storeQuery`）按多维度筛选 Temu 店铺（店名/ID、国家站点、后台类目、全托管/半托管、总/周/月销量与销售额、评分、评论、粉丝、商品数、开店时间等）。当用户提到 Temu 店铺、Temu 店铺分析、Temu seller、Temu 店铺排行、Temu 半托管店铺、Temu 销售额、temu stores、Temu store query 时触发。即使用户未提及工具名，只要在 Temu 上找店铺、筛店铺数据或分析店铺表现，也应触发此技能。
+description: 按多维度筛选 Temu 店铺（店名/ID、国家站点、后台类目、全托管/半托管、总/周/月销量与销售额、评分、评论、粉丝、商品数、开店时间等）。当用户提到 Temu 店铺、Temu 店铺分析、Temu seller、Temu 店铺排行、Temu 半托管店铺、Temu 销售额、temu stores、Temu store query 时触发。即使用户未提及工具名，只要在 Temu 上找店铺、筛店铺数据或分析店铺表现，也应触发此技能。
 ---
 
-# Temu 店铺查询（`ehunt/temu/storeQuery`）
+# Temu 店铺查询
 
 在具备 LinkFox「第三方数据服务」MCP 时，对应网关路由 **`ehunt/temu/storeQuery`** 调用（MCP 展示名：**Temu 店铺查询**，确切工具名以当前环境下发的工具元数据为准）。鉴权与上游路由由网关处理；若响应含根级 `code` 字段，是否成功以实网为准。
 

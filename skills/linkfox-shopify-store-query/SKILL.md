@@ -1,11 +1,9 @@
 ---
 name: linkfox-shopify-store-query
-description: 通过 Shopify 店铺查询（网关路由 `ehunt/shopify/storeQuery`）按多维度筛选独立站 Shopify 店铺（店名/域名、国家、创建年限、产品数、广告数、月访问量、月订单量、社媒粉丝等）。当用户提到 Shopify 店铺、Shopify 店铺分析、独立站店铺、Shopify seller、独立站竞品店铺、Shopify 月访问量、独立站广告库、shopify stores、Shopify store query 时触发。即使用户未提及工具名，只要在 Shopify 独立站上找店铺、筛店铺数据或分析店铺表现，也应触发此技能。
+description: 按多维度筛选独立站 Shopify 店铺（店名/域名、国家、创建年限、产品数、广告数、月访问量、月订单量、社媒粉丝等）。当用户提到 Shopify 店铺、Shopify 店铺分析、独立站店铺、Shopify seller、独立站竞品店铺、Shopify 月访问量、独立站广告库、shopify stores、Shopify store query 时触发。即使用户未提及工具名，只要在 Shopify 独立站上找店铺、筛店铺数据或分析店铺表现，也应触发此技能。
 ---
 
-# Shopify 店铺查询（`ehunt/shopify/storeQuery`）
-
-在具备 LinkFox「第三方数据服务」MCP 时，对应网关路由 **`ehunt/shopify/storeQuery`** 调用（MCP 展示名：**Shopify 店铺查询**，确切工具名以当前环境下发的工具元数据为准）。鉴权与上游路由由网关处理；若响应含根级 `code` 字段，是否成功以实网为准。
+# Shopify 店铺查询
 
 ## 要点
 

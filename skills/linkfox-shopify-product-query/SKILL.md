@@ -1,11 +1,9 @@
 ---
 name: linkfox-shopify-product-query
-description: 通过 Shopify 商品查询（网关路由 `ehunt/shopify/productQuery`）按多维度筛选独立站 Shopify 商品（关键词/URL、价格、周销量、上架时间、Facebook 广告、竞争度、是否有货源、发货国家等）。当用户提到 Shopify 商品、Shopify 选品、独立站选品、Shopify 爆款、Shopify dropshipping、独立站铺货、Facebook 广告商品、Shopify product query、shopify items 时触发。即使用户未提及工具名，只要在 Shopify 独立站上搜商品、看周销量/销售额/竞争度或筛品，也应触发此技能。
+description: 按多维度筛选独立站 Shopify 商品（关键词/URL、价格、周销量、上架时间、Facebook 广告、竞争度、是否有货源、发货国家等）。当用户提到 Shopify 商品、Shopify 选品、独立站选品、Shopify 爆款、Shopify dropshipping、独立站铺货、Facebook 广告商品、Shopify product query、shopify items 时触发。即使用户未提及工具名，只要在 Shopify 独立站上搜商品、看周销量/销售额/竞争度或筛品，也应触发此技能。
 ---
 
-# Shopify 商品查询（`ehunt/shopify/productQuery`）
-
-在具备 LinkFox「第三方数据服务」MCP 时，对应网关路由 **`ehunt/shopify/productQuery`** 调用（MCP 展示名：**Shopify 商品查询**，确切工具名以当前环境下发的工具元数据为准）。鉴权与上游路由由网关处理；若响应含根级 `code` 字段，是否成功以实网为准。
+# Shopify 商品查询
 
 ## 要点
 

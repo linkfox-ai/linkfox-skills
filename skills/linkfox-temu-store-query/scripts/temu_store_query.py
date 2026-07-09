@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Temu 店铺查询（`ehunt/temu/storeQuery`） - LinkFox Skill
+Temu 店铺查询
 调用 /ehunt/temu/storeQuery 接口。
 
 Usage:

@@ -1,11 +1,9 @@
 ---
 name: linkfox-etsy-product-query
-description: 通过 MCP 工具 `_ehunt_productQuery`（展示名「Etsy商品查询」）按多维度筛选 Etsy 商品（关键词/URL、价格、销量、收藏、评论、上架时间、类目、手工/复古等类型、Pick/Bestsell/Raving 等标签）。当用户提到 Etsy 商品、Etsy listing、Etsy 选品、Etsy 爆款、Etsy handmade、Etsy vintage、etsy items、Etsy商品查询、_ehunt_productQuery 时触发。即使用户未提及工具名，只要在 Etsy 上搜商品、看销量/价格/标签或筛品，也应触发此技能。
+description: 按多维度筛选 Etsy 商品（关键词/URL、价格、销量、收藏、评论、上架时间、类目、手工/复古等类型、Pick/Bestsell/Raving 等标签）。当用户提到 Etsy 商品、Etsy listing、Etsy 选品、Etsy 爆款、Etsy handmade、Etsy vintage、etsy items、Etsy商品查询时触发。即使用户未提及工具名，只要在 Etsy 上搜商品、看销量/价格/标签或筛品，也应触发此技能。
 ---
 
 # Etsy 商品查询（`_ehunt_productQuery`）
-
-在具备 LinkFox「第三方数据服务」MCP 时，按工具名 **`_ehunt_productQuery`** 调用（MCP 展示名：**Etsy商品查询**，以当前环境下发的工具元数据为准）。鉴权与上游路由由网关处理；若响应含根级 `code` 字段，是否成功以实网为准。
 
 ## 要点
 

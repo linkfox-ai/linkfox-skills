@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Temu 类目检索（`ehunt/temu/temuCategorySearch`） - LinkFox Skill
+Temu 类目检索
 调用 /ehunt/temu/temuCategorySearch 接口。
 
 Usage:

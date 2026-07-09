@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Shopify 商品查询（`ehunt/shopify/productQuery`） - LinkFox Skill
+Shopify 商品查询
 调用 /ehunt/shopify/productQuery 接口。
 
 Usage:

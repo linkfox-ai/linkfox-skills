@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Etsy 店铺查询（`_ehunt_storeQuery`） - LinkFox Skill
+Etsy 店铺查询
 调用 /ehunt/etsy/storeQuery 接口。
 
 Usage:
