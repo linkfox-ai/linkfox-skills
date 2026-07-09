@@ -38,6 +38,8 @@ from _common import (  # noqa: E402
     list_sd_entities,
     parse_argv_params,
     require_fields,
+    emit_result,
+    lf_inline_flag,
 )
 
 ENTITY_PATH_BASIC = "sd/adGroups"
@@ -92,7 +94,8 @@ def main() -> None:
         "pagesFetched": result.get("pagesFetched", 0),
         "truncated": result.get("truncated", False),
     }
-    print(json.dumps(output, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(output, inline)
     print(
         f"\n✓ Fetched {len(items)} SD ad groups across {output['pagesFetched']} page(s)"
         f"{' (truncated at maxPages)' if output['truncated'] else ''}",

@@ -2,11 +2,11 @@
 
 ## 1. 调用链
 
-1. **`POST {STORE_API_BASE_URL}/spApi/storeTokens`**  
+1. **`POST ${LINKFOX_TOOL_GATEWAY}/spApi/storeTokens`**  
    Body: `{"sellerId":"<卖家ID>","region":"NA|EU|FE|..."}`  
    响应需含 **`accessToken`**。
 
-2. **`POST {STORE_API_BASE_URL}/spApi/developerProxy`**  
+2. **`POST ${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`**  
    Body 字段（与 listings / pricing 系列一致）：
    - **`region`**：与 storeTokens 相同。
    - **`path`**：Amazon SP-API 相对 path，**无**前导 `/`。
@@ -18,8 +18,8 @@
 
 环境变量：
 
-- **`LINKFOXAGENT_API_KEY`**（必填）：网关鉴权。
-- **`STORE_API_BASE_URL`** 或 **`SPAPI_BASE_URL`**（可选）：默认 `https://tool-gateway.linkfox.com`。
+- **`LINKFOX_AGENT_API_KEY`**（或 **`LINKFOXAGENT_API_KEY`**，必填）：网关鉴权。
+- **`LINKFOX_TOOL_GATEWAY`**（或 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`，可选）：默认 `https://tool-gateway.linkfox.com`。
 
 ---
 

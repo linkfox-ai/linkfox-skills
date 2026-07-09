@@ -29,8 +29,10 @@ from urllib.parse import quote
 
 from _spapi_pricing_common import (
     developer_proxy_get,
+    emit_result,
     ensure_auth_skill_available,
     get_store_tokens,
+    lf_inline_flag,
     resolve_marketplace_id,
 )
 
@@ -110,7 +112,7 @@ def main() -> None:
         except json.JSONDecodeError:
             out["itemOffers"] = None
             out["itemOffersRaw"] = raw
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    emit_result(out, lf_inline_flag())
 
 
 if __name__ == "__main__":

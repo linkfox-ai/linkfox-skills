@@ -16,7 +16,7 @@ Usage:
 import json
 import sys
 
-from _temu_common import load_json_arg, parse_nested_body, require_text
+from _temu_common import emit_result, lf_inline_flag, load_json_arg, parse_nested_body, require_text
 from _temu_eu_common import DEFAULT_SITE, eu_proxy_call
 
 def main():
@@ -27,7 +27,7 @@ def main():
     params.setdefault("site", DEFAULT_SITE)
     api_type = require_text(params, "type")
     result = parse_nested_body(eu_proxy_call(params, api_type))
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    emit_result(result, inline=lf_inline_flag())
 
 if __name__ == "__main__":
     main()

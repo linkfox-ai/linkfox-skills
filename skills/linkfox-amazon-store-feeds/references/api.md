@@ -7,7 +7,7 @@
 | 1 | `POST {BASE}/spApi/storeTokens` | `{"sellerId","region"}` → `accessToken` |
 | 2 | `POST {BASE}/spApi/developerProxy` | 转发 SP-API（除文档上传/下载 URL 外） |
 
-环境变量：`LINKFOXAGENT_API_KEY`（必填）；`STORE_API_BASE_URL` / `SPAPI_BASE_URL`（可选，默认 `https://tool-gateway.linkfox.com`）。
+环境变量：`LINKFOX_AGENT_API_KEY`（或 `LINKFOXAGENT_API_KEY`，必填）；`LINKFOX_TOOL_GATEWAY`（可选，默认 `https://tool-gateway.linkfox.com`，回退 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`）。
 
 ### developerProxy Body
 

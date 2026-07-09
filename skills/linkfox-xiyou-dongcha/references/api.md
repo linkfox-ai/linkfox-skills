@@ -5,9 +5,9 @@
 
 ## 调用规范
 
-- **网关地址**：`https://tool-gateway.linkfox.com/xiyou/<路由名>`（如 `asinTraffic` → `.../xiyou/asinTraffic`）
+- **网关地址**：`${LINKFOX_TOOL_GATEWAY}/xiyou/<路由名>`（如 `asinTraffic` → `.../xiyou/asinTraffic`）
 - **请求方式**：POST，`Content-Type: application/json`
-- **LinkFox 认证**：请求头 `Authorization: <LINKFOXAGENT_API_KEY>`
+- **LinkFox 认证**：请求头 `Authorization: <LINKFOX_AGENT_API_KEY 或 LINKFOXAGENT_API_KEY>`
 - **西柚认证**：请求体 JSON 中的 `clientId`、`clientSecret`（脚本从环境变量 `XIYOU_CLIENT_ID`、`XIYOU_CLIENT_SECRET` 自动注入，**无需**在 `--params` 中手写）
 - **上游服务**：西柚找词 OpenAPI（`https://openapi.xiyouzhaoci.com`），经 LinkFox 网关转发
 

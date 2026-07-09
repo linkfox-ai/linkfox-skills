@@ -114,6 +114,20 @@ Amazon Ads 广告管理 skill，支持 list（查询）和 create / update（创
 | `sd/update_budget_rules.py` | 预算规则 | 修改 |
 详细过滤器、枚举值、返回字段见 [references/api/sp.md](./references/api/sp.md) / [references/api/sb.md](./references/api/sb.md) / [references/api/sd.md](./references/api/sd.md)。
 
+## 调用方式
+
+- **API 端点**：`POST /amazonAds/developerProxy`（不同操作通过请求体区分；完整参数/响应/错误码见 `references/api.md`）
+- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文脚本一览）
+- **成本约束**：本工具会消耗积分；失败/空结果不得自动换关键词、翻页或连续试探；需要继续检索时先向用户说明会产生额外消耗。
+
+**输出策略（脚本默认行为）**：
+- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-ads-manager-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
+- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
+- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
+- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+
+**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+
 ## Financial Safety Guidance
 
 创建和更新操作可能直接影响广告花费，立即生效且无法撤回。
@@ -269,32 +283,6 @@ Auto-detect and report feedback via the Feedback API when any of the following a
 
 Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
 
-<!-- LF_LARGE_RESPONSE_BLOCK -->
-## Handling Large Responses
-
-To avoid overflowing the agent context, persist the response to disk and extract only the fields you need:
-
-```
-python scripts/response_io.py run --script scripts/check_auth_dependency.py --out-dir <DIR> '<params>'
-python scripts/response_io.py read <file> --fields "<paths>"   # or --path "<JMESPath>"
-```
-
-> Pick `--out-dir` outside any git working tree (e.g. `/tmp/...` on Unix, `%TEMP%/...` on Windows). Persisted responses may contain PII, pricing, or auth-sensitive data — do not commit them. Files are not auto-deleted; clean up when the task is done.
-
-> This skill exposes multiple entry scripts: `check_auth_dependency.py`, `sb/create_ad_groups.py`, `sb/create_ads.py`, `sb/create_budget_rules.py`, `sb/create_campaigns.py`, `sb/list_ad_groups.py`, `sb/list_ads.py`, `sb/list_budget_rules.py`, `sb/list_campaigns.py`, `sb/update_ad_groups.py`, `sb/update_ads.py`, `sb/update_budget_rules.py`, `sb/update_campaigns.py`, `sd/create_ad_groups.py`, `sd/create_budget_rules.py`, `sd/create_campaigns.py`, `sd/create_creatives.py`, `sd/create_negative_targets.py`, `sd/create_product_ads.py`, `sd/create_targets.py`, `sd/list_ad_groups.py`, `sd/list_budget_rules.py`, `sd/list_campaigns.py`, `sd/list_creatives.py`, `sd/list_negative_targets.py`, `sd/list_product_ads.py`, `sd/list_targets.py`, `sd/update_ad_groups.py`, `sd/update_budget_rules.py`, `sd/update_campaigns.py`, `sd/update_creatives.py`, `sd/update_negative_targets.py`, `sd/update_product_ads.py`, `sd/update_targets.py`, `sp/create_ad_groups.py`, `sp/create_budget_rules.py`, `sp/create_budget_rules_association.py`, `sp/create_campaign_negative_keywords.py`, `sp/create_campaign_negative_targets.py`, `sp/create_campaigns.py`, `sp/create_keywords.py`, `sp/create_negative_keywords.py`, `sp/create_negative_targets.py`, `sp/create_product_ads.py`, `sp/create_targets.py`, `sp/list_ad_groups.py`, `sp/list_budget_rules.py`, `sp/list_campaigns.py`, `sp/list_keywords.py`, `sp/list_negative_keywords.py`, `sp/list_product_ads.py`, `sp/list_targets.py`, `sp/update_ad_groups.py`, `sp/update_budget_rules.py`, `sp/update_campaign_negative_keywords.py`, `sp/update_campaign_negative_targets.py`, `sp/update_campaigns.py`, `sp/update_keywords.py`, `sp/update_negative_keywords.py`, `sp/update_negative_targets.py`, `sp/update_product_ads.py`, `sp/update_targets.py`. Pass `--script scripts/<name>.py` to choose the one you need.
-
-`run` writes the full response to a file and emits only a schema preview + file path. `read` projects specific fields, with `--limit/--offset` for slicing and `--format json|jsonl|csv|table` for output.
-
-**When to prefer this pattern** — apply your judgment based on the response characteristics, e.g.:
-- High field count per record, or fields you don't need
-- Batch/paginated results (multiple items per call)
-- Long-text fields (descriptions, reviews, HTML, time series)
-- Output reused across later steps rather than consumed immediately
-
-For small, single-use responses, calling the main script directly is fine.
-
-⚠️ The preview is a truncated schema + sample, not the full data. Any field-level decision must read from the persisted file via `read`.
-<!-- /LF_LARGE_RESPONSE_BLOCK -->
 
 ---
 *For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*

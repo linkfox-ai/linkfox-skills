@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""
+Shopee Store — get_voucher_list (v2.voucher.get_voucher_list)
+官方: https://open.shopee.com/documents/v2/v2.voucher.get_voucher_list?module=112&type=1
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+
+from _voucher_api_runner import run_voucher_api
+from _shopee_voucher_common import emit_result, lf_inline_flag
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        print("Usage: get_voucher_list.py '<JSON>' [--inline]", file=sys.stderr)
+        sys.exit(1)
+    params = json.loads(sys.argv[1])
+    inline = lf_inline_flag()
+    emit_result(run_voucher_api("get_voucher_list", params, "get_voucher_list.py"), inline)
+
+
+if __name__ == "__main__":
+    main()

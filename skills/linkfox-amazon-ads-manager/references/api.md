@@ -13,7 +13,8 @@
 ## 通用约定
 
 - 每个脚本接受一个 JSON 字符串作为唯一位置参数
-- 鉴权：环境变量 `LINKFOXAGENT_API_KEY`
+- 鉴权：环境变量 `LINKFOX_AGENT_API_KEY`（或旧名 `LINKFOXAGENT_API_KEY`）
+- API 网关地址：环境变量 `LINKFOX_TOOL_GATEWAY`（默认 `https://tool-gateway.linkfox.com`）
 - 依赖 `linkfox-amazon-ads-auth`（脚本启动自动检查；缺失时 exit 42，stderr 打 `DEPENDENCY_MISSING`）
 
 ## 共用参数（SP + SB + SD 均适用）

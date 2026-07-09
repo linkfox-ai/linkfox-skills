@@ -19,9 +19,11 @@ from _spapi_catalog_common import (
     CATALOG_ITEMS_V2022,
     catalog_items_path,
     developer_proxy_get,
+    emit_result,
     encode_path_segment,
     ensure_auth_skill_available,
     get_store_tokens,
+    lf_inline_flag,
     load_cli_params,
     merge_success_json,
     norm_marketplace_ids,
@@ -82,7 +84,8 @@ def main() -> None:
         "catalogItemsVersion": version,
     }
     merge_success_json(out, proxy, "catalogItem")
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(out, inline)
 
 
 if __name__ == "__main__":

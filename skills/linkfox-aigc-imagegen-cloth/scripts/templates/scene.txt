@@ -1,0 +1,55 @@
+version: 0.2.0
+根据用户上传商品和用户输入的[核心营销卖点提炼]和[目标受众]，生成一个包含模特（严格根据用户描述中的[目标受众]生成对应模特形象，如未指定默认生成欧美模特）穿着商品或使用商品的照片，保持商品细节**必须100%一致**，先判断服装的目标人群、年龄（要特别注意区分童装童鞋和成人装的区别），判断服装对应性别，再自动匹配具有 ins 时尚型的场景与姿势。服装必须完整呈现并占画面的60%以上。真实的高清相机拍照效果。禁止出现 iPhone logo，禁止出现黑边，禁止遮挡衣服主体。整体画面需呈现高度真实感，高清表现商品细节。严格保证[核心卖点]生效。
+
+  ⚠️  搭配遮挡规则：
+  所有搭配单品（外套、罩衫、披肩、围巾、包袋等）不得遮挡用户定义的服装主体。搭配物品仅可出现在不影响主体服装展示的位置（如手持、搭在手臂上、放在旁边）。以下情况严格禁止：
+  - 裙装/连衣裙外搭遮挡性外套或开衫
+  - 泳衣/内衣外搭罩衫或浴袍
+  - 上衣外叠穿遮挡领口、袖型、版型等核心设计的外层
+  - 任何导致主体服装可见面积低于60%的搭配方式
+  如需展示叠穿效果，外层必须完全敞开且不遮挡主体服装的关键设计细节。
+ ⚠️  场景多样性规则：
+ 如果用户有描述[最佳场景]，则场景和人物都按照该描述生成（仅参考画面内容，风格还是遵循Instagram 风格）；没有的话，请构思多样的场景，保证输出的每张图片场景都非常具有时尚感，有百万博主的感染力。
+
+ ⚠️  时尚的姿势设计规则：
+模特姿势采用棚拍、街拍、时尚写真动作
+  根据服装匹配一个适合的Vibe:
+  choose1: Scandi fashion style, effortless cool
+  choose2: Old money vibe, wealthy lifestyle, elegant, beige and white tones, quiet luxury vacation
+  choose3: Y2K aesthetic, 2000s fashion, Bella Hadid style, flash photography, playful vibe
+  choose4: Coquette aesthetic, soft dreamy lighting, romantic vibe, hyper-feminine
+  choose5: Clean girl aesthetic, disciplined lifestyle
+  choose6: Cinematic film portraits, with a grainy film texture and a strong narrative quality
+  choose7: For outdoor enthusiasts, emphasizing the functionality of clothing is key
+  choose8: Flash photography, vintage film grain aesthetic, candid night out, blurry motion, lo-fi, cool girl party vibe, high contrast, disposable camera style
+  choose9: Sun-drenched, French countryside aesthetic, cottagecore, bright natural light, dreamy garden, vintage film look, soft grain, romantic summer vibe, effortless beauty, candid lifestyle
+  choose10: Summer vacation, golden hour lighting, sun-kissed skin, coastal aesthetic, vibrant colors, confident pose, resort wear, travel photography, exotic beauty
+  choose11: Classic femme fatale aesthetic, bold red lips, dark hair, high contrast, moody lighting, romantic vintage vibe, elegant close-up, cinematic look, mysterious beauty, film grain
+  choose12: Streetwear editorial, urban backdrop, raw concrete and graffiti, confident attitude, hypebeast energy, wide-angle shot, bold graphic styling
+  choose13: Soft grunge aesthetic, 90s inspired, muted tones, effortless layering, Doc Martens energy, moody overcast lighting, film photography feel
+  choose14: Miami / Ibiza party aesthetic, tropical golden light, poolside or rooftop, bold colors, high energy, sexy confident vibe, editorial resort style
+  choose15: Tokyo street style, Harajuku-inspired mix, layered eclectic fashion, neon signage background, playful maximalist, candid editorial
+  choose16: Minimalist editorial, clean studio or architectural background, neutral palette, sharp silhouette focus, high-fashion simplicity, Phoebe Philo-inspired restraint
+  choose17: Cottagecore dark academia crossover, autumn tones, library or campus setting, layered knits, warm ambient light, intellectual romantic mood
+  choose18: Sporty athleisure chic, morning run or studio session, dewy skin, natural light, functional yet fashionable, body-positive confidence
+  📸 拍摄风格参考（Photography Style Reference）：
+  整体拍摄风格对标 Instagram 时尚博主内容，参考 PrincessPolly、FashionNova 等账号的视觉语言。画面需具备以下特征：
+  - 构图自然不刻意，具有时尚写真拍摄的大片感
+  - 模特表情生动真实：嘴唇微张、微笑、眼神有故事感，避免面无表情的呆板目视镜头
+  - 姿势具有很强的商业感染力：采用模特棚拍、街拍、时尚写真动作
+  - 镜头角度多样化：适当使用低角度（显腿长）、侧拍、3/4身位、微俯拍等
+  - 画面有呼吸感，留白自然，适合直接作为电商主图或社交媒体素材使用
+  生成的时候需要注意以下氛围感的塑造：
+  模特的发型，精致的妆容，自信松弛的表情，肢体语言富有表现力且自然不僵硬，设计感的配饰；低饱和度；柔和光线。姿势需符合时尚棚拍或街拍风格，优先选择站姿和动态姿势，避免坐姿，强调服装的完整展示和动态美感。
+  随机为服装选择一个搭配技巧：
+  choose1: 廓形公式：松紧结合 (Volume Balance)
+  choose2: 风格混搭：High-Low Mix (正式与休闲的冲突)
+  choose3: 色彩法则：三明治穿搭法 (Sandwich Method)
+  choose4: 配饰点缀：眼镜 / 随身电子产品 / 金属首饰 / 帽子 / 领巾
+  choose5: 极简不搭配：仅穿着主体服装，不额外搭配，纯粹展示单品本身的设计力
+  ⚠️  Brand Control Rules — NO LOGOS:
+  All clothing (including shoes, scarves, bags, etc.), accessories, and props used for styling must be unbranded and unmarked.
+
+# 用户输入
+- [核心卖点]：{selling_points}
+- [最佳场景]:  {image_desc}

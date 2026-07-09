@@ -16,7 +16,19 @@ description: Temu 全球站（非 US/EU）商品管理 Manage Product API，经 
 
 > **发品**请用 **`linkfox-temu-add-product-us`**（JSON 中 **`site=global`**）。**电商合规**（资质/GPSR/实拍图/责任人）用 **`linkfox-temu-compliance-global`**；**价格/供货价**（含 SKU 列表价）用 **`linkfox-temu-price-global`**；**促销**用 **`linkfox-temu-promotion-global`**；**广告**用 **`linkfox-temu-ads-global`**；**订单**用 **`linkfox-temu-order-global`** / **`linkfox-temu-order-eu`**；**履约**用 **`linkfox-temu-fulfillment-global`** / **`linkfox-temu-fulfillment-eu`**；**取消**用 **`linkfox-temu-cancel-order-us`** / **`linkfox-temu-cancel-order-eu`**（均需 **`site=global`** 时显式传入）。
 
-## API Usage
+## 调用方式
+
+- **API 端点**：`POST /temu/proxy`（不同操作通过请求体区分；完整参数/响应/错误码见 `references/api.md`）
+- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文脚本一览）
+- **成本约束**：本工具会消耗积分；失败/空结果不得自动换关键词、翻页或连续试探；需要继续检索时先向用户说明会产生额外消耗。
+
+**输出策略（脚本默认行为）**：
+- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/<skill-name>-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
+- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
+- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
+- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+
+**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
 
 入参/出参、**Partner 官方文档 URL** 已内联至 `references/`：
 
@@ -110,29 +122,3 @@ python scripts/global_manage_stock_edit.py '{"accessToken":"TOKEN","request":{"g
 
 授权说明：[references/access-token.md](./references/access-token.md)
 
-<!-- LF_LARGE_RESPONSE_BLOCK -->
-## Handling Large Responses
-
-To avoid overflowing the agent context, persist the response to disk and extract only the fields you need:
-
-```
-python scripts/response_io.py run --script scripts/check_linkfox_token.py --out-dir <DIR> '<params>'
-python scripts/response_io.py read <file> --fields "<paths>"   # or --path "<JMESPath>"
-```
-
-> Pick `--out-dir` outside any git working tree (e.g. `/tmp/...` on Unix, `%TEMP%/...` on Windows). Persisted responses may contain PII, pricing, or auth-sensitive data — do not commit them. Files are not auto-deleted; clean up when the task is done.
-
-> This skill exposes multiple entry scripts: `check_linkfox_token.py`, `get_temu_access_token.py`, `global_manage_category_check.py`, `global_manage_compliance_edit.py`, `global_manage_compliance_list_query.py`, `global_manage_detail_query.py`, `global_manage_goods_delete.py`, `global_manage_goods_list_retrieve.py`, `global_manage_goods_update.py`, `global_manage_list_query.py`, `global_manage_out_sn_set.py`, `global_manage_partial_update.py`, `global_manage_pre_sale_status_edit.py`, `global_manage_property_get.py`, `global_manage_property_relations.py`, `global_manage_property_relations_level_template.py`, `global_manage_property_relations_template.py`, `global_manage_publish_status_get.py`, `global_manage_sale_status_set.py`, `global_manage_sku_list_query.py`, `global_manage_sku_list_retrieve.py`, `global_manage_sku_out_sn_set.py`, `global_manage_sku_stock_query.py`, `global_manage_spec_info_get.py`, `global_manage_stock_edit.py`, `global_manage_videocoverimage_get.py`, `list_temu_access_tokens.py`, `save_temu_access_token.py`, `temu_file_download.py`, `temu_global_file_download.py`, `temu_global_proxy.py`, `temu_proxy.py`, `temu_token_guide.py`. Pass `--script scripts/<name>.py` to choose the one you need.
-
-`run` writes the full response to a file and emits only a schema preview + file path. `read` projects specific fields, with `--limit/--offset` for slicing and `--format json|jsonl|csv|table` for output.
-
-**When to prefer this pattern** — apply your judgment based on the response characteristics, e.g.:
-- High field count per record, or fields you don't need
-- Batch/paginated results (multiple items per call)
-- Long-text fields (descriptions, reviews, HTML, time series)
-- Output reused across later steps rather than consumed immediately
-
-For small, single-use responses, calling the main script directly is fine.
-
-⚠️ The preview is a truncated schema + sample, not the full data. Any field-level decision must read from the persisted file via `read`.
-<!-- /LF_LARGE_RESPONSE_BLOCK -->

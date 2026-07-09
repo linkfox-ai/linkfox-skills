@@ -23,6 +23,8 @@ from _temu_common import (
     resolve_access_token,
     validate_management_type,
     validate_site,
+    emit_result,
+    lf_inline_flag,
 )
 
 def build_request(params: dict) -> dict:
@@ -52,7 +54,8 @@ def main():
     params = load_json_arg(sys.argv)
     body = build_request(params)
     result = call_temu_api(FILE_DOWNLOAD_URL, body, timeout=120, linkfox_params=params)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(result, inline)
 
 if __name__ == "__main__":
     main()

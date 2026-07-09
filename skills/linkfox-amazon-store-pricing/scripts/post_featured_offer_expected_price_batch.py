@@ -23,8 +23,10 @@ import sys
 
 from _spapi_pricing_common import (
     developer_proxy_post_json,
+    emit_result,
     ensure_auth_skill_available,
     get_store_tokens,
+    lf_inline_flag,
 )
 
 PATH_BATCH = "batches/products/pricing/2022-05-01/offer/featuredOfferExpectedPrice"
@@ -108,7 +110,7 @@ def main() -> None:
         except json.JSONDecodeError:
             out["featuredOfferExpectedPriceBatch"] = None
             out["featuredOfferExpectedPriceBatchRaw"] = br
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    emit_result(out, lf_inline_flag())
 
 
 if __name__ == "__main__":

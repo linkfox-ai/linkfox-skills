@@ -2,9 +2,9 @@
 
 ## 调用说明
 
-- **网关路由**：`POST ehunt/shopify/productQuery`（完整：`https://tool-gateway.linkfox.com/ehunt/shopify/productQuery`）。
+- **网关路由**：`POST ehunt/shopify/productQuery`（完整：`${LINKFOX_TOOL_GATEWAY}/ehunt/shopify/productQuery`）。
 - **MCP 展示名**：Shopify 商品查询（确切工具名以当前环境下发的工具元数据为准）。
-- **鉴权**：请求头 `Authorization: <LINKFOXAGENT_API_KEY>`。
+- **鉴权**：请求头 `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取。
 - **说明**：参数与返回结构以当前网关返回为准；若上游返回 JSON 根级 `code` 字段，成功值（`200`）以实网为准。无数据时网关可能抛错。
 
 ## 请求参数（JSON）

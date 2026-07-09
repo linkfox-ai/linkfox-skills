@@ -4,7 +4,7 @@
 import json
 import sys
 
-from _temu_common import load_json_arg
+from _temu_common import emit_result, lf_inline_flag, load_json_arg
 from _temu_eu_common import DEFAULT_SITE, eu_file_download_call
 
 def main():
@@ -16,8 +16,9 @@ def main():
         sys.exit(1)
     params = load_json_arg(sys.argv)
     params.setdefault("site", DEFAULT_SITE)
+    inline = lf_inline_flag()
     result = eu_file_download_call(params)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    emit_result(result, inline=inline)
 
 if __name__ == "__main__":
     main()

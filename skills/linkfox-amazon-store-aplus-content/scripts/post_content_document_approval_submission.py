@@ -24,6 +24,8 @@ from _spapi_aplus_common import (
     resolve_marketplace_id,
     encode_path_segment,
     merge_success_json,
+    emit_result,
+    lf_inline_flag,
 )
 
 
@@ -83,7 +85,8 @@ def main() -> None:
         "queryString": query_string,
     }
     merge_success_json(out, proxy, "postContentDocumentApprovalSubmissionResponse")
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(out, inline)
 
 
 if __name__ == "__main__":

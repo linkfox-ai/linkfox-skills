@@ -20,6 +20,8 @@ import sys
 from _temu_common import (
     PROXY_URL,
     call_temu_api,
+    emit_result,
+    lf_inline_flag,
     load_json_arg,
     parse_nested_body,
     require_text,
@@ -62,8 +64,9 @@ def main():
 
     params = load_json_arg(sys.argv)
     body = build_request(params)
+    inline = lf_inline_flag()
     result = call_temu_api(PROXY_URL, body, linkfox_params=params)
-    print(json.dumps(parse_nested_body(result), indent=2, ensure_ascii=False))
+    emit_result(parse_nested_body(result), inline=inline)
 
 if __name__ == "__main__":
     main()

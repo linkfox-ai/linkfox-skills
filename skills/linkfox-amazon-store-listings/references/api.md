@@ -12,8 +12,8 @@
 
 | 项 | 说明 |
 |----|------|
-| **Base URL** | `https://tool-gateway.linkfox.com`（可用 `STORE_API_BASE_URL` 或 `SPAPI_BASE_URL` 覆盖） |
-| **网关认证** | Header `Authorization: <api_key>`，变量 `LINKFOXAGENT_API_KEY` |
+| **Base URL** | `${LINKFOX_TOOL_GATEWAY}`（默认 `https://tool-gateway.linkfox.com`；可用 `STORE_API_BASE_URL` 或 `SPAPI_BASE_URL` 覆盖） |
+| **网关认证** | Header `Authorization: <api_key>`，环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` |
 | **店铺令牌** | `POST /spApi/storeTokens`，Body：`{"sellerId":"...","region":"NA\|EU\|FE"}` → `accessToken` |
 | **SP-API 转发** | `POST /spApi/developerProxy`，Body 见下节 |
 

@@ -17,9 +17,11 @@ from urllib.parse import quote
 from _spapi_feeds_common import (
     FEEDS_PATH_PREFIX,
     developer_proxy_call,
+    emit_result,
     encode_path_segment,
     ensure_auth_skill_available,
     get_store_tokens,
+    lf_inline_flag,
     load_cli_params,
     merge_success_json,
     require_seller_region,
@@ -63,7 +65,8 @@ def main() -> None:
     )
     out: dict = {"developerProxy": proxy, "resolvedPath": path, "queryString": qs}
     merge_success_json(out, proxy, "feedDocument")
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(out, inline)
 
 
 if __name__ == "__main__":

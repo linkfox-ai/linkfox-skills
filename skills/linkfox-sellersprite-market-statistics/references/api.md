@@ -4,9 +4,9 @@
 
 ## 调用规范
 
-- **请求地址**：`https://tool-gateway.linkfox.com/sellersprite/market/statistics`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/sellersprite/market/statistics`
 - **请求方式**：POST，`Content-Type: application/json`
-- **认证方式**：Header `Authorization: <api_key>`，从环境变量 `LINKFOXAGENT_API_KEY` 读取
+- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取
 
 ## 请求参数
 

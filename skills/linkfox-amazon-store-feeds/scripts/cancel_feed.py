@@ -16,9 +16,11 @@ import sys
 from _spapi_feeds_common import (
     FEEDS_PATH_PREFIX,
     developer_proxy_call,
+    emit_result,
     encode_path_segment,
     ensure_auth_skill_available,
     get_store_tokens,
+    lf_inline_flag,
     load_cli_params,
     require_seller_region,
 )
@@ -50,7 +52,8 @@ def main() -> None:
 
     proxy = developer_proxy_call(region, path, "DELETE", tokens["accessToken"])
     out: dict = {"developerProxy": proxy, "resolvedPath": path}
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(out, inline)
 
 
 if __name__ == "__main__":

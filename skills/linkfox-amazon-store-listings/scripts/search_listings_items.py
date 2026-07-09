@@ -31,12 +31,16 @@ import sys
 from pathlib import Path
 from urllib.parse import quote
 from urllib.error import HTTPError, URLError
+
+from _spapi_listings_common import emit_result, lf_inline_flag
 from urllib.request import Request, urlopen
 
 LISTINGS_API_VERSION = "2021-08-01"
 
-API_BASE_URL = os.environ.get("STORE_API_BASE_URL") or os.environ.get(
-    "SPAPI_BASE_URL", "https://tool-gateway.linkfox.com"
+API_BASE_URL = (
+    os.environ.get("LINKFOX_TOOL_GATEWAY")
+    or os.environ.get("STORE_API_BASE_URL")
+    or os.environ.get("SPAPI_BASE_URL", "https://tool-gateway.linkfox.com")
 )
 STORE_TOKENS_ENDPOINT = f"{API_BASE_URL.rstrip('/')}/spApi/storeTokens"
 DEVELOPER_PROXY_ENDPOINT = f"{API_BASE_URL.rstrip('/')}/spApi/developerProxy"
@@ -79,7 +83,7 @@ def ensure_auth_skill_available() -> None:
 
 
 def get_api_key() -> str:
-    key = os.environ.get("LINKFOXAGENT_API_KEY")
+    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
     if not key:
         print(
             "API Key not configured. Set:\n  export LINKFOXAGENT_API_KEY=<your-key>",
@@ -331,7 +335,7 @@ def main() -> None:
         except json.JSONDecodeError:
             out["searchResult"] = None
             out["searchResultRaw"] = body_raw
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    emit_result(out, lf_inline_flag())
 
 
 if __name__ == "__main__":

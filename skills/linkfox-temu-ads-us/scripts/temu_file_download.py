@@ -16,6 +16,8 @@ import json
 import sys
 
 from _temu_common import (
+    emit_result,
+    lf_inline_flag,
     FILE_DOWNLOAD_URL,
     call_temu_api,
     load_json_arg,
@@ -52,7 +54,7 @@ def main():
     params = load_json_arg(sys.argv)
     body = build_request(params)
     result = call_temu_api(FILE_DOWNLOAD_URL, body, timeout=120, linkfox_params=params)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    emit_result(result, inline=lf_inline_flag())
 
 if __name__ == "__main__":
     main()

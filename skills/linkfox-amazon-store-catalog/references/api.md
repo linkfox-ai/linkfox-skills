@@ -2,7 +2,7 @@
 
 经 **LinkFox** `storeTokens` + `developerProxy` 调用 SP-API **Catalog Items**（与 listings / pricing 系列相同）。
 
-环境变量：`LINKFOXAGENT_API_KEY`；可选 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`。
+环境变量：`LINKFOX_AGENT_API_KEY`（或 `LINKFOXAGENT_API_KEY`）；可选 `LINKFOX_TOOL_GATEWAY`（回退 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`，默认 `https://tool-gateway.linkfox.com`）。
 
 ---
 

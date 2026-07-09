@@ -5,14 +5,15 @@
 ## 调用规范
 
 - **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOXAGENT_API_KEY` 读取（如未配置，提示用户前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
+- **网关基础地址**：环境变量 `${LINKFOX_TOOL_GATEWAY}`（如未配置，脚本内置默认地址）
+- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置，提示用户前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
 - **业务成功判定**：HTTP 状态码 200，业务成功以响应体 `errcode` 字段为准（`errcode = 200` 成功，其他值为业务错误，`errmsg` 给出原因）
 
 ---
 
 ## 一、政策法规资讯列表
 
-- **请求地址**：`https://tool-gateway.linkfox.com/amazon/policyFeed`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/amazon/policyFeed`
 - **脚本**：`scripts/amazon_policy_feed.py`
 
 ### 请求参数
@@ -63,7 +64,7 @@ curl -X POST https://tool-gateway.linkfox.com/amazon/policyFeed \
 
 ## 二、资讯详情
 
-- **请求地址**：`https://tool-gateway.linkfox.com/amazon/policyFeedDetail`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/amazon/policyFeedDetail`
 - **脚本**：`scripts/amazon_policy_feed_detail.py`
 
 ### 请求参数

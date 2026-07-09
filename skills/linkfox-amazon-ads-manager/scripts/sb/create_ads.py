@@ -35,6 +35,8 @@ from _common import (  # noqa: E402
     mutate_entity,
     parse_argv_params,
     require_fields,
+    emit_result,
+    lf_inline_flag,
 )
 
 VALID_AD_TYPES = [
@@ -74,7 +76,7 @@ def main() -> None:
     access_token = get_access_token(profile_id)
     result = mutate_entity(
         region=region,
-        profile_id=profPE,
+        profile_id=profile_id,
         payload=params["payload"],
     )
 
@@ -82,7 +84,8 @@ def main() -> None:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         sys.exit(1)
 
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(result, inline)
     print(
         f"\n✓ {METHOD} {entity_path} — HTTP {result.get('httpStatus', '?')}",
         file=sys.stderr,

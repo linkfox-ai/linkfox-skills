@@ -18,19 +18,19 @@ description: Temu 美国站发品（Add Product）API，经 LinkFox 网关转发
 
 > **不是订单 skill**：订单、发货、物流见 `linkfox-temu-order-us` 或其它履约类 skill。
 
-## API Usage
+## 调用方式
 
-完整入参/出参见 `references/`（已内联 Partner 文档要点，无需外链）：
+- **API 端点**：`POST /temu/proxy`（不同操作通过请求体区分；完整参数/响应/错误码见 `references/api.md`）
+- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文脚本一览）
+- **成本约束**：本工具会消耗积分；失败/空结果不得自动换关键词、翻页或连续试探；需要继续检索时先向用户说明会产生额外消耗。
 
-| 文档 | 内容 |
-|------|------|
-| [api.md](./references/api.md) | 网关、鉴权、通用响应、错误码 |
-| [partner-us-catalog.md](./references/partner-us-catalog.md) | 全部接口与 `sub_menu_code` 对照 |
-| [product-query-apis.md](./references/product-query-apis.md) | 列表、详情 |
-| [product-edit-apis.md](./references/product-edit-apis.md) | 更新、改属性、敏感品、迁移 |
-| [product-publish-apis.md](./references/product-publish-apis.md) | V2 发品、图片、legacy 发品 |
-| [category-spec-apis.md](./references/category-spec-apis.md) | 类目/属性/规格/品牌/映射 |
-| [stock-price-apis.md](./references/stock-price-apis.md) | 库存、供货价 |
+**输出策略（脚本默认行为）**：
+- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-temu-add-product-us-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
+- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
+- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
+- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+
+**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
 
 ## 默认参数
 
@@ -115,29 +115,3 @@ python scripts/us_goods_add.py '{"accessToken":"TOKEN","params":{"..."}}'
 
 授权说明：[references/access-token.md](./references/access-token.md)
 
-<!-- LF_LARGE_RESPONSE_BLOCK -->
-## Handling Large Responses
-
-To avoid overflowing the agent context, persist the response to disk and extract only the fields you need:
-
-```
-python scripts/response_io.py run --script scripts/check_linkfox_token.py --out-dir <DIR> '<params>'
-python scripts/response_io.py read <file> --fields "<paths>"   # or --path "<JMESPath>"
-```
-
-> Pick `--out-dir` outside any git working tree (e.g. `/tmp/...` on Unix, `%TEMP%/...` on Windows). Persisted responses may contain PII, pricing, or auth-sensitive data — do not commit them. Files are not auto-deleted; clean up when the task is done.
-
-> This skill exposes multiple entry scripts: `check_linkfox_token.py`, `get_temu_access_token.py`, `list_temu_access_tokens.py`, `save_temu_access_token.py`, `temu_file_download.py`, `temu_proxy.py`, `temu_token_guide.py`, `temu_us_file_download.py`, `temu_us_proxy.py`, `us_goods_add.py`, `us_goods_add_legacy.py`, `us_goods_attrs.py`, `us_goods_attrs_bg.py`, `us_goods_brand.py`, `us_goods_category_mapping.py`, `us_goods_cats.py`, `us_goods_detail.py`, `us_goods_edit_property.py`, `us_goods_edit_sensitive.py`, `us_goods_image_upload.py`, `us_goods_list.py`, `us_goods_migrate.py`, `us_goods_parent_spec.py`, `us_goods_price_list.py`, `us_goods_stock_get.py`, `us_goods_stock_update.py`, `us_goods_update.py`, `us_goods_variation.py`. Pass `--script scripts/<name>.py` to choose the one you need.
-
-`run` writes the full response to a file and emits only a schema preview + file path. `read` projects specific fields, with `--limit/--offset` for slicing and `--format json|jsonl|csv|table` for output.
-
-**When to prefer this pattern** — apply your judgment based on the response characteristics, e.g.:
-- High field count per record, or fields you don't need
-- Batch/paginated results (multiple items per call)
-- Long-text fields (descriptions, reviews, HTML, time series)
-- Output reused across later steps rather than consumed immediately
-
-For small, single-use responses, calling the main script directly is fine.
-
-⚠️ The preview is a truncated schema + sample, not the full data. Any field-level decision must read from the persisted file via `read`.
-<!-- /LF_LARGE_RESPONSE_BLOCK -->

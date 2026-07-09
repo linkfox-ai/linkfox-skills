@@ -31,6 +31,8 @@ from _common import (  # noqa: E402
     parse_argv_params,
     require_fields,
     _developer_proxy_call,
+    emit_result,
+    lf_inline_flag,
 )
 
 ENTITY_PATH = "sd/budgetRules"
@@ -96,7 +98,8 @@ def main() -> None:
         "total": len(all_rules),
         "pagesFetched": pages,
     }
-    print(json.dumps(output, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(output, inline)
     print(f"\n✓ Fetched {len(all_rules)} budget rules across {pages} page(s)", file=sys.stderr)
 
 

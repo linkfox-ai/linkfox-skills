@@ -12,17 +12,20 @@ import os
 import sys
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
+from _lf_output import emit_result, lf_inline_flag
 
-
-API_BASE_URL = os.environ.get("STORE_API_BASE_URL") or os.environ.get(
-    "SPAPI_BASE_URL", "https://tool-gateway.linkfox.com"
-)
+API_BASE_URL = (
+    os.environ.get("LINKFOX_TOOL_GATEWAY")
+    or os.environ.get("STORE_API_BASE_URL")
+    or os.environ.get("SPAPI_BASE_URL")
+    or "https://tool-gateway.linkfox.com"
+).rstrip("/")
 API_ENDPOINT = f"{API_BASE_URL}/spApi/storeTokens"
 
 
 def get_api_key():
     """Retrieve the API key from environment, with a friendly prompt if missing."""
-    key = os.environ.get("LINKFOXAGENT_API_KEY")
+    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
     if not key:
         print(
             "API Key not configured. Please set the environment variable:\n"
@@ -87,7 +90,7 @@ def main():
     if "refreshToken" in result:
         result["refreshToken"] = result["refreshToken"][:10] + "..." if len(result["refreshToken"]) > 10 else result["refreshToken"]
 
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    emit_result(result, lf_inline_flag())
 
     # If successful, print helpful info
     if "expiresIn" in result:

@@ -2,9 +2,9 @@
 
 ## 调用规范
 
-- **请求地址**：`https://tool-gateway.linkfox.com/alibaba1688/imageSearch`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/alibaba1688/imageSearch`
 - **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOXAGENT_API_KEY` 读取（如未配置，提示用户前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
+- **认证方式**：Header `Authorization: <api_key>`，api_key 优先从环境变量 `LINKFOX_AGENT_API_KEY` 读取，回退 `LINKFOXAGENT_API_KEY`（如未配置，提示用户前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
 - **User-Agent**：`LinkFox-Skill/1.0`
 - **超时**：60s
 

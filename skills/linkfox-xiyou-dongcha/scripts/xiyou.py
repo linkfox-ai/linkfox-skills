@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _xiyou_common import call_xiyou_api  # noqa: E402
+from _xiyou_common import call_xiyou_api, emit_result, lf_inline_flag  # noqa: E402
 
 APIS: dict[str, str] = {
     "asinTraffic": "ASIN 流量得分",
@@ -109,7 +109,8 @@ def main() -> None:
         sys.exit(1)
 
     result = call_xiyou_api(route, params)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(result, inline)
 
 
 if __name__ == "__main__":

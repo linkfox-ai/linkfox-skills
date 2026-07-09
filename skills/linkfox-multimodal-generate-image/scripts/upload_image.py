@@ -18,7 +18,8 @@ import sys
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
-PRESIGN_URL = "https://tool-gateway.linkfox.com/oss/file/presignedPut"
+_API_BASE = (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
+PRESIGN_URL = f"{_API_BASE}/oss/file/presignedPut"
 
 CONTENT_TYPE_MAP = {
     "jpg": "image/jpeg",
@@ -32,7 +33,7 @@ CONTENT_TYPE_MAP = {
 
 def get_api_key():
     """Retrieve the API key from environment, with a friendly prompt if missing."""
-    key = os.environ.get("LINKFOXAGENT_API_KEY")
+    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
     if not key:
         print(
             "API Key not configured. Please complete authorization first:\n"

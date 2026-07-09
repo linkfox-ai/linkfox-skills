@@ -24,7 +24,7 @@ import sys
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from _spapi_uploads_common import load_cli_params, load_file_bytes
+from _spapi_uploads_common import emit_result, lf_inline_flag, load_cli_params, load_file_bytes
 
 
 def _resolve_upload_target(params: dict) -> tuple[str, dict]:
@@ -81,7 +81,8 @@ def main() -> None:
         out["success"] = False
         out["error"] = f"Connection failed: {e.reason}"
 
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(out, inline)
     if not out.get("success"):
         sys.exit(1)
 

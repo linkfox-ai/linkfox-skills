@@ -29,8 +29,10 @@ from urllib.parse import quote
 
 from _spapi_uploads_common import (
     developer_proxy_post,
+    emit_result,
     ensure_auth_skill_available,
     get_store_tokens,
+    lf_inline_flag,
     load_cli_params,
     merge_success_json,
     path_for_upload_destination,
@@ -89,7 +91,8 @@ def main() -> None:
         "resource": str(params["resource"]).strip(),
     }
     merge_success_json(out, proxy, "uploadDestination")
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(out, inline)
 
 
 if __name__ == "__main__":

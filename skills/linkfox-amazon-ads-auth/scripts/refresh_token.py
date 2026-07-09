@@ -14,14 +14,15 @@ import sys
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
+from _lf_output import emit_result, lf_inline_flag
 
 # 生产默认走 tool-gateway.linkfox.com；开发/测试期可 export AMAZON_ADS_BASE_URL=<url> 覆盖
-API_BASE_URL = os.environ.get("AMAZON_ADS_BASE_URL") or "https://tool-gateway.linkfox.com"
+API_BASE_URL = (os.environ.get("LINKFOX_TOOL_GATEWAY") or os.environ.get("AMAZON_ADS_BASE_URL") or "https://tool-gateway.linkfox.com").rstrip("/")
 API_ENDPOINT = f"{API_BASE_URL}/amazonAds/refreshToken"
 
 
 def get_api_key():
-    key = os.environ.get("LINKFOXAGENT_API_KEY")
+    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
     if not key:
         print(
             "API Key not configured. Please set the environment variable:\n"
@@ -83,7 +84,7 @@ def main():
     if "refreshToken" in result:
         result["refreshToken"] = _mask_token(result["refreshToken"])
 
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    emit_result(result, lf_inline_flag())
 
     if "message" in result:
         print(f"\n✓ {result['message']}", file=sys.stderr)

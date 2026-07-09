@@ -17,8 +17,10 @@ from urllib.parse import quote
 
 from _spapi_orders_common import (
     developer_proxy_call,
+    emit_result,
     ensure_auth_skill_available,
     get_store_tokens,
+    lf_inline_flag,
     merge_json_body,
 )
 
@@ -82,7 +84,8 @@ def main() -> None:
     proxy = developer_proxy_call(region, path, "GET", tokens["accessToken"], query_string=qs)
     out: dict = {"developerProxy": proxy, "resolvedPath": path, "queryString": qs}
     merge_json_body(out, proxy, "order")
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(out, inline)
 
 
 if __name__ == "__main__":

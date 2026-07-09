@@ -7,6 +7,8 @@ from _temu_common import (
     FILE_DOWNLOAD_URL,
     PROXY_URL,
     call_temu_api,
+    emit_result,
+    lf_inline_flag,
     load_json_arg,
     parse_nested_body,
     resolve_access_token,
@@ -86,4 +88,4 @@ def global_file_download_call(params: dict, timeout: int = 120) -> dict:
 
 def run_and_print(params: dict, api_type: str, business=None) -> None:
     result = parse_nested_body(global_proxy_call(params, api_type, business))
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    emit_result(result, inline=lf_inline_flag())

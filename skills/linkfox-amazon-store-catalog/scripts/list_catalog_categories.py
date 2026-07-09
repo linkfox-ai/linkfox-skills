@@ -16,8 +16,10 @@ from urllib.parse import quote
 
 from _spapi_catalog_common import (
     developer_proxy_get,
+    emit_result,
     ensure_auth_skill_available,
     get_store_tokens,
+    lf_inline_flag,
     load_cli_params,
     merge_success_json,
     norm_marketplace_ids,
@@ -76,7 +78,8 @@ def main() -> None:
     proxy = developer_proxy_get(region, PATH, tokens["accessToken"], query_string=qs)
     out: dict = {"developerProxy": proxy, "resolvedPath": PATH, "queryString": qs}
     merge_success_json(out, proxy, "categories")
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(out, inline)
 
 
 if __name__ == "__main__":

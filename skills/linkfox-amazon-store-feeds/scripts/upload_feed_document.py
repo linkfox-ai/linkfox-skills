@@ -26,6 +26,8 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from _spapi_feeds_common import emit_result, lf_inline_flag
+
 
 def _load_bytes(params: dict) -> bytes:
     if params.get("filePath"):
@@ -94,7 +96,8 @@ def main() -> None:
         out["success"] = False
         out["error"] = f"Connection failed: {e.reason}"
 
-    print(json.dumps(out, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(out, inline)
     if not out.get("success"):
         sys.exit(1)
 

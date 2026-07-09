@@ -15,13 +15,19 @@ This skill helps screen and rank Amazon category markets using SellerSprite mark
 - **入参刻度**：筛选用的 **GoodsCrn / BrandCrn / SellerCrn / EbcProportion / FbaProportion / FbmProportion / AmazonSelfProportion**（`min*`/`max*`）须为 **0～1 小数**，见下文参数表与 `references/api.md`。
 - **新品机会**：新品数量、新品占比、新品均价/评分/销量等。
 
-## API Usage
+## 调用方式
 
-- Endpoint: `POST https://tool-gateway.linkfox.com/sellersprite/market/research`
-- Auth: Header `Authorization: <api_key>` (`LINKFOXAGENT_API_KEY`)
-- 完整说明见 `references/api.md`：含 `marketplace` / `month` / `orderField` 枚举，`sellerLocation`/`newProduct`/`topNum`，以及集中度、新品、头部、重量体积等全部筛选入参；响应含顶层字段与 `data[]` 类目市场指标、`top10Images[]` 等。
-- Runnable script: `scripts/sellersprite_market_research.py`
+- **API 端点**：`POST /sellersprite/market/research`（完整参数/响应/错误码见 `references/api.md`）
+- **Python 脚本**：`python scripts/sellersprite_market_research.py '<JSON 参数>' [--inline]`
+- **成本约束**：本工具会消耗积分；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
 
+**输出策略（脚本默认行为）**：
+- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sellersprite-market-research-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
+- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
+- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
+- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+
+**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
 ## Key Parameters
 
 > 接口筛选项与工具 `_sellersprite_market_research` 一致（70+）；下表为常用子集，**完整参数与出参字段见 `references/api.md`**。
@@ -90,27 +96,3 @@ Auto-detect and report feedback via the Feedback API when any of the following a
 
 Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
 
-<!-- LF_LARGE_RESPONSE_BLOCK -->
-## Handling Large Responses
-
-To avoid overflowing the agent context, persist the response to disk and extract only the fields you need:
-
-```
-python scripts/response_io.py run --script scripts/sellersprite_market_research.py --out-dir <DIR> '<params>'
-python scripts/response_io.py read <file> --fields "<paths>"   # or --path "<JMESPath>"
-```
-
-> Pick `--out-dir` outside any git working tree (e.g. `/tmp/...` on Unix, `%TEMP%/...` on Windows). Persisted responses may contain PII, pricing, or auth-sensitive data — do not commit them. Files are not auto-deleted; clean up when the task is done.
-
-`run` writes the full response to a file and emits only a schema preview + file path. `read` projects specific fields, with `--limit/--offset` for slicing and `--format json|jsonl|csv|table` for output.
-
-**When to prefer this pattern** — apply your judgment based on the response characteristics, e.g.:
-- High field count per record, or fields you don't need
-- Batch/paginated results (multiple items per call)
-- Long-text fields (descriptions, reviews, HTML, time series)
-- Output reused across later steps rather than consumed immediately
-
-For small, single-use responses, calling the main script directly is fine.
-
-⚠️ The preview is a truncated schema + sample, not the full data. Any field-level decision must read from the persisted file via `read`.
-<!-- /LF_LARGE_RESPONSE_BLOCK -->

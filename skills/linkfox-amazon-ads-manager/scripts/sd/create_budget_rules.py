@@ -27,6 +27,8 @@ from _common import (  # noqa: E402
     mutate_entity,
     parse_argv_params,
     require_fields,
+    emit_result,
+    lf_inline_flag,
 )
 
 ENTITY_PATH = "sd/budgetRules"
@@ -60,7 +62,8 @@ def main() -> None:
         print(json.dumps(result, indent=2, ensure_ascii=False))
         sys.exit(1)
 
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(result, inline)
     print(
         f"\n\u2713 {METHOD} {ENTITY_PATH} \u2014 HTTP {result.get('httpStatus', '?')}",
         file=sys.stderr,

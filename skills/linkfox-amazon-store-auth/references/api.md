@@ -4,10 +4,10 @@
 
 ## Calling Conventions
 
-- **Base URL**: `https://tool-gateway.linkfox.com`（默认；可用 `STORE_API_BASE_URL` 或兼容旧名 `SPAPI_BASE_URL` 覆盖）
+- **Base URL**: `${LINKFOX_TOOL_GATEWAY}`（默认 `https://tool-gateway.linkfox.com`；可用 `LINKFOX_TOOL_GATEWAY` 覆盖，兼容旧名 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`）
 - **Request Method**: 所有接口均为 POST
 - **Content-Type**: `application/json`
-- **Authentication**: Header `Authorization: <api_key>`，API key 读取环境变量 `LINKFOXAGENT_API_KEY`（未配置时，请提示用户向系统管理员获取）
+- **Authentication**: Header `Authorization: <api_key>`，API key 优先读取环境变量 `LINKFOX_AGENT_API_KEY`，未设置时回退到兼容旧名 `LINKFOXAGENT_API_KEY`（均未配置时，请提示用户向系统管理员获取）
 
 ## API Endpoints
 

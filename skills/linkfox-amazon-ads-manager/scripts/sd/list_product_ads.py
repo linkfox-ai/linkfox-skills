@@ -51,6 +51,8 @@ from _common import (  # noqa: E402
     list_sd_entities,
     parse_argv_params,
     require_fields,
+    emit_result,
+    lf_inline_flag,
 )
 
 ENTITY_PATH_BASIC = "sd/productAds"
@@ -125,7 +127,8 @@ def main() -> None:
     if client_filters:
         output["serverTotalBeforeClientFilter"] = server_total
         output["clientSideFilters"] = {k: v for k, v in client_filters.items()}
-    print(json.dumps(output, indent=2, ensure_ascii=False))
+    inline = lf_inline_flag()
+    emit_result(output, inline)
 
     if client_filters:
         print(
