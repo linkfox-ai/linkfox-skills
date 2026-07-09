@@ -262,14 +262,9 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-aigc-textgen` | Aigc Textgen |
 | `linkfox-aigc-videogen` | Aigc Videogen |
 | `linkfox-aigc-videogen-multi` | Aigc Videogen Multi |
-| `linkfox-ehunt-etsy-category-search` | Ehunt Etsy Category Search |
-| `linkfox-ehunt-etsy-product-query` | Ehunt Etsy Product Query |
-| `linkfox-ehunt-etsy-store-query` | Ehunt Etsy Store Query |
-| `linkfox-ehunt-shopify-product-query` | Ehunt Shopify Product Query |
-| `linkfox-ehunt-shopify-store-query` | Ehunt Shopify Store Query |
-| `linkfox-ehunt-temu-category-search` | Ehunt Temu Category Search |
-| `linkfox-ehunt-temu-product-query` | Ehunt Temu Product Query |
-| `linkfox-ehunt-temu-store-query` | Ehunt Temu Store Query |
+| `linkfox-etsy-category-search` | Etsy Category Search |
+| `linkfox-etsy-product-query` | Etsy Product Query |
+| `linkfox-etsy-store-query` | Etsy Store Query |
 | `linkfox-lanjing-mercado-product-selection` | Query Mercado Libre (Mexico, Brazil, Argentina, Chile, Colombia) product, catalog, keyword, category, trend, seller, review, exchange-rate, and plan-usage data via 24 Lanjing tools through the LinkFox gateway |
 | `linkfox-lingxing-erp` | Lingxing Erp |
 | `linkfox-product-title-analyze` | Analyze and optimize Amazon product listing titles |
@@ -309,6 +304,8 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-shopee-store-top-picks` | Shopee Store Top Picks |
 | `linkfox-shopee-store-video` | Shopee Store Video |
 | `linkfox-shopee-store-voucher` | Shopee Store Voucher |
+| `linkfox-shopify-product-query` | Shopify Product Query |
+| `linkfox-shopify-store-query` | Shopify Store Query |
 | `linkfox-temu-add-product-us` | Temu Add Product Us |
 | `linkfox-temu-ads-eu` | Temu Ads Eu |
 | `linkfox-temu-ads-global` | Temu Ads Global |
@@ -316,6 +313,7 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-temu-cancel-order-eu` | Temu Cancel Order Eu |
 | `linkfox-temu-cancel-order-global` | Temu Cancel Order Global |
 | `linkfox-temu-cancel-order-us` | Temu Cancel Order Us |
+| `linkfox-temu-category-search` | Temu Category Search |
 | `linkfox-temu-compliance-global` | Temu Compliance Global |
 | `linkfox-temu-fulfillment-eu` | Temu Fulfillment Eu |
 | `linkfox-temu-fulfillment-global` | Temu Fulfillment Global |
@@ -329,12 +327,14 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-temu-price-eu` | Temu Price Eu |
 | `linkfox-temu-price-global` | Temu Price Global |
 | `linkfox-temu-price-us` | Temu Price Us |
+| `linkfox-temu-product-query` | Temu Product Query |
 | `linkfox-temu-promotion-eu` | Temu Promotion Eu |
 | `linkfox-temu-promotion-global` | Temu Promotion Global |
 | `linkfox-temu-promotion-us` | Temu Promotion Us |
 | `linkfox-temu-returns-refunds-eu` | Temu Returns Refunds Eu |
 | `linkfox-temu-returns-refunds-global` | Temu Returns Refunds Global |
 | `linkfox-temu-returns-refunds-us` | Temu Returns Refunds Us |
+| `linkfox-temu-store-query` | Temu Store Query |
 | `linkfox-temu-tax-eu` | Temu Tax Eu |
 | `linkfox-tsearch-search` | Tsearch Search |
 | `linkfox-wallysmarter-product-detail` | Walmart product detail with historical pricing and sales trends via WallySmarter |
