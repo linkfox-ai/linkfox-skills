@@ -367,3 +367,7 @@ Built on the [Agent Skills](https://agentskills.io) open standard:
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+## Download History
+
+[![Download History](https://skill-history.com/chart/linkfox-ai/linkfoxagent.svg)](https://skill-history.com/linkfox-ai/linkfoxagent)
