@@ -8,7 +8,7 @@ Shopee **AMS（Affiliate Marketing Solutions）模块**全部 36 个 API，经 *
 
 - **Base URL**：`${LINKFOX_TOOL_GATEWAY}`
 - **Method**：POST（网关），上游 Method 见各接口
-- **Auth**：Header `Authorization: <api_key>`（`LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`）
+- **Auth**：Header `Authorization: <api_key>`（`LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`）（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 - **流程**：`POST /shopee/storeTokens` → `POST /shopee/developerProxy`
 - **path**：须 `api/v2/ams/...`
 - **标识**：店铺级 API，通常传 **`shopId`**

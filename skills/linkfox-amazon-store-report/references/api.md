@@ -9,7 +9,7 @@
 - **Base URL**: `${LINKFOX_TOOL_GATEWAY}`（默认 `https://tool-gateway.linkfox.com`；可用 `STORE_API_BASE_URL` 或兼容旧名 `SPAPI_BASE_URL` 覆盖）
 - **Request Method**: POST
 - **Content-Type**: `application/json`
-- **Authentication**: Header `Authorization: <api_key>`，读取环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`
+- **Authentication**: Header `Authorization: <api_key>`，读取环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 ## API Endpoints
 
@@ -116,6 +116,7 @@ linkfox-amazon-store-report/scripts/get_report.py    # 用 accessToken 拉报告
 |---------|------|----------|
 | 200 | 代理调用成功（还需看 `httpStatus`） | 继续解析 `body` |
 | 1002 | 缺参数或认证失败 | 检查必填参数与 API key |
+| 402 | 积分不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。|
 | 1003 | 第三方服务调用失败 | 稍后重试 |
 | 1005 | path 不在白名单 | 联系后端加白名单 |
 

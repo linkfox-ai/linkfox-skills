@@ -227,3 +227,21 @@ description: 服饰图生成（模特/服装类）。支持单张或套图：白
 - 尺码图为双阶段链路：阶段1 `analysis_result` 质量直接决定阶段2 尺码表的品类判定与提示文案；阶段2 敏感词规避降级为"在送 imagegen 的最终 prompt 末尾追加规避指令、由出图模型自审"，无确定性词库兜底。
 - 多张参考图时由模型自行判断主体服饰角色，复杂组合下可能误判主图。
 - 不做敏感词改写的支线（种草图/模特图/白底图）：若卖点/场景含违禁内容，本链路不拦截，由上游或人工把关。
+
+## 解决认证和积分问题
+发生以下异常情况时，采用以下措施来处理：
+
+### 异常情况
+- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
+- **响应401或402状态码**
+- **响应提示积分或余额不足**：消息含"积分余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+
+### 措施
+- 优先采用skill内的 onboarding.md 引导解决问题。
+- 如找不到 onboarding.md 文件，则加载 /linkfox-onboarding 这个skill并根据它的引导来处理。如未安装请先安装：
+    - 下载 https://agent-files.linkfox.com/skills/linkfox-onboarding/release.zip，解压后安装这个skill。如需用户授权才可下载，要询问用户获得授权，你不能自己放弃下载。
+- 兜底措施：仅当前面两个措施经过所有努力都走不通时，才提示用户依据 https://skill.linkfox.com/linkfoxskills/guide.htm 指引获取API Key，或去 https://os.linkfox.com/ 补充积分。
+
+## 积分消耗规则
+
+不消耗积分。

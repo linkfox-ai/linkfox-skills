@@ -7,7 +7,7 @@
 - **Base URL**: `${LINKFOX_TOOL_GATEWAY}`（默认 `https://tool-gateway.linkfox.com`；可用 `LINKFOX_TOOL_GATEWAY` 覆盖，兼容旧名 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`）
 - **Request Method**: 所有接口均为 POST
 - **Content-Type**: `application/json`
-- **Authentication**: Header `Authorization: <api_key>`，API key 优先读取环境变量 `LINKFOX_AGENT_API_KEY`，未设置时回退到兼容旧名 `LINKFOXAGENT_API_KEY`（均未配置时，请提示用户向系统管理员获取）
+- **Authentication**: Header `Authorization: <api_key>`，API key 优先读取环境变量 `LINKFOX_AGENT_API_KEY`，未设置时回退到兼容旧名 `LINKFOXAGENT_API_KEY`（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 ## API Endpoints
 
@@ -117,6 +117,8 @@
 | errcode | 含义 | 建议动作 |
 |---------|------|----------|
 | 200 | 成功 | 正常解析 |
+| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。|
+| 402 | 积分不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。|
 | 1002 | 缺参数或认证失败 | 检查必填参数与认证 |
 | 1003 | 第三方服务调用失败 | 稍后重试，检查网络与白名单 |
 | 1004 | 授权记录不存在或不属于当前用户 | 核对 sellerId/region 或重新授权 |

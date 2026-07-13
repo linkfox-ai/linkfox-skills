@@ -9,7 +9,7 @@
 - **Content-Type**：`application/json`
 - **User-Agent**：`LinkFox-Skill/2.0`
 - **超时**：120s
-- **认证方式**：Header `Authorization: <api_key>`，api_key 优先从环境变量 `LINKFOX_AGENT_API_KEY` 读取，回退 `LINKFOXAGENT_API_KEY`（如未配置，脚本会在发起请求前退出，提示前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
+- **认证方式**：Header `Authorization: <api_key>`，api_key 优先从环境变量 `LINKFOX_AGENT_API_KEY` 读取，回退 `LINKFOXAGENT_API_KEY`（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 脚本还会透传 `SESSION_ID`、`MODE_ID`、`APP_NAME` 同名环境变量（缺省空串）。不要把蓝鲸上游 `secret-key`、`X-API-Key` 或后端内部环境变量交给 Skill；上游凭证由后端托管。
 
@@ -165,7 +165,9 @@ curl -X POST "${LINKFOX_TOOL_GATEWAY}/lingdong/call" \
 
 其他情况：
 
-- HTTP `401` / `403`：检查 `Authorization` 是否为 LinkFox 网关 Key，而不是蓝鲸上游 Key。
+- HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+- HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+- HTTP `403`：检查 `Authorization` 是否为 LinkFox 网关 Key，而不是蓝鲸上游 Key。
 - `toolName` 不支持：网关返回 `errcode 1002`，`errmsg` 形如「参数校验失败，请检查输入。不支持的 toolName: <name>」（脚本不会退出，照常落盘该错误响应）。
 - `data` 是文本：这不一定是失败，多数蓝鲸工具以文本返回业务结果。
 - 查询为空（如 `查询不到商品信息`、`未查询到评论数据`）：封装层 `code:"200"` 属正常，是上游业务结果为空，不应报成系统异常；换一个真实 ID/关键词即可。

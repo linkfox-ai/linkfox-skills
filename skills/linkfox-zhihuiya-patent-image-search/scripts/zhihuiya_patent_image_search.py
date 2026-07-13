@@ -27,6 +27,11 @@ from urllib.error import HTTPError, URLError
 API_PATH = "/zhihuiya/patentImageSearch"
 SLUG = "linkfox-zhihuiya-patent-image-search"
 
+# 本 skill 仅支持外观设计专利：patentType 固定为 D，model 仅允许 1（智能联想，推荐）/ 2（搜索此图）
+PATENT_TYPE = "D"
+ALLOWED_MODELS = {1, 2}
+DEFAULT_MODEL = 1
+
 # 响应小于等于该字节数时，直接全量输出，不落文件
 SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
@@ -43,12 +48,14 @@ def get_api_url():
 
 
 def get_api_key():
+    """
+    获取配置在环境变量的API Key。
+    如果获取不到，按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+    """
     key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
     if not key:
         print(
-            "API Key not configured. Please complete authorization first:\n"
-            "1. Visit https://skill.linkfox.com/linkfoxskills/guide.htm to obtain your Key\n"
-            "2. Set the environment variable: export LINKFOX_AGENT_API_KEY=your-key-here",
+            "API Key 未配置",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -322,6 +329,19 @@ def main():
         params = json.loads(argv[0])
     except json.JSONDecodeError as e:
         print(f"Invalid parameter format: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # 强制本 skill 支持的专利类型与模型，忽略/纠正入参中的外观专利以外的取值
+    params["patentType"] = PATENT_TYPE
+    model = params.get("model")
+    if model is None:
+        params["model"] = DEFAULT_MODEL
+    elif model not in ALLOWED_MODELS:
+        print(
+            f"本技能仅支持外观设计专利（model 必须为 1 或 2），收到 model={model}；"
+            f"实用新型专利检索请使用 linkfox-zhihuiya-utility-patent-image-search",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     cache_path = _cache_path(params)

@@ -8,7 +8,7 @@ Shopee **Video 模块**全部 15 个 API，经 **`POST /shopee/developerProxy`**
 
 - **Base URL**：`https://tool-gateway.linkfox.com`
 - **Method**：POST（网关），上游 Method 见各接口
-- **Auth**：Header `Authorization: <api_key>`（`LINKFOXAGENT_API_KEY`）
+- **Auth**：Header `Authorization: <api_key>`（`LINKFOXAGENT_API_KEY`）（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 - **流程**：`POST /shopee/storeTokens` → `POST /shopee/developerProxy`
 - **path**：须 `api/v2/video/...`
 - **标识**：店铺级 API，通常传 **`shopId`**
@@ -77,6 +77,7 @@ Shopee **Video 模块**全部 15 个 API，经 **`POST /shopee/developerProxy`**
 | 1003 | 代理/网络异常 | 重试 |
 | 1004 | 无授权记录 | auth skill |
 | 1005 | path 未白名单 | 确认 `api/v2/video/...` |
+| HTTP 402 | 积分不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
 
 ---
 

@@ -13,7 +13,7 @@
 | 项 | 说明 |
 |----|------|
 | **Base URL** | `${LINKFOX_TOOL_GATEWAY}`（默认 `https://tool-gateway.linkfox.com`；可用 `STORE_API_BASE_URL` 或 `SPAPI_BASE_URL` 覆盖） |
-| **网关认证** | Header `Authorization: <api_key>`，环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` |
+| **网关认证** | Header `Authorization: <api_key>`，环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理） |
 | **店铺令牌** | `POST /spApi/storeTokens`，Body：`{"sellerId":"...","region":"NA\|EU\|FE"}` → `accessToken` |
 | **SP-API 转发** | `POST /spApi/developerProxy`，Body 见下节 |
 
@@ -55,6 +55,8 @@
   - **`definitions/2020-09-01/productTypes`**：`searchDefinitionsProductTypes` 与 **`getDefinitionsProductType`**（后者 path 含 **`/{productType}`** 段）。
 - 网关须允许 **`PATCH`**、**`PUT`**、**`DELETE`**（及已有 **GET**）转发。
 - 其它 **`errcode`** / **`httpStatus`** 含义与处置与 `linkfox-amazon-store-report` 的 `references/api.md` 中 **Error Codes** / **Developer Proxy 上游状态码** 表格一致（400 参数、403 令牌/权限、404 无此 SKU 等）。
+- HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+- HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
 
 ---
 

@@ -2,7 +2,7 @@
 
 Temu **全球站退货与退款（Returns & Refunds）**，经本 skill `temu_global_proxy`（`POST /temu/proxy`） 转发。Temu 的 `type` 写在 Body，**不是** URL 路径。
 
-> 网关与鉴权：本 skill `scripts/`（`LINKFOXAGENT_API_KEY`、`accessToken` / `storeKey`）。建议 token 见 `references/access-token.md`（`tokenPurpose=order-shipping`）。
+> 网关与鉴权：本 skill `scripts/`（`LINKFOXAGENT_API_KEY`、`accessToken` / `storeKey`）。建议 token 见 `references/access-token.md`（`tokenPurpose=order-shipping`）。（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 ---
 
@@ -13,7 +13,7 @@ Temu **全球站退货与退款（Returns & Refunds）**，经本 skill `temu_gl
 | 网关根地址 | `${LINKFOX_TOOL_GATEWAY}`（可用 `TEMU_API_BASE_URL` / `STORE_API_BASE_URL` 覆盖） |
 | 退货退款 OpenAPI | `POST /temu/proxy` |
 | 加签文件下载 | `POST /temu/fileDownload`（`temu_global_file_download.py`） |
-| LinkFox 鉴权 | Header **`Authorization`** 与 **`Token`**（同值）；或 `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY`；或 JSON `token` |
+| LinkFox 鉴权 | Header **`Authorization`** 与 **`Token`**（同值）；或 `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY`；或 JSON `token`（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理） |
 | Temu 鉴权 | Body `accessToken`，或 `storeKey` + `site` + `managementType` + `tokenPurpose` |
 | 默认 | `site=global`，`managementType=semi-managed`，`tokenPurpose=order-shipping` |
 | 上游 OpenAPI（Global） | `https://openapi-b-global.temu.com/openapi/router`（网关按 `site` 解析） |
@@ -104,6 +104,7 @@ python scripts/temu_global_proxy.py '{"accessToken":"TOKEN","tokenPurpose":"orde
 |------|------|------|
 | 1002 | 参数或 LinkFox Token 无效 | 修正参数与 `LINKFOXAGENT_API_KEY` |
 | 1003 | 转发失败 | 检查 Temu token、`tokenPurpose`、白名单、网络 |
+| 402 | HTTP 402 | 按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
 
 ---
 

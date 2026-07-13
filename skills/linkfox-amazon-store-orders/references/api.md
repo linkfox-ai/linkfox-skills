@@ -18,7 +18,7 @@
 
 环境变量：
 
-- **`LINKFOX_AGENT_API_KEY`**（或 **`LINKFOXAGENT_API_KEY`**，必填）：网关鉴权。
+- **`LINKFOX_AGENT_API_KEY`**（或 **`LINKFOXAGENT_API_KEY`**，必填）：网关鉴权。（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 - **`LINKFOX_TOOL_GATEWAY`**（或 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`，可选）：默认 `https://tool-gateway.linkfox.com`。
 
 ---
@@ -134,6 +134,8 @@
 - 脚本统一输出 JSON：`developerProxy` 为网关原样；部分脚本增加 **`resolvedPath`**、**`queryString`**、**`requestBody`**。
 - 优先阅读 **`developerProxy.errcode`**、**`developerProxy.httpStatus`**，再读 **`developerProxy.body`**（常为 Amazon 错误 JSON）。
 - **429**：需降频重试；searchOrders 默认速率较低。
+- HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+- HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
 
 ---
 

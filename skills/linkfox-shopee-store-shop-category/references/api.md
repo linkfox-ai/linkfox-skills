@@ -43,7 +43,7 @@ Shopee **Shop Category 模块**全部 7 个 API，经 **`POST /shopee/developerP
 
 ## curl 示例
 
-请求地址从环境变量 `${LINKFOX_TOOL_GATEWAY}` 读取（默认 `https://tool-gateway.linkfox.com`）。认证从 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 任一环境变量读取。
+请求地址从环境变量 `${LINKFOX_TOOL_GATEWAY}` 读取（默认 `https://tool-gateway.linkfox.com`）。认证从 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 任一环境变量读取（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）。
 
 ```bash
 curl -X POST ${LINKFOX_TOOL_GATEWAY}/shopee/developerProxy \

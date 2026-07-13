@@ -79,7 +79,7 @@
 
 - **网关**：`https://tool-gateway.linkfox.com`（可用 `LINKFOX_TOOL_GATEWAY_BASE` 覆盖根 URL）
 - **默认路径段**：`ehunt/etsy/storeQuery`（可用 `LINKFOX_EHUNT_STORE_QUERY_PATH` 覆盖，不含域名）
-- **鉴权**：环境变量 `LINKFOXAGENT_API_KEY`（与其他 `linkfox-*` skill 相同；申请见 https://skill.linkfox.com/linkfoxskills/guide.htm ）
+- **鉴权**：环境变量 `LINKFOXAGENT_API_KEY`（与其他 `linkfox-*` skill 相同；如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 ```bash
 export LINKFOXAGENT_API_KEY="<your-key>"

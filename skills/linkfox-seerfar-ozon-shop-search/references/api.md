@@ -4,7 +4,7 @@
 
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/seerfar/ozon/shopSearch`
 - **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置，提示用户前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
+- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 - **User-Agent**：`LinkFox-Skill/1.0`；HTTP 超时 60s
 
 ## 请求参数
@@ -80,7 +80,8 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`id` 与 `pag
 | 400 | 参数错误 | 查看 `errmsg`；常见为缺 `id`（`id 为必填参数`）、缺 `page`（`page 为必填参数`） |
 | 1002 | 分页参数超出限制 | `page.pageSize` 最大为 20，调小后重试 |
 | 1003 | 请求过于频繁 | 限流，稍后重试 |
-| 401 | 认证失败 | 检查请求头 `Authorization` 是否正确携带 API Key；API Key 申请方式请参考上述[调用规范](#调用规范)下的认证方式 |
+| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
+| 402 | 计费失败 | HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
 | 其他非 200 值 | 业务异常 | 查看 `errmsg` 获取具体原因 |
 
 > **不存在的店铺 ID**：传入不存在的 `id` 不会报错，而是返回 `errcode:200`、`total:0`、`data:[]`（空结果）。判断"店铺无数据"应基于 `total=0`，而非 `errcode`。

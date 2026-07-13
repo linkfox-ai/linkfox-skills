@@ -13,7 +13,7 @@
 | 项 | 说明 |
 |----|------|
 | **Base URL** | `${LINKFOX_TOOL_GATEWAY}`（默认 `https://tool-gateway.linkfox.com`；可用 `STORE_API_BASE_URL` 或 `SPAPI_BASE_URL` 覆盖） |
-| **网关认证** | Header `Authorization: <api_key>`，环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` |
+| **网关认证** | Header `Authorization: <api_key>`，环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理） |
 | **店铺令牌** | `POST /spApi/storeTokens`，Body：`{"sellerId":"...","region":"NA|EU|FE"}` → `accessToken` |
 | **SP-API 转发** | `POST /spApi/developerProxy`，Body 见下节 |
 
@@ -37,6 +37,8 @@
 
 - `path` 须在网关 **`sp-api.developer-proxy.allowed-path-prefixes`** 内。若 **`errcode=1005`**，需联系后端放行 **`products/pricing/`** 与 **`batches/products/pricing/`** 等前缀（以运维配置为准）。
 - 其它错误与 `linkfox-amazon-store-report` 的 Developer Proxy 说明一致。
+- HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+- HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
 
 ---
 

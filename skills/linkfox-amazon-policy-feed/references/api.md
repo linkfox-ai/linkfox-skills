@@ -6,7 +6,7 @@
 
 - **请求方式**：POST，Content-Type: application/json
 - **网关基础地址**：环境变量 `${LINKFOX_TOOL_GATEWAY}`（如未配置，脚本内置默认地址）
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置，提示用户前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
+- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 - **业务成功判定**：HTTP 状态码 200，业务成功以响应体 `errcode` 字段为准（`errcode = 200` 成功，其他值为业务错误，`errmsg` 给出原因）
 
 ---
@@ -102,7 +102,8 @@ curl -X POST https://tool-gateway.linkfox.com/amazon/policyFeedDetail \
 | code | 含义 | 处理建议 |
 |------|------|----------|
 | 200 | 成功 | 正常解析业务字段 |
-| 401 | 认证失败 | 检查请求头 `Authorization` 是否正确携带 API Key |
+| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。|
+| 402 | 积分不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。|
 | 其他非 200 值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
 
 错误响应示例（详情接口传入无效 id）：

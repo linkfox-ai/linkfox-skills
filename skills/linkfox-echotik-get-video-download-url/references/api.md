@@ -4,7 +4,7 @@
 
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/echotik/getVideoDownloadUrl`
 - **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置，提示用户前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
+- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 ## 请求参数
 
@@ -60,7 +60,8 @@ POST Body（JSON）：
 |---------|------|----------|
 | 200 | 成功 | 正常解析业务字段 |
 | 400 | 参数错误 | `errmsg` 会指明缺失项，如 `url 为必填参数`；检查 `url` 是否传入且非空 |
-| 401 | 认证失败 | 检查请求头 `Authorization` 是否正确携带 API Key；API Key 申请方式请参考上述[调用规范](#调用规范)下的认证方式。|
+| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。|
+| 402 | 积分不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。|
 | 10000 | 未获取到视频下载地址 | URL 非 TikTok 视频链接、视频不可访问或已被删除；提示用户检查链接是否为有效的 TikTok 视频地址 |
 | 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
 

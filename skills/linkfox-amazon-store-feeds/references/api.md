@@ -7,7 +7,7 @@
 | 1 | `POST {BASE}/spApi/storeTokens` | `{"sellerId","region"}` → `accessToken` |
 | 2 | `POST {BASE}/spApi/developerProxy` | 转发 SP-API（除文档上传/下载 URL 外） |
 
-环境变量：`LINKFOX_AGENT_API_KEY`（或 `LINKFOXAGENT_API_KEY`，必填）；`LINKFOX_TOOL_GATEWAY`（可选，默认 `https://tool-gateway.linkfox.com`，回退 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`）。
+环境变量：`LINKFOX_AGENT_API_KEY`（或 `LINKFOXAGENT_API_KEY`，必填）（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）；`LINKFOX_TOOL_GATEWAY`（可选，默认 `https://tool-gateway.linkfox.com`，回退 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`）。
 
 ### developerProxy Body
 
@@ -110,6 +110,8 @@ createFeedDocument → PUT uploadUrl (upload_feed_document.py)
 
 ## 5. 错误与限制
 
+- **401**：HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+- **402**：HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
 - **403**：权限或 feedType 未授权。
 - **1005**（网关）：path 未在白名单，需放行 `feeds/2021-06-30/`。
 - **429**：降频；getFeeds 等有独立 usage plan。

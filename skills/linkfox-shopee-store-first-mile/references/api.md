@@ -83,7 +83,7 @@ curl -X POST ${LINKFOX_TOOL_GATEWAY}/shopee/developerProxy \
   }'
 ```
 
-> 认证：从 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 任一环境变量读取。请求地址使用 `${LINKFOX_TOOL_GATEWAY}`（回退到 `SHOPEE_API_BASE_URL`，再回退到 `https://tool-gateway.linkfox.com`）。
+> 认证：从 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 任一环境变量读取（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）。请求地址使用 `${LINKFOX_TOOL_GATEWAY}`（回退到 `SHOPEE_API_BASE_URL`，再回退到 `https://tool-gateway.linkfox.com`）。
 
 ---
 

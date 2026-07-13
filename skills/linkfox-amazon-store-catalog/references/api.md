@@ -2,7 +2,7 @@
 
 经 **LinkFox** `storeTokens` + `developerProxy` 调用 SP-API **Catalog Items**（与 listings / pricing 系列相同）。
 
-环境变量：`LINKFOX_AGENT_API_KEY`（或 `LINKFOXAGENT_API_KEY`）；可选 `LINKFOX_TOOL_GATEWAY`（回退 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`，默认 `https://tool-gateway.linkfox.com`）。
+环境变量：`LINKFOX_AGENT_API_KEY`（或 `LINKFOXAGENT_API_KEY`）（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）；可选 `LINKFOX_TOOL_GATEWAY`（回退 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`，默认 `https://tool-gateway.linkfox.com`）。
 
 ---
 
@@ -84,6 +84,8 @@
 
 ## 6. 错误与白名单
 
+- **401**：HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+- **402**：HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
 - **403**：Catalog Items 权限不足。
 - **1005**（网关）：需放行 `catalog/v0/`、`catalog/2020-12-01/`、`catalog/2022-04-01/`。
 - **429**：按官方 usage plan 降频。

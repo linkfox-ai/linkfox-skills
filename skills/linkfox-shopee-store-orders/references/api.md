@@ -8,7 +8,7 @@ Shopee **Order 模块**全部 22 个 API，经 **`POST /shopee/developerProxy`**
 
 - **Base URL**：`${LINKFOX_TOOL_GATEWAY}`
 - **Method**：POST（网关），上游 Method 见各接口
-- **Auth**：Header `Authorization: <api_key>`（从 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取）
+- **Auth**：Header `Authorization: <api_key>`（从 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取）（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 - **流程**：`POST /shopee/storeTokens` → `POST /shopee/developerProxy`
 - **path**：须 `api/v2/order/...`（不含域名）
 - **紫鸟代理**：自动追加 `partner_id`、`timestamp`、`sign`；`access_token`/`shop_id` 由 `developerProxy` 写入

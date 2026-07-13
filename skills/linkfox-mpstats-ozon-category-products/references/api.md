@@ -4,7 +4,7 @@
 
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/mpstats/ozon/categoryProducts`
 - **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置，提示用户前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
+- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 ## 请求参数
 
@@ -121,7 +121,8 @@ POST Body（JSON）。以下字段与工具网关当前登记的「MPSTATS-Ozon-
 | errcode | 含义 | 处理建议 |
 |---------|------|----------|
 | 200 | 成功 | 解析 `products` |
-| 401 | 认证失败 | 检查 `Authorization` |
+| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
+| 402 | 积分或余额不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
 | 其他 | 业务异常 | 查看 `errmsg`；常见为 `categoryPath` 非俄语、非全路径、日期越过昨日等 |
 
 ## curl 示例

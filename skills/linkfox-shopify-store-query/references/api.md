@@ -4,7 +4,7 @@
 
 - **网关路由**：`POST ehunt/shopify/storeQuery`（完整：`${LINKFOX_TOOL_GATEWAY}/ehunt/shopify/storeQuery`）。
 - **MCP 展示名**：Shopify 店铺查询（确切工具名以当前环境下发的工具元数据为准）。
-- **鉴权**：请求头 `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取。
+- **鉴权**：请求头 `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）。
 - **说明**：参数与返回结构以当前网关返回为准；若上游返回 JSON 根级 `code` 字段，成功值（`200`）以实网为准。无数据时网关可能抛错。
 
 ## 请求参数（JSON）
@@ -74,7 +74,7 @@
 
 - **网关**：`https://tool-gateway.linkfox.com`（可用 `LINKFOX_TOOL_GATEWAY_BASE` 覆盖根 URL）
 - **默认路径段**：`ehunt/shopify/storeQuery`（可用 `LINKFOX_EHUNT_SHOPIFY_STORE_QUERY_PATH` 覆盖，不含域名）
-- **鉴权**：环境变量 `LINKFOXAGENT_API_KEY`（与其他 `linkfox-*` skill 相同；申请见 https://skill.linkfox.com/linkfoxskills/guide.htm ）
+- **鉴权**：环境变量 `LINKFOXAGENT_API_KEY`（与其他 `linkfox-*` skill 相同；如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 ```bash
 export LINKFOXAGENT_API_KEY="<your-key>"

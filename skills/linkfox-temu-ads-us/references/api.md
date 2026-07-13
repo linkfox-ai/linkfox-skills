@@ -13,7 +13,7 @@ Temu **美国站电商广告（Ads）**，经本 skill `temu_us_proxy`（`POST /
 | 网关根地址 | `${LINKFOX_TOOL_GATEWAY}`（可用 `LINKFOX_TOOL_GATEWAY` / `TEMU_API_BASE_URL` / `STORE_API_BASE_URL` 覆盖） |
 | 广告 OpenAPI | `POST /temu/proxy` |
 | 加签文件下载 | `POST /temu/fileDownload`（`temu_us_file_download.py`） |
-| LinkFox 鉴权 | Header **`Authorization`** 与 **`Token`**（同值）；或 `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY`；或 JSON `token` |
+| LinkFox 鉴权 | Header **`Authorization`** 与 **`Token`**（同值）；或 `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY`；或 JSON `token`（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理） |
 | Temu 鉴权 | Body `accessToken`，或 `storeKey` + `site` + `managementType` + `tokenPurpose` |
 | 默认 | `site=us`，`managementType=semi-managed`，`tokenPurpose=product-inventory` |
 | 上游 OpenAPI（US） | `https://openapi-b-us.temu.com/openapi/router`（网关按 `site` 解析） |
@@ -100,6 +100,7 @@ python scripts/temu_us_proxy.py '{"accessToken":"TOKEN","tokenPurpose":"product-
 |------|------|------|
 | 1002 | 参数或 LinkFox Token 无效 | 修正参数与 `LINKFOXAGENT_API_KEY` |
 | 1003 | 转发失败 | 检查 Temu token、`tokenPurpose`、白名单、网络 |
+| 402 | HTTP 402 | 按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
 
 ---
 

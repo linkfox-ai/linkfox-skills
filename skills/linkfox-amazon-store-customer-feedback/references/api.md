@@ -72,6 +72,8 @@ Query：`marketplaceId`
 ## 5. 限制
 
 - 非订单接口；订单用 **`linkfox-amazon-store-orders`**。
+- **401**：HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+- **402**：HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
 - **403**：角色或站点不支持。
 - **1005**：网关需放行 `customerFeedback/2024-06-01/`。
 

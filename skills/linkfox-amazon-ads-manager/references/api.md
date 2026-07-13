@@ -13,7 +13,7 @@
 ## 通用约定
 
 - 每个脚本接受一个 JSON 字符串作为唯一位置参数
-- 鉴权：环境变量 `LINKFOX_AGENT_API_KEY`（或旧名 `LINKFOXAGENT_API_KEY`）
+- 鉴权：环境变量 `LINKFOX_AGENT_API_KEY`（或旧名 `LINKFOXAGENT_API_KEY`）（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 - API 网关地址：环境变量 `LINKFOX_TOOL_GATEWAY`（默认 `https://tool-gateway.linkfox.com`）
 - 依赖 `linkfox-amazon-ads-auth`（脚本启动自动检查；缺失时 exit 42，stderr 打 `DEPENDENCY_MISSING`）
 
@@ -59,7 +59,8 @@
 |-------------------|------|------|
 | 200 | 成功 | — |
 | 400 | 入参结构错 | 核对对应 adProduct 的过滤器结构（api/sp.md / api/sb.md / api/sd.md） |
-| 401 | accessToken 过期 | 调 `linkfox-amazon-ads-auth/scripts/refresh_token.py` 后重试 |
+| 401 | accessToken 过期 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
+| 402 | 积分或余额不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
 | 403 | profileId 无权限 | 核对 profileId 归属 |
 | 429 | 限流 | 间隔 2-5s 重试 |
 | exit 42 | 依赖 skill 未安装 | 先装 `linkfox-amazon-ads-auth` |

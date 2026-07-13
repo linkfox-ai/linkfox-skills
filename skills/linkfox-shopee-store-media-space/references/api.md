@@ -8,7 +8,7 @@ Shopee **MediaSpace 模块**全部 6 个 API，经 **`POST /shopee/developerProx
 
 - **Base URL**：`https://tool-gateway.linkfox.com`
 - **Method**：POST（网关），上游 Method 见各接口
-- **Auth**：Header `Authorization: <api_key>`（`LINKFOXAGENT_API_KEY`）
+- **Auth**：Header `Authorization: <api_key>`（`LINKFOXAGENT_API_KEY`）（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 - **流程**：`POST /shopee/storeTokens` → `POST /shopee/developerProxy`
 - **path**：须 `api/v2/media_space/...`
 - **标识**：通常传 **`shopId`**

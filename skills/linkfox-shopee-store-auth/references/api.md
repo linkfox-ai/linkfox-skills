@@ -8,7 +8,7 @@ Shopee 授权、已授权店铺列表、令牌读取。
 
 - **Base URL**：`${LINKFOX_TOOL_GATEWAY}`
 - **Method**：POST，`Content-Type: application/json`
-- **Auth**：Header `Authorization: <api_key>`（读环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`；未配置时引导用户到 https://skill.linkfox.com/linkfoxskills/guide.htm 申请）
+- **Auth**：Header `Authorization: <api_key>`（读环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`；如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 ## 关键 ID 关系
 

@@ -8,7 +8,7 @@ Shopee **GlobalProduct 模块**全部 34 个 API，经 **`POST /shopee/developer
 
 - **Base URL**：`https://tool-gateway.linkfox.com`
 - **Method**：POST（网关），上游 Method 见各接口
-- **Auth**：Header `Authorization: <api_key>`（`LINKFOXAGENT_API_KEY`）
+- **Auth**：Header `Authorization: <api_key>`（`LINKFOXAGENT_API_KEY`）（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 - **流程**：`POST /shopee/storeTokens` → `POST /shopee/developerProxy`
 - **path**：须 `api/v2/global_product/...`
 - **标识**：跨境 GlobalProduct 接口通常用 **`merchantId`**（商户级）；部分发布/映射接口需 **`shopId`**

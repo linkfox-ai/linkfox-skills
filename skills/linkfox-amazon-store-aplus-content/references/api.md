@@ -13,7 +13,7 @@
 | 项 | 说明 |
 |----|------|
 | **Base URL** | `${LINKFOX_TOOL_GATEWAY}`（可用 `STORE_API_BASE_URL` 或 `SPAPI_BASE_URL` 覆盖） |
-| **网关认证** | Header `Authorization: <api_key>`，环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` |
+| **网关认证** | Header `Authorization: <api_key>`，环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理） |
 | **店铺令牌** | `POST /spApi/storeTokens`，Body：`{"sellerId":"...","region":"NA\|EU\|FE"}` → `accessToken` |
 | **SP-API 转发** | `POST /spApi/developerProxy` |
 
@@ -40,6 +40,11 @@
 ### 速率（文档默认值）
 
 各操作文档默认多为 **10 req/s**，burst **10**；以响应头 `x-amzn-RateLimit-Limit` 及账号实际配额为准。
+
+### 错误码
+
+- **401**：HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+- **402**：HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。
 
 ---
 

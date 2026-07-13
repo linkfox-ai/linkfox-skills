@@ -13,7 +13,7 @@ Temu **美国站商品发布**（Partner US **Product > Add Products > Recommend
 | 网关根地址 | `${LINKFOX_TOOL_GATEWAY}`（可用 `LINKFOX_TOOL_GATEWAY` / `TEMU_API_BASE_URL` / `STORE_API_BASE_URL` 覆盖） |
 | 商品 OpenAPI | `POST /temu/proxy` |
 | 加签文件下载 | `POST /temu/fileDownload`（`temu_us_file_download.py`） |
-| LinkFox 鉴权 | Header **`Authorization`** 与 **`Token`**（同值）；或环境变量 `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY`；或 JSON `token` / `linkfoxToken` |
+| LinkFox 鉴权 | Header **`Authorization`** 与 **`Token`**（同值）；或环境变量 `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY`；或 JSON `token` / `linkfoxToken`（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理） |
 | Temu 鉴权 | Body `accessToken`，或 `storeKey` + `site` + `managementType` + `tokenPurpose` |
 | 默认 | `site=us`，`managementType=semi-managed`，`tokenPurpose=product-inventory` |
 | 上游 OpenAPI（US） | `https://openapi-b-us.temu.com/openapi/router`（由网关按 `site` 解析，调用方勿直连） |
@@ -107,6 +107,7 @@ python scripts/us_goods_attrs.py '{"accessToken":"TOKEN","params":{"catId":12345
 |------|------|------|
 | 1002 | 参数校验失败或 LinkFox 用户 Token 无效 | 修正参数；检查 `LINKFOXAGENT_API_KEY`；勿盲目重试 |
 | 1003 | 转发/上游失败 | 检查 Temu `accessToken`、白名单、网络；可退避重试 |
+| 402 | HTTP 402 | 按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
 
 Temu 业务层 `errorCode` / `errorMsg` 在 `body` 内，需结合 `success` 判断。
 

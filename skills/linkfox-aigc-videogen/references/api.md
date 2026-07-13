@@ -12,7 +12,7 @@
 
 - **基础地址**：`${LINKFOX_TOOL_GATEWAY}`，从环境变量读取，未配置时报错退出。
 - **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 读取。未配置时提示用户前往 https://skill.linkfox.com/linkfoxskills/guide.htm 申请。
+- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）。
 
 ---
 
@@ -120,7 +120,8 @@ HTTP 200 时业务成功与否看响应体 `errcode`/`errorCode`（200=成功）
 |---------|------|------|
 | 200 | 成功 | 正常解析业务字段 |
 | 400 | 参数错误 | 检查必填参数是否正确传入 |
-| 401 | 认证失败 | 检查 Authorization Header 是否传入正确 API Key |
+| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
+| 402 | 积分不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和积分问题** 处理。 |
 | 10007 | 参数校验失败 | 检查 videoTime 是否为模型支持的值 |
 | 10009 | 任务不存在 | 检查 taskId 是否正确 |
 | 其他 | 业务异常 | 参考 errmsg 字段 |

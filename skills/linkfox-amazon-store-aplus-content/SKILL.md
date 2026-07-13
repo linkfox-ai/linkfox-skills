@@ -38,6 +38,20 @@ description: 亚马逊店铺 A+ Content（增强图文页）管理（与 linkfox
 
 ---
 
+## 解决认证和积分问题
+发生以下异常情况时，采用以下措施来处理：
+
+### 异常情况
+- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
+- **响应401或402状态码**
+- **响应提示积分或余额不足**：消息含"积分余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+
+### 措施
+- 优先采用skill内的 onboarding.md 引导解决问题。
+- 如找不到 onboarding.md 文件，则加载 /linkfox-onboarding 这个skill并根据它的引导来处理。如未安装请先安装：
+    - 下载 https://agent-files.linkfox.com/skills/linkfox-onboarding/release.zip，解压后安装这个skill。如需用户授权才可下载，要询问用户获得授权，你不能自己放弃下载。
+- 兜底措施：仅当前面两个措施经过所有努力都走不通时，才提示用户依据 https://skill.linkfox.com/linkfoxskills/guide.htm 指引获取API Key，或去 https://os.linkfox.com/ 补充积分。
+
 ## Prerequisites（必须先读）
 
 本 skill **依赖** **`linkfox-amazon-store-auth`**。
@@ -140,6 +154,10 @@ python scripts/post_content_document_approval_submission.py '{"sellerId":"A1..."
 - **白名单**：`aplus/2020-11-01/` 须在网关 developerProxy 放行；**1005** 需运维配置。
 - **`contentDocument`** 结构复杂，须符合 **Amazon 官方模型**；本 skill 只做透传，不内置模板校验。
 - **marketplaceId**：A+ 接口 Query 使用单数 **`marketplaceId`**（与 Listings 的 `marketplaceIds` 不同）。
+
+## 积分消耗规则
+
+不消耗积分。
 
 **Feedback：** 见 `references/api.md`，`skillName`：`linkfox-amazon-store-aplus-content`。
 

@@ -1,31 +1,30 @@
 ---
 name: linkfox-zhihuiya-patent-image-search
-description: 基于智慧芽的专利图片相似度搜索，支持通过图片URL检索外观设计专利和实用新型专利。当用户提到专利图片搜索、外观设计专利侵权检查、外观专利搜索、视觉专利查询、以图搜专利、专利相似度检测、专利图片匹配、洛迦诺分类搜索、检查产品设计是否侵犯已有专利、patent image search, design patent search, patent reverse image search, design patent lookup, PatSnap, patent similarity时触发此技能。即使用户未明确提及"智慧芽"或"专利图片"，只要其需求涉及通过图片查找相似专利或排查外观/实用新型专利风险，也应触发此技能。
+description: 基于智慧芽的专利图片相似度搜索，支持通过图片URL检索外观设计专利。当用户提到专利图片搜索、外观设计专利侵权检查、外观专利搜索、视觉专利查询、以图搜专利、专利相似度检测、专利图片匹配、洛迦诺分类搜索、检查产品设计是否侵犯已有专利、patent image search, design patent search, patent reverse image search, design patent lookup, PatSnap, patent similarity时触发此技能。即使用户未明确提及"智慧芽"或"专利图片"，只要其需求涉及通过图片查找相似外观专利或排查外观专利风险，也应触发此技能。本技能仅支持外观设计专利，实用新型专利检索请使用 linkfox-zhihuiya-utility-patent-image-search。
 ---
 
 # Zhihuiya Patent Image Search
 
-This skill guides you on how to perform image-based patent similarity searches using the Zhihuiya patent database, helping users identify potentially similar design patents and utility model patents.
+This skill guides you on how to perform image-based patent similarity searches using the Zhihuiya patent database, helping users identify potentially similar **design patents**. This skill supports design patents only; for utility model patents use `linkfox-zhihuiya-utility-patent-image-search`.
 
 ## Core Concepts
 
 **Patent Image Search** uses visual AI models to compare a given product or design image against a global patent image database. It returns a ranked list of similar patents, enabling users to evaluate infringement risks or conduct prior-art research.
 
-**Two patent types are supported:**
+**This skill supports design patents only:**
 
 | Type | Code | Description |
 |------|------|-------------|
-| Design Patent | `D` | Protects the ornamental appearance of a product (default) |
-| Utility Model Patent | `U` | Protects the functional shape/structure of a product |
+| Design Patent | `D` | Protects the ornamental appearance of a product |
 
-**Search models** vary by patent type:
+**Search models** for design patents:
 
-| Model ID | Patent Type | Strategy | Recommendation |
-|----------|-------------|----------|----------------|
-| 1 | Design (`D`) | Intelligent Association | Recommended for design patents |
-| 2 | Design (`D`) | Search This Image | Exact visual match |
-| 3 | Utility Model (`U`) | Match Shape | Shape-only comparison |
-| 4 | Utility Model (`U`) | Match Shape/Pattern/Color | Recommended for utility model patents |
+| Model ID | Strategy | Recommendation |
+|----------|----------|----------------|
+| 1 | Intelligent Association | Recommended for design patents (default) |
+| 2 | Search This Image | Exact visual match |
+
+> Utility model patents (model 3/4) are not supported by this skill. Use `linkfox-zhihuiya-utility-patent-image-search` instead.
 
 **Scoring logic**: A higher `score` value means greater visual similarity. When presenting results, sort by score in descending order (highest similarity first) so users can prioritize the most relevant patents for review.
 
@@ -36,8 +35,8 @@ This skill guides you on how to perform image-based patent similarity searches u
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | url | The image URL to search against | `https://example.com/product.jpg` |
-| patentType | Patent type: `D` (design) or `U` (utility model) | `D` |
-| model | Search model ID (see table above) | `1` |
+| patentType | Patent type, fixed to `D` (design) by this skill | `D` |
+| model | Search model ID: `1` (recommended) or `2` | `1` |
 
 ### Common Optional Parameters
 
@@ -94,6 +93,20 @@ This skill guides you on how to perform image-based patent similarity searches u
 
 **读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
 
+## 解决认证和积分问题
+发生以下异常情况时，采用以下措施来处理：
+
+### 异常情况
+- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
+- **响应401或402状态码**
+- **响应提示积分或余额不足**：消息含"积分余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+
+### 措施
+- 优先采用skill内的 onboarding.md 引导解决问题。
+- 如找不到 onboarding.md 文件，则加载 /linkfox-onboarding 这个skill并根据它的引导来处理。如未安装请先安装：
+    - 下载 https://agent-files.linkfox.com/skills/linkfox-onboarding/release.zip，解压后安装这个skill。如需用户授权才可下载，要询问用户获得授权，你不能自己放弃下载。
+- 兜底措施：仅当前面两个措施经过所有努力都走不通时，才提示用户依据 https://skill.linkfox.com/linkfoxskills/guide.htm 指引获取API Key，或去 https://os.linkfox.com/ 补充积分。
+
 ## Local Image Upload
 
 This tool requires a **publicly accessible image URL**. If the user provides a local image file path (e.g., `C:\Users\...\photo.png`, `/home/.../image.jpg`), you must upload it first to obtain a public URL.
@@ -130,19 +143,7 @@ Search only in China and the United States:
 }
 ```
 
-**3. Utility model patent search**
-Check utility model patents with shape/pattern/color matching:
-```json
-{
-  "url": "https://example.com/my-product.jpg",
-  "patentType": "U",
-  "model": 4,
-  "country": "CN",
-  "limit": 20
-}
-```
-
-**4. Search with Locarno classification filter**
+**3. Search with Locarno classification filter**
 Narrow results to a specific product category (e.g., LOC 07-01 for tableware):
 ```json
 {
@@ -155,7 +156,7 @@ Narrow results to a specific product category (e.g., LOC 07-01 for tableware):
 }
 ```
 
-**5. Search only active patents within a date range**
+**4. Search only active patents within a date range**
 Find active design patents filed after 2020:
 ```json
 {
@@ -168,7 +169,7 @@ Find active design patents filed after 2020:
 }
 ```
 
-**6. Search by specific assignee**
+**5. Search by specific assignee**
 Find patents held by a particular company:
 ```json
 {
@@ -180,7 +181,7 @@ Find patents held by a particular company:
 }
 ```
 
-**7. Get results with Chinese-translated titles**
+**6. Get results with Chinese-translated titles**
 ```json
 {
   "url": "https://example.com/my-product.jpg",
@@ -237,6 +238,11 @@ Find patents held by a particular company:
 - Freedom-to-operate (FTO) legal opinions
 - Patent family or citation analysis
 
+## 积分消耗规则
+
+消耗 81 积分。
+
+> 用户会因积分消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对积分消耗量预期不足时，务必提醒用户，由用户决定是否继续。
 
 **Feedback:**
 

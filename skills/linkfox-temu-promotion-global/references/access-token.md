@@ -1,12 +1,12 @@
 # Temu accessToken 授权与获取
 
-Temu **没有** LinkFox 侧自动 OAuth；`accessToken` 须在 Temu 卖家后台「服务市场 → 授权管理」**手动复制**。与 `LINKFOXAGENT_API_KEY`（LinkFox 用户鉴权）是两套令牌。
+Temu **没有** LinkFox 侧自动 OAuth；`accessToken` 须在 Temu 卖家后台「服务市场 → 授权管理」**手动复制**。与 `LINKFOXAGENT_API_KEY`（LinkFox 用户鉴权）是两套令牌。（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理）
 
 ## 两种鉴权（勿混淆）
 
 | 令牌 | 用途 | 获取方式 |
 |------|------|----------|
-| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token`；Header `Authorization` + `Token`（同 amazon-store-auth） |
+| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token`；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **## 解决认证和积分问题** 处理） |
 | **Temu accessToken** | Temu 业务 API（经紫鸟转发） | Temu 卖家后台授权后复制 |
 
 ```bash

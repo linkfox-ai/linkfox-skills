@@ -24,12 +24,15 @@ API_ENDPOINT = f"{API_BASE_URL}/spApi/authorizedStores"
 
 
 def get_api_key():
-    """Retrieve the API key from environment, with a friendly prompt if missing."""
+    """
+    获取配置在环境变量的API Key。
+    如果获取不到，按 SKILL.md 的 **## 解决认证和积分问题** 处理。
+    Retrieve the API key from environment, with a friendly prompt if missing.
+    """
     key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
     if not key:
         print(
-            "API Key not configured. Please set the environment variable:\n"
-            "  export LINKFOXAGENT_API_KEY=your-key-here",
+            "API Key 未配置",
             file=sys.stderr,
         )
         sys.exit(1)
