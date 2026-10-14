@@ -53,7 +53,7 @@ description: 服饰图生成（模特/服装类）。支持单张或套图：白
 
 - **输入**：`imageUrls`
 - **空数组护栏（强制）**：若 `imageUrls` 为空数组 / 缺失 / 全部无效，**立即停止**，不得带空图调下游。优先从上下文（用户本轮/历史上传的原始图片路径）补齐；仍无法补齐时如实向用户报错并请求重新上传，**禁止**带空 `imageUrls` 继续执行。
-- **操作**：逐项检查 `imageUrls` 中的值（保持原顺序）：已是公开 URL（http/https 开头）→ 直接透传；本地文件路径（非 http/https）→ 调 `linkfox-file-upload` 上传获得公开 URL 后替换。
+- **操作**：逐项检查 `imageUrls` 中的值（保持原顺序）：已是公开 URL（http/https 开头）→ 直接透传；本地文件路径（非 http/https）→ 读取并按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 执行上传，获得公开 URL 后替换；无需安装额外上传 skill。
 - **输出**：`imageUrls`（全部为公开可访问的 HTTPS URL）
 
 ### 步骤 2：构造最终 prompt（差异部分见各 type reference）
@@ -149,7 +149,7 @@ description: 服饰图生成（模特/服装类）。支持单张或套图：白
 | `imageUrls` | string[] | 必填 | 服饰参考图 URL。步骤 1 会校验可访问性 |
 | `ratio` | string | 随类型 | 图片比例，原样透传给 imagegen 的 `aspectRatio` |
 | `resolution` | string | 2K | 分辨率，2K / 4K |
-| `provider` | string | — | 生图模型（`BANANA_PRO` / `GPT_2_IMAGE` / `BANANA_2` / `AIDRAW_EDIT` / `WAN2_7`）；未传入时用 `AskUserQuestion` 让用户从上述 5 个模型中选择 |
+| `provider` | string | — | 生图模型（`BANANA_PRO` / `GPT_2_IMAGE` / `GPT_2_5_IMAGE` / `GPT_2_5_F_IMAGE` / `BANANA_2` / `AIDRAW_EDIT` / `WAN2_7`）；未传入时用 `AskUserQuestion` 让用户从上述 7 个模型中选择 |
 
 ## 错误处理与失败护栏
 
@@ -176,17 +176,19 @@ description: 服饰图生成（模特/服装类）。支持单张或套图：白
 
 ### 模型类型规则
 
-本 skill 支持以下 5 个生图模型，模型由 agent 层通过 `provider` 参数传入；若未传入则由本 skill 向用户确认。
+本 skill 支持以下 7 个生图模型，模型由 agent 层通过 `provider` 参数传入；若未传入则由本 skill 向用户确认。
 
 | 模型名称 | 内部代码 |
 |---------|---------|
 | LFBanana Pro | `BANANA_PRO` |
 | Img2 | `GPT_2_IMAGE` |
+| Img2.5 sunburst | `GPT_2_5_IMAGE` |
+| Img 2.5 flare | `GPT_2_5_F_IMAGE` |
 | LFBanana2 | `BANANA_2` |
 | Linkfox-Image-1 | `AIDRAW_EDIT` |
 | Wan 2.7 | `WAN2_7` |
 
-**模型确认**：若 `provider` 为空或不在上表内，使用 `AskUserQuestion` 让用户从上述 5 个模型中选择，用户选择后再继续执行。将 `provider` 统一下发给步骤 3。
+**模型确认**：若 `provider` 为空或不在上表内，使用 `AskUserQuestion` 让用户从上述 7 个模型中选择，用户选择后再继续执行。将 `provider` 统一下发给步骤 3。
 
 ### 分辨率规则
 
@@ -201,10 +203,10 @@ description: 服饰图生成（模特/服装类）。支持单张或套图：白
 
 ### 执行期约束
 
-1. **无上传环节**：服饰图片以 `imageUrls` 形式直接传递，本 skill 不涉及本地文件上传操作（步骤 1 的 URL 校验除外），禁止探查或调用任何上传脚本。
+1. **上传边界**：出图流水线接收 `imageUrls`，不自动上传。本地输入图或需公开的产物由调用方按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 执行上传后传入；无需查找或安装额外上传 skill。
 2. **计划管理工具使用规范**：单张直出时不使用计划工具。套图并发出图前须为 N 张图创建任务计划（见 `references/runtime/02-confirm.md`）。
 3. **套图落盘**：plan / summary 由 `run_collection_pipeline.py` 写盘；**禁止** Agent 凭记忆 Write 整份 image-plan。
-4. **Listing 报告回写资产清单（强制）**：如果套图结果要合并进 Listing HTML，调用方必须保留 `$DATADIR/collection-asset-manifest.json`，并在 merge 前把 manifest 中的本地 `media/` 路径通过 `linkfox-file-upload` 换成公开 OSS URL。本 skill 不直接上传，但不得暗示本地路径可直接写入 HTML。
+4. **Listing 报告回写资产清单（强制）**：如果套图结果要合并进 Listing HTML，调用方必须保留 `$DATADIR/collection-asset-manifest.json`，并在 merge 前按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 执行上传，把 manifest 中的本地 `media/` 路径换成公开 OSS URL。出图流水线不自动上传，但不得暗示本地路径可直接写入 HTML。
 
 ## 套图编排流程（runtime，渐进 Read）
 

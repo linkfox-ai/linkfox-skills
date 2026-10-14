@@ -1,6 +1,6 @@
 ---
 name: linkfox-aigc-imagegen
-description: AI生图工具，根据提示词和参考图生成图片。支持多种模型（BANANA/BANANA_2/BANANA_PRO/GPT_2_IMAGE/AIDRAW_EDIT/WAN2_7/SEEDREAM5），可控制分辨率、宽高比、输出数量。用户说"生成图片"、"AI画图"、"AI生图"、"帮我画"、"图片生成"、"image generation"、"generate image"、"画一张图"、"做张图"、"图生图"时触发。
+description: AI生图工具，根据提示词或参考图生成图片。支持配置中已开放的多种图片模型，可控制分辨率、宽高比、质量和输出数量。用户说"生成图片"、"AI画图"、"AI生图"、"帮我画"、"图片生成"、"image generation"、"generate image"、"画一张图"、"做张图"、"图生图"时触发。
 ---
 
 # AI 生图
@@ -9,26 +9,37 @@ description: AI生图工具，根据提示词和参考图生成图片。支持�
 
 ## 核心特点
 
-- **多模型选择**：7 种模型可选，各有不同特长和分辨率支持。
-- **图生图**：可传入参考图+提示词生成新图。
+- **多模型选择**：10 种模型可选，各有不同特长和分辨率支持。
+- **文生图/图生图**：可仅使用提示词生成，也可传入参考图+提示词生成新图。
 - **批量输出**：单次最多生成 10 张图片。
 - **异步模式**：创建任务立即返回 taskId，脚本自动轮询直到完成（超时 10 分钟）。
 
 ## 模型说明
 
-| 模型（provider） | 说明 | 特点 |
-|------|------|------|
-| BANANA | LFBanana（基础版） | 仅支持 1K 分辨率 |
-| BANANA_2 | LFBanana2 | 支持更高分辨率 |
-| BANANA_PRO | LFBanana Pro（默认） | 综合效果最好 |
-| GPT_2_IMAGE | Img2 | 支持 quality 参数控制质量 |
-| AIDRAW_EDIT | Linkfox-Image-1 | 适合编辑类场景 |
-| WAN2_7 | Wan 2.7 | 万相模型 |
-| SEEDREAM5 | Seedream 5.0 | 仅支持2K |
+| 说明名称 | 支持分辨率 | 参考图上限 | 特点 |
+|------|------|------|------|
+| LF全能模型 | 1K | 6张 | 基础生成 |
+| LF全能模型 2 | 1K/2K/4K | 10张 | 支持更高分辨率 |
+| LF全能模型 Pro（兼容默认） | 1K/2K/4K | 10张 | 保持旧调用默认行为 |
+| LF智能模型 G-2 | 1K/2K/4K | 10张 | 支持 low/medium/high 质量档位 |
+| Linkfox-Image-1 | 2K | 4张 | 适合编辑类场景 |
+| Wan 2.7 | 1K/2K | 6张 | 创意增强 |
+| Seedream 5.0 | 2K | 6张 | 仅支持2K |
+| LF智能模型 G-2.5 Sunburst | 1K/2K/4K（默认2K） | 10张 | 支持 low/medium/high/xhigh/max 质量档位 |
+| LF智能模型 G-2.5 Flare | 1K/2K/4K（默认2K） | 10张 | 支持 low/medium/high/xhigh/max 质量档位 |
+| Seedream 5.0 Pro | 1K/2K | 6张 | 不使用 quality 档位 |
+
+## 展示规则
+
+- 面向用户介绍、推荐、确认模型或解释错误时，只能使用上表的**说明名称**。
+- 禁止向用户展示请求字段值、模型别名、provider 或下游模型 code。
+- 用户未指定模型时使用 **LF全能模型 Pro**，不得改为跟随后台默认模型。
 
 ## 参数概览
 
-- **必填字段**：`prompt`、`imageUrls`、`outputNum`（默认 `1`）、`resolution`（默认 `1K`）、`quality`（默认 `high`，仅 GPT_2_IMAGE）
+- **必填字段**：`prompt`
+- **参考图**：`imageUrls` 可选；不传或传空列表时为文生图，传入时为参考图生图。
+- **常用可选字段**：`outputNum`（默认 `1`）、`resolution`、`aspectRatio`、`quality`
 
 完整参数表、响应字段结构与错误码，见 [`references/api.md`](references/api.md)。
 
@@ -77,31 +88,52 @@ description: AI生图工具，根据提示词和参考图生成图片。支持�
 
 ## 使用指引
 
-1. **模型选择**：一般场景用 `BANANA_PRO`（默认）；需要高质量画质控制用 `GPT_2_IMAGE`；编辑现有图片用 `AIDRAW_EDIT`。
+1. **模型选择**：一般场景用 **LF全能模型 Pro**（兼容默认）；需要更高质量档位时用 **LF智能模型 G-2.5 Sunburst** 或 **LF智能模型 G-2.5 Flare**；编辑现有图片用 **Linkfox-Image-1**。
 2. **提示词**：描述越具体效果越好，建议用英文提示词获得更好效果。
-3. **参考图**：必须提供至少一张参考图 URL。
-4. **分辨率**：支持 1K/2K/4K，默认 1K。
+3. **参考图**：可选；传入时具体上限按模型说明表执行。
+4. **分辨率**：必须选择模型支持的分辨率。两个 G-2.5 模型未指定时默认2K；旧模型继续保留原调用默认行为，Skill 内部调用仍应显式传入合法分辨率。
+
+## 内部执行映射（禁止向用户展示）
+
+本节仅用于构造工具请求。回复用户时必须使用第一列说明名称，禁止输出第二列技术值。
+
+| 说明名称 | 内部请求值 |
+|------|------|
+| LF全能模型 | `LF_BN_1` |
+| LF全能模型 2 | `LF_BN_2` |
+| LF全能模型 Pro | `LF_BN_3` |
+| LF智能模型 G-2 | `LF_GT_1` |
+| Linkfox-Image-1 | `LF_AD_1` |
+| Wan 2.7 | `LF_WN_1` |
+| Seedream 5.0 | `LF_SD_1` |
+| LF智能模型 G-2.5 Sunburst | `LF_GT_2` |
+| LF智能模型 G-2.5 Flare | `LF_GT_2_F` |
+| Seedream 5.0 Pro | `LF_SD_2` |
+
+工具端继续兼容历史请求值，但新调用统一使用上表内部请求值。
 
 ### 示例
 
-**1. 用默认模型生成商品场景图**
+以下 JSON 仅为内部调用参数，禁止原样展示给用户。
+
+**1. 用 LF全能模型 Pro 生成商品场景图**
 ```json
-{"imageUrls": ["https://example.com/product.jpg"], "prompt": "product photography on white background, studio lighting", "provider": "BANANA_PRO", "outputNum": 1, "resolution": "1K", "aspectRatio": "1:1", "quality": "high"}
+{"imageUrls": ["https://example.com/product.jpg"], "prompt": "product photography on white background, studio lighting", "provider": "LF_BN_3", "outputNum": 1, "resolution": "1K", "aspectRatio": "1:1", "quality": "high"}
 ```
 
-**2. 用 GPT_2_IMAGE 高质量生图**
+**2. 用 LF智能模型 G-2.5 Sunburst 高质量生图**
 ```json
-{"imageUrls": ["https://example.com/ref.jpg"], "prompt": "modern minimalist product showcase", "provider": "GPT_2_IMAGE", "outputNum": 1, "resolution": "1K", "aspectRatio": "16:9", "quality": "high"}
+{"imageUrls": ["https://example.com/ref.jpg"], "prompt": "modern minimalist product showcase", "provider": "LF_GT_2", "outputNum": 1, "resolution": "2K", "aspectRatio": "16:9", "quality": "xhigh"}
 ```
 
 **3. 批量生成多张**
 ```json
-{"imageUrls": ["https://example.com/ref.jpg"], "prompt": "creative product ad design", "provider": "BANANA_PRO", "outputNum": 4, "resolution": "2K", "aspectRatio": "1:1", "quality": "high"}
+{"imageUrls": ["https://example.com/ref.jpg"], "prompt": "creative product ad design", "provider": "LF_BN_3", "outputNum": 4, "resolution": "2K", "aspectRatio": "1:1", "quality": "high"}
 ```
 
 ## 限制
 
-- 必须提供至少一张参考图 URL。
+- 参考图 URL 可选；传入时具体上限按所选模型配置执行。
 - 单次最多生成 10 张。
 - 生成时间视模型和分辨率不同，通常 10-120 秒。脚本自动轮询，超时 10 分钟。
 - 失败时不重试（仅尝试 1 次）。
@@ -109,7 +141,7 @@ description: AI生图工具，根据提示词和参考图生成图片。支持�
 ## 不适用
 
 **不适用**：
-- 纯文字生成 → `linkfox-aigc-textgen`
+- 文本生成 → `linkfox-aigc-textgen`
 - 视频生成 → `linkfox-aigc-videogen`
 
 ## 反馈

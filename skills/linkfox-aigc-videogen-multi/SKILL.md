@@ -1,32 +1,42 @@
 ---
 name: linkfox-aigc-videogen-multi
-description: 多参考图生视频工具，根据多张参考图和提示词生成视频。支持模型KLING可灵/SEED豆包/SEED_FAST/HAPPY_HORSE百炼，可控制时长、Pro模式、声音、宽高比、生视频"、"多图视频"、"多张图片生成视频"、"多参考图生视频"、"multi image video"、"multiple images to video"时触发。
+description: 多参考图生视频工具，根据多张参考图和提示词生成视频。支持配置中已开放的多种多图视频模型，可控制时长、声音、宽高比和分辨率。用户说"多图生视频"、"多图视频"、"多张图片生成视频"、"多参考图生视频"、"multi image video"、"multiple images to video"时触发。
 ---
 
 # 多参考图生视频
 
-根据多张参考图和提示词生成视频，支持 3 种 AI 视频模型，异步创建任务后轮询获取结果。
+根据多张参考图和提示词生成视频，支持 7 种 AI 视频模型，异步创建任务后轮询获取结果。
 
 ## 核心特点
 
-- **4 种模型选择**：KLING/SEED/SEED_FAST/HAPPY_HORSE，覆盖不同风格和时长。
+- **7 种模型选择**：覆盖不同风格和时长需求。
 - **多图参考**：传入多张图片作为参考，AI 综合生成视频。
 - **丰富参数**：支持 Pro 模式、声音生成、宽高比、分辨率等。
 - **异步模式**：创建任务立即返回 taskId，脚本自动轮询直到完成（超时 20 分钟）。
 
 ## 模型说明
 
-| 模型（videoType） | 说明 | 支持时长 | 图片上限 |
+| 说明名称 | 时长 | 默认分辨率 | 图片上限 |
 |------|------|----------|----------|
-| KLING | 可灵 | 5秒/10秒 | ≤7张 |
-| SEED | Seedance/豆包 | 5秒/10秒/15秒 | ≤9张 |
-| SEED_FAST | Seedance 2.0 Fast | 5秒/10秒/15秒 | ≤9张 |
-| HAPPY_HORSE | 百炼HappyHorse | 5秒/10秒/15秒(默认15) | ≤9张 |
+| 可灵Omni | 5秒/10秒/15秒 | 720p | ≤7张 |
+| Seedance 2.0 | 4～15秒 | 480p，可选720p/1080p | ≤9张 |
+| Seedance 2.0 fast | 4～15秒 | 480p，可选720p | ≤9张 |
+| Seedance 2.5 | 4～30秒 | 480p，可选720p/1080p | ≤30张 |
+| HappyHorse 1.1 | 5秒/10秒/15秒（默认15秒） | 720p | ≤9张 |
+| Seedance 2.0 mini | 4～15秒，默认10秒 | 480p，可选720p | ≤9张 |
+| MiniMax H3 | 5秒/10秒/15秒，默认5秒 | 2K，可选768p | ≤9张 |
+
+## 展示规则
+
+- 面向用户介绍、推荐、确认模型或解释错误时，只能使用上表的**说明名称**。
+- 禁止向用户展示 videoType、provider、模型 code 或内部渠道名称。
+- 万相3.0不开放多图，不得在多图模型选项中展示或调用。
+- MiniMax H3 的多个内部渠道只对用户展示为 **MiniMax H3**。
 
 ## 参数概览
 
 - **必填字段**：`imageList`、`videoType`、`videoTime`
-- **可选核心**：`prompt`（2000字以内）、`aspectRatio`、`resolution`
+- **可选核心**：`prompt`（3000字符以内）、`aspectRatio`、`resolution`
 
 完整参数表、响应字段结构与错误码，见 [`references/api.md`](references/api.md)。
 
@@ -57,26 +67,42 @@ description: 多参考图生视频工具，根据多张参考图和提示词生�
 
 ## 使用指引
 
-1. **模型选择**：一般多图参考用 `KLING`；高分辨率用 `SEED`；百炼风格用 `HAPPY_HORSE`。
-2. **图片数量**：KLING 最多 7 张，SEED/HAPPY_HORSE 最多 9 张。至少传 1 张。
+1. **模型选择**：一般多图参考用 **可灵Omni**；需要2K默认分辨率时用 **MiniMax H3**。
+2. **图片数量**：可灵Omni最多7张，Seedance 2.5最多30张，其他已开放模型最多9张。至少传1张。
 3. **时长匹配**：必须传模型支持的时长值，否则报错。
-4. **提示词**：可选，2000 字以内，描述期望的动态效果。
+4. **提示词**：可选，3000 字符以内，描述期望的动态效果。
+
+## 内部执行映射（禁止向用户展示）
+
+本节仅用于构造工具请求。回复用户时必须使用第一列说明名称，禁止输出第二列技术值。
+
+| 说明名称 | 内部 videoType |
+|------|------|
+| 可灵Omni | `KLING` |
+| Seedance 2.0 | `SEED` |
+| Seedance 2.0 fast | `SEED_FAST` |
+| Seedance 2.5 | `SEED_V25` |
+| HappyHorse 1.1 | `HAPPY_HORSE` |
+| Seedance 2.0 mini | `SEED_MINI` |
+| MiniMax H3 | `MINIMAX_V2` |
 
 ### 示例
 
-**1. KLING 多参考图**
+以下 JSON 仅为内部调用参数，禁止原样展示给用户。
+
+**1. 可灵Omni多参考图**
 ```json
 {"imageList": ["https://example.com/img1.jpg", "https://example.com/img2.jpg", "https://example.com/img3.jpg"], "videoType": "KLING", "videoTime": 10, "prompt": "商品多角度展示"}
 ```
 
-**2. SEED 高分辨率多图**
+**2. Seedance 2.0 mini 多图**
 ```json
-{"imageList": ["https://example.com/a.jpg", "https://example.com/b.jpg"], "videoType": "SEED", "videoTime": 15, "resolution": "1080p", "aspectRatio": "16:9"}
+{"imageList": ["https://example.com/a.jpg", "https://example.com/b.jpg"], "videoType": "SEED_MINI", "videoTime": 10, "resolution": "480p", "aspectRatio": "16:9"}
 ```
 
-**3. HAPPY_HORSE 多图参考**
+**3. MiniMax H3 多图参考**
 ```json
-{"imageList": ["https://example.com/p1.jpg", "https://example.com/p2.jpg", "https://example.com/p3.jpg"], "videoType": "HAPPY_HORSE", "videoTime": 15, "resolution": "1080p", "aspectRatio": "16:9"}
+{"imageList": ["https://example.com/p1.jpg", "https://example.com/p2.jpg", "https://example.com/p3.jpg"], "videoType": "MINIMAX_V2", "videoTime": 5, "resolution": "2K", "aspectRatio": "16:9"}
 ```
 
 ## 展示规则
@@ -87,10 +113,10 @@ description: 多参考图生视频工具，根据多张参考图和提示词生�
 
 ## 限制
 
-- 提示词最大 2000 字符。
+- 提示词最大 3000 字符。
 - 生成时间较长，通常 100-600 秒。脚本自动轮询，超时 20 分钟。
-- KLING 最多 7 张参考图，SEED/HAPPY_HORSE 最多 9 张。
-- HAPPY_HORSE 不支持 isPro。
+- 可灵Omni最多7张参考图，Seedance 2.5最多30张，其他已开放模型最多9张。
+- 万相3.0和可灵2.6不开放多图。
 - 失败时不重试（仅尝试 1 次）。
 
 ## 不适用

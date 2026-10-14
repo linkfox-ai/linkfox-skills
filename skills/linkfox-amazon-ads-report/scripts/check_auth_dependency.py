@@ -204,7 +204,7 @@ def main() -> None:
         "suggestedActions": [
             f"If a skill installer tool is available (e.g. install_skill / skill marketplace MCP), invoke it to install '{REQUIRED_SKILL}' immediately.",
             "Otherwise, ask the user to install the skill from https://skill.linkfox.com/ and retry.",
-            "Do NOT bypass the dependency by calling /amazonAds/authorizeUrl or /amazonAds/storeTokens directly from this skill.",
+            "Do NOT bypass the dependency or fetch/pass raw Amazon tokens directly from this skill.",
         ],
         "marketplaceUrl": "https://skill.linkfox.com/",
     }

@@ -5,8 +5,10 @@
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/alibaba1688/imageSearch`
 - **请求方式**：POST，Content-Type: application/json
 - **认证方式**：Header `Authorization: <api_key>`，api_key 优先从环境变量 `LINKFOX_AGENT_API_KEY` 读取，回退 `LINKFOXAGENT_API_KEY`（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
-- **User-Agent**：`LinkFox-Skill/1.0`
+- **User-Agent**：`LinkFox-Skill/2.0`
 - **超时**：150s
+
+> The current 1688-facing upload path rejects WebP in production. The bundled `scripts/alibaba1688_image_search.py` keeps JPEG/PNG on the original path and transparently converts WebP to JPEG before calling this endpoint. GIF and other formats retain their original behavior.
 
 ## 请求参数
 
@@ -14,8 +16,8 @@ POST Body（JSON）：
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
-| imageUrl | string | 条件必填 | - | 图片URL地址，请确保图片URL有效且可公开访问。最大长度：1000。仅支持 png/jpg/jpeg 格式，不支持 webp/gif 等。imageUrl/imageBase64/imageId 三选一必填 |
-| imageBase64 | string | 条件必填 | - | 图片 Base64 编码字符串，为纯编码内容，不包含 `data:image/jpeg;base64,` 前缀。仅支持 png/jpg/jpeg 格式（imageUrl为空时使用） |
+| imageUrl | string | 条件必填 | - | 直接 API 要求 URL 实际返回 JPEG/PNG；最大长度 1000。Skill 脚本保持 JPEG/PNG 不变，并自动转换 WebP。imageUrl/imageBase64/imageId 三选一必填 |
+| imageBase64 | string | 条件必填 | - | 纯 Base64，不含 data URL 前缀。Skill 脚本保持 JPEG/PNG 不变，并自动将 WebP Base64 转成 JPEG Base64 |
 | imageId | string | 条件必填 | - | 图片ID（1688图片ID），以图搜图查询结果中也会返回，建议当分页 page>1 查询时带 imageId，加快响应速度 |
 | page | int | 否 | 1 | 页码，从1开始 |
 | pageSize | int | 否 | 20 | 每页返回的商品数量，最大不超过50 |
@@ -160,7 +162,7 @@ POST Body（JSON）：
 curl -X POST https://tool-gateway.linkfox.com/alibaba1688/imageSearch \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/1.0" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{
     "imageUrl": "https://m.media-amazon.com/images/I/719mRAn2VrL._AC_SL1500_.jpg",
     "page": 1,
@@ -174,7 +176,7 @@ curl -X POST https://tool-gateway.linkfox.com/alibaba1688/imageSearch \
 curl -X POST https://tool-gateway.linkfox.com/alibaba1688/imageSearch \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/1.0" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{
     "imageUrl": "https://m.media-amazon.com/images/I/719mRAn2VrL._AC_SL1500_.jpg",
     "page": 1,
@@ -190,7 +192,7 @@ curl -X POST https://tool-gateway.linkfox.com/alibaba1688/imageSearch \
 curl -X POST https://tool-gateway.linkfox.com/alibaba1688/imageSearch \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/1.0" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{
     "imageId": "abc123456",
     "page": 2,
@@ -204,7 +206,7 @@ curl -X POST https://tool-gateway.linkfox.com/alibaba1688/imageSearch \
 curl -X POST https://tool-gateway.linkfox.com/alibaba1688/imageSearch \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/1.0" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{
     "imageUrl": "https://m.media-amazon.com/images/I/719mRAn2VrL._AC_SL1500_.jpg",
     "page": 1,

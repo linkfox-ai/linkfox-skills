@@ -154,7 +154,7 @@ def call_api(endpoint: str, params: dict) -> dict:
         headers={
             "Authorization": api_key,
             "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/1.0",
+            "User-Agent": "LinkFox-Skill/2.0",
             "SESSION_ID": os.environ.get("SESSION_ID", ""),
             "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
             "MODE_ID": os.environ.get("MODE_ID", ""),
@@ -233,7 +233,7 @@ def get_report_status(region: str, profile_id: int, report_id: str) -> dict:
 def download_report(url: str, output_path: str) -> bool:
     print(f"⬇️  Downloading report to {output_path}...", file=sys.stderr)
     try:
-        req = Request(url, headers={"User-Agent": "LinkFox-Skill/1.0"})
+        req = Request(url, headers={"User-Agent": "LinkFox-Skill/2.0"})
         with urlopen(req, timeout=60) as response:
             with open(output_path, 'wb') as f:
                 shutil.copyfileobj(response, f)

@@ -38,14 +38,14 @@ This skill performs visual product searches on the 1688 platform using an image 
 ## Parameter Guide
 
 **Image Rules:**
-1. Only png, jpg, jpeg formats are supported. webp, gif, and other formats are NOT supported.
+1. JPEG and PNG are passed through unchanged. WebP is detected from its real file bytes and transparently converted to JPEG before the 1688 call.
 2. Base64 string must be pure encoded content WITHOUT the `data:image/jpeg;base64,` prefix.
 3. Image source — one of imageUrl, imageBase64, or imageId must be provided (at least one required).
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| imageUrl | Conditional | - | Public image URL (max 1000 chars). Only png/jpg/jpeg formats supported |
-| imageBase64 | Conditional | - | Pure Base64 encoded image string, without `data:image/...;base64,` prefix. Only png/jpg/jpeg supported |
+| imageUrl | Conditional | - | Public image URL (max 1000 chars). JPEG/PNG pass through; WebP is converted automatically |
+| imageBase64 | Conditional | - | Pure Base64 without a data URL prefix. JPEG/PNG pass through; WebP is converted automatically |
 | imageId | Conditional | - | 1688 image ID from previous search result (speeds up pagination) |
 | page | No | 1 | Page number, starting from 1 |
 | pageSize | No | 20 | Results per page (1-50) |
@@ -120,7 +120,10 @@ Sort format example: `{"price":"asc"}` for price low to high.
 ## 调用方式
 
 - **API 端点**：`POST /alibaba1688/imageSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/alibaba1688_image_search.py '<JSON 参数>' [--inline]`
+- **Python 解释器选择**：调用前先选择一个真实可用的 Python 命令并在本次任务中始终复用，记为 `<PYTHON>`。Windows 按 `py -3`、`python`、`python3` 的顺序尝试，其他系统按 `python3`、`python` 的顺序尝试；候选命令必须执行 `<候选命令> -c "import sys; print(sys.executable)"` 后退出码为 0 且 stdout 含非空解释器路径，否则视为不可用（WindowsApps 的空输出占位命令不得选用）。
+- **Python 脚本**：`<PYTHON> scripts/alibaba1688_image_search.py '<JSON 参数>' [--inline]`
+- **无感图片预处理**：必须通过上述脚本调用。JPEG/PNG 保持原逻辑；WebP 由 Agent 使用 Pillow 转成 JPEG 后再按原逻辑调用，不要求用户手工转换。
+- **Pillow 首次初始化**：在当前运行环境第一次调用本 Skill 前，Agent 必须用 `<PYTHON>` 执行 `<PYTHON> -c "from PIL import features; ok=features.check('webp'); print('WEBP_OK' if ok else 'WEBP_MISSING'); raise SystemExit(0 if ok else 1)"`。只有退出码为 0 且 stdout 包含 `WEBP_OK` 才算检查通过。如果检查失败，静默执行 `<PYTHON> -m pip install --disable-pip-version-check "Pillow>=10.4,<13"`，然后用同一 `<PYTHON>` 重新检查一次。检查通过后再运行图搜脚本；第二次仍失败时停止并报告依赖初始化失败，不得进入收费接口，也不得循环安装或要求用户手工处理。后续调用检查通过即可直接执行，不重复安装。
 - **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
 
 **输出策略（脚本默认行为）**：
@@ -145,7 +148,7 @@ This tool requires a **publicly accessible image URL**. If the user provides a l
 
 Run the upload script:
 ```bash
-python scripts/upload_image.py /path/to/local/image.png
+<PYTHON> scripts/upload_image.py /path/to/local/image.png
 ```
 
 The script will return a public URL (valid for 24 hours) that can be used as the imageUrl parameter.
@@ -193,7 +196,7 @@ The script will return a public URL (valid for 24 hours) that can be used as the
 1. **Data real-time nature**: Results are live searches, not stored in any database. Cannot use `_dataQuery_executeDynamicQuery` for secondary processing.
 2. **Logic constraint**: If the user requests sort or filter conditions not in the preset supported list, do NOT call any other tool or logic to compensate.
 3. **Image input**: One of imageUrl, imageBase64, or imageId is required. For page > 1, prefer passing imageId from the first page result to speed up queries.
-4. **Image format**: Only png, jpg, jpeg are supported. webp, gif, and other formats will be rejected.
+4. **Image format**: JPEG/PNG follow the original path. The bundled script transparently converts WebP to JPEG before calling 1688. GIF and other formats retain their original behavior.
 5. **Base64 format**: The imageBase64 value must be the raw Base64 string only — do NOT include the `data:image/jpeg;base64,` prefix.
 6. **Page size**: Maximum 50 results per page.
 

@@ -26,26 +26,59 @@
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
 | imageUrl | string | 是 | - | 原图（首帧图），支持 jpg/jpeg/png/webp |
-| videoType | string | 是 | KLING | 模型类型：KLING(可灵) / WAN(万相) / SEED(豆包) / SEED_FAST(Seedance2.0 Fast) / HAILUO(海螺) |
+| videoType | string | 是 | 可灵Omni | 内部模型请求值，按下方“内部执行映射”填写；不得向用户展示该字段值 |
 | videoTime | integer | 是 | 5 | 视频时长(秒)，见下方各模型支持对照 |
-| prompt | string | 否 | - | 强化内容描述（2000字以内） |
+| prompt | string | 否 | - | 强化内容描述（3000字符以内） |
 | promptOptimizer | boolean | 否 | false | 是否开启提示词优化 |
-| isPro | boolean | 否 | false | Pro高质量模式（KLING/SEED/HAILUO支持） |
-| voice | boolean | 否 | false | 是否生成声音（WAN/SEED支持） |
-| lastFrameImageUrl | string | 否 | - | 尾帧图片URL，控制视频结束帧（KLING仅Pro/WAN/SEED支持） |
-| aspectRatio | string | 否 | - | 视频比例 16:9 / 9:16。SEED默认16:9；KLING透传 |
-| resolution | string | 否 | 720p | 视频分辨率。SEED: 480p/720p/1080p；KLING: 720p/1080p；HAILUO: 768p/1080p |
+| isPro | boolean | 否 | - | 仅在所选模型支持且用户明确需要时传入 |
+| voice | boolean | 否 | - | 仅在所选模型支持且用户明确需要时传入；可灵2.6仅在1080p下使用 |
+| lastFrameImageUrl | string | 否 | - | 尾帧图片URL；AgentOS配置中仅万相3.0和MiniMax H3支持 |
+| aspectRatio | string | 否 | - | 视频比例，以所选模型配置为准；仅在所选模型支持时传入 |
+| resolution | string | 否 | 按模型 | 新增模型默认值见下方；旧模型保持原默认值 |
 
 ### 各模型参数支持对照
 
-| 参数 | KLING(可灵) | WAN(万相) | SEED(豆包) | SEED_FAST | HAILUO(海螺) |
+| 参数 | 可灵Omni | Seedance 2.0 | Seedance 2.0 fast | 海螺2.3 |
+|------|:---:|:---:|:---:|:---:|
+| videoTime | 5/10/15秒 | 4～15秒 | 4～15秒 | 6/10秒 |
+| isPro | 支持 | 支持 | 不支持 | 支持 |
+| voice | 不支持 | 支持 | 支持 | 不支持 |
+| lastFrameImageUrl | 不支持 | 不支持 | 不支持 | 不支持 |
+| aspectRatio | 1:1/9:16/16:9 | 9:16/16:9/1:1/4:3/3:4/21:9 | 9:16/16:9/1:1/4:3/3:4/21:9 | 不生效 |
+| resolution | 720p/1080p | 480p/720p/1080p | 480p/720p(不支持1080p) | 768p/1080p |
+
+### 配置增量参数支持对照
+
+| 参数 | Seedance 2.5 | Seedance 2.0 mini | 万相3.0 | MiniMax H3 | 可灵2.6 |
 |------|:---:|:---:|:---:|:---:|:---:|
-| videoTime | 5/10秒 | 5/10/15秒 | 5/10/15秒 | 5/10/15秒 | 6/10秒 |
-| isPro | 支持 | 不支持 | 支持 | 不支持 | 支持 |
-| voice | 不支持 | 支持 | 支持 | 支持 | 不支持 |
-| lastFrameImageUrl | 仅Pro | 支持 | 支持 | 支持 | 不支持 |
-| aspectRatio | 透传16:9/9:16 | 不支持 | 16:9/9:16(默认16:9) | 16:9/9:16(默认16:9) | 不生效 |
-| resolution | 720p/1080p | 不支持 | 480p/720p/1080p | 480p/720p(不支持1080p) | 768p/1080p |
+| videoTime | 4～30秒 | 4～15秒（默认10秒） | 5/10/15/20/25/30秒（默认10秒） | 5/10/15秒（默认5秒） | 5/10秒（默认10秒） |
+| voice | 支持 | 支持 | 不支持 | 不支持 | 支持，仅1080p使用 |
+| lastFrameImageUrl | 不支持 | 不支持 | 支持 | 支持 | 不支持 |
+| aspectRatio | 9:16/16:9/1:1/4:3/3:4/21:9 | 9:16/16:9/1:1/4:3/3:4/21:9 | 16:9/4:3/1:1/3:4/9:16 | 16:9/9:16/1:1/4:3/3:4/21:9/adaptive | 不支持 |
+| resolution | 480p/720p/1080p | 480p/720p（默认480p） | 480p/720p/1080p（默认480p） | 768p/2K（默认2K） | 720p/1080p（默认720p） |
+
+### 内部执行映射（禁止向用户展示）
+
+面向用户的回复、选项、确认和错误解释必须使用“说明名称”，禁止输出内部 videoType 或内部渠道名称。
+
+| 说明名称 | 内部 videoType |
+|------|------|
+| 可灵Omni | `KLING` |
+| Seedance 2.0 | `SEED` |
+| Seedance 2.0 fast | `SEED_FAST` |
+| Seedance 2.5 | `SEED_V25` |
+| 海螺2.3 | `HAILUO` |
+| Seedance 2.0 mini | `SEED_MINI` |
+| 万相3.0 | `WAN3` |
+| MiniMax H3 | `MINIMAX_V2` |
+| 可灵2.6 | `MODEL_V2_6` |
+
+新增模型默认值与入口：
+
+- Seedance 2.0 mini：4～15秒，480p/720p，默认10秒、480p，支持单图和多图入口。
+- 万相3.0：5/10/15/20/25/30秒，480p/720p/1080p，默认10秒、480p，仅支持单图入口，支持尾帧，不开放多图。
+- MiniMax H3：5秒/10秒/15秒，768p/2K，默认5秒、2K，支持单图和多图入口，支持尾帧。内部渠道差异不得展示给用户。
+- 可灵2.6：5秒/10秒，720p/1080p，默认10秒、720p，仅支持单图入口；声音能力仅在1080p下使用。
 
 ### 响应结构
 
@@ -122,7 +155,7 @@ HTTP 200 时业务成功与否看响应体 `errcode`/`errorCode`（200=成功）
 | 400 | 参数错误 | 检查必填参数是否正确传入 |
 | 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
 | 402 | 算力不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 10007 | 参数校验失败 | 检查 videoTime 是否为模型支持的值 |
+| 10007 | 参数校验失败 | 检查时长、分辨率、比例、声音或尾帧是否符合所选模型当前配置 |
 | 10009 | 任务不存在 | 检查 taskId 是否正确 |
 | 其他 | 业务异常 | 参考 errmsg 字段 |
 
@@ -133,7 +166,7 @@ HTTP 200 时业务成功与否看响应体 `errcode`/`errorCode`（200=成功）
 
 ## curl 示例
 
-创建任务：
+创建任务（内部调用示例，禁止向用户展示 videoType 值）：
 ```bash
 curl -X POST "$LINKFOX_TOOL_GATEWAY/aigc/videoGenAsync" \
   -H "Authorization: $LINKFOX_AGENT_API_KEY" \

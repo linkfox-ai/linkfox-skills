@@ -56,7 +56,7 @@
 
 ## 执行自检
 
-- [ ] 步骤 1 所有参考图都为公开可访问 URL（本地路径已通过 linkfox-file-upload 上传），否则报错而非带空图调 `linkfox-aigc-textgen`
+- [ ] 步骤 1 所有参考图都为公开可访问 URL（本地路径已按内置 [file-upload.md](../file-upload.md) 执行上传），否则报错而非带空图调 `linkfox-aigc-textgen`
 - [ ] 步骤 2 的占位符全部被真实值或空串替换，最终 prompt 里无残留 `{xxx}`
 - [ ] 步骤 3 `provider` 已按入参透传给 imagegen、`outputNum=1`，`aspectRatio` 已按入参 `ratio` 原样透传给 `linkfox-aigc-imagegen`
 - [ ] 产物为特写图（局部区域占比约 60%~80%、浅景深、高锐度，背景非纯白且不抢焦点）

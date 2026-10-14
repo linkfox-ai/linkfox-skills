@@ -25,13 +25,41 @@
 
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
-| imageUrls | array[string] | 是 | - | 参考图列表（1张或多张图片URL） |
+| imageUrls | array[string] | 否 | - | 参考图列表；不传或传空列表时为文生图，传入时为参考图生图，具体上限以所选模型配置为准，最高10张 |
 | prompt | string | 是 | - | 提示词，描述期望生成的图片内容 |
-| provider | string | 否 | BANANA_PRO | 模型枚举值：`BANANA`(基础版仅1K) / `BANANA_2`(香蕉2) / `BANANA_PRO`(香蕉Pro) / `GPT_2_IMAGE`(Image2) / `AIDRAW_EDIT`(Linkfox-Image-1) / `WAN2_7`(Wan2.7) / `SEEDREAM5`(Seedream5.0仅2K) |
-| outputNum | integer | 是 | 1 | 输出张数，取值范围 [1, 10]。必须显式传入 |
-| resolution | string | 是 | 1K | 分辨率：`1K` / `2K` / `4K`。必须显式传入 |
-| aspectRatio | string | 是 | 1:1 | 宽高比：`1:1` / `16:9` / `9:16`。必须显式传入 |
-| quality | string | 是 | high | 图片质量，仅 GPT_2_IMAGE 支持：`low` / `medium` / `high`。必须显式传入 |
+| provider | string | 否 | LF全能模型 Pro | 内部模型请求值，按下方“内部执行映射”填写；不得向用户展示该字段值 |
+| outputNum | integer | 否 | 1 | 输出张数，取值范围 [1, 10]；未传时默认1 |
+| resolution | string | 否 | 按模型 | 分辨率：`1K` / `2K` / `4K`，必须使用所选模型支持的值。两个 G-2.5 模型未指定时默认2K；旧模型保留原调用默认行为 |
+| aspectRatio | string | 否 | 由下游决定 | 宽高比以所选模型配置为准；工具端未指定时不透传此字段，建议显式传入合法比例 |
+| quality | string | 否 | high | 图片质量：`low` / `medium` / `high` / `xhigh` / `max`；仅支持质量档位的模型生效 |
+
+### 内部执行映射（禁止向用户展示）
+
+面向用户的回复、选项、确认和错误解释必须使用“说明名称”，禁止输出内部请求值。
+
+| 说明名称 | provider 内部请求值 |
+|------|------|
+| LF全能模型 | `LF_BN_1` |
+| LF全能模型 2 | `LF_BN_2` |
+| LF全能模型 Pro | `LF_BN_3` |
+| LF智能模型 G-2 | `LF_GT_1` |
+| Linkfox-Image-1 | `LF_AD_1` |
+| Wan 2.7 | `LF_WN_1` |
+| Seedream 5.0 | `LF_SD_1` |
+| LF智能模型 G-2.5 Sunburst | `LF_GT_2` |
+| LF智能模型 G-2.5 Flare | `LF_GT_2_F` |
+| Seedream 5.0 Pro | `LF_SD_2` |
+
+工具端继续兼容历史请求值；新调用使用上表内部请求值。未传 provider 时仍按 LF全能模型 Pro 执行。
+
+### 新增图片模型参数支持对照
+
+| 参数 | LF智能模型 G-2.5 Sunburst | LF智能模型 G-2.5 Flare | Seedream 5.0 Pro |
+|------|:---:|:---:|:---:|
+| resolution | 1K/2K/4K（默认2K） | 1K/2K/4K（默认2K） | 1K/2K |
+| imageUrls上限 | 10张 | 10张 | 6张 |
+| quality | low/medium/high/xhigh/max | low/medium/high/xhigh/max | 不使用 |
+| aspectRatio | 1:1/3:4/4:3/2:3/3:2/9:16/16:9/4:5/5:4/21:9/9:21 | 1:1/3:4/4:3/2:3/3:2/9:16/16:9/4:5/5:4/21:9/9:21 | 1:1/3:4/4:3/9:16/16:9/3:2/2:3/21:9 |
 
 ### 响应结构
 
@@ -117,12 +145,12 @@ HTTP 200 时业务成功与否看响应体 `errcode`/`errorCode`（200=成功）
 
 ## curl 示例
 
-创建任务：
+创建任务（内部调用示例，禁止向用户展示 provider 值）：
 ```bash
 curl -X POST "$LINKFOX_TOOL_GATEWAY/aigc/imageGenAsync" \
   -H "Authorization: $LINKFOX_AGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"imageUrls":["https://example.com/ref.jpg"],"prompt":"product on white background","provider":"BANANA_PRO","outputNum":1,"resolution":"1K","aspectRatio":"1:1","quality":"high"}'
+  -d '{"imageUrls":["https://example.com/ref.jpg"],"prompt":"product on white background","provider":"LF_BN_3","outputNum":1,"resolution":"1K","aspectRatio":"1:1","quality":"high"}'
 ```
 
 查询结果：

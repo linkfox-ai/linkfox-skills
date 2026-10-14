@@ -17,7 +17,8 @@ POST Body（JSON）：
 | sort | string | 否 | 排序，支持价格、评分、评论数排序。可选值：`default`（默认）、`price-asc-rank`（价格从低到高）、`price-desc-rank`（价格从高到低）、`rating-asc-rank`（评分从低到高）、`rating-desc-rank`（评分从高到低）、`ratings-asc-rank`（评论数从低到高）、`ratings-desc-rank`（评论数从高到低） |
 | deliveryZip | string | 否 | 站内收货地址邮编或城市，如果用户未指定，则取站点（国家）的默认邮编。最大长度：1000。各站点默认邮编：美国=10001、英国=EC1A 1BB、德国=10115、法国=75001、意大利=00100、西班牙=28001、日本=100-0001、印度=110034 |
 | countryOrAreaCode | string | 否 | 站外收货的国家代码（如 CN、JP、KR、TW、HK、MO、SG、TH、VN、PH、MY）。站内邮编地址和站外国家地区代码不能同时指定。注意：印度站不支持设置站外国家或地区收货。最大长度：1000 |
-| aggregateByKeepaData | boolean | 否 | 是否聚合Keepa数据（销售排名、月销量、FBA费用、尺寸等） |
+
+> `aggregateByKeepaData` 已废弃，新调用不得传入。需要 Keepa 数据时，先从图搜结果获取 ASIN，再调用对应 Keepa skill。
 
 
 ## 响应结构
@@ -32,6 +33,8 @@ POST Body（JSON）：
 | sourceType | string | 来源类型 |
 | columns | array | 渲染的列 |
 | costToken | integer | 消耗token |
+| keepaDataEnriched | boolean | 是否已聚合 Keepa 增强数据；新图搜调用默认为 `false` |
+| message | string | 数据边界或降级提示；应展示给用户 |
 | products | array | 商品列表（详见下方商品字段） |
 
 ### 商品字段
@@ -53,7 +56,9 @@ POST Body（JSON）：
 | sourceTool | string | 来源工具 |
 | sourceType | string | 来源类型 |
 
-Keepa 聚合字段（当 `aggregateByKeepaData` 为 true 时返回）：
+### 已废弃的 Keepa 聚合字段
+
+以下字段仅保留用于兼容旧调用，新流程不应依赖。请使用 `linkfox-keepa-product-request` 查询当前商品详情，或使用 `linkfox-keepa-product-series` 查询历史趋势。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -130,20 +135,6 @@ curl -X POST https://tool-gateway.linkfox.com/amazon/searchByImage \
     "imageUrl": "https://m.media-amazon.com/images/I/61pAlIX8SZL._AC_SY575_.jpg",
     "amazonDomain": "amazon.com",
     "sort": "default"
-  }'
-```
-
-### 聚合 Keepa 数据示例
-
-```bash
-curl -X POST https://tool-gateway.linkfox.com/amazon/searchByImage \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "imageUrl": "https://m.media-amazon.com/images/I/61pAlIX8SZL._AC_SY575_.jpg",
-    "amazonDomain": "amazon.com",
-    "sort": "price-asc-rank",
-    "aggregateByKeepaData": true
   }'
 ```
 

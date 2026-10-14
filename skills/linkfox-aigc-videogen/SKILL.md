@@ -1,6 +1,6 @@
 ---
 name: linkfox-aigc-videogen
-description: AI生视频工具（首尾帧/单图模式），根据原图和提示词生成视频，支持可选尾帧图控制结束画面。支持模型KLING可灵/WAN万相/SEED豆包/SEED_FAST/HAILUO海螺。用户说"生成视频"、"AI视频"、"图生视频"、"做个视频"、"video generation"、"generate video"、"图片转视频"、"动态视频"时触发。
+description: AI生视频工具（单图/首尾帧模式），根据原图和提示词生成视频，支持配置中已开放的多种视频模型。用户说"生成视频"、"AI视频"、"图生视频"、"做个视频"、"video generation"、"generate video"、"图片转视频"、"动态视频"时触发。
 ---
 
 # AI 生视频（首尾帧/单图模式）
@@ -9,25 +9,35 @@ description: AI生视频工具（首尾帧/单图模式），根据原图和提�
 
 ## 核心特点
 
-- **5 种模型选择**：覆盖不同风格和时长需求。
-- **首尾帧控制**：可选尾帧图控制视频结束画面。
-- **丰富参数**：支持 Pro 模式、声音生成、运镜控制、宽高比等。
+- **9 种模型选择**：覆盖不同风格和时长需求。
+- **首尾帧控制**：按 AgentOS 配置，万相3.0和MiniMax H3可选尾帧图。
+- **丰富参数**：支持 Pro 模式、声音生成、宽高比和分辨率等。
 - **异步模式**：创建任务立即返回 taskId，脚本自动轮询直到完成（超时 20 分钟）。
 
 ## 模型说明
 
-| 模型（videoType） | 说明 | 支持时长       |
+| 说明名称 | 时长 | 默认分辨率/备注 |
 |------|------|------------|
-| KLING | 可灵 | 5秒/10秒     |
-| WAN | 万相 | 5秒/10秒/15秒 |
-| SEED | Seedance/豆包 | 5秒/10秒/15秒 |
-| SEED_FAST | Seedance 2.0 Fast | 5秒/10秒/15秒 |
-| HAILUO | 海螺 | 6秒/10秒     |
+| 可灵Omni | 5秒/10秒/15秒 | 720p，旧调用默认5秒 |
+| Seedance 2.0 | 4～15秒 | 480p，可选720p/1080p |
+| Seedance 2.0 fast | 4～15秒 | 480p，可选720p |
+| Seedance 2.5 | 4～30秒 | 480p，可选720p/1080p |
+| 海螺2.3 | 6秒/10秒 | 768p |
+| Seedance 2.0 mini | 4～15秒，默认10秒 | 480p，可选720p |
+| 万相3.0 | 5/10/15/20/25/30秒，默认10秒 | 480p，可选720p/1080p，支持尾帧 |
+| MiniMax H3 | 5秒/10秒/15秒，默认5秒 | 2K，可选768p，支持尾帧 |
+| 可灵2.6 | 5秒/10秒，默认10秒 | 720p，可选1080p；声音能力仅在1080p使用 |
+
+## 展示规则
+
+- 面向用户介绍、推荐、确认模型或解释错误时，只能使用上表的**说明名称**。
+- 禁止向用户展示 videoType、provider、模型 code 或内部渠道名称。
+- MiniMax H3 的多个内部渠道只对用户展示为 **MiniMax H3**。
 
 ## 参数概览
 
 - **必填字段**：`imageUrl`、`videoType`、`videoTime`
-- **可选核心**：`lastFrameImageUrl`（尾帧图）、`prompt`（2000字以内）
+- **可选核心**：`lastFrameImageUrl`（仅万相3.0、MiniMax H3）、`prompt`（3000字符以内）
 
 完整参数表、响应字段结构与错误码，见 [`references/api.md`](references/api.md)。
 
@@ -58,27 +68,45 @@ description: AI生视频工具（首尾帧/单图模式），根据原图和提�
 
 ## 使用指引
 
-1. **模型选择**：一般商品视频用 `KLING`；长时长用 `WAN`/`SEED`。
-2. **首尾帧**：传 `imageUrl`（首帧，必传）+ 可选 `lastFrameImageUrl`（尾帧），支持模型：KLING仅Pro / WAN / SEED。
+1. **模型选择**：一般商品视频用 **可灵Omni**；需要新模型时按上表能力选择。
+2. **首尾帧**：传 `imageUrl`（首帧，必传）+ 可选 `lastFrameImageUrl`（尾帧）。按 AgentOS 配置，仅 **万相3.0** 和 **MiniMax H3** 使用尾帧。
 3. **时长匹配**：必须传模型支持的时长值，否则报错。
-4. **提示词**：可选，2000 字以内，描述期望的动态效果。
+4. **提示词**：可选，3000 字符以内，描述期望的动态效果。
+5. **声音**：可灵2.6仅在1080p下使用声音能力。
+
+## 内部执行映射（禁止向用户展示）
+
+本节仅用于构造工具请求。回复用户时必须使用第一列说明名称，禁止输出第二列技术值。
+
+| 说明名称 | 内部 videoType |
+|------|------|
+| 可灵Omni | `KLING` |
+| Seedance 2.0 | `SEED` |
+| Seedance 2.0 fast | `SEED_FAST` |
+| Seedance 2.5 | `SEED_V25` |
+| 海螺2.3 | `HAILUO` |
+| Seedance 2.0 mini | `SEED_MINI` |
+| 万相3.0 | `WAN3` |
+| MiniMax H3 | `MINIMAX_V2` |
+| 可灵2.6 | `MODEL_V2_6` |
 
 ### 示例
 
-**1. KLING — 商品展示**
+以下 JSON 仅为内部调用参数，禁止原样展示给用户。
+
+**1. 可灵Omni - 商品展示**
 ```json
 {"imageUrl": "https://example.com/product.jpg", "videoType": "KLING", "videoTime": 10, "prompt": "商品展示视频"}
 ```
 
-
-**3. WAN 万相 — 带声音和运镜**
+**2. 万相3.0 - 首尾帧**
 ```json
-{"imageUrl": "https://example.com/scene.jpg", "videoType": "WAN", "videoTime": 15, "voice": true, "camera": "single"}
+{"imageUrl": "https://example.com/scene-start.jpg", "lastFrameImageUrl": "https://example.com/scene-end.jpg", "videoType": "WAN3", "videoTime": 10, "resolution": "480p"}
 ```
 
-**4. SEED — 高分辨率**
+**3. 可灵2.6 - 1080p声音视频**
 ```json
-{"imageUrl": "https://example.com/scene.jpg", "videoType": "SEED", "videoTime": 10, "resolution": "1080p", "aspectRatio": "16:9"}
+{"imageUrl": "https://example.com/scene.jpg", "videoType": "MODEL_V2_6", "videoTime": 10, "resolution": "1080p", "voice": true}
 ```
 
 ## 展示规则
@@ -89,9 +117,9 @@ description: AI生视频工具（首尾帧/单图模式），根据原图和提�
 
 ## 限制
 
-- 提示词最大 2000 字符。
+- 提示词最大 3000 字符。
 - 生成时间较长，通常 100-600 秒。脚本自动轮询，超时 20 分钟。
-- KLING 尾帧图仅 Pro 模式下支持。
+- AgentOS 配置中仅万相3.0和MiniMax H3开放尾帧能力。
 - 本接口仅支持单图/首尾帧模式。多参考图请使用 `linkfox-aigc-videogen-multi`。
 - 失败时不重试（仅尝试 1 次）。
 

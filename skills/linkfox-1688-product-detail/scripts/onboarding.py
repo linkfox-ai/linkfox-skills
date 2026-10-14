@@ -219,7 +219,9 @@ def _headers(source: str, origin_host: str, *, access_token: str = "",
     }
     if access_token:
         h["authorization"] = access_token
-        h["uid"] = _uid_header(access_token, user_id) if user_id else _LOGIN_FIXED_UID
+    # uid 是登录链路的独立门禁（生产缺失/非法均返回 30021 非法uid），与 authorization 无关，
+    # 故不能嵌在 if access_token 内：/user/v*/web/login 不带 token 但同样要求 uid。
+    h["uid"] = _uid_header(access_token, user_id) if user_id else _LOGIN_FIXED_UID
     if group_id:
         h["tid"] = group_id
     return h
@@ -315,12 +317,12 @@ def create_order(plan_id: str, method: str) -> dict:
         raise ValueError(f"不支持的支付方式 {method}，仅支持 wechat/alipay")
     user = fetch_user_info()
     is_team = bool(user.get("isTeamUser"))
-    member_id = _jwt_uid().get("uid", "")
-    if not member_id:
-        raise RuntimeError("无法从 JWT 解出 uid，请检查 LINKFOX_AGENT_API_KEY 或 LINKFOXAGENT_API_KEY")
+    # memberId 是 swoosh 路由层必填参数（缺失会被拒为“memberId 为必填参数”），但后端 *ByAPI
+    # 下单只认 API key 解出的身份，body 里的值会被丢弃，故传固定占位值而不从 key 解 uid：
+    # 一旦 key 格式变更，解析失败会把本可成功的下单误拦为“配置错误”。
     body = {
         "packageId": plan_id, "payType": PAY_METHOD_MAP[method], "payDeviceType": "PC",
-        "memberId": member_id, "groupId": user.get("currentGroupId", ""),
+        "memberId": "ignored", "groupId": user.get("currentGroupId", ""),
     }
     path = "/order/createTeamOrderByAPI" if is_team else "/order/createByAPI"
     print(f"{TAG} 下单 path={path} isTeamUser={is_team} groupId={body['groupId']}", file=sys.stderr)
@@ -602,4 +604,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

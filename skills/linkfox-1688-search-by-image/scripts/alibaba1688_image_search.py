@@ -23,6 +23,8 @@ import secrets
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
+from _image_prepare import ImagePreparationError, prepare_search_params
+
 
 API_PATH = "/alibaba1688/imageSearch"
 SLUG = "linkfox-1688-search-by-image"
@@ -60,6 +62,7 @@ def get_api_key():
 def call_api(params):
     api_url = get_api_url()
     api_key = get_api_key()
+    params = prepare_search_params(params)
     data = json.dumps(params).encode("utf-8")
     headers = {
         "Authorization": api_key,
@@ -304,6 +307,11 @@ def _resolve_output_path(ts):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+
     argv = sys.argv[1:]
     inline = False
     use_cache = True
@@ -330,7 +338,11 @@ def main():
     cache_path = _cache_path(params)
     result = _load_cache(cache_path) if use_cache else None
     if result is None:
-        result = call_api(params)
+        try:
+            result = call_api(params)
+        except ImagePreparationError as e:
+            print(f"Image preparation failed: {e}", file=sys.stderr)
+            sys.exit(1)
         if use_cache:
             _save_cache(cache_path, result)
 
@@ -338,7 +350,7 @@ def main():
     ts = int(time.time())
     out_path = _resolve_output_path(ts)
     try:
-        with open(out_path, "w") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             f.write(serialized)
         print(f"Saved full response: {out_path} ({len(serialized)} bytes)")
         if result.get("_cache", {}).get("hit"):

@@ -144,7 +144,8 @@
 | latest1daysAds | integer | 最近 1 天广告竞品数 |
 | latest7daysAds | integer | 最近 7 天广告竞品数 |
 | latest30daysAds | integer | 最近 30 天广告竞品数 |
-| sprt | number | SP 相关比率 |
+| spr | integer | SPR（SellerSprite Product Rank），关键词维持首页所需的 8 天预估销量 |
+| sprt | number | 兼容历史字段；卖家精灵当前官方 v1 文档未定义，勿与 `spr` 混用 |
 | monopolyClickRate | number | 垄断点击率 |
 | top3ClickingRate | number | Top3 点击率 |
 | top3ConversionRate | number | Top3 转化率 |

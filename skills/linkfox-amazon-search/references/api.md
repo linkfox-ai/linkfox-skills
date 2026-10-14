@@ -20,6 +20,7 @@ POST Body（JSON）：
 | page | integer | 否 | 页码（从1开始，每页大概20条），默认 `1` |
 | deliveryZip | string | 否 | 配送地邮编，用于模拟亚马逊前台地址，建议使用目标国家主要城市的常用邮编，如美国站常用纽约邮编 10001（最大长度1000） |
 | device | string | 否 | 设备类型：`desktop`、`mobile`、`tablet`，默认 `desktop`（最大长度1000） |
+| includeSellerSpriteData | boolean | 是（Skill 调用） | 高级参数，每次 Skill 调用必须显式传入；`true` 时调用卖家精灵补全销量、销售额、品牌、履约等竞品数据，并按成功批次追加动态算力消耗，不需要补全时传 `false`。服务端为兼容旧调用，缺省时仍按 `false` 处理 |
 
 ### 支持的 amazonDomain 值
 
@@ -113,6 +114,7 @@ POST Body（JSON）：
 | type | string | 渲染的样式 |
 | columns | array | 渲染的列定义 |
 | costToken | integer | 消耗token |
+| sellerSpriteEnriched | boolean | 本次请求是否启用了卖家精灵竞品数据补全 |
 | products | array | 搜索结果列表（详见下方） |
 
 ### products 商品对象字段
@@ -178,7 +180,24 @@ POST Body（JSON）：
 curl -X POST https://tool-gateway.linkfox.com/amazon/search \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"keyword": "wireless earbuds", "amazonDomain": "amazon.com", "page": 1}'
+  -d '{"keyword": "wireless earbuds", "amazonDomain": "amazon.com", "page": 1, "includeSellerSpriteData": false}'
+```
+
+## 动态算力规则
+
+```text
+costToken = 20000 + Σ(每个成功卖家精灵补全批次返回的 costToken)
+```
+
+Skill 调用必须显式传入 `includeSellerSpriteData`；传 `false` 时仅产生 20000 基础 `costToken`。服务端为兼容旧调用，在参数缺省时仍按 `false` 处理。传 `true` 后最终费用随成功补全批次数动态变化，应以响应顶层 `costToken` 为准。
+
+高级查询示例：
+
+```bash
+curl -X POST https://tool-gateway.linkfox.com/amazon/search \
+  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"keyword":"neck massager","amazonDomain":"amazon.com","includeSellerSpriteData":true}'
 ```
 
 ---

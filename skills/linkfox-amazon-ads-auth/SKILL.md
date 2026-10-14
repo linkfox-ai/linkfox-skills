@@ -1,21 +1,31 @@
 ---
 name: linkfox-amazon-ads-auth
-description: 亚马逊广告（Amazon Ads）店铺授权与管理技能，提供完整的授权流程、已绑定账号与站点的查询、令牌刷新与读取、当前用户广告授权连接解绑等能力。发起授权链接时需要先向用户确认一个账号名称；一次授权即可自动发现并绑定同账号下所有可用站点的广告 profile（每个站点对应一个 profileId）。当用户提到亚马逊广告授权、Amazon Ads 授权、绑定广告账户、解绑广告账户、断开广告连接、取消广告授权、刷新广告令牌、查询 profile 列表、管理已授权广告账户、Amazon Advertising authorization, Ads token refresh, list profiles, ad account management时触发此技能。即使未明确提及"Amazon Ads"或"授权"，只要涉及亚马逊广告账号绑定、访问令牌管理或广告 profile 列表查询，也应触发。
+description: 亚马逊广告（Amazon Ads）店铺授权与管理技能，提供完整的授权流程、已绑定账号与站点的查询、profile 管理、当前用户广告授权连接解绑等能力。发起授权链接时需要先向用户确认一个账号名称；一次授权即可自动发现并绑定同账号下所有可用站点的广告 profile（每个站点对应一个 profileId）。当用户提到亚马逊广告授权、Amazon Ads 授权、批量授权、绑定广告账户、解绑广告账户、断开广告连接、取消广告授权、查询 profile 列表、管理已授权广告账户、Amazon Advertising authorization, list profiles, ad account management时触发此技能。即使未明确提及"Amazon Ads"或"授权"，只要涉及亚马逊广告账号绑定、授权关系管理或广告 profile 列表查询，也应触发。授权时支持保留原手动流程或选择紫鸟 CLI 自动授权。
 ---
 
 # Amazon Ads 授权与广告账户管理
 
-Amazon Ads 的授权（LWA OAuth）、profile 发现、访问令牌管理。**下游 skill 的前置依赖**。
+Amazon Ads 的授权（LWA OAuth）、profile 发现与授权连接管理。**下游 skill 的前置依赖**。
 
 下游：`linkfox-amazon-ads-manager`（广告管理）、`linkfox-amazon-ads-report`（报告）。
+
+## 授权方式路由（授权任务最先执行）
+
+本节优先于后续 `Core Concepts`、`Usage Scenarios` 和参数要求。只有用户要新增、恢复或批量执行授权时才进行选择；查询和解绑仍直接执行原场景。
+
+需要授权且用户尚未选择方式时，必须先让用户选择：
+
+1. **手动授权**：选择后继续执行原 Scenario 1，此时才询问并使用 `accountName`。
+2. **紫鸟 CLI 自动授权**：向用户展示此选项时只用一句话说明：“紫鸟 CLI 自动授权（推荐，仅支持本机 Windows/macOS；Agent 会自动检查并推进，只有登录、系统确认或审核等必要步骤才需要你操作）”。该模式要求 CLI、紫鸟客户端和 Bridge 位于同一台用户可见的电脑；云端 Agent、远程主机/虚拟机、容器、WSL 和 Linux（包括本机 Ubuntu）均不支持，不能因为远端装得上软件就启用。用户选择后在后台完成环境、版本和现有配置检查，正常项不逐条汇报，已有可用配置直接复用。只有执行环境被明确识别为用户本机后才完整执行 `references/automatic-authorization.md`；否则提示本机使用自动授权或选择手动授权，禁止在当前环境安装 CLI、申请 Key 或打开店铺。自动模式不得询问手动流程的 `accountName`；所选紫鸟店铺的 `storeName` 用作授权标记。
+
+用户已在当前请求中明确说“自动授权”“紫鸟 CLI 自动授权”或同义表达时，直接进入自动流程，不重复询问授权方式，也不能先询问 `accountName`。“全部授权”只表示全部所选 Amazon 店铺的 Ads 授权，并且只创建 Ads worker。
 
 ## Core Concepts
 
 - **授权流程**：生成 URL → 用户浏览器授权 → 系统存 token + 同步 profile
 - **一次授权多 profile**：每个 marketplace（US/UK/JP…）一个 profileId；下游调用必须带 profileId
 - **accountName 必填**：调 `authorize_url.py` 前必须问用户要一个非空账号名
-- **下游选店**：业务 skill 经 `developerProxy` 传 **`profileId`**（+ `region`），服务端注入 token；**勿**先 `storeTokens` 取 raw token
-- **accessToken 1 小时有效**；过期后下游返回 HTTP 401，可用 `refresh_token.py` 续签（刷新后重试 proxy，仍只需 `profileId`）
+- **下游选店**：业务 skill 经 `developerProxy` 传 **`profileId`**（+ `region`），令牌由服务端透明管理和注入；本 skill 不提供 raw token 读取或手动刷新能力
 
 ## 可用脚本
 
@@ -24,15 +34,13 @@ Amazon Ads 的授权（LWA OAuth）、profile 发现、访问令牌管理。**�
 | `authorize_url.py` | 为新账号生成授权 URL（`accountName` 必填） |
 | `authorized_stores.py` | 列出已授权的账号 × 站点（按 profileId 聚合） |
 | `profiles.py` | 列 profile 列表（`refresh=true` 穿透上游刷新） |
-| `refresh_token.py` | 刷新 accessToken |
-| `store_tokens.py` | 查授权/令牌**状态**（非下游 token 来源） |
 | `cancel_authorization.py` | 按 `authRecordId` 解绑广告连接 |
 
 入参、响应字段、错误码见 `references/api.md`。
 
 ## 调用方式
 
-- **API 端点**：`POST /amazonAds/{authorizeUrl|storeTokens|authorizedStores|refreshToken|cancelAuthorization}`（完整参数/响应/错误码见 `references/api.md`）
+- **API 端点**：`POST /amazonAds/{authorizeUrl|authorizedStores|profiles|cancelAuthorization}`（完整参数/响应/错误码见 `references/api.md`）
 - **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文）
 - **成本约束**：本工具会消耗算力；失败/空结果不得自动连续试探；需要继续检索时先向用户说明会产生额外消耗。
 
@@ -60,21 +68,22 @@ Amazon Ads 的授权（LWA OAuth）、profile 发现、访问令牌管理。**�
 
 ### 1. 新授权账号
 1. 问用户要 `accountName`（非空字符串，用于识别）
-2. 调 `authorize_url.py` 拿 URL → 给用户在浏览器打开(安全警告：为保障店铺安全，请务必在日常运营该店铺的安全网络环境中打开此链接。强烈建议使用紫鸟浏览器等专业的防关联浏览器进行授权，切勿在陌生或公共网络下操作。)
+2. 调 `authorize_url.py` 拿 URL → 以文本形式给用户在浏览器打开(安全警告：为保障店铺安全，请务必在日常运营该店铺的安全网络环境中打开此链接。强烈建议使用紫鸟浏览器等专业的防关联浏览器进行授权，切勿在陌生或公共网络下操作。)
 3. 授权完成后系统自动存 token + 同步 profile
 4. 可选：调 `authorized_stores.py` 确认
+
+### 1B. 批量授权账号（紫鸟 CLI）
+
+完整执行 `references/automatic-authorization.md`。每家所选店铺建立一个 Ads worker；先生成本店授权链接并用对应紫鸟店铺打开，由 Agent 仅沿本次授权链路持续推进；可恢复问题自主处理，确需用户处理时才转人工，其余店铺继续。
 
 ### 2. 列已授权账号
 调 `authorized_stores.py`，展示 `profileId / accountInfoName / countryCode / region`。
 
-### 3. 刷新过期令牌
-下游返回 HTTP 401 或含 `expired` / `unauthorized` 时，调 `refresh_token.py`（传 `profileId` 或 `authRecordId`）。
-
-### 4. 给下游准备 profileId（高频）
+### 3. 给下游准备 profileId（高频）
 
 用户只说自然语言（"美国站"、"我的店铺"），**不要让用户报 profileId 数字**。
 
-下游 **`linkfox-amazon-ads-manager`** / **`linkfox-amazon-ads-report`** 调用 `developerProxy` 时传入解析到的 **`profileId`** 即可；**不要**先调 `store_tokens.py` 取 `accessToken`。
+下游 **`linkfox-amazon-ads-manager`** / **`linkfox-amazon-ads-report`** 调用 `developerProxy` 时传入解析到的 **`profileId`** 即可；不要读取或传递 Amazon raw token。
 
 | 用户上下文 | Agent 动作 |
 |---|---|
@@ -83,14 +92,12 @@ Amazon Ads 的授权（LWA OAuth）、profile 发现、访问令牌管理。**�
 | 同时给出 accountName + 站点 | 直接定位 `profileId` |
 | 显式给出 profileId 数字 | 直接用 |
 
-`store_tokens.py` **仅用于**确认授权/令牌状态（`status`、`expiresIn`、`message` 等），或在用户明确要查状态时调用。
-
 站点关键词映射参考（以 `authorized_stores` 真实 `countryCode` 兜底）：
 - 美国 / US → `US`；英国 / UK → `UK`；日本 / JP → `JP`；德国 / DE → `DE`
 
 **静默原则**：映射成功时不播报 profileId 数值；仅在歧义或失败时向用户开口。
 
-### 5. 解绑广告连接
+### 4. 解绑广告连接
 
 仅在用户要求时执行。当前用户按 API key 对应的成员身份识别；共用该身份的使用者会一起受影响。
 
@@ -102,7 +109,7 @@ Amazon Ads 的授权（LWA OAuth）、profile 发现、访问令牌管理。**�
 ## 调用原则
 
 - 先问 `accountName` 再调 `authorize_url.py`
-- 不假设 `storeTokens`/`refreshToken` 响应含 raw token；展示 `status`、过期时间等元数据即可
+- 不向用户索取、读取、展示或传递 Amazon raw token；令牌生命周期由服务端处理
 - 授权失败按错误码解释原因；不擅自重试
 
 ## 常见问题

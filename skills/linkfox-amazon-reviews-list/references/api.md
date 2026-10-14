@@ -69,7 +69,7 @@ POST Body（JSON）：
 | startedAt | integer | 任务开始时间，Unix毫秒 |
 | completedAt | integer | 任务完成时间，Unix毫秒 |
 | expiresAt | integer | 任务结果过期时间，Unix毫秒 |
-| costToken | integer | 本次查询的Token消耗；成功结果仅首次领取时产生 |
+| costToken | integer | 查询本身为 `0`，任务费用由后端独立结算，不代表整个任务免费 |
 
 处理规则：
 
@@ -85,7 +85,7 @@ POST Body（JSON）：
 - 超过 `200` 秒仍未完成时返回 `POLL_TIMEOUT` 并停止自动查询。用户可以选择继续查询同一个 `taskId`，或停止查询；不得自动提交新任务。
 - 当前没有手动取消端点。后端只自动取消尚未调用供应商的 `PENDING` 任务；停止查询不会取消已进入 `RUNNING` 的上游调用。
 - 任务不存在或已过期：结束并提示用户；只有用户明确要求重试时才重新提交。
-- 调用前的积分公式只用于预估。实际扣费只认首次 `SUCCEEDED` 查询响应的 `X-Cost-Token`/`costToken`；提交、`PENDING`、`RUNNING`、`FAILED`、`CANCELLED`、`POLL_TIMEOUT` 均不得由客户端推算或补记费用。
+- 调用前的积分公式只用于预估。后端在上游处理结束后独立结算，与是否领取结果无关；提交和查询响应的 `X-Cost-Token`/`costToken` 为 `0` 只表示本次接口不再扣费。实际消耗以消费记录为准，不得因未领取、查询失败或本地观察超时报告任务免费，也不得由客户端推算或补记费用。
 
 ## 评论结果结构
 
@@ -94,7 +94,7 @@ POST Body（JSON）：
 | total | integer | 总评论数 |
 | data | array | 评论列表（详见下方评论对象） |
 | columns | array | 渲染的列 |
-| costToken | integer | 总Token消耗 |
+| costToken | integer | 领取结果时为 `0`；此字段不表示任务实际费用，任务费用由后台独立结算 |
 | type | string | 渲染的样式 |
 
 ### 评论对象
@@ -113,7 +113,8 @@ POST Body（JSON）：
 | numberOfHelpful | integer | 有用数量 |
 | imageUrlList | array | 评论图片列表 |
 | videoUrlList | array | 评论视频列表 |
-| domainCode | string | 国家代码 |
+| domainCode | string | 本次查询的站点代码，不代表每条评论的来源 |
+| reviewCountry | string | 单条评论所在国家/地区，Pango 和 Apify 共用；名称可能本地化，如 `Canada`、`Canadá` 均指加拿大。缺失时不要从 `domainCode` 或 `locale.country` 推断 |
 | productTitle | string | 产品标题 |
 | productRating | string | 产品评分 |
 | countRatings | integer | 产品评分数量 |

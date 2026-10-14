@@ -2,7 +2,7 @@
 
 ## 前置
 
-- `imageUrls` 全部为公开 HTTPS URL（本地路径先 `linkfox-file-upload`）
+- `imageUrls` 全部为公开 HTTPS URL（本地路径先读取并按内置 [file-upload.md](../file-upload.md) 执行上传）
 - 已 Read `00-index.md` 并完成 S0
 
 ## 写 collection-job.json

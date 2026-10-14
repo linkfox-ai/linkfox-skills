@@ -99,8 +99,8 @@ SellerSprite Product Search provides access to a comprehensive Amazon product da
 |-----------|------|-------------|---------|
 | hideUnlistedProduct | boolean | Hide delisted products | true |
 | listedWithinLastMonths | integer | Listed within last N months (1, 3, 6, 12, or 24) | - |
-| page | integer | Page number, starting from 1 | 1 |
-| size | integer | Results per page (10-100) | 20 |
+| page | integer | Page number, starting from 1; pagination can access only the first 2,000 records | 1 |
+| size | integer | Results per page (10-100); `page * size` must not exceed 2,000 | 20 |
 
 ### Sorting
 
@@ -243,14 +243,14 @@ Find products with monthly sales growth rate above 50%.
 1. **Present data clearly**: Show query results in well-structured tables. Key columns to prioritize: ASIN, title, price, monthly sales, monthly revenue, BSR rank, rating, ratings count, gross margin, fulfillment type
 2. **BSR clarification**: When showing BSR data, remind users that lower values mean better rankings
 3. **Gross margin note**: Gross margin values are percentages. Remind users this is an estimate based on price minus FBA fees and estimated costs
-4. **Pagination awareness**: When the total count exceeds the returned page size, inform the user of the total result count and suggest adjusting page or size parameters to see more results
+4. **Pagination awareness**: When the total count exceeds the returned page size, inform the user of the total result count and suggest adjusting page or size only within the first 2,000 records. If `total` exceeds 2,000, clearly state that records after the first 2,000 cannot be queried and suggest narrowing the filters
 5. **Snapshot labeling**: When displaying historical snapshot data, clearly label the data period (e.g., "Data from December 2024 snapshot") to avoid confusion with real-time data
 6. **Error handling**: When a query fails, explain the reason based on the `message` field and suggest adjusting query criteria
 7. **Weight unit reminder**: When the user provides weight filters without specifying a unit, ask them to confirm the weight unit (g, kg, oz, or lb) before proceeding
 8. **Keyword translation**: When the user provides keywords in a language different from the target marketplace, translate the keyword to the appropriate language and note the translation
 ## Important Limitations
 
-- **Result cap**: Each page returns a maximum of 100 records (size parameter max is 100)
+- **Result cap**: Each page returns 10-100 records, and pagination can query only the first 2,000 records in the sorted result set (`page * size` must not exceed 2,000). Narrow the filters to reach records outside that window
 - **Historical snapshots**: Only past monthly snapshots are available; future dates are not supported
 - **Weight unit required**: If any weight filter is used, the `weightUnit` must also be provided
 - **Subcategory BSR**: The subcategory BSR rank filters only work when `filterSubNode` is set to `true`

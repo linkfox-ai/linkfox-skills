@@ -72,7 +72,7 @@
 
 ## 执行自检
 
-- [ ] 步骤 1 所有参考图都为公开可访问 URL（本地路径已通过 linkfox-file-upload 上传），否则报错而非带空图调 `linkfox-aigc-textgen`
+- [ ] 步骤 1 所有参考图都为公开可访问 URL（本地路径已按内置 [file-upload.md](../file-upload.md) 执行上传），否则报错而非带空图调 `linkfox-aigc-textgen`
 - [ ] 版式意图与 `type` 匹配：`PREMIUM_APLUS` / `STANDARD_APLUS` 填了 A+ 版位 + `layout` 版式意图；`PHONE_APLUS` 的 `{layoutInfo}` 为空串
 - [ ] 步骤 2 的占位符全部被真实值或空串替换，最终 prompt 里无残留 `{xxx}`
 - [ ] textgen 用 `GEM_3_1_PRO`，prompt 末尾已追加敏感词规避指令，Text on Image 文案合规、无违禁/侵权词

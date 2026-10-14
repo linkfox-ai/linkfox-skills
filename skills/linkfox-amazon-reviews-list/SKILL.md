@@ -29,7 +29,7 @@ This tool retrieves real customer reviews for a given Amazon ASIN across **15 ma
 6. 超过 `200` 秒仍为 `PENDING` 或 `RUNNING` 时返回 `POLL_TIMEOUT` 并停止自动查询，让用户选择：继续查询同一个 `taskId`，或停止查询并放弃本次结果。不得自动提交新任务。当前没有手动取消端点；后端只会自动取消等待执行资源超时且尚未调用供应商的 `PENDING` 任务，已进入 `RUNNING` 的任务仍可能完成并产生费用。
 7. 未读取任务从提交起最多保留 `4` 小时；首次读取到 `SUCCEEDED`、`FAILED` 或 `CANCELLED` 终态后，后端立即删除任务。脚本将成功结果保存到本地文件，任务缓存只保留“已领取”和文件路径。原参数与 `taskId` 在同一工作目录内共用任务记录；24h 本地缓存有效期内再次执行会返回 `ALREADY_RECEIVED`、`resultFile` 和本次 `costToken: 0`，应读取该文件，不再查后端或重新提交。文件不存在时也不得自动重新抓取。
 8. 查询返回“任务不存在或已过期”时停止，不得自动创建新的付费任务。只有用户明确要求重试时才能重新提交。
-9. 提交、`PENDING`、`RUNNING`、`FAILED`、`CANCELLED` 和 `POLL_TIMEOUT` 均不得按预计公式记为实际消耗；实际扣费只认首次成功领取结果时响应返回的 `X-Cost-Token`/`costToken`，不得由 Agent 自行推算或补记。
+9. 任务费用由后端在上游处理结束后独立结算，与是否查询或领取结果无关。提交和查询响应的 `X-Cost-Token`/`costToken` 为 `0` 只表示该次接口不再扣费，不代表整个任务免费；实际消耗以消费记录为准，不得由 Agent 按预计公式推算或补记。
 
 脚本只执行上述异步流程，并在本地缓存未完成的 `taskId` 以便后续查询。
 
@@ -124,8 +124,9 @@ Use `domainCode` for every supported marketplace. Always confirm the user's inte
 4. **Vine and verified labels**: Clearly indicate Vine Voice and verified purchase status.
 5. **Media indicators**: Note when reviews include images or videos.
 6. **Response normalization**: Normalize rating and helpful-count fields for consistent display when the raw response uses marketplace-specific text formats.
-7. **Error handling**: When a query fails, explain the reason based on the response message and suggest adjusting parameters.
-8. **Single ASIN limitation**: If the user asks about multiple ASINs, make separate requests for each.
+7. **Review origin**: Use each review's `reviewCountry` to describe where that review was posted; `domainCode` identifies the queried marketplace, not every review's origin. Country names may be localized (`Canada` and `Canadá` both mean Canada); treat them as the same country in analysis. If `reviewCountry` is missing, mark the origin unknown rather than inferring it from `domainCode` or `locale.country`.
+8. **Error handling**: When a query fails, explain the reason based on the response message and suggest adjusting parameters.
+9. **Single ASIN limitation**: If the user asks about multiple ASINs, make separate requests for each.
 
 ## Important Limitations
 
@@ -171,13 +172,13 @@ Use `domainCode` for every supported marketplace. Always confirm the user's inte
 - **实际消耗算力 = `ceil((21000 × P) / 2000) = ceil(10.5 × P)`**，按每次请求分别向上取整。
 - 未传任何星级数量时，1~5 星默认各抓取 10 条，`P = 5`，消耗 `53` 算力。
 - 传入任意星级数量后，未传星级按 `0`；五个星级均显式传 `0` 时，`P = 0`，不调用供应商且消耗 `0` 算力。
-- 请求成功但结果为空，或经关键词、认证购买、媒体筛选后为空，仍按计划页数计费；部分子任务失败但整体成功时仍按全部计划页数计费；调用完全失败不计费。
+- 请求成功但结果为空，或经关键词、认证购买、媒体筛选后为空，仍按计划页数计费；部分子任务失败但整体成功时仍按全部计划页数计费；上游调用完全失败不计费。
 
 常见消耗：1 页 `11` 算力，2 页 `21` 算力，5 页 `53` 算力，10 页 `105` 算力。
 
 > **重要**：费用按请求的抓取页数计算，而不是按最终返回评论数计算。请求多个星级或大量评论前必须向用户说明预计页数和算力消耗。
 
-> 上述公式只用于调用前预估。实际是否扣费及扣费数额只以首次成功领取结果时返回的 `X-Cost-Token`/`costToken` 为准；提交、处理中、失败或超时不得按预估值计为已消耗。
+> 上述公式只用于调用前预估，实际是否扣费及金额以消费记录为准。费用由后端独立结算，领取结果不重复扣费；未领取、查询失败或本地观察超时不代表任务免费，不得据此报告零消耗或按预估值计为已消耗。
 
 **Feedback:**
 

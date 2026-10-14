@@ -199,7 +199,7 @@ python scripts/get_report.py '{
 | 状态 | 含义 | 建议 |
 |------|------|------|
 | `Missing required parameters: adProduct/groupBy/columns` | 调用方未显式传入三必填 | 回到 "Agent 调用流程" 第 2 步，从 `references/report-types/<adProduct-dir>/<reportTypeId>.md` 读出并补上 |
-| `HTTP 401` | accessToken 过期 | 调 ads-auth 的 `refresh_token.py` 后重试 |
+| `HTTP 401` | Ads 授权失效或服务端令牌异常 | 停止自动重试，检查授权状态；必要时重新授权 |
 | `HTTP 403` | 未关联广告账户或权限不足 | 到 Amazon Ads 后台检查经理账户/广告账户关联 |
 | `HTTP 400 "must not exceed maximum range"` | 日期跨度超限（多数 31 天） | 拆分拉取后本地合并；具体上限看对应 `.md` frontmatter `dateRange.maxSpanDays` |
 | `HTTP 400` 含 `columns`/`groupBy` 校验错 | 列名拼写错 / 与 reportTypeId 不匹配 / 超出 Base metrics | 对照 `.md` 文件 Base metrics 表核对 |

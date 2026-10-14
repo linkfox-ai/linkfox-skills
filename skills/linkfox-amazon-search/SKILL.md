@@ -15,6 +15,21 @@ This tool simulates a real user searching on Amazon's storefront. It returns liv
 
 **Keyword language**: Keywords should be in the language of the target marketplace. For example, use English keywords for amazon.com, German keywords for amazon.de, Japanese keywords for amazon.co.jp, etc.
 
+## 卖家精灵销量数据开关（重要）
+
+`includeSellerSpriteData` 控制是否使用卖家精灵补全竞品数据，每次调用都必须显式传入：
+
+- 默认传 `false`：只返回 Amazon 前台搜索数据，不调用卖家精灵。
+- 当用户需要商品月销量、月销售额、品牌、卖家数量、履约方式或其他卖家精灵竞品字段时，必须向用户说明可启用 `includeSellerSpriteData`，并在调用时传 `true`。
+- 传 `true` 会产生额外的动态积分消耗；启用前应明确提醒用户，费用随成功补全的批次数变化。
+- 不得因为用户只说“找竞品”就自动开启；只有需求包含上述卖家精灵补全数据，或用户明确要求启用时，才传 `true`。
+
+需要销量数据的调用示例：
+
+```json
+{"keyword": "neck massager", "amazonDomain": "amazon.com", "includeSellerSpriteData": true}
+```
+
 ## Parameters
 
 | Parameter | Type | Required | Description | Default |
@@ -27,6 +42,7 @@ This tool simulates a real user searching on Amazon's storefront. It returns liv
 | page | integer | No | Page number (starting from 1, ~20 results per page) | 1 |
 | deliveryZip | string | No | Postal/zip code for delivery location simulation | - |
 | device | string | No | Device type: desktop, mobile, or tablet | desktop |
+| includeSellerSpriteData | boolean | Yes | 高级参数：每次调用必须显式传入。`true` 时调用卖家精灵补全销量、销售额、品牌、履约等竞品数据，并产生额外动态算力消耗；不需要补全时传 `false` | false（仅服务端兜底） |
 
 ### Supported Marketplaces
 
@@ -100,47 +116,53 @@ Construct the request parameters based on the user's intent:
 4. **Pagination**: Use the `page` parameter to fetch additional result pages if needed
 5. **Category scope**: If the user wants to search within a specific category, provide the `node` parameter
 6. **Delivery simulation**: Use `deliveryZip` to see location-specific availability and delivery info
+7. **SellerSprite enrichment**: 每次调用必须显式传入 `includeSellerSpriteData`。只有用户明确要求卖家精灵数据、月销量、销售额、品牌、履约等补全字段时才传 `true`，并提前说明会增加动态算力消耗；其他情况必须传 `false`
 
 ### Usage Examples
 
 **1. Basic keyword search on US marketplace**
 ```json
-{"keyword": "wireless earbuds", "amazonDomain": "amazon.com"}
+{"keyword": "wireless earbuds", "amazonDomain": "amazon.com", "includeSellerSpriteData": false}
 ```
 
 **2. Search on German marketplace with German keyword**
 ```json
-{"keyword": "kabellose Kopfhoerer", "amazonDomain": "amazon.de", "language": "de_DE"}
+{"keyword": "kabellose Kopfhoerer", "amazonDomain": "amazon.de", "language": "de_DE", "includeSellerSpriteData": false}
 ```
 
 **3. Search sorted by price (low to high)**
 ```json
-{"keyword": "phone case", "amazonDomain": "amazon.com", "sort": "price-asc-rank"}
+{"keyword": "phone case", "amazonDomain": "amazon.com", "sort": "price-asc-rank", "includeSellerSpriteData": false}
 ```
 
 **4. Search for best sellers in a category**
 ```json
-{"keyword": "yoga mat", "amazonDomain": "amazon.com", "sort": "exact-aware-popularity-rank"}
+{"keyword": "yoga mat", "amazonDomain": "amazon.com", "sort": "exact-aware-popularity-rank", "includeSellerSpriteData": false}
 ```
 
 **5. Search for newest arrivals on Japan marketplace**
 ```json
-{"keyword": "USB充電器", "amazonDomain": "amazon.co.jp", "language": "ja_JP", "sort": "date-desc-rank"}
+{"keyword": "USB充電器", "amazonDomain": "amazon.co.jp", "language": "ja_JP", "sort": "date-desc-rank", "includeSellerSpriteData": false}
 ```
 
 **6. Multi-page search to analyze deeper results**
 ```json
-{"keyword": "laptop stand", "amazonDomain": "amazon.com", "page": 2}
+{"keyword": "laptop stand", "amazonDomain": "amazon.com", "page": 2, "includeSellerSpriteData": false}
 ```
 
 **7. Mobile device search simulation**
 ```json
-{"keyword": "running shoes", "amazonDomain": "amazon.com", "device": "mobile"}
+{"keyword": "running shoes", "amazonDomain": "amazon.com", "device": "mobile", "includeSellerSpriteData": false}
 ```
 
 **8. Category-scoped search with delivery zip**
 ```json
-{"keyword": "office chair", "amazonDomain": "amazon.com", "deliveryZip": "10001"}
+{"keyword": "office chair", "amazonDomain": "amazon.com", "deliveryZip": "10001", "includeSellerSpriteData": false}
+```
+
+**9. 高级查询：启用卖家精灵数据补全**
+```json
+{"keyword": "neck massager", "amazonDomain": "amazon.com", "includeSellerSpriteData": true}
 ```
 
 ## Display Rules
@@ -188,7 +210,17 @@ Construct the request parameters based on the user's intent:
 
 ## 算力消耗规则
 
-消耗 15 算力。
+算力动态计算：
+
+```text
+Amazon 搜索基础 costToken（20000）
++ 实际成功执行的卖家精灵补全批次 costToken 之和
+```
+
+- Skill 调用必须显式传入 `includeSellerSpriteData`；不需要卖家精灵补全时传 `false`，此时仅产生 Amazon 搜索基础消耗。服务端为兼容旧调用仍保留缺省值 `false`。
+- 开启后，搜索结果按批次调用卖家精灵，成功批次返回的 `costToken` 会逐批累加；最终消耗以响应中的顶层 `costToken` 为准。
+- 失败且未返回 `costToken` 的卖家精灵批次不追加算力。
+- 多页搜索中每一页都是独立请求，会分别计算算力。
 
 > 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
 

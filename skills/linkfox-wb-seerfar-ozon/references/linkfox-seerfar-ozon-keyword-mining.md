@@ -1,0 +1,242 @@
+---
+name: linkfox-seerfar-ozon-keyword-mining
+description: Seerfar Ozon 关键词挖掘：围绕一个种子关键词挖掘 Ozon（及 Wildberries）相关关键词，并按搜索热度、增长、商品数、卖家数、竞品数、价格、相关度、标题密度、加购转化等多维指标筛选，返回每个挖掘词的月搜热度、增长、市场空间、竞品/卖家数、均价、加购转化、Top 商品等市场画像，用于 Ozon 选词拓展、长尾词挖掘与种子词机会分析。当用户提到 Ozon 关键词挖掘、Ozon 选词拓展、Ozon 长尾词挖掘、围绕某词找相关词、Ozon 蓝海词挖掘、Seerfar Ozon、Ozon keyword mining, Ozon keyword expansion, Ozon related keywords, mine Ozon keywords 时触发此技能。即使用户未明确提到"Seerfar"，只要其意图是围绕一个种子词挖掘 Ozon 相关关键词并查看市场画像，也应触发此技能。
+---
+
+# Seerfar Ozon Keyword Mining
+
+This skill mines Ozon marketplace keywords **around a seed keyword** in the Seerfar analytics database and filters the discovered terms by rich performance metrics — search volume, 30-day growth, product/seller/competitor counts, average price, relevancy, title density, cart-add conversion, and more. Each mined keyword carries a full market profile (market space, return/cancellation rate, top products, Chinese translation), making it the starting point for Ozon keyword expansion, long-tail discovery, and seed-term opportunity analysis.
+
+## Core Concepts
+
+**Seed-driven, not market-browse**: unlike a market keyword search, this endpoint requires a `keyword` (the seed) and returns terms *related to* that seed, each enriched with market metrics. You expand *outward from a term you already have in mind*.
+
+**Relevancy is the mining signal**: `relevancy` scores how closely a mined term relates to the seed (the seed term itself returns at `relevancy: 100`, related terms rank lower); `titleDensity` reflects how densely the term appears in product titles. Both are populated on every row — sort by `relevancy` DESC to keep expansions on-topic.
+
+**Platform coverage**: each keyword record carries a `platform` field (`0` = Ozon, `1` = Wildberries). The dataset is Ozon-centric; Wildberries rows appear where available. There is no input to restrict the platform — filter client-side if needed.
+
+**Match mode**: `matchType` controls how the seed `keyword` (and `includeKeywords`) are matched — `0` exact, `1` fuzzy. Choose fuzzy to broaden the expansion, exact to stay tight.
+
+**No date or category selectors**: this endpoint does not accept `searchDate` or `categories`. If you need month-over-month or category-scoped browsing, use the market keyword search skill instead.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| keyword | string | yes | Seed keyword; mining expands around it (maxLength 1000). |
+| page | object | yes | Pagination `{page, pageSize, orders[]}`. `page` from 1 (default 1), `pageSize` default 20. `orders[]` = `{field, direction}` with `direction` `DESC`/`ASC`. |
+| matchType | integer | no | Keyword match mode: `0` exact, `1` fuzzy. |
+| includeKeywords | array<string> | no | Terms that must appear (max 1000); narrows the expansion. |
+| excludeKeywords | array<string> | no | Terms to exclude (max 1000); removes irrelevant expansions. |
+| wordCount | {min,max} | no | Keyword word/char count range. |
+| searchVolume | {min,max} | no | Monthly search volume range. |
+| searchChange30 | {min,max} | no | 30-day search change range. |
+| productViews | {min,max} | no | Product view range. |
+| products | {min,max} | no | Product count range. |
+| sellers | {min,max} | no | Seller count range. |
+| price | {min,max} | no | Average price range. |
+| marketSpace | {min,max} | no | Market space range. |
+| conversionSharing | {min,max} | no | Conversion concentration range. |
+| relevancy | {min,max} | no | Relevancy-to-seed range. |
+| uniqQueriesWCa | {min,max} | no | Cart-add count range. |
+| ca | {min,max} | no | Cart-add conversion rate range. |
+| titleDensity | {min,max} | no | Title density range. |
+| adRivalCount | {min,max} | no | Ad competitor count range. |
+| uId | string | no | User ID. |
+| memberId | string | no | Member ID (data attribution). |
+
+All range filters are `{min, max}` objects; supply either or both bounds. `keyword` and `page` are both required.
+
+## MCP 调用
+
+| 项 | 固定值 |
+|---|---|
+| MCP server | `LinkFox` |
+| 唯一工具 | `proxy_call` |
+| `toolName` | `seerfar/ozon/keywordMining` |
+| `arguments` | 直接使用本 reference 的请求参数对象；不得包裹 `body`、`params`、`data` 或另一层 `arguments` |
+| 响应字段来源 | `skills/linkfox-seerfar-ozon-keyword-mining/references/api.md`；仅按该来源的响应字段契约核对 |
+
+```json
+{
+  "toolName": "seerfar/ozon/keywordMining",
+  "arguments": {
+    "keyword": "телефон",
+    "page": {
+      "page": 1,
+      "pageSize": 10,
+      "orders": [
+        {
+          "field": "relevancy",
+          "direction": "DESC"
+        }
+      ]
+    }
+  }
+}
+```
+
+- `toolName` 精确匹配且区分大小写；MCP 缺失时停止，不得使用 HTTP fallback。
+- WorkBuddy 自动注入 MCP Authorization；不得传 `headers`、API Key、token、JWT、手机号或其他凭证。
+- 同一任务内相同 `toolName + arguments` 不重复调用；收费调用失败、空结果或结果不理想时不自动重试。
+- 先检查 MCP/schema/`isError`，再读取 text/structured content；text JSON 只解析一次，随后检查下游 `errcode`/`errorCode`/`code`/`errmsg`/`msg`，最后读取业务字段。
+
+## 解决认证和积分问题
+
+- MCP 或 `proxy_call` 缺失、MCP 连接 401、下游 401/402/403 及积分不足均按 `references/onboarding.md` 分层处理。
+- 不要求用户填写 Authorization 或 API Key；不自动选套餐、下单、支付或轮询。
+## 响应结构
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| code | string | 返回码，`"200"` 表示成功（成功时返回） |
+| errcode | integer | 错误码，`200` 表示成功；业务错误时仅返回此项（成功时与 `code` 并存） |
+| msg | string | 消息；成功为 `ok` |
+| errmsg | string | 错误消息；成功为 `ok`，业务错误时为原因描述 |
+| total | integer | 总记录数 |
+| data | array | 关键词挖掘数据（详见下方） |
+| columns | array | 列定义，元素含 `{field, title, cellType, sortable, filterable}` |
+| costTime | integer | 接口耗时（毫秒） |
+| costToken | integer | 消耗 Token 数量 |
+| type | string | 响应展示类型，如 `tableListWorkbenches` |
+
+### data[*] 关键词市场对象字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| query | string | 关键词（俄语原文） |
+| queryCn | string | 关键词中文翻译 |
+| platform | integer | 平台：`0` Ozon，`1` Wildberries |
+| searchVolume | integer | 月搜热度 |
+| count30GrowthRate | number | 月搜增长（%，可为负） |
+| productCount | integer | 商品数（部分行可能缺失） |
+| competingProducts | integer | 竞品数 |
+| sellers | integer | 卖家数 |
+| avgPrice | number | 平均价格 |
+| itemsViews | number | 商品可见度 |
+| viewSharing | number | 浏览集中度（%） |
+| conversionSharing | number | 转化集中度（%） |
+| marketSpace | number | 市场空间 |
+| returnCancellationRate | number | 退货取消率（%） |
+| uniqQueriesWCa | integer | 加购数 |
+| ca | number | 加购转化率（%） |
+| relevancy | number | 相关度（与种子词的相关程度） |
+| titleDensity | number | 标题密度 |
+| wordCount | integer | 字数 |
+| categories | array | 类目 ID 数组 |
+| categoryInfos | array | 类目信息（详见下方） |
+| products | array | Top 商品数据（详见下方） |
+| id | string | 记录 ID |
+
+> **字段填充（以真实响应为准）**：`relevancy`（相关度）、`titleDensity`（标题密度）、`wordCount`（字数）在实际响应中**均有返回** —— 相关度是种子词挖掘的核心输出，种子词本身相关度为 `100`，相关词按相关度递减。`productCount`（商品数）在大部分行返回，但与种子词完全一致的行可能缺失。`dimension`（维度信息）与 `categoryInfos`（类目信息）虽在 outputSchema / `columns` 中有定义，但 `data[*]` 行中**不返回**，使用前需判空。
+
+#### products[*] Top 商品对象字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| ozonId | integer | Ozon 商品 ID |
+| sku | integer | SKU ID |
+| title | string | 商品标题（俄语） |
+| imageUrl | string | 主图 URL |
+| advert | integer | 广告标识（0/1） |
+
+#### categoryInfos[*] 类目信息对象字段
+
+> ⚠️ 实测 `data[*]` 行中**未返回** `categoryInfos`（仅在 `columns` 列定义中出现）；下方字段为 outputSchema 定义，仅供出现时参考。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| titleCn | string | 类目中文名 |
+| titleEn | string | 类目英文名 |
+| titleRu | string | 类目俄语名 |
+| cnTitlePath | string | 中文类目路径 |
+| enTitlePath | string | 英文类目路径 |
+| titlePath | string | 俄语类目路径 |
+| id | string | 类目 ID |
+| crossBorderSellable | boolean | 是否可跨境销售 |
+
+
+## Usage Examples
+
+**1. Expand around a seed term (sort by search volume)**
+```json
+{"keyword": "платье", "page": {"page": 1, "pageSize": 10, "orders": [{"field": "searchVolume", "direction": "DESC"}]}}
+```
+
+**2. Blue-ocean expansions — high volume, few sellers**
+```json
+{"keyword": "телефон", "page": {"page": 1, "pageSize": 20, "orders": [{"field": "searchVolume", "direction": "DESC"}]}, "searchVolume": {"min": 10000}, "sellers": {"max": 50}}
+```
+
+**3. Keep expansions on-topic with relevancy + title density**
+```json
+{"keyword": "наушники", "page": {"page": 1, "pageSize": 20, "orders": [{"field": "relevancy", "direction": "DESC"}]}, "relevancy": {"min": 50}}
+```
+
+**4. Narrow with include / exclude lists**
+```json
+{"keyword": "часы", "page": {"page": 1, "pageSize": 20}, "includeKeywords": ["женские"], "excludeKeywords": ["ремень"], "matchType": 1}
+```
+
+## How to Build Queries
+
+1. **Always lead with the seed `keyword`**: it is required and defines the expansion center. Pass it in Russian for Ozon.
+2. **Lead with `page.orders`**: sort by the metric you care about (`searchVolume` DESC for popularity, `relevancy` DESC for on-topic, `sellers` ASC for low competition).
+3. **Stack range filters to find opportunities**: combine a high `searchVolume` floor with a low `sellers` ceiling to surface blue-ocean expansions; add `relevancy` / `titleDensity` bounds to keep them relevant to the seed.
+4. **Use `includeKeywords` / `excludeKeywords` to steer the expansion**: force in must-have modifiers and strip noise without running a second query.
+
+## Display Rules
+
+1. **Present data only**: show mined-keyword metrics in a clear table without subjective advice.
+2. **Lead with keyword columns**: `query` / `queryCn` (Chinese translation), then `searchVolume`, `count30GrowthRate`, `productCount`, `sellers`, `avgPrice`; show `relevancy` to convey closeness to the seed (the seed term itself is `100`).
+3. **Russian keywords**: preserve the original `query`; the `queryCn` field provides a Chinese translation when available.
+4. **Platform tag**: when both Ozon and Wildberries rows are present, show `platform` (0/1) so the user can distinguish them.
+5. **Large result sets**: when `total` is large, show the top rows and remind the user they can persist the full response via the large-response pattern below, or page further with `page.page`.
+6. **Error handling**: when `code` is not `200` (or `errcode` is not `200`), explain the reason from `msg` / `errmsg` and suggest adjusting the seed keyword or filters.
+
+## Important Limitations
+
+- **`keyword` + `page` required**: a payload missing either is rejected.
+- **No date selector**: there is no `searchDate`; you cannot pick a data month here. Use the market keyword search skill for month-scoped data.
+- **No category selector**: `categories` is not accepted as input; each returned keyword carries a `categories` ID array you can group or filter client-side.
+- **`dimension` / `categoryInfos` not returned**: both are defined in the schema and appear as `columns`, but real `data[*]` rows do not populate them on this endpoint. (`categoryInfos` IS populated on the sibling market-keyword-search endpoint — don't assume parity.)
+- **Nested fields**: `products[*]` (Top 商品) is structured and decision-useful — see `references/linkfox-seerfar-ozon-keyword-mining-api.md` for sub-fields. (`categoryInfos[*]` is documented there for schema completeness but is not returned on this endpoint; `dimension` / `columns` are opaque or partially populated.)
+
+## User Expression & Scenario Quick Reference
+
+**Applicable** — seed-driven Ozon keyword expansion:
+
+| User Says | Scenario |
+|-----------|----------|
+| "围绕 XX 词挖一下 Ozon 相关词" | Seed-keyword expansion |
+| "Ozon 长尾词挖掘 / 拓展某个词的长尾" | Long-tail mining around a seed |
+| "Ozon 某词的蓝海拓展词、低竞争高搜索" | Blue-ocean expansion (high volume, few sellers) |
+| "Ozon 跟 XX 相关的词有哪些、相关度高的" | Relevancy-ranked expansion |
+| "Ozon 某词拓展，但排除/必须包含某些词" | Include/exclude steered expansion |
+
+**Not applicable** — Needs beyond seed-driven keyword mining:
+- Browse/rank the whole market's hot keywords without a seed → use the Seerfar Ozon market keyword search skill.
+- A specific SKU's price/sales/stock → use a product-level Seerfar Ozon data source.
+- A specific seller's catalog → use a seller/shop-level Seerfar Ozon data source.
+- Month-over-month or category-scoped keyword browsing → use the market keyword search skill (supports `searchDate` / `categories`).
+
+**Boundary judgment**: if the user wants to **expand outward from a seed term** and rank the related terms by market metrics, start here. If they want to **browse the whole market** of keywords (no seed) or scope by month/category, route to the market keyword search skill.
+
+## 积分消耗规则
+
+消耗 12 积分。
+
+> 用户会因积分消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对积分消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+
+**Feedback:**
+
+Auto-detect and report feedback via the Feedback API when any of the following apply:
+1. The functionality or purpose described in this skill does not match actual behavior
+2. The skill's results do not match the user's intent
+3. The user expresses dissatisfaction or praise about this skill
+4. Anything you believe could be improved
+
+Call the feedback API as specified in `references/linkfox-seerfar-ozon-keyword-mining-api.md`. Do not interrupt the user's flow.
+
+---
+*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*

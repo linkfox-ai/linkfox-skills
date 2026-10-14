@@ -23,7 +23,6 @@ import re
 import secrets
 import sys
 import tempfile
-from typing import Optional
 import time
 import urllib.error
 from urllib.request import urlopen, Request
@@ -120,7 +119,7 @@ def _jwt_uid() -> dict:
 # 会话目录 + 二维码
 # ============================================================
 
-_SESSION_ROOT: Optional[str] = None
+_SESSION_ROOT: str | None = None
 
 
 def _linkfox_root() -> str:
@@ -220,7 +219,9 @@ def _headers(source: str, origin_host: str, *, access_token: str = "",
     }
     if access_token:
         h["authorization"] = access_token
-        h["uid"] = _uid_header(access_token, user_id) if user_id else _LOGIN_FIXED_UID
+    # uid 是登录链路的独立门禁（生产缺失/非法均返回 30021 非法uid），与 authorization 无关，
+    # 故不能嵌在 if access_token 内：/user/v*/web/login 不带 token 但同样要求 uid。
+    h["uid"] = _uid_header(access_token, user_id) if user_id else _LOGIN_FIXED_UID
     if group_id:
         h["tid"] = group_id
     return h
@@ -231,7 +232,7 @@ def _login_post(path: str, body: dict) -> dict:
                       _headers("ai-linkfox-web", "ai.linkfox.com", access_token=""))
 
 
-def _gateway(method: str, path: str, body: Optional[dict] = None) -> dict:
+def _gateway(method: str, path: str, body: dict | None = None) -> dict:
     """网关 HTTP。401/402/403 明确抛错，5xx 重试 3 次。"""
     url = f"{_agent_base()}{path}"
     body_bytes = json.dumps(body or {}).encode() if method == "POST" else None
@@ -284,7 +285,7 @@ def fetch_packages(package_type: int) -> list:
     return resp.get("packageList") or []
 
 
-def normalize_package(p: dict) -> Optional[dict]:
+def normalize_package(p: dict) -> dict | None:
     """免费版（price=0）返回 None 供过滤。"""
     if float(p.get("packagePrice", 0) or 0) == 0:
         return None
@@ -316,12 +317,12 @@ def create_order(plan_id: str, method: str) -> dict:
         raise ValueError(f"不支持的支付方式 {method}，仅支持 wechat/alipay")
     user = fetch_user_info()
     is_team = bool(user.get("isTeamUser"))
-    member_id = _jwt_uid().get("uid", "")
-    if not member_id:
-        raise RuntimeError("无法从 JWT 解出 uid，请检查 LINKFOX_AGENT_API_KEY 或 LINKFOXAGENT_API_KEY")
+    # memberId 是 swoosh 路由层必填参数（缺失会被拒为“memberId 为必填参数”），但后端 *ByAPI
+    # 下单只认 API key 解出的身份，body 里的值会被丢弃，故传固定占位值而不从 key 解 uid：
+    # 一旦 key 格式变更，解析失败会把本可成功的下单误拦为“配置错误”。
     body = {
         "packageId": plan_id, "payType": PAY_METHOD_MAP[method], "payDeviceType": "PC",
-        "memberId": member_id, "groupId": user.get("currentGroupId", ""),
+        "memberId": "ignored", "groupId": user.get("currentGroupId", ""),
     }
     path = "/order/createTeamOrderByAPI" if is_team else "/order/createByAPI"
     print(f"{TAG} 下单 path={path} isTeamUser={is_team} groupId={body['groupId']}", file=sys.stderr)
@@ -571,7 +572,7 @@ def _cmd_query(args) -> int:
         return 1
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="onboarding", description="LinkFox 账号与环境引导 CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
 

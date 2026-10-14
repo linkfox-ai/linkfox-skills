@@ -1,6 +1,6 @@
 ---
 name: linkfox-amazon-store-auth
-description: 亚马逊卖家店铺授权与账号连接管理。用于生成授权链接、绑定店铺、查询已授权店铺、检查授权状态、刷新访问令牌和本地取消/解绑授权；生成授权链接时需要 sellerName 区分店铺。用户提到亚马逊店铺授权、绑定或连接 Amazon Seller 账号、查看已授权店铺、授权失效、刷新令牌、token 状态、取消授权、解绑店铺、停用授权、Amazon seller authorization、bind seller account、refresh access token、disconnect seller account 时触发。即使未明确说“授权”，只要其他亚马逊店铺操作因未绑定店铺、凭证过期或需要选择授权账号而无法继续，也应触发此技能。
+description: 亚马逊卖家店铺授权与账号连接管理。用于生成授权链接、绑定店铺、查询已授权店铺、检查授权状态、刷新访问令牌和本地取消/解绑授权；生成授权链接时需要 sellerName 区分店铺。用户提到亚马逊店铺授权、批量授权、绑定或连接 Amazon Seller 账号、查看已授权店铺、授权失效、刷新令牌、token 状态、取消授权、解绑店铺、停用授权、Amazon seller authorization、bind seller account、refresh access token、disconnect seller account 时触发。即使未明确说“授权”，只要其他亚马逊店铺操作因未绑定店铺、凭证过期或需要选择授权账号而无法继续，也应触发此技能。授权时支持保留原手动流程或选择紫鸟 CLI 自动授权。
 ---
 
 # Amazon 店铺授权与管理
@@ -8,6 +8,17 @@ description: 亚马逊卖家店铺授权与账号连接管理。用于生成授�
 本 skill 负责 **亚马逊卖家店铺的 OAuth 授权、已授权店铺列表、授权状态查询、令牌刷新与本地取消授权**，是拉取报告、查询库存、同步订单等所有下游操作的前置依赖。下游业务经 `developerProxy` 传入 `sellerId`+`region` 即可，**无需**先取 raw token。
 
 > 📌 **Related skill**：如果用户需要 **拉取亚马逊店铺报告**（库存 / 订单 / 销售 / 财务报告等），请切换到 `linkfox-amazon-store-report`。该 skill 依赖本 skill 提供的授权与令牌能力。
+
+## 授权方式路由（授权任务最先执行）
+
+本节优先于后续 `Core Concepts`、`Usage Scenarios` 和参数要求。只有用户要新增、恢复或批量执行授权时才进行选择；查询、刷新和解绑仍直接执行原场景。
+
+需要授权且用户尚未选择方式时，必须先让用户选择：
+
+1. **手动授权**：选择后继续执行原 Scenario 1，此时才询问并使用 `sellerName`。调用原 `authorize_url.py` 时还需传入 `central: "seller"` 和目标站点的 `marketplace`（如美国站为 `US`）；当前紫鸟接口缺少 `marketplace` 会拒绝生成链接。站点不明确时先向用户确认，不得仅凭区域猜测。原手动脚本保持不变。
+2. **紫鸟 CLI 自动授权**：向用户展示此选项时只用一句话说明：“紫鸟 CLI 自动授权（推荐，仅支持本机 Windows/macOS；Agent 会自动检查并推进，只有登录、系统确认或审核等必要步骤才需要你操作）”。该模式要求 CLI、紫鸟客户端和 Bridge 位于同一台用户可见的电脑；云端 Agent、远程主机/虚拟机、容器、WSL 和 Linux（包括本机 Ubuntu）均不支持，不能因为远端装得上软件就启用。用户选择后在后台完成环境、版本和现有配置检查，正常项不逐条汇报，已有可用配置直接复用。只有执行环境被明确识别为用户本机后才完整执行 `references/automatic-authorization.md`；否则提示本机使用自动授权或选择手动授权，禁止在当前环境安装 CLI、申请 Key 或打开店铺。自动模式不得询问手动流程的 `sellerName`；所选紫鸟店铺的 `storeName` 用作授权标记。
+
+用户已在当前请求中明确说“自动授权”“紫鸟 CLI 自动授权”或同义表达时，直接进入自动流程，不重复询问授权方式，也不能先询问 `sellerName`。“全部授权”只表示全部所选 Amazon 店铺的卖家店铺授权，并且只创建对应店铺 worker。
 
 ## Core Concepts
 
@@ -54,9 +65,11 @@ Selling Partner API 是亚马逊为卖家提供的官方接口。本 skill 负�
 
 | Code | Name | Marketplaces |
 |------|------|--------------|
-| NA | 北美 | 美国、加拿大、墨西哥 |
-| EU | 欧洲 | 英国、德国、法国、意大利、西班牙、荷兰等 |
-| FE | 远东 | 日本、澳大利亚、新加坡、印度 |
+| NA | 北美 | 加拿大、美国、墨西哥、巴西 |
+| EU | 欧洲 | 爱尔兰、西班牙、英国、法国、比利时、荷兰、德国、意大利、瑞典、南非、波兰、沙特阿拉伯、埃及、土耳其、阿联酋、印度 |
+| FE | 远东 | 新加坡、澳大利亚、日本 |
+
+Amazon SP-API 没有独立的东南亚区域代码；东南亚目前只有新加坡站，使用 **FE**。`region` 由目标 Amazon 站点决定，而不是由卖家所在地决定；例如越南卖家经营美国站时仍使用 **NA**。
 
 默认区域为 **NA**；解绑时按 Scenario 5 明确目标区域。
 
@@ -91,9 +104,13 @@ Selling Partner API 是亚马逊为卖家提供的官方接口。本 skill 负�
 **Steps**：
 1. **询问店铺名 `sellerName`**（若用户未提供）。`/spApi/authorizeUrl` 要求 `sellerName` 为非空字符串；向用户说明这只是在 LinkFox 里识别店铺的标签，建议与 Seller Central 后台名字保持一致。
 2. 调用 `/spApi/authorizeUrl`，传入 `region` 与 `sellerName`
-3. 把返回的 `authorizeUrl` 给用户，让其在浏览器中打开
+3. 把返回的 `authorizeUrl` 以文本格式给用户，让其在浏览器中打开。紧接授权链接之后，必须按「Display Rules」原封不动显示安全警告，不得省略或改写
 4. 用户在 Amazon 完成授权 → Amazon 回调系统 → 系统自动保存授权
 5. 可选：调用 `/spApi/authorizedStores` 确认授权成功
+
+### Scenario 1B: Batch Authorization（紫鸟 CLI）
+
+完整执行 `references/automatic-authorization.md`。每家所选店铺建立一个 worker；先生成本店授权链接并用对应紫鸟店铺打开，由 Agent 仅沿本次授权链路持续推进；可恢复问题自主处理，确需用户处理时才转人工，其余店铺继续。
 
 ### Scenario 2: View Authorized Stores
 
@@ -155,13 +172,17 @@ Selling Partner API 是亚马逊为卖家提供的官方接口。本 skill 负�
 1. **先有店铺名再生成授权链接**：若用户未提供 `sellerName`，**必须先问**，不允许带空值调用 `/spApi/authorizeUrl`。
 2. **只呈现数据**：展示授权结果、店铺列表、令牌信息即可，不做业务建议。
 3. **安全意识**：响应若含 legacy token 字段，不要明文展示；优先呈现 `status` / 过期时间等元数据。
-4. **清晰引导**：返回授权链接时，明确告知用户在浏览器中打开并完成授权。
-5. **错误说明**：授权失败时，基于错误码解释原因并给出建议。
-6. **成功确认**：授权完成后与用户确认，可选择展示该店铺基本信息。
+4. **授权链接安全警告（强制逐字输出）**：成功生成并向用户返回授权链接后，必须紧接链接显示下面这段文字。必须原封不动输出，包括“警告：”、括号、标点和结尾感叹号；不得省略、改写、翻译、缩写或用其他提示替代：
+
+   > 警告：必须在你日常登录店铺的安全IP（或紫鸟浏览器）下打开授权链接！
+
+5. **清晰引导**：返回授权链接时，明确告知用户在浏览器中打开并完成授权。
+6. **错误说明**：授权失败时，基于错误码解释原因并给出建议。
+7. **成功确认**：授权完成后与用户确认，可选择展示该店铺基本信息。
 
 ## Important Limitations
 
-- **sellerName 必填**：`/spApi/authorizeUrl` 必须传入非空 `sellerName`；脚本与 agent 在调用前务必校验。
+- **sellerName 必填**：`/spApi/authorizeUrl` 必须传入非空 `seller Name`；脚本与 agent 在调用前务必校验。
 - **令牌有效期**：`accessToken` 1 小时过期，需及时刷新。
 - **区域专属**：每次店铺授权都与具体区域绑定，不同区域需分别授权。
 - **用户隔离**：用户只能查看/管理自己授权的店铺。

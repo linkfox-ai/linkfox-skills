@@ -105,7 +105,7 @@ def call_api(endpoint: str, params: dict) -> dict:
         headers={
             "Authorization": api_key,
             "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/1.0",
+            "User-Agent": "LinkFox-Skill/2.0",
             "SESSION_ID": os.environ.get("SESSION_ID", ""),
             "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
             "MODE_ID": os.environ.get("MODE_ID", ""),

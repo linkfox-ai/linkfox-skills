@@ -9,7 +9,7 @@
   query <order_id>               查询订单状态
   --help                         查看完整帮助
 
-所有子命令输出 stdout JSON。stderr 仅日志。自包含，不依赖同目录辅助模块。
+所有子命令输出 stdout JSON。stderr 仅日志。自包含，不依赖 _shared/。
 环境变量配置说明由外层 SKILL.md embed 块直接呈现给用户。
 """
 from __future__ import annotations
@@ -25,7 +25,6 @@ import sys
 import tempfile
 import time
 import urllib.error
-from typing import Optional
 from urllib.request import urlopen, Request
 
 # Windows 控制台默认 GBK，reconfigure 保证 QR ASCII 与中文可管道输出。
@@ -77,6 +76,7 @@ def _env_base(name: str, default: str, *fallbacks: str) -> str:
 def _agent_base() -> str:
     return _env_base("LINKFOX_AGENT_API_URL", "https://tool-gateway.linkfox.com", "LINKFOX_TOOL_GATEWAY")
 
+
 def _login_base() -> str:
     return _env_base("LINKFOX_LOGIN_API_URL", "https://api.linkfox.com")
 
@@ -110,7 +110,7 @@ def _uid_header(access_token: str, user_id: str) -> str:
 
 
 def _jwt_uid() -> dict:
-    """从 LINKFOX_AGENT_API_KEY 或 LINKFOXAGENT_API_KEY 的 JWT payload 解出信息。失败返回空 dict。"""
+    """从 LINKFOX_AGENT_API_KEY 的 JWT payload 解出信息。失败返回空 dict。"""
     parts = _api_key().split(".")
     return _b64url_json(parts[1]) if len(parts) >= 2 else {}
 
@@ -119,7 +119,7 @@ def _jwt_uid() -> dict:
 # 会话目录 + 二维码
 # ============================================================
 
-_SESSION_ROOT: Optional[str] = None
+_SESSION_ROOT: str | None = None
 
 
 def _linkfox_root() -> str:
@@ -157,6 +157,7 @@ def session_dir() -> str:
     path = os.path.join(_linkfox_root(), time.strftime("%Y-%m-%d", time.localtime(ts)), sid)
     os.makedirs(path, exist_ok=True)
     return path
+
 
 def render_qr(content: str, out_dir: str) -> dict:
     try:
@@ -218,7 +219,9 @@ def _headers(source: str, origin_host: str, *, access_token: str = "",
     }
     if access_token:
         h["authorization"] = access_token
-        h["uid"] = _uid_header(access_token, user_id) if user_id else _LOGIN_FIXED_UID
+    # uid 是登录链路的独立门禁（生产缺失/非法均返回 30021 非法uid），与 authorization 无关，
+    # 故不能嵌在 if access_token 内：/user/v*/web/login 不带 token 但同样要求 uid。
+    h["uid"] = _uid_header(access_token, user_id) if user_id else _LOGIN_FIXED_UID
     if group_id:
         h["tid"] = group_id
     return h
@@ -229,35 +232,37 @@ def _login_post(path: str, body: dict) -> dict:
                       _headers("ai-linkfox-web", "ai.linkfox.com", access_token=""))
 
 
-def _gateway(method: str, path: str, body: Optional[dict] = None) -> dict:
-    """网关 HTTP；外部变更与计费相关调用不自动重试。"""
+def _gateway(method: str, path: str, body: dict | None = None) -> dict:
+    """网关 HTTP。401/402/403 明确抛错，5xx 重试 3 次。"""
     url = f"{_agent_base()}{path}"
     body_bytes = json.dumps(body or {}).encode() if method == "POST" else None
-    headers = {
-        "Authorization": _api_key(),
-        "SESSION_ID": (os.environ.get("SESSION_ID") or "").strip(),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    if method == "POST":
-        headers["Content-Type"] = "application/json"
-    req = Request(url, method=method, data=body_bytes, headers=headers)
-    try:
-        with urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        status = e.code
-        raw = e.read().decode(errors="replace")[:300]
-        if status == 401:
-            raise RuntimeError(f"鉴权失败（401），请检查 LINKFOX_AGENT_API_KEY 或 LINKFOXAGENT_API_KEY：{raw}")
-        if status == 402:
-            raise RuntimeError(f"算力余额不足（402），请充值：{raw}")
-        if status == 403:
-            raise RuntimeError(f"无权限（403）：{raw}")
-        raise RuntimeError(f"HTTP {status}: {raw}")
-    except Exception as e:
-        raise RuntimeError(f"网关请求失败: {e}") from e
+    last_exc: Exception = RuntimeError("未知错误")
+    for attempt in range(3):
+        if attempt:
+            time.sleep(1 << (attempt - 1))
+        headers = {"Authorization": _api_key()}
+        if method == "POST":
+            headers["Content-Type"] = "application/json"
+        req = Request(url, method=method, data=body_bytes, headers=headers)
+        try:
+            with urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            status = e.code
+            raw = e.read().decode()[:300]
+            if status == 401:
+                raise RuntimeError(f"鉴权失败（401），请检查 LINKFOX_AGENT_API_KEY 或 LINKFOXAGENT_API_KEY：{raw}")
+            if status == 402:
+                raise RuntimeError(f"算力余额不足（402），请充值：{raw}")
+            if status == 403:
+                raise RuntimeError(f"无权限（403）：{raw}")
+            last_exc = RuntimeError(f"HTTP {status}: {raw}")
+            if status not in (408, 429, 500, 502, 503, 504):
+                raise last_exc
+        except Exception as e:
+            last_exc = RuntimeError(f"网关请求失败: {e}")
+            print(f"{TAG} gateway_{method.lower()} attempt {attempt+1}/3 失败: {e}", file=sys.stderr)
+    raise last_exc
 
 
 # ============================================================
@@ -280,7 +285,7 @@ def fetch_packages(package_type: int) -> list:
     return resp.get("packageList") or []
 
 
-def normalize_package(p: dict) -> Optional[dict]:
+def normalize_package(p: dict) -> dict | None:
     """免费版（price=0）返回 None 供过滤。"""
     if float(p.get("packagePrice", 0) or 0) == 0:
         return None
@@ -312,12 +317,12 @@ def create_order(plan_id: str, method: str) -> dict:
         raise ValueError(f"不支持的支付方式 {method}，仅支持 wechat/alipay")
     user = fetch_user_info()
     is_team = bool(user.get("isTeamUser"))
-    member_id = _jwt_uid().get("uid", "")
-    if not member_id:
-        raise RuntimeError("无法从 JWT 解出 uid，请检查 LINKFOX_AGENT_API_KEY 或 LINKFOXAGENT_API_KEY")
+    # memberId 是 swoosh 路由层必填参数（缺失会被拒为“memberId 为必填参数”），但后端 *ByAPI
+    # 下单只认 API key 解出的身份，body 里的值会被丢弃，故传固定占位值而不从 key 解 uid：
+    # 一旦 key 格式变更，解析失败会把本可成功的下单误拦为“配置错误”。
     body = {
         "packageId": plan_id, "payType": PAY_METHOD_MAP[method], "payDeviceType": "PC",
-        "memberId": member_id, "groupId": user.get("currentGroupId", ""),
+        "memberId": "ignored", "groupId": user.get("currentGroupId", ""),
     }
     path = "/order/createTeamOrderByAPI" if is_team else "/order/createByAPI"
     print(f"{TAG} 下单 path={path} isTeamUser={is_team} groupId={body['groupId']}", file=sys.stderr)
@@ -567,7 +572,7 @@ def _cmd_query(args) -> int:
         return 1
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="onboarding", description="LinkFox 账号与环境引导 CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
 

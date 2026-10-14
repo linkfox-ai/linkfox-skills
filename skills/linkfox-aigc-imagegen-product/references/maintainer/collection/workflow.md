@@ -9,7 +9,7 @@
 | 参数 | 性质 | 默认 | 说明 |
 |------|------|------|------|
 | imageUrls | 运行时入参，必填 | — | 用户上传的商品图片 URL 列表 |
-| provider | 运行时入参 | 由用户确认 | 生图模型：BANANA_PRO / GPT_2_IMAGE / BANANA_2 / AIDRAW_EDIT / WAN2_7 |
+| provider | 运行时入参 | 由用户确认 | 生图模型：BANANA_PRO / GPT_2_IMAGE / GPT_2_5_IMAGE / GPT_2_5_F_IMAGE / BANANA_2 / AIDRAW_EDIT / WAN2_7 |
 | resolution | 运行时入参 | 由用户确认 | 分辨率：2K / 4K |
 | point | agent 层传入（可空） | — | 完整卖点描述（2~3句话），有则跳过卖点推理 |
 | pointHint | agent 层传入（可空） | — | 方向性关键词（需扩写） |

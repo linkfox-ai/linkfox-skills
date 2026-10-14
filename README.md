@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Open%20Standard-orange)](https://agentskills.io)
-[![Skills](https://img.shields.io/badge/skills-153-brightgreen)](#skills-catalog)
+[![Skills](https://img.shields.io/badge/skills-154-brightgreen)](#skills-catalog)
 
-**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 153 API-driven skills covering product research, competitor analysis, keyword tracking, Amazon Ads reporting, patent search, compliance detection, and more.
+**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 154 API-driven skills covering product research, competitor analysis, keyword tracking, Amazon Ads reporting, patent search, compliance detection, and more.
 
 Built on the [Agent Skills](https://agentskills.io) open standard, compatible with Claude Code, Cursor, GitHub Copilot, and 30+ AI agent platforms.
 
@@ -202,6 +202,7 @@ Get your API key and configure the environment before using any skill.
 | --- | --- |
 | `linkfox-sif-asin-keywords` | Reverse lookup traffic keywords for an ASIN (organic + ad rankings) |
 | `linkfox-sif-asin-summary` | Analyze ASIN traffic sources and distribution |
+| `linkfox-sif-compliance-detection` | SIF design patent detection: find visually similar design-registration candidates from a product image, with optional title, region, source jurisdiction, Locarno and legal-status filters; candidates do not establish infringement |
 | `linkfox-sif-keyword-overview` | Get keyword search volume, competition, and CPC overview |
 | `linkfox-sif-keyword-summary` | Sif Keyword Summary |
 
@@ -336,6 +337,7 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-shopee-store-voucher` | Shopee Store Voucher |
 | `linkfox-shopify-product-query` | Shopify Product Query |
 | `linkfox-shopify-store-query` | Shopify Store Query |
+| `linkfox-smart-table` | Smart Table |
 | `linkfox-temu-add-product-us` | Temu Add Product Us |
 | `linkfox-temu-ads-eu` | Temu Ads Eu |
 | `linkfox-temu-ads-global` | Temu Ads Global |
@@ -369,6 +371,41 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-tiktok-shop-product-detail` | Retrieve one public TikTok Shop product with pricing, sales, SKU inventory, media, seller, reviews, shipping, and promotion data |
 | `linkfox-tsearch-search` | Tsearch Search |
 | `linkfox-wallysmarter-product-detail` | Walmart product detail with historical pricing and sales trends via WallySmarter |
+| `linkfox-wb-1688-procurement` | Wb 1688 Procurement |
+| `linkfox-wb-1688-sourcing` | Wb 1688 Sourcing |
+| `linkfox-wb-amazon-ads` | Wb Amazon Ads |
+| `linkfox-wb-amazon-business-insight` | Wb Amazon Business Insight |
+| `linkfox-wb-amazon-front-data` | Wb Amazon Front Data |
+| `linkfox-wb-amazon-sp-api` | Wb Amazon Sp Api |
+| `linkfox-wb-damai-mercado-intelligence` | Wb Damai Mercado Intelligence |
+| `linkfox-wb-e-commerce-compliance` | Wb E Commerce Compliance |
+| `linkfox-wb-ebay-product-selection` | Wb Ebay Product Selection |
+| `linkfox-wb-echotik-tiktok` | Wb Echotik Tiktok |
+| `linkfox-wb-etsy-data` | Wb Etsy Data |
+| `linkfox-wb-fastmoss-tiktok` | Wb Fastmoss Tiktok |
+| `linkfox-wb-google-tools` | Wb Google Tools |
+| `linkfox-wb-jiimore` | Wb Jiimore |
+| `linkfox-wb-jungle-scout` | Wb Jungle Scout |
+| `linkfox-wb-kalodata-tiktok` | Wb Kalodata Tiktok |
+| `linkfox-wb-keepa` | Wb Keepa |
+| `linkfox-wb-linkfox-aigc` | Wb Linkfox Aigc |
+| `linkfox-wb-maidalv-product-tro-detection` | Wb Maidalv Product Tro Detection |
+| `linkfox-wb-mercado-selection` | Wb Mercado Selection |
+| `linkfox-wb-mpstats-ozon` | Wb Mpstats Ozon |
+| `linkfox-wb-ruiguan-detection` | Wb Ruiguan Detection |
+| `linkfox-wb-seerfar-ozon` | Wb Seerfar Ozon |
+| `linkfox-wb-sellersprite` | Wb Sellersprite |
+| `linkfox-wb-shopee-official-api` | Wb Shopee Official Api |
+| `linkfox-wb-shopee-product-selection` | Wb Shopee Product Selection |
+| `linkfox-wb-shopify-data` | Wb Shopify Data |
+| `linkfox-wb-sif-search-intelligence` | Wb Sif Search Intelligence |
+| `linkfox-wb-sorftime` | Wb Sorftime |
+| `linkfox-wb-sorftime-walmart` | Wb Sorftime Walmart |
+| `linkfox-wb-temu-data` | Wb Temu Data |
+| `linkfox-wb-tiktok-official-api` | Wb Tiktok Official Api |
+| `linkfox-wb-tiktok-official-video-api` | Wb Tiktok Official Video Api |
+| `linkfox-wb-walmart-product-selection` | Wb Walmart Product Selection |
+| `linkfox-workflow` | Workflow |
 
 
 ## Requirements

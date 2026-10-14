@@ -129,8 +129,10 @@ POST Body（JSON）。以下字段与工具网关当前登记的「卖家精灵-
 | order | object | 否 | 排序配置；若传入，建议同时提供 `field` 与 `desc`（子 schema 中二者为 required） |
 | order.field | string | 否 | 排序字段：`total_units`（月销量）、`total_amount`（月销售额）、`bsr_rank`、`price`、`rating`、`reviews`、`profit`、`reviews_rate`、`available_date`、`questions`、`total_units_growth`、`total_amount_growth`、`reviews_increasement`、`bsr_rank_cv`、`bsr_rank_cr`、`amz_unit`（子体销量）。默认 `total_units`。传空字符串 `""` 表示不按上述业务字段排序（查询全部排序语义由服务端处理） |
 | order.desc | string | 否 | `"true"` 降序，`"false"` 升序；默认 `"true"`；`maxLength` 1000 |
-| page | integer | 否 | 页码，从1开始，默认 1 |
-| size | integer | 否 | 每页条数（10-100），默认 20 |
+| page | integer | 否 | 页码，从1开始，默认 1；分页最多只能查询排序结果中的前 2000 条记录 |
+| size | integer | 否 | 每页条数（10-100），默认 20；`page * size` 不得超过 2000 |
+
+> **分页上限**：无论 `total` 显示多少条匹配结果，接口最多只能查询当前排序结果中的前 2000 条记录。若需查看第 2000 条之后的数据，请增加或收紧筛选条件后重新查询。
 
 ## 响应结构
 

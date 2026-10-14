@@ -42,8 +42,8 @@ Default marketplace is **US**. Use US when the user does not specify a marketpla
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
-| page | Page number, starting from 1 | `1` |
-| size | Results per page, 10-100 (default 50) | `50` |
+| page | Page number, starting from 1; pagination can access only the first 2,000 records | `1` |
+| size | Results per page, 10-100 (default 50); `page * size` must not exceed 2,000 | `50` |
 | order.field | Sort field (see sort options below) | `total_units` |
 | order.desc | Sort direction: `true` = descending, `false` = ascending | `true` |
 
@@ -195,13 +195,13 @@ Use case: Examine all variation-level data for a product family.
 2. **Keyword language**: When searching by keyword, always translate the keyword to the target marketplace language (e.g., English for US/UK, German for DE, Japanese for JP). Remind the user of this if they provide keywords in the wrong language.
 3. **BSR clarification**: When displaying BSR data, remind users that a lower BSR value indicates stronger sales performance.
 4. **Growth metrics**: When showing growth rates, clarify whether positive values mean improvement or decline (positive BSR growth count means BSR increased, which means worsened ranking).
-5. **Pagination notice**: When the total result count exceeds the returned page size, inform the user of the total count and offer to fetch additional pages.
+5. **Pagination notice**: When the total result count exceeds the returned page size, inform the user of the total count and offer to fetch additional pages only within the first 2,000 records. If `total` exceeds 2,000, clearly state that records after the first 2,000 cannot be queried and suggest narrowing the filters.
 6. **Badge highlights**: When products carry badges (Best Seller, Amazon's Choice, A+ Content, Video), highlight these in the results as they are important competitive signals.
 7. **Error handling**: When a query fails, explain the reason based on the `message` field and suggest adjusting query parameters.
 8. **Snapshot guidance**: When users want to do seasonal or trend analysis, proactively suggest using historical snapshots (e.g., last year's same month) for comparison.
 ## Important Limitations
 
-- **Result cap**: Each page returns 10-100 records (controlled by `size`). Use pagination for larger result sets.
+- **Result cap**: Each page returns 10-100 records (controlled by `size`), and pagination can query only the first 2,000 records in the sorted result set (`page * size` must not exceed 2,000). Narrow the filters to reach records outside that window.
 - **ASIN limit**: A maximum of 40 ASINs can be queried at once via `asinList`.
 - **Historical snapshots**: Only existing monthly snapshots can be queried; future dates are not supported.
 - **Keyword language**: Keywords should match the marketplace language for best results.

@@ -50,7 +50,7 @@ def call_api(params: dict) -> dict:
         headers={
             "Authorization": api_key,
             "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/1.0",
+            "User-Agent": "LinkFox-Skill/2.0",
         },
         method="POST",
     )
@@ -59,7 +59,7 @@ def call_api(params: dict) -> dict:
         with urlopen(req, timeout=150) as response:
             result = json.loads(response.read().decode("utf-8"))
             error_code = str(result.get("errcode", ""))
-            if error_code.isdigit() and 1500 <= int(error_code) <= 1599:
+            if error_code.isdigit() and int(error_code) not in (0, 200):
                 raise SystemExit(json.dumps(result, ensure_ascii=False))
             return result
     except HTTPError as e:
@@ -118,6 +118,10 @@ def main():
         )
         print("Please open the following URL in your browser to authorize:", file=sys.stderr)
         print(f"\n  {result['authorizeUrl']}\n", file=sys.stderr)
+        print(
+            "警告：必须在你常用的登录店铺的安全IP（或紫鸟浏览器）下打开授权链接，否则可能导致店铺关联！",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":

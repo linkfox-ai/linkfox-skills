@@ -45,7 +45,7 @@ def call_api() -> dict:
         headers={
             "Authorization": api_key,
             "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/1.0",
+            "User-Agent": "LinkFox-Skill/2.0",
         },
         method="POST",
     )
@@ -53,7 +53,7 @@ def call_api() -> dict:
         with urlopen(req, timeout=150) as response:
             result = json.loads(response.read().decode("utf-8"))
             error_code = str(result.get("errcode", ""))
-            if error_code.isdigit() and 1500 <= int(error_code) <= 1599:
+            if error_code.isdigit() and int(error_code) not in (0, 200):
                 raise SystemExit(json.dumps(result, ensure_ascii=False))
             return result
     except HTTPError as e:

@@ -78,7 +78,7 @@ This skill helps query and analyze traffic keyword lists for an Amazon ASIN via 
 
 ## Display Rules
 
-1. 结果优先展示：关键词、自然位、广告位、流量占比类型、转化类型。
+1. 结果优先展示：关键词、自然位、广告位、SPR、流量占比类型、转化类型。
 2. 明确标注查询周期（最近30天或历史月份）。
 3. 当存在分页时，告知总数与当前页。
 4. 不输出与接口无关的主观商业建议，除非用户明确要求。

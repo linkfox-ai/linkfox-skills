@@ -312,26 +312,37 @@
 
 ### 北美 (NA)
 
-- 美国: amazon.com
 - 加拿大: amazon.ca
+- 美国: amazon.com
 - 墨西哥: amazon.com.mx
+- 巴西: amazon.com.br
 
 ### 欧洲 (EU)
 
-- 英国: amazon.co.uk
-- 德国: amazon.de
-- 法国: amazon.fr
-- 意大利: amazon.it
+- 爱尔兰: amazon.ie
 - 西班牙: amazon.es
+- 英国: amazon.co.uk
+- 法国: amazon.fr
+- 比利时: amazon.com.be
 - 荷兰: amazon.nl
+- 德国: amazon.de
+- 意大利: amazon.it
 - 瑞典: amazon.se
+- 南非: amazon.co.za
 - 波兰: amazon.pl
+- 沙特阿拉伯: amazon.sa
+- 埃及: amazon.eg
+- 土耳其: amazon.com.tr
+- 阿联酋: amazon.ae
+- 印度: amazon.in
 
 ### 远东 (FE)
 
-- 日本: amazon.co.jp
-- 澳大利亚: amazon.com.au
 - 新加坡: amazon.sg
+- 澳大利亚: amazon.com.au
+- 日本: amazon.co.jp
+
+> Amazon SP-API 没有独立的东南亚区域代码；东南亚目前只有新加坡站，使用 **FE**。`region` 按目标 Amazon 站点选择，与卖家所在地无关。
 
 ---
 

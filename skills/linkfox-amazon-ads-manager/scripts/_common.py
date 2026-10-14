@@ -4,7 +4,7 @@ Shared helpers for linkfox-amazon-ads-manager scripts.
 All list_*.py scripts import from this module for:
   - Dependency check (linkfox-amazon-ads-auth must be installed)
   - LINKFOXAGENT_API_KEY retrieval
-  - /amazonAds/storeTokens call to get access token
+  - server-side token resolution through /amazonAds/developerProxy
   - /amazonAds/developerProxy call with the right method / Content-Type per ad product
   - Auto-pagination across Sponsored Products / Sponsored Brands (nextToken) and
     Sponsored Display (startIndex + count offset)
@@ -38,7 +38,6 @@ from urllib.request import Request, urlopen
 
 # 生产默认走 tool-gateway.linkfox.com；开发/测试期可 export AMAZON_ADS_BASE_URL=<url> 覆盖
 API_BASE_URL = (os.environ.get("LINKFOX_TOOL_GATEWAY") or os.environ.get("AMAZON_ADS_BASE_URL") or "https://tool-gateway.linkfox.com").rstrip("/")
-STORE_TOKENS_ENDPOINT = f"{API_BASE_URL}/amazonAds/storeTokens"
 DEVELOPER_PROXY_ENDPOINT = f"{API_BASE_URL}/amazonAds/developerProxy"
 
 REQUIRED_SKILL = "linkfox-amazon-ads-auth"
@@ -113,7 +112,7 @@ def call_gateway(endpoint: str, payload: dict) -> dict:
         headers={
             "Authorization": api_key,
             "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/1.0",
+            "User-Agent": "LinkFox-Skill/2.0",
             "SESSION_ID": os.environ.get("SESSION_ID", ""),
             "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
             "MODE_ID": os.environ.get("MODE_ID", ""),

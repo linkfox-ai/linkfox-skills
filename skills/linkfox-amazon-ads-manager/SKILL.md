@@ -288,7 +288,7 @@ python scripts/sd/list_product_ads.py '{"profileId":1234567890,"region":"NA",
 
 | 状态 | 含义 | 建议 |
 |------|------|------|
-| `HTTP 401` | accessToken 过期 | 调 ads-auth 的 `refresh_token.py` 后重试 |
+| `HTTP 401` | Ads 授权失效或服务端令牌异常 | 停止自动重试，检查授权状态；必要时重新授权 |
 | `HTTP 403` | profileId 无权限 | 核对 profileId 归属 |
 | `HTTP 400` | 入参结构错 | 先核对"过滤器结构速查"表 |
 | `HTTP 429` | 限流 | 等 2-5s 重试 |

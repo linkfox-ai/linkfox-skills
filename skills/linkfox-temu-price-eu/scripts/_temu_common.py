@@ -55,7 +55,7 @@ def build_gateway_headers(linkfox_token: str) -> dict:
         "Authorization": linkfox_token,
         "Token": linkfox_token,
         "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/1.0",
+        "User-Agent": "LinkFox-Skill/2.0",
         "SESSION_ID": os.environ.get("SESSION_ID", ""),
         "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
         "MODE_ID": os.environ.get("MODE_ID", ""),

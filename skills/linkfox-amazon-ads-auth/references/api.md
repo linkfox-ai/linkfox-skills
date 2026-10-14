@@ -1,6 +1,6 @@
 # linkfox-amazon-ads-auth — 参数与字段参考
 
-Amazon Ads 授权、已授权账号列表、profile 管理、令牌读取与刷新。
+Amazon Ads 授权、已授权账号列表、profile 管理与授权连接解绑。
 
 下游实体查询见 `linkfox-amazon-ads-manager`；SP 报告见 `linkfox-amazon-ads-report`。
 
@@ -17,7 +17,7 @@ Amazon Ads 授权、已授权账号列表、profile 管理、令牌读取与刷�
 ```
   一次 OAuth 授权
         ▼
-  authRecordId (1 条)  ← 与 accessToken/refreshToken 绑定
+  authRecordId (1 条 OAuth 授权连接)
         │
         ├──► profileId A (US)    ─┐
         ├──► profileId B (CA)    ├── 一次授权 → 多个 profile（每个 marketplace 一个）
@@ -103,39 +103,7 @@ Amazon Ads 授权、已授权账号列表、profile 管理、令牌读取与刷�
 
 ---
 
-### 4. 刷新令牌 — `/amazonAds/refreshToken`
-
-`accessToken` 1 小时有效；过期后下游返回 HTTP 401 或错误体含 `expired` / `unauthorized` / `access token`。
-
-**Request**（`authRecordId` 和 `profileId` 二选一）：
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `authRecordId` | number | 授权主表 ID |
-| `profileId` | number | 系统会反查到所属授权 |
-
-**Response**：
-```json
-{
-  "authRecordId": 1001,
-  "accessToken": "Atza|IwEBI...", "refreshToken": "Atzr|IwEBI...",
-  "tokenType": "bearer", "expiresIn": "3600",
-  "message": "刷新成功"
-}
-```
-
----
-
-### 5. 查询令牌 — `/amazonAds/storeTokens`
-
-**Request**（二选一，同上）：`authRecordId` 或 `profileId`。
-
-**Response**：同 §4，少了 `message` 字段。
-
-本接口**不触发刷新**，仅读 DB。
-
----
-
-### 6. 解绑广告连接 — `/amazonAds/cancelAuthorization`
+### 4. 解绑广告连接 — `/amazonAds/cancelAuthorization`
 
 **Request**：
 
@@ -204,15 +172,7 @@ curl -X POST $BASE/amazonAds/authorizedStores -H "Authorization: $KEY" \
 curl -X POST $BASE/amazonAds/profiles -H "Authorization: $KEY" \
   -H "Content-Type: application/json" -d '{"refresh":true}'
 
-# 4. 刷新令牌
-curl -X POST $BASE/amazonAds/refreshToken -H "Authorization: $KEY" \
-  -H "Content-Type: application/json" -d '{"profileId":1111111111}'
-
-# 5. 查令牌
-curl -X POST $BASE/amazonAds/storeTokens -H "Authorization: $KEY" \
-  -H "Content-Type: application/json" -d '{"profileId":1111111111}'
-
-# 6. 解绑广告连接
+# 4. 解绑广告连接
 curl -X POST $BASE/amazonAds/cancelAuthorization -H "Authorization: $KEY" \
   -H "Content-Type: application/json" -d '{"authRecordId":1001}'
 ```

@@ -5,7 +5,7 @@
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/amazon/opportunity/searchByMetrics`
 - **请求方式**：POST，Content-Type: application/json
 - **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
-- **User-Agent**：`LinkFox-Skill/1.0`
+- **User-Agent**：`LinkFox-Skill/2.0`
 
 ## 请求参数
 
@@ -175,7 +175,7 @@ POST Body（JSON）。所有参数均为可选，但**必须至少提供 `keywor
 curl -X POST https://tool-gateway.linkfox.com/amazon/opportunity/searchByMetrics \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/1.0" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{
     "nicheBrandCountLte": 20,
     "nicheSearchVolumeYoyChangePctAtLeastGte": 100,
@@ -190,7 +190,7 @@ curl -X POST https://tool-gateway.linkfox.com/amazon/opportunity/searchByMetrics
 curl -X POST https://tool-gateway.linkfox.com/amazon/opportunity/searchByMetrics \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/1.0" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{"keyword": "whoop band", "limit": 50}'
 ```
 
@@ -200,7 +200,7 @@ curl -X POST https://tool-gateway.linkfox.com/amazon/opportunity/searchByMetrics
 curl -X POST https://tool-gateway.linkfox.com/amazon/opportunity/searchByMetrics \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/1.0" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{
     "reviewNegativeTop1Topic": "size",
     "reviewNegativeTop1PctAtLeastGte": 70,

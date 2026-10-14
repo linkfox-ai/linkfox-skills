@@ -251,7 +251,7 @@ def _process_task(spec: dict, variant: str, skill_root: str) -> dict:
         if not isinstance(image_urls, list) or not image_urls:
             raise RuntimeError("image_urls 为空——拒绝带空图出图（步骤1护栏）")
         if not all(isinstance(u, str) and u.startswith(("http://", "https://")) for u in image_urls):
-            raise RuntimeError("image_urls 含非 http(s) 地址——需先经 linkfox-file-upload 上传")
+            raise RuntimeError("image_urls 含非 http(s) 地址——需先按本 skill 的 references/file-upload.md 执行上传")
 
         textgen_script = spec.get("textgen_script") or ""
         imagegen_script = spec.get("imagegen_script") or ""

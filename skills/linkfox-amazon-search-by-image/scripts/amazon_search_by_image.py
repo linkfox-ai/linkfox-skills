@@ -327,6 +327,14 @@ def main():
         print(f"Invalid parameter format: {e}", file=sys.stderr)
         sys.exit(1)
 
+    if "aggregateByKeepaData" in params:
+        params.pop("aggregateByKeepaData")
+        print(
+            "Warning: aggregateByKeepaData is deprecated and was ignored; "
+            "query Keepa separately by ASIN.",
+            file=sys.stderr,
+        )
+
     cache_path = _cache_path(params)
     result = _load_cache(cache_path) if use_cache else None
     if result is None:
