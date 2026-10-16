@@ -8,6 +8,12 @@
 
 采用异步两步模式：先创建任务获得 `taskId`，再轮询查询任务状态和结果。
 
+## 模型配置（先查询，原静态能力仅兜底）
+
+模型列表地址可通过 `LINKFOX_AI_API_URL` 覆盖；下述绝对地址为生产默认值。生成请求独立使用 `LINKFOX_TOOL_GATEWAY`，测试环境设置示例见 [model-config.md](model-config.md)。
+
+本接口使用公共配置 `GET https://ai-api.linkfox.com/image/model/config/list?bizType=201`。先调用 `python scripts/aigc_imagegen.py --list-models --inline`；上层明确限定模型时，仅列表查询使用 `--allowed-models` 传入其原有业务限制，生成参数继续原样提交。仅查询失败使用下方静态能力，不扩大任何原有业务/模式限制。完整规则见 [model-config.md](model-config.md)。
+
 ## 通用调用规范
 
 - **基础地址**：`${LINKFOX_TOOL_GATEWAY}`，从环境变量读取，未配置时报错退出。
@@ -23,9 +29,11 @@
 
 ### 请求参数
 
+`imageUrls` 中若有本地图片或附件，先按 [file-upload.md](file-upload.md) 上传，用成功项的 `url` 替换；已有可公开访问的 HTTP(S) URL 直接复用，文生图无需上传。生成接口不接收本地路径，上传失败不创建任务。
+
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
-| imageUrls | array[string] | 否 | - | 参考图列表；不传或传空列表时为文生图，传入时为参考图生图，具体上限以所选模型配置为准，最高10张 |
+| imageUrls | array[string] | 否 | - | 参考图列表；不传或传空列表时为文生图，传入时为参考图生图，具体上限以动态配置 refImageCount 为准；查询失败用原静态表 |
 | prompt | string | 是 | - | 提示词，描述期望生成的图片内容 |
 | provider | string | 否 | LF全能模型 Pro | 内部模型请求值，按下方“内部执行映射”填写；不得向用户展示该字段值 |
 | outputNum | integer | 否 | 1 | 输出张数，取值范围 [1, 10]；未传时默认1 |
@@ -50,9 +58,9 @@
 | LF智能模型 G-2.5 Flare | `LF_GT_2_F` |
 | Seedream 5.0 Pro | `LF_SD_2` |
 
-工具端继续兼容历史请求值；新调用使用上表内部请求值。未传 provider 时仍按 LF全能模型 Pro 执行。
+工具端继续兼容历史请求值；已有模型保留上表请求别名，动态新增图片模型使用 apiCode，由脚本规范化。未传 provider 时仍按 LF全能模型 Pro 执行。
 
-### 新增图片模型参数支持对照
+### 新增图片模型参数支持对照（仅配置查询失败时兜底）
 
 | 参数 | LF智能模型 G-2.5 Sunburst | LF智能模型 G-2.5 Flare | Seedream 5.0 Pro |
 |------|:---:|:---:|:---:|
@@ -184,3 +192,13 @@ curl -X POST "$LINKFOX_TOOL_GATEWAY/aigc/taskQuery" \
 - `sentiment`：`POSITIVE`（赞扬）/ `NEUTRAL`（建议无情绪）/ `NEGATIVE`（不满或错误）
 - `category`：`BUG`（异常或数据错误）/ `COMPLAINT`（不满）/ `SUGGESTION`（改进建议）/ `OTHER`
 - `content`：说明用户说了什么/期望什么、实际发生了什么、为什么是问题/赞赏
+
+## 脚本异常返回与退出码
+
+| 退出码 | 含义 | 处理方式 |
+|---|---|---|
+| 0 | 生成成功且媒体已交付 | 使用原 `Saved full response: [路径数组]` 标记 |
+| 1 | 创建/查询/服务端失败或媒体未交付 | 读取 stdout 错误摘要；完整响应见 `dataFile`，不自动重建任务 |
+| 2 | 本地轮询预算耗尽 | `status=TIMEOUT` 与 `taskStatus` 分别表示等待状态和最后服务端状态；保留 `taskId` 续查 |
+
+HTTP 状态和业务状态分别判断；HTTP 200 的空体或非 JSON 也会返回结构化错误。错误保留已有业务码和消息、可用的 HTTP 状态与请求ID；原始非 JSON 内容仅写入诊断文件，不直接输出到对话。

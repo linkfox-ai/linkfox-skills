@@ -45,6 +45,6 @@
 | task-result-*.json | 单任务结果片段（含 assets[]） | 中间产物 | 每个 `run_one_task.py` 落盘，summary 读后汇总 + 写 asset manifest |
 | brandGeneJson | 品牌基因 | 输入/生成 | S3 `save_brand_gene.py` 落盘路径 → state `brand_gene_file` |
 | provider | 生图模型 | 输入 | 用户选择 |
-| resolution | 分辨率 | 输入 | 用户选择（2K/4K） |
+| resolution | 分辨率 | 输入 | 从所选模型当前支持的分辨率选择；原默认/必填约定不变，旧2K/4K仅作历史示例 |
 | imageUrls | 全部商品图 key | 输入 | 用户上传（必须全量传） |
 | 图片产物 | 共享流水线步骤 3 输出 | 输出 | 直接交付用户 |

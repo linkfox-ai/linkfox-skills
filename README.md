@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Open%20Standard-orange)](https://agentskills.io)
-[![Skills](https://img.shields.io/badge/skills-154-brightgreen)](#skills-catalog)
+[![Skills](https://img.shields.io/badge/skills-163-brightgreen)](#skills-catalog)
 
-**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 154 API-driven skills covering product research, competitor analysis, keyword tracking, Amazon Ads reporting, patent search, compliance detection, and more.
+**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 163 API-driven skills covering product research, competitor analysis, keyword tracking, Amazon Ads reporting, patent search, compliance detection, and more.
 
 Built on the [Agent Skills](https://agentskills.io) open standard, compatible with Claude Code, Cursor, GitHub Copilot, and 30+ AI agent platforms.
 
@@ -272,11 +272,20 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-1688-product-detail` | Retrieve 1688 product details by offer ID with one-piece retail prices, wholesale tiers for two or more units, SKU stock, logistics, and supplier data |
 | `linkfox-1688-search-by-image` | Find similar 1688 supplier products using image-based visual search |
 | `linkfox-ai-mode-google-search` | Ai Mode Google Search |
+| `linkfox-aigc-clothing-suite` | Generate apparel model, selling-point, seeding, size, white-background and A+ images. |
+| `linkfox-aigc-image-edit` | Edit one source image with an instruction and an explicitly chosen image model. |
+| `linkfox-aigc-image-to-video` | Generate video from one image or multiple images with optional reference videos and templates. |
 | `linkfox-aigc-imagegen` | Aigc Imagegen |
 | `linkfox-aigc-imagegen-brand-gene-extract` | Aigc Imagegen Brand Gene Extract |
 | `linkfox-aigc-imagegen-cloth` | Aigc Imagegen Cloth |
 | `linkfox-aigc-imagegen-product` | Aigc Imagegen Product |
+| `linkfox-aigc-multi-image-edit` | Combine multiple reference images into one coherent edited visual. |
+| `linkfox-aigc-product-suite` | Generate product selling-point, scene, close-up, white-background and A+ images from reference assets. |
+| `linkfox-aigc-sales-video` | Create product sales videos from a supplied script and reference images. |
 | `linkfox-aigc-textgen` | Aigc Textgen |
+| `linkfox-aigc-video-edit` | Edit a source video with an instruction and optional reference images. |
+| `linkfox-aigc-video-reclone` | Recreate a reference video using product images, target market and language. |
+| `linkfox-aigc-video-translate` | Translate speech in an existing video into a target language with optional lip synchronization. |
 | `linkfox-aigc-videogen` | Aigc Videogen |
 | `linkfox-aigc-videogen-multi` | Aigc Videogen Multi |
 | `linkfox-chuhaijiang-tiktok-ads` | Research public TikTok ads and creative assets with filtered discovery, detailed performance data, promoted-product relationships, content-structure analysis, and embeddings |
@@ -399,12 +408,14 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-wb-shopee-product-selection` | Wb Shopee Product Selection |
 | `linkfox-wb-shopify-data` | Wb Shopify Data |
 | `linkfox-wb-sif-search-intelligence` | Wb Sif Search Intelligence |
+| `linkfox-wb-smart-table` | Wb Smart Table |
 | `linkfox-wb-sorftime` | Wb Sorftime |
 | `linkfox-wb-sorftime-walmart` | Wb Sorftime Walmart |
 | `linkfox-wb-temu-data` | Wb Temu Data |
 | `linkfox-wb-tiktok-official-api` | Wb Tiktok Official Api |
 | `linkfox-wb-tiktok-official-video-api` | Wb Tiktok Official Video Api |
 | `linkfox-wb-walmart-product-selection` | Wb Walmart Product Selection |
+| `linkfox-wb-workflow` | Wb Workflow |
 | `linkfox-workflow` | Workflow |
 
 

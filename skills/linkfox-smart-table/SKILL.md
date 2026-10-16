@@ -68,7 +68,7 @@ python scripts/smart_table.py <op> '<JSON 参数>' [--inline] [--yes]
 - **始终**把完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-smart-table-<操作>-<timestamp>.json`（`<session>` 取自 `SESSION_ID`；**禁止写 /tmp**）。
 - 响应 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout；更大时只打摘要。`--inline` 强制全量打印。
 - 字段名或值含中文时，JSON 参数用单引号整体包住传给脚本；不要直接 curl 内联中文。
-- 常规表格读写不计费（读写的是自己团队的数据）；AI 出图会扣调用方积分，见 [ai.md](references/ai.md)。
+- 不计费（读写的是自己团队的数据）。
 
 **通用错误码**（各操作特有的错误见对应 reference 的「常见错误」）：
 
@@ -80,18 +80,6 @@ python scripts/smart_table.py <op> '<JSON 参数>' [--inline] [--yes]
 | 404 | 多维表/表/记录不存在，或不在你团队里 | 用 `listMyTables` / `listSharedTables` 重新拿 id |
 | 500 | 服务端异常（`errmsg` 已消毒） | **写操作重试前先用读接口确认是否已生效** —— `createTable` / `addTable` / `createRecords` 重试会建重 |
 | 503 | 数据库暂不可用 | 稍后重试，写操作同样先确认状态 |
-
-## 解决认证和算力问题
-
-发生以下异常情况时，采用 [references/onboarding.md](references/onboarding.md) 引导解决问题，使用本 skill 自带的 `scripts/onboarding.py`：
-
-### 异常情况
-
-- **未配置 API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应 401 或 402**：HTTP 状态码或业务 `errcode` 为 401/402；鉴权失败消息也按认证问题处理。
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”，或类似含义的内容。
-
-`403` 是权限问题，不进入注册或充值引导；按上面的通用错误码处理。
 
 ## 反馈
 

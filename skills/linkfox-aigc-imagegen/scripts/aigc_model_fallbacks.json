@@ -1,0 +1,852 @@
+{
+  "_note": "Frozen from the existing SKILL.md/references/api.md. Used only when fetching config fails; never overwrite from live config.",
+  "image": [
+    {
+      "code": "BANANA",
+      "apiCode": "BANANA",
+      "name": "LF全能模型",
+      "supportedResolutions": [
+        "1K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "16:9",
+        "9:16",
+        "3:4",
+        "4:3",
+        "3:2",
+        "2:3",
+        "4:5",
+        "5:4",
+        "21:9"
+      ],
+      "supportedQualities": [],
+      "refImageCount": 6,
+      "isMaintenance": false
+    },
+    {
+      "code": "BANANA_2",
+      "apiCode": "BANANA_2",
+      "name": "LF全能模型 2",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "16:9",
+        "9:16",
+        "3:4",
+        "4:3",
+        "3:2",
+        "2:3",
+        "4:5",
+        "5:4",
+        "21:9"
+      ],
+      "supportedQualities": [],
+      "refImageCount": 10,
+      "isMaintenance": false
+    },
+    {
+      "code": "BANANA_PRO",
+      "apiCode": "BANANA_PRO",
+      "name": "LF全能模型 Pro",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "16:9",
+        "9:16",
+        "3:4",
+        "4:3",
+        "3:2",
+        "2:3",
+        "4:5",
+        "5:4",
+        "21:9"
+      ],
+      "supportedQualities": [],
+      "refImageCount": 10,
+      "isMaintenance": false
+    },
+    {
+      "code": "GPT_2_IMAGE",
+      "apiCode": "GPT_2_IMAGE",
+      "name": "LF智能模型 G-2",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "9:16",
+        "16:9",
+        "4:5",
+        "5:4",
+        "21:9",
+        "9:21"
+      ],
+      "supportedQualities": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "refImageCount": 10,
+      "isMaintenance": false
+    },
+    {
+      "code": "AIDRAW_EDIT",
+      "apiCode": "AIDRAW_EDIT",
+      "name": "Linkfox-Image-1",
+      "supportedResolutions": [
+        "2K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "supportedQualities": [],
+      "refImageCount": 4,
+      "isMaintenance": false
+    },
+    {
+      "code": "WAN2_7",
+      "apiCode": "WAN2_7",
+      "name": "Wan 2.7",
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "1:4",
+        "4:1",
+        "3:2",
+        "2:3",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "16:9",
+        "9:16",
+        "21:9"
+      ],
+      "supportedQualities": [],
+      "refImageCount": 6,
+      "isMaintenance": false
+    },
+    {
+      "code": "SEEDREAM5",
+      "apiCode": "SEEDREAM5",
+      "name": "Seedream 5.0",
+      "supportedResolutions": [
+        "2K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "9:16",
+        "16:9",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedQualities": [],
+      "refImageCount": 6,
+      "isMaintenance": false
+    },
+    {
+      "code": "GPT_2_5_IMAGE",
+      "apiCode": "GPT_2_5_IMAGE",
+      "name": "LF智能模型 G-2.5 Sunburst",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "9:16",
+        "16:9",
+        "4:5",
+        "5:4",
+        "21:9",
+        "9:21"
+      ],
+      "supportedQualities": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "refImageCount": 10,
+      "isMaintenance": false
+    },
+    {
+      "code": "GPT_2_5_F_IMAGE",
+      "apiCode": "GPT_2_5_F_IMAGE",
+      "name": "LF智能模型 G-2.5 Flare",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "2:3",
+        "3:2",
+        "9:16",
+        "16:9",
+        "4:5",
+        "5:4",
+        "21:9",
+        "9:21"
+      ],
+      "supportedQualities": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "refImageCount": 10,
+      "isMaintenance": false
+    },
+    {
+      "code": "SEEDREAM5_PRO",
+      "apiCode": "SEEDREAM5_PRO",
+      "name": "Seedream 5.0 Pro",
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "supportedRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "9:16",
+        "16:9",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedQualities": [],
+      "refImageCount": 6,
+      "isMaintenance": false
+    }
+  ],
+  "video": [
+    {
+      "code": "KLING",
+      "name": "可灵Omni",
+      "supportedResolutions": [
+        "720p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "5",
+        "10",
+        "15"
+      ],
+      "refImageCount": 7,
+      "supportVoice": false,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "1:1",
+        "9:16",
+        "16:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ]
+      }
+    },
+    {
+      "code": "SEED",
+      "name": "Seedance 2.0",
+      "supportedResolutions": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15"
+      ],
+      "refImageCount": 9,
+      "supportVoice": true,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ]
+      }
+    },
+    {
+      "code": "SEED_FAST",
+      "name": "Seedance 2.0 fast",
+      "supportedResolutions": [
+        "480p",
+        "720p"
+      ],
+      "supportedDurations": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15"
+      ],
+      "refImageCount": 9,
+      "supportVoice": true,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ]
+      }
+    },
+    {
+      "code": "SEED_V25",
+      "name": "Seedance 2.5",
+      "supportedResolutions": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30"
+      ],
+      "refImageCount": 30,
+      "supportVoice": true,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ]
+      }
+    },
+    {
+      "code": "HAILUO",
+      "name": "海螺2.3",
+      "supportedResolutions": [
+        "768p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "6",
+        "10"
+      ],
+      "refImageCount": 0,
+      "supportVoice": false,
+      "supportLastFrame": false,
+      "supportedRatios": [],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ]
+      }
+    },
+    {
+      "code": "SEED_MINI",
+      "name": "Seedance 2.0 mini",
+      "supportedResolutions": [
+        "480p",
+        "720p"
+      ],
+      "supportedDurations": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15"
+      ],
+      "refImageCount": 9,
+      "supportVoice": true,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ],
+        "defaultDuration": 10,
+        "defaultResolution": "480p"
+      }
+    },
+    {
+      "code": "WAN3",
+      "name": "万相3.0",
+      "supportedResolutions": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "5",
+        "10",
+        "15",
+        "20",
+        "25",
+        "30"
+      ],
+      "refImageCount": 1,
+      "supportVoice": false,
+      "supportLastFrame": true,
+      "supportedRatios": [
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage",
+          "firstLastFrame"
+        ],
+        "defaultDuration": 10,
+        "defaultResolution": "480p"
+      }
+    },
+    {
+      "code": "MINIMAX_V2",
+      "name": "MiniMax H3",
+      "supportedResolutions": [
+        "768p",
+        "2K"
+      ],
+      "supportedDurations": [
+        "5",
+        "10",
+        "15"
+      ],
+      "refImageCount": 9,
+      "supportVoice": false,
+      "supportLastFrame": true,
+      "supportedRatios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9",
+        "adaptive"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage",
+          "firstLastFrame"
+        ],
+        "defaultDuration": 5,
+        "defaultResolution": "2K"
+      }
+    },
+    {
+      "code": "MODEL_V2_6",
+      "name": "可灵2.6",
+      "supportedResolutions": [
+        "720p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "5",
+        "10"
+      ],
+      "refImageCount": 1,
+      "supportVoice": true,
+      "supportLastFrame": false,
+      "supportedRatios": [],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ],
+        "defaultDuration": 10,
+        "defaultResolution": "720p"
+      }
+    }
+  ],
+  "video_multi": [
+    {
+      "code": "KLING",
+      "name": "可灵Omni",
+      "supportedResolutions": [
+        "720p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "5",
+        "10",
+        "15"
+      ],
+      "refImageCount": 7,
+      "supportVoice": false,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "1:1",
+        "9:16",
+        "16:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ]
+      }
+    },
+    {
+      "code": "SEED",
+      "name": "Seedance 2.0",
+      "supportedResolutions": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15"
+      ],
+      "refImageCount": 9,
+      "supportVoice": true,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ]
+      }
+    },
+    {
+      "code": "SEED_FAST",
+      "name": "Seedance 2.0 fast",
+      "supportedResolutions": [
+        "480p",
+        "720p"
+      ],
+      "supportedDurations": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15"
+      ],
+      "refImageCount": 9,
+      "supportVoice": true,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ]
+      }
+    },
+    {
+      "code": "SEED_V25",
+      "name": "Seedance 2.5",
+      "supportedResolutions": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27",
+        "28",
+        "29",
+        "30"
+      ],
+      "refImageCount": 30,
+      "supportVoice": true,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ]
+      }
+    },
+    {
+      "code": "HAPPY_HORSE",
+      "name": "HappyHorse 1.1",
+      "supportedResolutions": [
+        "720p",
+        "1080p"
+      ],
+      "supportedDurations": [
+        "5",
+        "10",
+        "15"
+      ],
+      "refImageCount": 9,
+      "supportVoice": false,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ],
+        "defaultDuration": 15,
+        "defaultResolution": "720p"
+      }
+    },
+    {
+      "code": "SEED_MINI",
+      "name": "Seedance 2.0 mini",
+      "supportedResolutions": [
+        "480p",
+        "720p"
+      ],
+      "supportedDurations": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15"
+      ],
+      "refImageCount": 9,
+      "supportVoice": true,
+      "supportLastFrame": false,
+      "supportedRatios": [
+        "9:16",
+        "16:9",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage"
+        ],
+        "defaultDuration": 10,
+        "defaultResolution": "480p"
+      }
+    },
+    {
+      "code": "MINIMAX_V2",
+      "name": "MiniMax H3",
+      "supportedResolutions": [
+        "768p",
+        "2K"
+      ],
+      "supportedDurations": [
+        "5",
+        "10",
+        "15"
+      ],
+      "refImageCount": 9,
+      "supportVoice": false,
+      "supportLastFrame": true,
+      "supportedRatios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9",
+        "adaptive"
+      ],
+      "isMaintenance": false,
+      "extraConfig": {
+        "supportModes": [
+          "refImage",
+          "firstLastFrame"
+        ],
+        "defaultDuration": 5,
+        "defaultResolution": "2K"
+      }
+    }
+  ]
+}

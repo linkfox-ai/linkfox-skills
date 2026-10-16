@@ -8,6 +8,12 @@
 
 采用异步两步模式：先创建任务获得 `taskId`，再轮询查询任务状态和结果。
 
+## 模型配置（先查询，原静态能力仅兜底）
+
+模型列表地址可通过 `LINKFOX_AI_API_URL` 覆盖；下述绝对地址为生产默认值。生成请求独立使用 `LINKFOX_TOOL_GATEWAY`，测试环境设置示例见 [model-config.md](model-config.md)。
+
+本接口使用公共配置 `GET https://ai-api.linkfox.com/image/video/model/config/list?bizType=88`。先调用 `python scripts/aigc_videogen.py --list-models --inline`；上层明确限定模型时，仅列表查询使用 `--allowed-models` 传入其原有业务限制，生成参数继续原样提交。仅查询失败使用下方静态能力，不扩大任何原有业务/模式限制。完整规则见 [model-config.md](model-config.md)。
+
 ## 通用调用规范
 
 - **基础地址**：`${LINKFOX_TOOL_GATEWAY}`，从环境变量读取，未配置时报错退出。
@@ -23,6 +29,8 @@
 
 ### 请求参数
 
+`imageUrl` 及实际提供的 `lastFrameImageUrl` 若为本地图片或附件，先按 [file-upload.md](file-upload.md) 上传，用成功项的 `url` 填入对应字段；已有可公开访问的 HTTP(S) URL 直接复用。生成接口不接收本地路径，上传失败不创建任务，查询时不重复上传。
+
 | 参数 | 类型 | 必填 | 默认 | 说明 |
 |------|------|------|------|------|
 | imageUrl | string | 是 | - | 原图（首帧图），支持 jpg/jpeg/png/webp |
@@ -32,11 +40,11 @@
 | promptOptimizer | boolean | 否 | false | 是否开启提示词优化 |
 | isPro | boolean | 否 | - | 仅在所选模型支持且用户明确需要时传入 |
 | voice | boolean | 否 | - | 仅在所选模型支持且用户明确需要时传入；可灵2.6仅在1080p下使用 |
-| lastFrameImageUrl | string | 否 | - | 尾帧图片URL；AgentOS配置中仅万相3.0和MiniMax H3支持 |
+| lastFrameImageUrl | string | 否 | - | 尾帧图片URL；AgentOS配置中是否支持以当前动态配置的 `supportLastFrame` 为准 |
 | aspectRatio | string | 否 | - | 视频比例，以所选模型配置为准；仅在所选模型支持时传入 |
 | resolution | string | 否 | 按模型 | 新增模型默认值见下方；旧模型保持原默认值 |
 
-### 各模型参数支持对照
+### 各模型参数支持对照（仅配置查询失败时兜底）
 
 | 参数 | 可灵Omni | Seedance 2.0 | Seedance 2.0 fast | 海螺2.3 |
 |------|:---:|:---:|:---:|:---:|
@@ -47,7 +55,7 @@
 | aspectRatio | 1:1/9:16/16:9 | 9:16/16:9/1:1/4:3/3:4/21:9 | 9:16/16:9/1:1/4:3/3:4/21:9 | 不生效 |
 | resolution | 720p/1080p | 480p/720p/1080p | 480p/720p(不支持1080p) | 768p/1080p |
 
-### 配置增量参数支持对照
+### 配置增量参数支持对照（仅配置查询失败时兜底）
 
 | 参数 | Seedance 2.5 | Seedance 2.0 mini | 万相3.0 | MiniMax H3 | 可灵2.6 |
 |------|:---:|:---:|:---:|:---:|:---:|
@@ -205,3 +213,13 @@ curl -X POST "$LINKFOX_TOOL_GATEWAY/aigc/taskQuery" \
 - `sentiment`：POSITIVE（赞扬）/ NEUTRAL（建议无情绪）/ NEGATIVE（不满或错误）
 - `category`：BUG（异常或数据错误）/ COMPLAINT（不满）/ SUGGESTION（改进建议）/ OTHER
 - `content`：说明用户说了什么/期望什么、实际发生了什么、为什么是问题/赞赏
+
+## 脚本异常返回与退出码
+
+| 退出码 | 含义 | 处理方式 |
+|---|---|---|
+| 0 | 生成成功且媒体已交付 | 使用原 `Saved full response: [路径数组]` 标记 |
+| 1 | 创建/查询/服务端失败或媒体未交付 | 读取 stdout 错误摘要；完整响应见 `dataFile`，不自动重建任务 |
+| 2 | 本地轮询预算耗尽 | `status=TIMEOUT` 与 `taskStatus` 分别表示等待状态和最后服务端状态；保留 `taskId` 续查 |
+
+HTTP 状态和业务状态分别判断；HTTP 200 的空体或非 JSON 也会返回结构化错误。错误保留已有业务码和消息、可用的 HTTP 状态与请求ID；原始非 JSON 内容仅写入诊断文件，不直接输出到对话。

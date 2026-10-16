@@ -9,8 +9,8 @@
 | 参数 | 性质 | 默认 | 说明 |
 |------|------|------|------|
 | imageUrls | 运行时入参，必填 | — | 用户上传的商品图片 URL 列表 |
-| provider | 运行时入参 | 由用户确认 | 生图模型：BANANA_PRO / GPT_2_IMAGE / GPT_2_5_IMAGE / GPT_2_5_F_IMAGE / BANANA_2 / AIDRAW_EDIT / WAN2_7 |
-| resolution | 运行时入参 | 由用户确认 | 分辨率：2K / 4K |
+| provider | 运行时入参 | 由用户确认 | 从图片 bizType=201 动态完整列表选择 requestValue，按任务能力校验；不以旧模型名列表限制 |
+| resolution | 运行时入参 | 由用户确认 | 从所选模型当前支持的分辨率选择；原默认/必填约定不变，旧2K/4K仅作历史示例 |
 | point | agent 层传入（可空） | — | 完整卖点描述（2~3句话），有则跳过卖点推理 |
 | pointHint | agent 层传入（可空） | — | 方向性关键词（需扩写） |
 | imageDesc | agent 层传入（可空） | — | 完整画面描述，有则跳过画面推理 |

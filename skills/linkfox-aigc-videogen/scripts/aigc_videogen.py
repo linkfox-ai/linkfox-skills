@@ -10,10 +10,14 @@ import sys
 import time
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
+from http.client import HTTPException
+
+from aigc_model_config import load_catalog, parse_model_args, print_catalog, save_catalog
 
 CREATE_PATH = "/aigc/videoGenAsync"
 QUERY_PATH = "/aigc/taskQuery"
 SLUG = "linkfox-aigc-videogen"
+MODEL_KIND = "video"
 POLL_INTERVAL = 10
 MAX_POLL_TIME = 1200
 INITIAL_DELAY = 120
@@ -281,7 +285,50 @@ def get_api_key():
     return key
 
 
-def _post(url, params):
+def _response_error(code, message, raw=b"", status=None, headers=None):
+    headers = headers or {}
+    result = {"error": message, "errorCode": code, "responseBytes": len(raw)}
+    if status is not None:
+        result["httpStatus"] = status
+    content_type = headers.get("Content-Type")
+    request_id = headers.get("X-Request-Id") or headers.get("X-Kong-Request-Id")
+    if content_type:
+        result["contentType"] = content_type
+    if request_id:
+        result["requestId"] = request_id
+    if raw:
+        # Kept in the failure data file, never printed as a raw body to stdout.
+        result["details"] = raw.decode("utf-8", errors="replace")
+    return result
+
+
+def _decode_response(raw, status, headers):
+    if not raw.strip():
+        return _response_error("EMPTY_RESPONSE", f"Upstream returned an empty response (HTTP {status})", raw, status, headers)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _response_error("INVALID_ENCODING", f"Upstream response is not UTF-8 (HTTP {status})", raw, status, headers)
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        return _response_error("INVALID_JSON_RESPONSE", f"Upstream response is not JSON (HTTP {status})", raw, status, headers)
+    if not isinstance(result, dict):
+        return _response_error("INVALID_RESPONSE", "Upstream JSON response must be an object", raw, status, headers)
+    business_code = result.get("errcode", result.get("code"))
+    business_failed = business_code is not None and str(business_code) not in ("0", "200")
+    if result.get("error") or business_failed or not 200 <= status < 300:
+        message = result.get("error") or result.get("errmsg") or result.get("msg") or result.get("message") or f"HTTP {status}: upstream request failed"
+        result["error"] = message
+        result.setdefault("errorCode", str(business_code) if business_failed else "HTTP_ERROR")
+        metadata = _response_error(result["errorCode"], message, raw, status, headers)
+        for key in ("httpStatus", "contentType", "requestId", "responseBytes"):
+            if key in metadata:
+                result.setdefault(key, metadata[key])
+    return result
+
+
+def _post(url, params, timeout=150):
     api_key = get_api_key()
     data = json.dumps(params, ensure_ascii=False).encode("utf-8")
     headers = {
@@ -294,17 +341,25 @@ def _post(url, params):
         "APP_NAME": os.environ.get("APP_NAME", ""),
     }
     req = Request(url, data=data, headers=headers, method="POST")
+    status, response_headers = None, {}
     try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
+        with urlopen(req, timeout=timeout) as response:
+            status = response.status
+            response_headers = response.headers
+            return _decode_response(response.read(), status, response_headers)
+    except HTTPError as error:
         try:
-            return json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
-        except Exception:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+            raw = error.read() if error.fp else b""
+            return _decode_response(raw, error.code, error.headers or {})
+        except (OSError, HTTPException) as read_error:
+            return _response_error("HTTP_READ_ERROR", "Could not read upstream error response", getattr(read_error, "partial", b""), error.code, error.headers)
+    except URLError as error:
+        code = "REQUEST_TIMEOUT" if isinstance(error.reason, TimeoutError) else "CONNECTION_ERROR"
+        return {"error": "Request timed out; submission outcome may be unknown" if code == "REQUEST_TIMEOUT" else f"Connection failed: {error.reason}", "errorCode": code}
+    except TimeoutError:
+        return _response_error("REQUEST_TIMEOUT", "Request timed out; submission outcome may be unknown", status=status, headers=response_headers)
+    except (OSError, HTTPException) as error:
+        return _response_error("HTTP_READ_ERROR", "Could not read upstream response; submission outcome may be unknown", getattr(error, "partial", b""), status, response_headers)
 
 
 def create_task(params):
@@ -312,30 +367,48 @@ def create_task(params):
     return _post(url, params)
 
 
-def query_task(task_id, member_id):
+def query_task(task_id, member_id, timeout=150):
     url = get_api_base() + QUERY_PATH
-    return _post(url, {"taskId": task_id, "memberId": member_id})
+    return _post(url, {"taskId": task_id, "memberId": member_id}, timeout=timeout)
+
+
+def _retryable_query_error(result):
+    status = result.get("httpStatus")
+    return (isinstance(status, int) and (status in (408, 429) or status >= 500)) or result.get("errorCode") in ("CONNECTION_ERROR", "REQUEST_TIMEOUT", "HTTP_READ_ERROR")
 
 
 def poll_until_done(task_id, member_id):
-    start = time.time()
+    deadline = time.monotonic() + MAX_POLL_TIME
+    last_status, last_error = "UNKNOWN", None
     print(f"  Waiting {INITIAL_DELAY}s before first poll...", file=sys.stderr)
-    time.sleep(INITIAL_DELAY)
-    while time.time() - start < MAX_POLL_TIME:
-        result = query_task(task_id, member_id)
+    time.sleep(min(INITIAL_DELAY, MAX_POLL_TIME))
+    while time.monotonic() < deadline:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        result = query_task(task_id, member_id, timeout=min(150, remaining))
         if result.get("error"):
+            if not _retryable_query_error(result):
+                return {**result, "taskId": task_id, "taskStatus": last_status, "canQuery": True}
+            last_error = result
             print(f"  Poll error: {result['error']}", file=sys.stderr)
-            time.sleep(POLL_INTERVAL)
-            continue
-        status = result.get("status")
-        if status == "SUCCESS":
-            return result
-        elif status == "FAILED":
-            return result
-        elapsed = int(time.time() - start)
-        print(f"  Polling... status={status}, elapsed={elapsed}s", file=sys.stderr)
-        time.sleep(POLL_INTERVAL)
-    return {"error": f"Polling timeout after {MAX_POLL_TIME}s", "taskId": task_id}
+        else:
+            status = result.get("status")
+            if isinstance(status, str) and status:
+                last_status = status
+            if status in ("SUCCESS", "FAILED"):
+                return result
+            elapsed = int(MAX_POLL_TIME - (deadline - time.monotonic()))
+            print(f"  Polling... status={status}, elapsed={elapsed}s", file=sys.stderr)
+        time.sleep(min(POLL_INTERVAL, max(0, deadline - time.monotonic())))
+    result = {
+        "error": f"Polling timeout after {MAX_POLL_TIME}s; use the same taskId to query again, do not resubmit",
+        "errorCode": "POLL_TIMEOUT", "status": "TIMEOUT", "taskStatus": last_status,
+        "taskId": task_id, "pollTimedOut": True, "canQuery": True,
+    }
+    if last_error is not None:
+        result["lastQueryError"] = last_error
+    return result
 
 
 def _resolve_output_path(ts):
@@ -380,10 +453,37 @@ def summarize(result):
         print(json.dumps(result_list[:3], indent=2, ensure_ascii=False))
 
 
+def _emit_failure(result, exit_code=1):
+    result = dict(result)
+    result.setdefault("status", "ERROR")
+    out_path = None
+    try:
+        out_path = _resolve_output_path(time.time())
+        with open(out_path, "w", encoding="utf-8") as handle:
+            json.dump(result, handle, ensure_ascii=False, indent=2)
+        print(f"Saved full response: {out_path}")
+    except OSError as error:
+        print(f"Failed to save error response: {error}", file=sys.stderr)
+        out_path = None
+    keys = ("error", "errorCode", "errcode", "code", "errmsg", "msg", "traceId", "requestId", "httpStatus", "contentType", "responseBytes", "status", "taskStatus", "taskId", "pollTimedOut", "canQuery")
+    summary = {key: result[key] for key in keys if key in result}
+    summary["dataFile"] = out_path
+    print(json.dumps(summary, ensure_ascii=False))
+    sys.exit(exit_code)
+
+
 def main():
-    argv = sys.argv[1:]
-    if "--inline" in argv:
-        argv = [a for a in argv if a != "--inline"]
+    try:
+        list_models, allowed_models, inline, argv = parse_model_args(sys.argv[1:])
+    except ValueError as error:
+        print(json.dumps({"error": str(error)}, ensure_ascii=False))
+        sys.exit(1)
+
+    if list_models:
+        catalog = load_catalog(MODEL_KIND, allowed_models=allowed_models)
+        out = save_catalog(catalog, resolve_data_path, SLUG)
+        print_catalog(catalog, out, inline=inline)
+        return
 
     if not argv:
         print("Usage: aigc_videogen.py '<JSON>'", file=sys.stderr)
@@ -392,8 +492,9 @@ def main():
     try:
         params = json.loads(argv[0])
     except json.JSONDecodeError as e:
-        print(f"Invalid parameter format: {e}", file=sys.stderr)
-        sys.exit(1)
+        _emit_failure({"error": f"Invalid parameter JSON: {e}", "errorCode": "INVALID_PARAMETERS"})
+    if not isinstance(params, dict):
+        _emit_failure({"error": "Parameters must be a JSON object", "errorCode": "INVALID_PARAMETERS"})
 
     params = decode_nl_in_obj(params)
 
@@ -401,36 +502,30 @@ def main():
 
     create_result = create_task(params)
     if create_result.get("error"):
-        print(json.dumps(create_result, ensure_ascii=False))
-        sys.exit(1)
+        _emit_failure(create_result)
 
     task_id = create_result.get("taskId")
     cost_token = create_result.get("costToken", 0)
 
     if not task_id:
-        print(json.dumps(create_result, ensure_ascii=False))
-        sys.exit(1)
+        _emit_failure({**create_result, "error": "Task creation response did not contain taskId; do not resubmit automatically", "errorCode": "MISSING_TASK_ID"})
 
     print(f"Task created: taskId={task_id}, costToken={cost_token}", file=sys.stderr)
 
     result = poll_until_done(task_id, member_id)
     result["costToken"] = cost_token
+    if result.get("error") or result.get("status") == "FAILED":
+        result.setdefault("taskId", task_id)
+        result.setdefault("error", result.get("errorMsg") or result.get("errmsg") or "Task generation failed")
+        result.setdefault("errorCode", "TASK_FAILED")
+        _emit_failure(result, 2 if result.get("errorCode") == "POLL_TIMEOUT" else 1)
 
     media_paths = _download_results(result)
 
     if media_paths:
         print(f"Saved full response: {json.dumps(media_paths, ensure_ascii=False)}")
     else:
-        serialized = json.dumps(result, ensure_ascii=False, indent=2)
-        ts = int(time.time())
-        out_path = _resolve_output_path(ts)
-        try:
-            with open(out_path, "w") as f:
-                f.write(serialized)
-            print(f"Saved full response: {out_path} ({len(serialized)} bytes)")
-        except OSError as e:
-            print(f"Failed to save to {out_path}: {e}", file=sys.stderr)
-        summarize(result)
+        _emit_failure({**result, "error": "No media was delivered; query the same taskId instead of creating a new task", "errorCode": "NO_MEDIA_DELIVERED", "taskId": task_id, "taskStatus": result.get("status", "UNKNOWN"), "status": "DELIVERY_FAILED", "canQuery": True})
 
 
 if __name__ == "__main__":

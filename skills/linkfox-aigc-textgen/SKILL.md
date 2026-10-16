@@ -37,6 +37,12 @@ description: AI生文工具，使用大语言模型根据提示词生成文本�
 
 完整参数表、响应字段结构与错误码，见 [`references/api.md`](references/api.md)。
 
+## 图片／视频上传（file-upload）
+
+- `imageUrls` 接收图片或视频 URL，不接收本地文件路径；纯文本请求继续传 `[]`，无需上传。
+- 逐项检查实际使用的媒体，保持原顺序：已有可公开访问的 HTTP(S) URL 直接复用；本地图片、视频或附件先按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 上传，再把成功项的 `url` 填回 `imageUrls`。无需查找或安装额外上传 skill，也不要新增 `videoUrl` 等字段。
+- 上传失败时停止本次生文并说明原因，不传本地路径或失败项。生文脚本不自动上传，须在创建任务或链式调用前完成素材准备；后续步骤复用已取得的 URL。
+
 ## 调用方式
 
 采用异步两步模式（与 imagegen 一致）：

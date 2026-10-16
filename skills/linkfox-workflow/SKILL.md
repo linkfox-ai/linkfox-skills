@@ -360,18 +360,6 @@ Bash(
 - 标签不放进 Markdown 代码围栏,不加其他属性,不在同一回复中输出多个。
 - 上传失败时完全不输出该标签。
 
-## 解决认证和算力问题
-
-发生以下异常情况时，采用 [references/onboarding.md](references/onboarding.md) 引导解决问题，使用本 skill 自带的 `scripts/onboarding.py`：
-
-### 异常情况
-
-- **未配置 API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应 401 或 402**：HTTP 状态码或业务 `errcode` 为 401/402；鉴权失败消息也按认证问题处理。
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”，或类似含义的内容。
-
-`403` 是权限问题，不进入注册或充值引导；保留原错误并提示检查当前账号对目标工作流的权限。引导完成后继续原任务，执行工作流仍须用户明确要求。
-
 ## 能力边界
 
 - **确认后只允许导入/更新**:只通过 `scripts/upload_workflow.py`;确认前禁止任何 linkfox-workflow 系统写调用。
@@ -379,7 +367,7 @@ Bash(
 - **历史版本只经 `scripts/workflow_history.py`**:上传时自动打开历史记录开关(只开不关);还原只在用户明确要求、预览之后才带 `--confirm`。
 - **其他后端动作仍禁止**:不发布、不删除 flow,不删除也不修改执行记录,不查询 model / credential / documentStore 目录。
 - **只用 LinkFox 认证**:不得获取、读取或使用系统内部 API Key。
-- **业务调用不回显密钥**:LinkFox API Key 只由业务脚本从环境读取,不得写进命令参数、工作流 JSON、日志或用户回复。仅用户选择手机号注册/登录引导时,允许 `scripts/onboarding.py login` 返回 `api_key` 并按 `references/onboarding.md` 提供环境变量配置;不得把该 key 带入工作流或后续业务调用参数。
+- **密钥不出上下文**:LinkFox API Key 只由脚本从环境读取,不得写进命令参数、JSON、日志或用户回复。
 - **一个文件对应一个 flow**:已有 workflow 的后续修改必须原地覆盖原 JSON,文件名和 sourceKey 保持不变;只有用户明确要求新流程才允许新文件。
 - **只支持 agentflow v2**:不生成老 chatflow 结构,不生成 v1 multiagent。
 - **只用 24 个节点**。原生 15:Start(**已弃用,禁止生成**)/ Agent / LLM / Tool / Retriever / Condition / ConditionAgent / Loop / Iteration / HumanInput / HTTP / CustomFunction / ExecuteFlow / DirectReply / StickyNote;LinkFox 自定义 9:BusinessStart / CrossBorderExpert / DataReader / FillForm / SendNotification / WriteFile / LinkfoxHTTP / End / CustomPythonFunction。开始节点一律 BusinessStart。不自造节点类型;`chatOpenAI` 是 Agent/LLM 节点里 `agentModel` 字段的选项值,不是独立节点。未注册的 `data.name` 会被 `save_workflow.py` 拒绝落盘。

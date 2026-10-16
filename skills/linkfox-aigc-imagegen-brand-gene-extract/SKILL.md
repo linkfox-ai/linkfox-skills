@@ -55,7 +55,7 @@ description: 品牌基因样式提取原子技能。根据商品图片与用户�
   2. **主色决策**：`brandColor` 非空 → 直接采用；为空 → 标记为"自动提取"
   3. **字体决策**：`fontStyle` 非空 → 直接采用；为空 → 标记为"自动提取"
   4. **填充默认值**：`language` 空则默认"英文"；`platform` 空则默认"亚马逊"；`salesRegion` 空则默认"美国"
-  5. 将 `images` 转为可访问 URL 列表（`imageUrlList`），供步骤 3 传入 textgen
+  5. 逐项检查 `images`，保持原顺序：已有可公开访问的 HTTP(S) URL 直接复用；本地商品图或附件先按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 上传，用成功项的 `url` 组成 `imageUrlList`，供步骤 3 传入 textgen 的 `imageUrls`。无需查找或安装额外上传 skill；上传失败时停止提取并说明原因，不把本地路径或失败项传给 textgen
 - **输出**：决策路由表（哪些字段用户给定、哪些需自动提取）+ `imageUrlList`
 - **用途**：指导步骤 2 的 prompt 组装
 
