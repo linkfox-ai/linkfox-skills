@@ -25,7 +25,7 @@
 
 **LinkFox 自定义 9 个**（本 linkfox-workflow 系统分支已注册，全部属于 `Agent Flows` 分类）：`BusinessStart` / `CrossBorderExpert` / `DataReader` / `FillForm` / `SendNotification` / `WriteFile` / `LinkfoxHTTP` / `End` / `CustomPythonFunction`。前 8 个详见 `nodes-linkfox-custom.md`；`CustomPythonFunction`（沙箱里执行 Python）与 CustomFunction 同类，写在 `nodes-integration-and-output.md`。
 
-**代码节点默认 JS**：两者都能实现时用 `CustomFunction`（JS）。只有下游要按字段取结果、要 pandas / 解析 PDF·Word·Excel·PPT·HTML、或用户明确要 Python 时才用 `CustomPythonFunction`（引用 `output.result.<字段>`）；延时 sleep 永远用 JS。两者都跑在沙箱里、单次 60 秒上限，选型细则见 `nodes-integration-and-output.md` 末尾。
+**代码节点默认 JS**：两者都能实现时用 `CustomFunction`（JS）。只有下游要按字段取结果、要 pandas / 解析 PDF·Word·Excel·PPT·HTML、或用户明确要 Python 时才用 `CustomPythonFunction`（引用 `output.result.<字段>`）；延时 sleep 永远用 JS。两者都跑在沙箱里、单次执行上限默认 30 分钟（部署配置 `E2B_SANDBOX_TIMEOUT`，不是无限），选型细则见 `nodes-integration-and-output.md` 末尾。
 
 选择规则：涉及亚马逊授权店铺 / 业务定时启动 / 邮件、飞书、钉钉通知 / 跨境专家平台 / Linkfox 多维表 / CSV / Excel 读取等场景时，**优先使用 LinkFox 自定义节点**，不要用原生 HTTP + CustomFunction 手工模拟。调 Linkfox 工具网关（`tool-gateway.linkfox.com`）或其他 Linkfox 内部服务时用 `LinkfoxHTTP`（只填相对路径，认证头自动注入），只有调第三方外部 API 才用原生 `HTTP`。
 

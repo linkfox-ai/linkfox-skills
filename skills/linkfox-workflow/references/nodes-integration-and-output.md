@@ -32,6 +32,7 @@
   ```
 
   代码中使用 `const data = $<变量名>;`。
+- 可选 `customFunctionEnvVariables[]`：每项 `{variableName, variableValue}`，执行时注入 `process.env`，代码里 `process.env.REGION` 读取。**默认什么都不注入**——没配这一栏时 `process` 是 `undefined`，部署进程的环境变量一个都带不进去。`variableValue` 支持 `{{ }}`；密钥用内置绑定（见下方「沙箱环境变量」），不要手填明文。
 - 可选 `customFunctionUpdateState[]`。
 - **可以 `await`，所以本节点兼当"延时节点"**（平台没有 delay / wait / sleep 节点）。轮询异步任务时用它隔开两次查询：
 
@@ -45,7 +46,18 @@
   完整的轮询环（sleep → 查询 → Condition → Loop 回跳 sleep）和四条硬规则见 `nodes-linkfox-custom.md` 的"异步任务接口：必须自己搭轮询循环"。
 - **`inputParams` 整个字段别写**：CustomFunction 的 `inputParams`（含 `customFunctionInputVariables[].variableValue` 与 `customFunctionUpdateState` 的 `acceptVariable` / `acceptNodeOutputAsVariable`）由 `save_workflow.py` 代填。写成 `[]` 不算省略、会报 error。
 - 输出锚点：`<id>-output-customFunctionAgentflow`；函数返回值位于 `{{ <id>.output.content }}`。若返回对象，linkfox-workflow 系统会将其 JSON 序列化为字符串——**下游没法按字段取**，要字段只能先经 `customFunctionUpdateState` 写进 state。需要按字段取值时改用 CustomPythonFunction。
-- **执行位置**：本节点在沙箱里执行，单次执行上限 **60 秒**（由部署配置决定）。所以单个延时节点的 `sleep` **不要超过 50 秒**（留出沙箱启动的几秒）；要等更久就串多个延时节点或让 Loop 多转几轮，不要写超长 sleep。沙箱里的 `$flow.state` 是值拷贝，执行完只写回**改过的键**，`delete $flow.state.x` 不生效。
+- **执行位置**：本节点在沙箱里执行，当前部署走远程沙箱（`E2B_SANDBOX_NODES` 点名了 `customFunctionAgentflow`），单次执行上限**默认 30 分钟**（部署配置 `E2B_SANDBOX_TIMEOUT`，部署可调）。所以 `await sleep()` 按毫秒写即可，`sleep(300000)` 也不会超时。不过等待期间这条执行一直挂着，轮询间隔仍按 10–30 秒写；单个 sleep 建议不超过 5 分钟，再长的等待先问用户是否真要同步等。沙箱里的 `$flow.state` 是值拷贝，执行完只写回**改过的键**，`delete $flow.state.x` 不生效。
+
+### 沙箱环境变量（两个代码节点通用规则）
+
+`CustomFunction` 用 `customFunctionEnvVariables`、`CustomPythonFunction` 用 `customPythonFunctionEnvVariables`，各有一个字段、不共用。规则一致：
+
+- 每项 `{variableName, variableValue}`；名字 `^[A-Za-z_][A-Za-z0-9_]*$`、≤128 字符、不重名、≤32 条；值只能是文本 / 数字 / 布尔（对象和数组会被拒）、≤8192 字符。
+- **保留名不能碰**：`PATH` / `HOME` / `PYTHONPATH` / `PYTHONHOME` / `PYTHONSTARTUP` / `NODE_PATH` / `NODE_OPTIONS` / `LD_PRELOAD` / `LD_LIBRARY_PATH`——pip / npm 安装、解释器启动、动态库加载都读它们。
+- **内置运行时 key**：`{{$vars.LINKFOX_AGENT_API_KEY}}`（推荐）/ `{{$vars.LINKFOXAGENT_API_KEY}}`（旧名，同一把 key）。按当前工作流属主在运行时取，每次执行取一次，可以嵌在文本里（如 `Bearer {{$vars.LINKFOX_AGENT_API_KEY}}`）；取不到就报错，不降级成空串。
+  **只在这两个字段里解析**——写进 Prompt / HTTP Body / 别的 `acceptVariable` 字段不会被替换，会原样留给用户看。这层作用域就是安全边界。
+- **绑定的值明文落在编排 JSON 里**，所以密钥一律用 `{{$vars.X}}` 引用，禁止手填；也不要让用户去页面上绑沙箱凭据。`save_workflow.py` 对「名字像密钥（含 KEY / TOKEN / SECRET / PASSWORD / AUTH / CREDENTIAL）却填了字面量」直接报 **error** 拒绝落盘；它本来就不是密钥的（如 `TOKEN_TTL=3600` 这类配置数值）换个名字即可。
+- 值是「只发点名的那几条」：工作区全局变量、部署环境变量都不会整包下发。
 
 ## CustomPythonFunction（自定义 Python 函数）
 
@@ -60,7 +72,8 @@ LinkFox 分支新增的节点，**在沙箱里执行一段 Python**，没有本�
   | `customPythonFunctionCode` | code，必填 | Python 代码。**把结果赋值给 `result`** |
   | `customPythonFunctionLibraries` | string，可选 | 要 pip 安装的包，逗号分隔。模板预装的直接 `import`，**不用填**；白名单外的包会报错 |
   | `customPythonFunctionInputVariables[]` | array，可选 | 每项 `{variableName, variableValue}`，`variableValue` 可用 `{{ }}`；每项成为**同名 Python 变量**（裸名字，不带 `$`） |
-  | `customPythonFunctionTimeout` | number，可选，默认 `60000` | **实际不生效**：部署配置的超时优先级更高（当前 60 秒），节点上填多少都被它覆盖 |
+  | `customPythonFunctionEnvVariables[]` | array，可选 | 每项 `{variableName, variableValue}`，执行时注入 `os.environ`；规则见上方「沙箱环境变量」 |
+  | `customPythonFunctionTimeout` | number，可选 | **实际不生效**：部署配置的 `E2B_SANDBOX_TIMEOUT`（默认 30 分钟）优先于节点值，填多少都被它覆盖。留空即可 |
   | `customPythonFunctionUpdateState[]` | array，可选 | 同其它节点的 `UpdateState`，`{{ output.<字段> }}` 指本节点的 `result`（不用写 `.result`），保留原类型 |
 
 - **`inputParams` 整个字段别写**：由 `save_workflow.py` 代填。
@@ -109,19 +122,33 @@ result = {"count": len(top), "items": [r["<字段名>"] for r in top]}
 ### 代价与限制（方案里要讲）
 
 - **每次执行新建沙箱，要多等几秒启动**，多个 Python 节点叠加。别把它放进高频轮询环当延时用——延时仍用 JS CustomFunction 的 `await sleep()`。
-- **数据出境**：代码和输入变量的值都会发到外部沙箱执行。用户说数据不能出境时不要用。
-- **单次执行 60 秒上限**（同上，由部署配置决定）。
+- **数据出境**：代码、输入变量的值、环境变量的值都会发到外部沙箱执行。用户说数据不能出境时不要用。
+- **单次执行上限默认 30 分钟**（同上，由部署配置 `E2B_SANDBOX_TIMEOUT` 决定，不是无限）。
 - 沙箱里生成的文件（`report.docx`、PDF）**执行完即销毁**，节点只能把结果以 `result` 交出去（如 base64 或文本）；要"导出文件给用户"仍然没有落地通道（见 prompt-compiler 的 `capability-gaps.md` §5.2）。
 - 沙箱能访问公网，但**不是** Linkfox 网关：调 Linkfox 工具仍用 `LinkfoxHTTP`，不要在 Python 里拿 `requests` 去打 `tool-gateway.linkfox.com`（没有认证头）。
 
 ## ExecuteFlow
 
-- `data.name`: `executeFlowAgentflow`；`data.type`: `ExecuteFlow`；`version`: `1.2`；`color`: `#a3b18a`。
-- 调用另一个 chatflow / agentflow。
-- 必填：`executeFlowSelectedFlow`（目标 flow 的 id；生成时空字符串占位，由用户在界面里选）、`executeFlowInput`、`executeFlowReturnResponseAs`（默认 `userMessage`，另一枚 `assistantMessage`）。
-- 可选：`executeFlowOverrideConfig`（type `json`，必须是合法 JSON）、`executeFlowBaseURL`（必须是合法 URL）、credential `chatflowApi`。
-- **`inputParams` 要自己写完整**（本节点不在脚本代填范围内）：`executeFlowInput` 等字段需要 `acceptVariable: true` 才能正确替换变量。详见 `variable-substitution.md`。
-- 输出锚点：`<id>-output-executeFlowAgentflow`。自调用会被拦截，不要让 ExecuteFlow 调用自身。
+- `data.name`: `executeFlowAgentflow`；`data.type`: `ExecuteFlow`；`version`: `2.0`；`color`: `#a3b18a`；面板名「执行工作流」。
+- 调用另一条工作流，把子工作流的回复作为本节点输出继续往下走。请求经 Linkfox 工具网关 → workflow-studio 转发，以凭据所属成员的身份执行。
+- `inputs` 字段：
+
+  | 字段 | name | 必填 | 说明 |
+  |---|---|---|---|
+  | 选择工作流 | `executeFlowSelectedFlow` | 是 | `asyncOptions`，目标 flow 的 id。生成时留 `""`，由用户在界面里选 |
+  | 输入 | `executeFlowInput` | 是 | 作为子工作流的 `question`，`acceptVariable: true`。默认 `{{ question }}`，见下方「输入怎么写」 |
+  | 覆盖配置 | `executeFlowOverrideConfig` | 否 | type `json`，必须是合法 JSON，透传为子工作流的 `overrideConfig` |
+  | 返回消息角色 | `executeFlowReturnResponseAs` | 是 | `userMessage`（默认）/ `assistantMessage`，子工作流回复以哪种角色进入后续上下文 |
+  | 更新流程状态 | `executeFlowUpdateState` | 否 | `{key, value}[]`，把结果写回 `$flow.state` |
+
+- **凭据**：`data.credential` 收 `linkfoxAgentApi`，必填，与 LinkfoxHTTP 等节点共用同一份凭据。生成时留 `""`，不写类型名，上传后由后台自动绑定，补配置指引里不提示绑凭据（规则同 `nodes-linkfox-custom.md`）。补配置只点名「选择工作流」。没有 Base URL 字段，地址取凭据里的 `baseUrl`；不要写 `executeFlowBaseURL`，也不要写 `chatflowApi` 凭据（`save_workflow.py` 对 `executeFlowBaseURL` 报 warning）。
+- **输入怎么写**：开始节点是 BusinessStart 时 `question` 通常为空（手动启动恒为 `""`），默认的 `{{ question }}` 会把空串传给子工作流。要给子工作流传数据时，显式引用上游节点输出，如 `{{ llmAgentflow_0.output.content }}`。
+- **`inputParams` 要自己写完整**（本节点不在脚本代填范围内）：`executeFlowInput` / `executeFlowOverrideConfig` / `executeFlowUpdateState` 需要 `acceptVariable: true` 才能正确替换变量。详见 `variable-substitution.md`。
+- 输出：`output.content` 是子工作流回复文本；输出锚点 `<id>-output-executeFlowAgentflow`。
+- **可选的目标范围**：只能调凭据所属成员可见的工作流——普通成员只能调自己的，组 owner 能调全组的。用户说"调同事那条流程"时如实说明可能选不到。
+- **积分扣两次**：子工作流按一次独立执行计费，父工作流照常计费；余额不足时节点报 `Execute Flow: 积分不足，请充值`。生成计划里要提醒用户这一点。
+- **禁止调自身**（报 `Cannot call the same agentflow!`）。A → B → A 这类环运行时不拦，嵌套无深度限制，生成时要自己避免；要重复执行用 Loop / Iteration。
+- 子工作流的消息挂在父工作流同一个会话下。
 
 ## DirectReply
 
@@ -142,7 +169,7 @@ result = {"count": len(top), "items": [r["<字段名>"] for r in top]}
 
 - 调第三方 API / webhook → HTTP。
 - 拼接 / 截断 / 格式转换 / 排序去重 / 简单计算，结果整体往下传 → CustomFunction（JS）。
-- **延时 / 轮询环里的 sleep** → CustomFunction（JS），单个 sleep ≤ 50 秒。
+- **延时 / 轮询环里的 sleep** → CustomFunction（JS），单个 sleep 建议 ≤ 5 分钟（上限默认 30 分钟，但没人真会同步等那么久）。
 - 用户说"数据不能出境" → 两个都在外部沙箱执行，如实说明。
 
 `save_workflow.py` 对三条都不满足的 Python 节点给 warning（没 import 第三方包、下游和自己的 UpdateState 都没按字段取 `result`、description 里没有「用户指定用 Python」），看到就改成 CustomFunction。

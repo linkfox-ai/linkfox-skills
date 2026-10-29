@@ -15,6 +15,7 @@
 | `run` | "跑一下这个流程" / "执行一次" / "手动触发一次试试" / "帮我跑起来看看" | 取 workflowId,按 `runtime-execution.md` 调 `run_workflow.py` 真实执行一次 |
 | `runs` | "看下执行记录" / "这个流程跑过几次" / "上次为什么失败" / "最近一次跑成功了吗" | 取 workflowId,按 `runtime-execution.md` 调 `list_executions.py` 只读查询 |
 | `history` | "看下历史版本" / "刚才改了什么" / "谁改的这个流程" / "撤销刚才的修改" / "回到第 3 版" | 取 workflowId,按 `version-history.md` 调 `workflow_history.py`;查看纯读,还原先预览再 `--confirm` |
+| `automation` | "停用 / 关掉 / 暂停这个流程的自动化" / "重新启用记录触发" / "这个自动化开着吗" / "这张表挂了哪些工作流" | 按 `table-automation.md` 调 `table_automation.py`(`set --enabled true\|false` / `list` / `by-notebook`);不动画布、不 save/upload。**定时任务的启停不走 `set`**(由画布顶部排期开关管,脚本会退出 66)。**换表 / 换事件 / 改条件不是 `automation`**,是 refine 开始节点 |
 | `not_workflow` | "介绍一下 linkfox-workflow 系统" / "Retriever 节点原理是啥" / "写段代码给我" | 普通对话,不生成 flow |
 
 当前会话已经有唯一 workflow 文件时,“继续改”“优化一下”“把名字改成…”均路由为 `refine`,沿用原文件名。只有用户明确说“新建一份”“另做一个”“保留原来的再生成”时才路由为新的 `generate` 并创建新文件。
@@ -27,7 +28,9 @@
 - 用户描述"我需要时点一下就跑 / 手动触发":`chatInput`(默认。**无对话文本**,聊天面板是一枚
   「启动任务」按钮;下游读到的 `question` 恒为空串)
 - 用户描述"每天 / 每周 / 每月定时跑":`scheduleInput`,同时问频率与时间。**没有 Cron 子模式**,
-  只有可视化配置;需要 cron 表达式或"每次调度带一段默认文本"的场景本分支表达不了
+  只有可视化配置;需要 cron 表达式或"每次调度带一段默认文本"的场景本分支表达不了。
+  定时流读写的是某张多维表、或用户要"挂到这张表下"时,Start 带 `linkfoxTableAutomationContext`
+  (见 `table-automation.md` §1.5);"表一改就跑"不是定时,是下面的 `tableRecordTrigger`
 - 用户描述"店铺有新订单 / 库存变了 / Listing 变了就跑":`storeAuthorization`,同时问监听哪类变化
   (五种:`listing` / `orderList` / `afterSalesOrder` / `fbaInventory` / `removalOrder`)
 - 用户描述"多维表里加了一行 / 改了某个字段 / 某列变成 X 就跑":`tableRecordTrigger`,同时确认
@@ -42,7 +45,7 @@
 
 ### `tableRecordTrigger` 的两个前提(生成前必须说)
 
-1. **记录触发必须由用户在 linkfox-workflow 系统界面上保存一次才会生效**。只经本 skill 上传的记录触发配置不会触发(事件来了静默不跑);事后在其他位置改配置也不会更新已有触发。
+1. **上传即关联,但要看结果**:上传时服务端按开始节点自动登记订阅,不需要用户去界面保存;登记可能失败(缺 `notebookId`、多维表侧超时等),回复按上传 stdout 的 `tableAutomation.effective` 说,规则见 `table-automation.md`。监听 / 条件字段**名字和 ID 都写**(ID 取自 `listFields`),否则用户改列名后静默失效。
 2. **`tableId` 留占位时,上传会被拒绝**(提示 `Data Table is required on the Start node.`)。
    所以触发表**由你查出来让用户选**:跑 `linkfox-smart-table` 的 `listMyTables`(必要时加 `listSharedTables`),把候选列给用户问"监听哪张表",选定后把 `notebookId` / `tableId` 写成真实 id 再生成(见 `SKILL.md`「选表」)。
    只有用户一张表都没有、或明确说表以后再绑时,才退到"先按 `chatInput` 上线、之后在 UI 上切成记录触发"。**这条退路只适用于从零 generate**;基线里已经配好记录触发(表已绑上)时,原样保留,不要降级成手动。

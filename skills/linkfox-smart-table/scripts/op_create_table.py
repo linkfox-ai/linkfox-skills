@@ -47,10 +47,13 @@ FIELD_TYPES = (
     # attachment 存的是文件（我们自己的存储）。建列无需选项；往格子里放图走
     # smart_table.py uploadAttachment，不能直接写 URL。
     "attachment",
+    # 查找引用（页面上的「查找引用」）：按条件从**你自己创建的**另一张表取值，算出来的、写不进去。
+    # 必须带 lookup 配置，预检见 lookup_spec.py
+    "lookup",
 )
 
-# 首列（主字段）不能用的类型
-NON_PRIMARY_TYPES = ("checkbox", "attachment")
+# 首列（主字段）不能用的类型（lookup 是算出来的，主字段要能写）
+NON_PRIMARY_TYPES = ("checkbox", "attachment", "lookup")
 
 # 选项类字段必须给 choices
 CHOICE_TYPES = ("singleSelect", "multipleSelect")
@@ -59,6 +62,8 @@ CHOICE_TYPES = ("singleSelect", "multipleSelect")
 from linkfox_paths import get_api_base, resolve_data_path
 # 附件 AI 列的模型清单与 ai 预检（改模型只改那个文件）
 from image_models import prepare_field_ai
+# 查找引用列的 lookup 预检（三条建列脚本共用）
+from lookup_spec import check_field_lookup
 
 
 def get_api_url():
@@ -185,6 +190,9 @@ def _validate(params):
             problem = prepare_field_ai(field, f"fields[{i}]")
             if problem:
                 return problem
+        problem = check_field_lookup(field, f"fields[{i}]")
+        if problem:
+            return problem
     return None
 
 

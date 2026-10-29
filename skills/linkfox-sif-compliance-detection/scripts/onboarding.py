@@ -391,7 +391,7 @@ def _login_v3(phone: str, code: str, channel: str) -> dict:
     data = resp.get("data") or {}
     access_token, user_id = data.get("accessToken"), data.get("userId")
     if not access_token or not user_id:
-        return {"error": f"login: 响应缺 accessToken/userId: {json.dumps(resp, ensure_ascii=False)}"}
+        return {"error": "login: 响应缺 accessToken/userId，请重新登录或联系管理员"}
     return {
         "access_token": access_token,
         "refresh_token": data.get("refreshToken", "") or "",

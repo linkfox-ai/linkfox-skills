@@ -43,13 +43,13 @@ description: 用自然语言设计、修改、解释、校验 linkfox-workflow a
 
 按需读:意图分类模糊读 `references/intent-routing.md`;不清楚 lifecycle 动作读 `references/lifecycle-actions.md`;不清楚"要不要单独求确认"读 `references/confirmation-policy.md`;不清楚回复格式读 `references/response-contract.md`;不清楚会话边界读 `references/chat-runtime-contract.md`。**已经知道就不重复 Read。**
 
-`run` / `runs` 固定读 `references/runtime-execution.md`,**且只读它**,上面三个固定项一个字都不用读。`history`(查看 / 对比 / 还原历史版本)同理,只读 `references/version-history.md`。
+`run` / `runs` 固定读 `references/runtime-execution.md`,**且只读它**,上面三个固定项一个字都不用读。`history`(查看 / 对比 / 还原历史版本)同理,只读 `references/version-history.md`;`automation`(启停 / 查看多维表自动化)只读 `references/table-automation.md`。flow 含记录触发(`tableRecordTrigger`)的 generate / refine 追加读 `references/table-automation.md` §1–§2(上传后怎么回报关联结果、字段 ID 怎么写);含**挂在多维表下的定时启动**(`scheduleInput` + `linkfoxTableAutomationContext`)的追加读 §1–§1.5。
 
 **一轮 generate 追加的 references 上限 4 个**(不含 SKILL.md 与三个固定项);超过就说明选错了参考,回头判断意图。
 
 ## 执行流程
 
-1. **识别意图**:按 `intent-routing.md` 分类为 `generate` / `refine` / `explain` / `validate` / `export` / `run` / `runs` / `history` / `not_workflow`,看完整语义不只靠关键词。**`run` / `runs` / `history` 不生成 JSON**,识别到就直接跳到第 7 / 第 8 / 第 9 步,不读节点契约、不写 fragment、不跑 save/upload。
+1. **识别意图**:按 `intent-routing.md` 分类为 `generate` / `refine` / `explain` / `validate` / `export` / `run` / `runs` / `history` / `automation` / `not_workflow`,看完整语义不只靠关键词。**`run` / `runs` / `history` / `automation` 不生成 JSON**,识别到就直接跳到第 7 / 第 8 / 第 9 / 第 10 步,不读节点契约、不写 fragment、不跑 save/upload。
 2. **`not_workflow`**:走普通对话,不强行生成 flow。
 3. **`explain` / `validate`**:直接执行,不需要确认。validate 把 JSON 写成临时文件后跑 `save_workflow.py --content-file <临时文件> --dry-run`。它做完整的补齐和校验,但不写文件、不动门禁。按退出码和 `ERROR:` / `warnings` 分 error / warning 输出,再按 `lifecycle-actions.md` 的清单补充脚本查不到的语义问题。不修改用户贴来的 JSON。**dry-run 只给 validate 用**,generate / refine 直接正式保存。
 4. **`generate`**:先判断需求是否足够明确,参考 `confirmation-policy.md`。
@@ -91,6 +91,13 @@ description: 用自然语言设计、修改、解释、校验 linkfox-workflow a
    - **退出 69 = AI 改完之后又有人保存过**:不还原,把 stdout 的 `newerVersions`(谁、何时、改了哪些节点)转述给用户,问要一起撤掉还是只撤 AI 那次。不许把 `--expect-latest` 改成最新值硬过检查。
    - **只有属主能还原**(退出 68);不要用 `save_workflow.py --restore-from` 或手工重放 JSON 绕过。
    - 还原成功后不贴 JSON,**最后一行输出 flow info 标签**(画布靠它重新拉取,不输出画布就停在旧内容上,用户再点保存会把还原冲掉);只预览或失败时不输出。下一轮 refine 照常先 fetch。
+10. **`automation`**(多维表自动化启停 / 查看;细节见 `references/table-automation.md` §3):
+   - "停用 / 关掉 / 暂停自动化" → `python scripts/table_automation.py set --workflow-id <id> --enabled false`;"重新打开" → `--enabled true`。用户原话就是授权,可逆,不另外确认;`--enabled` 永远显式带。
+   - "自动化开着吗 / 这张表挂了哪些流程" → `list --workflow-id <id>` / `by-notebook --notebook-id <nbk> --table-id <tbl>`,纯读。
+   - 请求体由脚本从服务端开始节点推导,**不手写 curl、不手填表 / 条件 / 字段 ID**;换表、换事件、改条件、补字段 ID 走 refine 开始节点。
+   - **定时任务不经 `set`**:它的启停在画布顶部排期开关,订阅的 `enabled` 管不了排期,脚本退出 66;回复里引导用户去关开关,或 refine 改成手动启动。
+   - 按退出码回报:0 看 `tableSync.status`;66 推不出订阅 / 是定时任务;68 被拒(别的成员绑定 / 无表权限);70 已保存但没生效。不输出 flow info 标签(画布没变)。
+   - 预算 ≤ 2 次:Read `references/table-automation.md`(如未读)→ 一次脚本。
 
 ## 从 `<linkfox-flow-info>` 恢复已有 flow(refine 前置)
 
@@ -138,7 +145,7 @@ Bash(
 
 **脚本硬拦**:`save_workflow.py --workflow-id` 会把新片段的开始节点和基线逐字段比对,`inputs` / `credential` / 节点 id 有任何差异就 exit 65,stderr 逐条列出改动。看到这个报错,就把片段里开始节点的 `inputs` / `credential` 删掉(让脚本从基线补)再重跑,**不要**带 `--allow-trigger-change` 过门禁。
 
-**只有用户本轮原话明确要求换触发方式或改触发条件**("改成<触发时间>跑""换成监听另一张表""条件改成<条件>")时,才带 `--allow-trigger-change`。放行后 stdout 会带 `triggerChanges`,回复里必须逐条告诉用户触发配置变了什么;改的是记录触发时,还要提醒用户到 linkfox-workflow 系统界面重新保存一次才会生效。
+**只有用户本轮原话明确要求换触发方式或改触发条件**("改成<触发时间>跑""换成监听另一张表""条件改成<条件>")时,才带 `--allow-trigger-change`。放行后 stdout 会带 `triggerChanges`,回复里必须逐条告诉用户触发配置变了什么;改的是记录触发时,上传会按新配置重新登记订阅,按 stdout 的 `tableAutomation` 告诉用户新配置有没有生效(见 `references/table-automation.md`)。
 
 ## 选表:先查用户的表,再问用哪张(不要留空让用户自己配)
 
@@ -350,7 +357,8 @@ Bash(
 
 1. 一句 `已保存到工作空间:<path>`。
 2. ```json 代码块贴完整 JSON。
-3. "下一步"配置/试跑指引(按实际用到的节点裁剪,不再提示手工导入)。开头说清当前是**模板**,状态是"可导入、待配置",再按节点逐条点出要绑什么,比如"「通知」节点:飞书机器人地址",不要只写一句"补模型和凭据"。**不要提示绑定 `linkfoxAgentApi` 凭据**,它由后台自动绑定。用户配好之前执行会被执行前检查拦下。
+3. "下一步"配置/试跑指引(按实际用到的节点裁剪,不再提示手工导入)。开头说清当前是**模板**,状态是"可导入、待配置",再按节点逐条点出要绑什么,比如"「通知」节点:飞书机器人地址",不要只写一句"补模型和凭据"。**不要提示绑定 `linkfoxAgentApi` 凭据**,它由后台自动绑定。用了 ExecuteFlow 时说明子工作流会**再扣一次积分**。用户配好之前执行会被执行前检查拦下。
+3.5. **flow 含记录触发、或挂在多维表下的定时启动时**,一句关联结果,按 stdout 的 `tableAutomation`(话术见 `references/table-automation.md` §1 / §1.5;定时流再次保存回 `UNBOUND` 是正常成功,不说成停用)。`effective` 为 `false` 时这句挪到回复**第一段**说"工作流已保存,但自动化没生效"并给补救;为 `null` 时先跑一次 `table_automation.py list --workflow-id <id>` 再说。`tableAutomation` 不影响上传成功的判定、不影响输出 flow info 标签。
 4. 一句版本说明,按 `upload_workflow.py` stdout 的 `history` 字段,话术见 `references/version-history.md` §1(例:「这次修改记为第 7 版;想撤销可以说"撤销刚才的修改"」)。`history` 不影响上传成功的判定。
 5. 最后一行原样输出一个标签:`<linkfox-flow-info id="<workflowId>"></linkfox-flow-info>`。
 
@@ -365,6 +373,7 @@ Bash(
 - **确认后只允许导入/更新**:只通过 `scripts/upload_workflow.py`;确认前禁止任何 linkfox-workflow 系统写调用。
 - **执行只在用户明确要求时**:`scripts/run_workflow.py` 执行一次,`scripts/list_executions.py` 读取执行记录;**禁止**在上传成功后顺手跑一次"验证"。
 - **历史版本只经 `scripts/workflow_history.py`**:上传时自动打开历史记录开关(只开不关);还原只在用户明确要求、预览之后才带 `--confirm`。
+- **多维表自动化启停只经 `scripts/table_automation.py set`**:只在用户明确要求启用 / 停用时跑;不用 `linkfox-smart-table` 的 `registerWorkflow` / `updateWorkflowTriggerTable` / `unregisterWorkflow` 改关联(只改多维表侧,订阅行对不上)。
 - **其他后端动作仍禁止**:不发布、不删除 flow,不删除也不修改执行记录,不查询 model / credential / documentStore 目录。
 - **只用 LinkFox 认证**:不得获取、读取或使用系统内部 API Key。
 - **密钥不出上下文**:LinkFox API Key 只由脚本从环境读取,不得写进命令参数、JSON、日志或用户回复。
@@ -390,9 +399,10 @@ Bash(
 - 通知机器人地址 / 加签密钥:新建为空、refine 与基线一致;没有从别的流程或记忆里抄值。带了 `--secrets-from-user` 的,用户本轮确实给过这个流程的地址。
 - **选多维表的地方都写了两级、且是用户挑的真实表**:`DataReader`(`sourceType=linkfoxTable`)、`WriteFile`(`writeDestination=linkfoxTable` 或 `updateLinkfoxTable`)、`BusinessStart`(`startInputType=tableRecordTrigger`)都给了 `notebookId`(`nbk…` / `__loose__`)+ `tableId`(`tbl…`),来自智能表格 skill 查出的列表并经用户确认(见「选表」一节);只有用户明确说以后再选时才留 `""` 并带 `--table-later`。`WriteFile` 新建分支用 `newTableNotebookId`(默认 `__new__`)+ `newTableName`。
 - **`WriteFile` 的 `writeDestination` 从三个值里选**:`linkfoxTable`(往已有表新增行)/ `newLinkfoxTable`(新建表)/ `updateLinkfoxTable`(改已有行,一次只改一行)。"改已有行"不要用"先删后加"或"写一条新记录"表达。
-- **含 `tableRecordTrigger` 的 flow 已把两个前提说给用户**:① 记录触发必须由用户在 linkfox-workflow 系统界面上保存一次才会生效,只经本 skill 上传的不会触发;② 触发表必须是用户挑好的真实表(`tableId` 留空时服务端保存会拒绝)。取"这次变的那一行"用**节点引用** `{{businessStartAgentflow_0.output.recordEvent.recordId}}` / `.output.recordEvent.recordByName.<字段名>`(字段名来自 `list-fields` 的真表头),**不用** `{{$webhook.*}}`,也不是 `BusinessStart.output.tableRecordTrigger`(那是订阅配置的静态回显)。要写表时直接把 `BusinessStart` 接 `WriteFile`,用 `output.rows`(name-keyed),中间**不需要** `CustomFunction` 搬数据;回写触发的那一行用 `writeDestination=updateLinkfoxTable` 且 `updateRecordId` 留空。
+- **挂在多维表下的定时流**(`scheduleInput` + `linkfoxTableAutomationContext`):上下文至少有 `notebookId`、`tableId` 是真实 `tbl…`;回报时 `UNBOUND` 当正常成功说;没有说"表一改就会跑"(记录变更不触发定时流)。
+- **含 `tableRecordTrigger` 的 flow**:① 触发表是用户挑好的真实表(`tableId` 留空时服务端保存会拒绝);② 监听 / 条件字段名字和 ID(`recordWatchFieldIds` / `recordConditionFieldId`,取自 `listFields`)都写了;③ 回复按上传 stdout 的 `tableAutomation` 说了关联结果,`effective` 不是 `true` 时第一段就说了"已保存但自动化没生效"和补救办法,没有说"已生效";从记录触发切走时提醒了原表的自动触发一起停了。取"这次变的那一行"用**节点引用** `{{businessStartAgentflow_0.output.recordEvent.recordId}}` / `.output.recordEvent.recordByName.<字段名>`(字段名来自 `list-fields` 的真表头),**不用** `{{$webhook.*}}`,也不是 `BusinessStart.output.tableRecordTrigger`(那是订阅配置的静态回显)。要写表时直接把 `BusinessStart` 接 `WriteFile`,用 `output.rows`(name-keyed),中间**不需要** `CustomFunction` 搬数据;回写触发的那一行用 `writeDestination=updateLinkfoxTable` 且 `updateRecordId` 留空。
 - **refine 时开始节点原样保留**:BusinessStart 的 `id` / `inputs` / `credential` 与 fetch 基线一致;只有用户本轮明确要求换触发时才带过 `--allow-trigger-change`,且回复里逐条转述了 `triggerChanges`。记录触发流的下游用到了触发的那一行,没有读 `output.question`、没有插 FillForm 顶替。
-- BusinessStart 唯一且无入边;Loop / DirectReply / End 无出边;分支节点(Condition / ConditionAgent / HumanInput)每个都至少接一条下游;Iteration 子节点带 `parentNode` + `extent: "parent"`。
+- BusinessStart 唯一且无入边;其余执行节点都有入边(Iteration 子节点、Loop 回跳目标除外 —— 漏一条边运行时就报 `Multiple starting nodes are not allowed`);Loop / DirectReply / End 无出边;分支节点(Condition / ConditionAgent / HumanInput)每个都至少接一条下游;Iteration 子节点带 `parentNode` + `extent: "parent"`。
 - flow 允许停在最后一个动作节点上,不必为了"看起来完整"硬接 DirectReply。
 - 模型/AI 推理场景用了 `CrossBorderExpert`,没有默认落到原生 `Agent`/`LLM`/`ConditionAgent`;出现这三个节点时方案里已点出具体兜底原因(Tool 调用 / RAG 检索 / Structured Output / 节点内动态分支判断之一)。
 - **每个 `LinkfoxHTTP` 节点的 `path`/`body` 都不是占位或抄用户原文的 endpoint_path 字面量**:已按 `nodes-linkfox-custom.md` 的流程用 `query_tools_matrix.py` 查过对应端点,`path` 是文档给的真实相对路径,`body` 是按文档参数表组好的字段(不是 `"{}"`)。查不到才允许留空占位,并在补配置指引里逐个点名哪些节点没查到、要用户自己补。
@@ -419,6 +429,14 @@ Bash(
 - 退出 68 时如实说"只有创建者能还原"或"有人刚保存过",没有改走 `--restore-from` / 手工重放绕过。
 - 还原成功后没贴 JSON,报了 `newVersion`,最后一行输出了 flow info 标签;只预览 / 失败时没输出标签。
 - 上传后的版本说明来自 stdout 的 `history`,没为拿版本号另跑 `list`。
+
+`automation` 的检查:
+
+- 只在用户明确要求启用 / 停用时跑了 `set`,`--enabled` 显式带了;没有在上传后顺手跑。
+- 没手写 curl、没用 `linkfox-smart-table` 的 `registerWorkflow` / `updateWorkflowTriggerTable` 改关联;换表 / 换事件 / 补字段 ID 走的是 refine。
+- 退出 70 / `tableSync.effective=false` 时说的是"订阅已保存但自动化没生效",转述了 `detail`;没说"已停用 / 已启用"。
+- `list` 为空没有说成"这条流没有自动化"(只看得到自己的);`by-notebook` 带表回空时说了"可能无权限"。
+- 回复里没输出 flow info 标签。
 
 `run` / `runs` 另有一组检查(它们不产出 JSON,上面那些节点契约项一条都不适用):
 

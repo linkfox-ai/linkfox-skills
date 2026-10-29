@@ -6,7 +6,7 @@ description: 面向 Amazon Ads 的账号授权、广告实体管理、标准效�
 description_zh: 面向亚马逊广告运营的统一 WorkBuddy 能力。完成广告账号授权与站点选择，查询及创建/修改 SP、SB、SD 广告实体，获取标准广告指标报告，并获取 SP 受众与搜索词展示份额/排名洞察。支持 profileId 解析、分页和异步报告状态管理；不覆盖 Amazon DSP、Sponsored Television、Brand Analytics、Retail Analytics 或法律/经营结论。
 description_en: A unified WorkBuddy capability for Amazon Ads operations. authorize ad accounts and resolve marketplace profiles, query and create/update SP, SB, and SD entities, retrieve standard performance reports, and obtain SP audience and search-term impression-share/rank insights. It supports profile resolution, pagination, and asynchronous report state management; it does not cover Amazon DSP, Sponsored Television, Brand Analytics, Retail Analytics, or legal/business conclusions.
 icon: icons/logo.png
-version: 2.1.0
+version: 2.3.0
 author: Linkfox
 ---
 
@@ -105,6 +105,7 @@ MCP 配置缺失时使用：
 - 按各 reference 的 `nextToken`、`nextPageToken`、offset/limit 约束分页。每次下一页都是不同 arguments 的收费调用；先展示已取数量并征得用户同意，避免无界拉取。
 - 保留 Amazon 原始字段和 ID；数据缺失写“未返回”，不要补猜。
 - 实体结果说明其为 metadata；报告结果说明 reportType、日期、状态和可用资源。结论只基于返回数据，不做法律、侵权或确定性经营承诺。
+9. **以文本形式展示链接**：授权链接只能以文本展示（plaintext），不要转成链接给用户。
 
 ## 边界
 

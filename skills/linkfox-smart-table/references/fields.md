@@ -1,10 +1,10 @@
 # 表结构：listFields / addFields / deleteFields
 
 本文件覆盖读表头（`listFields`）、加列（`addFields`）、删列（`deleteFields`）三个操作。
-三者共用下面的「字段类型总表」：建列时 `type` 从这十种里选，写值时按「怎么写值」一列填。
+三者共用下面的「字段类型总表」：建列时 `type` 从这十一种里选，写值时按「怎么写值」一列填。
 这套接口的入参**全程按字段名寻址**；出参里的 `fieldId` 只给工作流配触发条件用（见 § listFields）。
 
-## 字段类型总表（十种可建类型）
+## 字段类型总表（十一种可建类型）
 
 | 对外名 `type` | 中文 | 怎么写值（`createRecords` / `updateRecords`） | 建列要求 | 能否当 `createTable` / `addTable` 首列 |
 |---|---|---|---|---|
@@ -18,6 +18,7 @@
 | `rating` | 评分 | 整数，`max` 是上限（超过会被截断） | | 能 |
 | `image` | 图片（外链） | **一个图片 URL 字符串**，不用上传、不用 token | | 能 |
 | `attachment` | 附件 | ⚠️ **不能直接写 URL**（会 400）；见下一节 | 无需任何选项 | **不能**（会 400） |
+| `lookup` | 查找引用 | **写不进去**（算出来的，`isComputed: true`），写入时跳过 | **必须给 `lookup`**，见 § 查找引用 | **不能**（会 400） |
 
 - 首列（主字段，最左那列，代表"这一行是什么"）限制只针对 `createTable` / `addTable` 的 `fields[0]`；**`addFields` 没有首列限制**，加的列永远排在已有列后面，不会成为主字段。
 - `choices[].color` 传的话要是站点色名（如 `blueBright`），**不是** `#RRGGBB`；不传由前端自动配色。
@@ -39,6 +40,58 @@
 - `image` **服务端不校验** URL 形态（单行文本的校验就是"是个字符串"），写什么存什么；链接失效、或压根不是图片时，表格里显示占位图，不会报错。
 - ⚠️ 反过来也成立：一列报成 `singleLineText` 就**不是**图片列，往它写 URL 只会显示成一串文字。要图片列得在建列时指定 `image`（`addFields` / `createTable` / `addTable`），或让用户在页面上改这一列的展示形态。
 
+### 查找引用（`type: "lookup"`）
+
+和页面上「查找引用」一样：按**查找条件**从另一张表里找出匹配的行，取其中**某一列**的值，按**计算方式**呈现。典型用法是「订单表按 SKU 去库存表取可用库存」。
+
+```json
+{
+  "name": "库存",
+  "type": "lookup",
+  "lookup": {
+    "tableId": "tblStockXXXXXXXX",
+    "fieldName": "可用库存",
+    "conditions": [
+      {"fieldName": "SKU", "operator": "is", "valueFromField": "SKU"}
+    ],
+    "conjunction": "and",
+    "computeMode": "sum"
+  }
+}
+```
+
+| `lookup` 的键 | 必填 | 说明 |
+|---|---|---|
+| tableId | **是** | 被引用的表（`tbl` 开头）。⚠️ **只能是你自己创建的表**（`listMyTables` 里的；`listSharedTables` 里别人的表不行），与页面同一条限制。可以是本表（自引用） |
+| fieldName | **是** | 从被引用表里取**哪一列**的值（被引用表的列名） |
+| conditions | **是** | 查找条件，1～20 条（页面上也是必填）。每条见下表 |
+| conjunction | 否 | 条件之间 `and`（默认）或 `or` |
+| computeMode | 否 | 计算方式，默认 `raw`。见下表 |
+
+每条条件 `conditions[]`：
+
+| 键 | 说明 |
+|---|---|
+| fieldName | **被引用表**的列名（不是本表的） |
+| operator | 算子，规则与 `listRecords` 的 `filter` 一致（按被引用列的类型校验） |
+| valueFromField | **本表**的列名：按行匹配，「对方表.fieldName 与本表这一列的值」比较。可以是已有列，也可以是同一次调用里一起建的普通列（不能是另一个查找引用列）。用它时 `isEmpty` / `isNotEmpty` 不可用，且两边类型要能比（文本对文本、数字对数字……） |
+| value | 固定值，形状规则同 `listRecords` 的 `filter`。与 `valueFromField` **二选一** |
+
+计算方式 `computeMode`：
+
+| 值 | 页面上叫 | 能用在 | 结果 |
+|---|---|---|---|
+| `raw` | 原值 | 所有类型 | 匹配到的所有值（多值），类型跟被引用列一样 |
+| `unique` | 去重 | 所有类型 | 去重后的值 |
+| `count` | 计数 | 所有类型 | 匹配到的**行数**（数字） |
+| `sum` / `average` | 求和 / 平均 | 只有数字类（数字、评分） | 数字 |
+| `max` / `min` | 最大 / 最小 | 数字类、日期 | 数字或日期 |
+
+- 计算方式和被引用列类型对不上（如对文本列 `sum`）**直接 400**（页面会悄悄退回原值，接口不会）。
+- 建好之后这一列的 `type` **不是 `lookup`**：`raw` / `unique` 回显成被引用列的类型（如 `number`）或 `conditionalRollup`，其余是 `conditionalRollup`；**认它靠 `listFields` 出参里有没有 `lookup` 对象**，而且一定带 `isComputed: true`。
+- 被引用表的数据变了，这一列会自动重算；写入时**跳过它**，传了会被拒。
+- 所有引用问题（表不存在 / 不是你建的 / 列名不对 / 算子不对 / 计算方式不对）都在**建之前**查，查不过整批 400、一列都不建。
+
 ### `listFields` 会报出、但不能建的类型
 
 表可能是用户在页面上建的，所以 `listFields` 还会报出下面这些类型。**能读，但这套接口建不了**（`addFields` / `createTable` / `addTable` 传了会 400），其中多数也**写不进去**：
@@ -49,9 +102,11 @@
 | `user` / `createdBy` / `lastModifiedBy` | 人（成员类） | 值是内部用户 id，对调用方无意义；`createdBy` / `lastModifiedBy` 是算出来的（`isComputed: true`） |
 | `formula` / `rollup` / `conditionalRollup` / `autoNumber` / `createdTime` / `lastModifiedTime` / `button` | 公式 / 汇总 / 自动编号 / 系统时间 / 按钮 | **写不进去**（`isComputed: true`），值是系统算出来的 |
 
-**为什么只开放那十种**：刻意只放"自足"的类型——只看这个字段的定义本身就能建出来，不需要引用别的表、别的字段（`attachment` 建列本身无需任何选项，往里放图另有专门接口）。被排除的不是不重要，而是**外部调用极难一次填对**、且填错时报的是内部错误：
+> `conditionalRollup` 带 `lookup` 对象时就是**查找引用**（按计算方式聚合的那种），见上一节；不带的是页面上建的普通条件汇总。
 
-- `link`（关联）：要另一张表的 `tblXXX`，还会产生跨表的对称字段
+**为什么只开放那十一种**：刻意只放"自足"的类型——只看这个字段的定义本身就能建出来，不需要引用别的表、别的字段（`attachment` 建列本身无需任何选项，往里放图另有专门接口）。被排除的不是不重要，而是**外部调用极难一次填对**、且填错时报的是内部错误：
+
+- `link`（关联）：要另一张表的 `tblXXX`，还会产生跨表的对称字段。要从别的表取值，用 `lookup`（查找引用）按条件匹配，不需要关联列
 - `formula` / `rollup` / `conditionalRollup`（公式 / 汇总）：表达式里要引用内部字段 id（`fldXXX`），而这套接口的**入参**全程按字段名寻址、不接受字段 id（出参里的 `fieldId` 是给工作流配触发条件用的，不能拿来写表达式：建表这一刻那些 id 还不存在）
 - `user` / `createdBy` / `lastModifiedBy`（成员类）：值是内部用户 id（`usrXXX`），对调用方无意义
 - `createdTime` / `lastModifiedTime` / `autoNumber`（系统字段）：建了也只是噪音
@@ -106,6 +161,7 @@
 | choices | array[string] | 选项类字段且 `includeChoices` 为 true | 可选项名称列表 |
 | max | integer | 评分字段 | 上限（写入时超过会被截断） |
 | description | string | 表设计者写了备注时 | 字段说明，对理解该填什么很有用 |
+| lookup | object | 仅查找引用列 | 按名字描述的配置，与 `addFields` 的 `lookup` 入参同形状，另多一个 `tableName`。被引用的列已被删时 `fieldName` 回 `fldXXX`；`hasNestedConditions: true` 表示页面上配了嵌套条件组，`conditions` 只列了顶层几条，不能原样拿去复刻 |
 
 > **布尔项只在为 `true` 时出现**（与主字段标记一致），不要用 `field["isComputed"] is False` 判断，用 `field.get("isComputed")`。
 
@@ -119,7 +175,11 @@
     {"fieldId": "fld56789AbCdEfGhIj", "name": "状态", "type": "singleSelect", "choices": ["待处理", "已选中", "已淘汰"]},
     {"fieldId": "fldKlMnOpQrStUvWxY", "name": "标签", "type": "multipleSelect", "isMultipleCellValue": true, "choices": ["清仓", "新品", "主推"]},
     {"fieldId": "fldZ0123456789AbCd", "name": "评分", "type": "rating", "max": 5},
-    {"fieldId": "fldEfGhIjKlMnOpQrS", "name": "利润率", "type": "formula", "isComputed": true}
+    {"fieldId": "fldEfGhIjKlMnOpQrS", "name": "利润率", "type": "formula", "isComputed": true},
+    {"fieldId": "fldTuVwXyZ0123456A", "name": "库存", "type": "conditionalRollup", "isComputed": true,
+     "lookup": {"tableId": "tblStockXXXXXXXX", "tableName": "库存表", "fieldName": "可用库存",
+                "conditions": [{"fieldName": "SKU", "operator": "is", "valueFromField": "商品标题"}],
+                "conjunction": "and", "computeMode": "sum"}}
   ]
 }
 ```
@@ -206,9 +266,10 @@
 | tableId | string | **是** | - | 以 `tbl` 开头 | 表 id |
 | fields | array | **是** | - | 非空，**1～50 项** | 要加的列，**一律追加到最后** |
 | fields[].name | string | **是** | - | 1～255 字符 | 列名。**与已有列或批内其他列重名会报错**（见下） |
-| fields[].type | string | **是** | - | 十种之一 | 见文件开头「字段类型总表」 |
+| fields[].type | string | **是** | - | 十一种之一 | 见文件开头「字段类型总表」 |
 | fields[].choices | array[object] | 单选/多选**必填** | - | 非空；每项必须有 `name` | `[{"name": "选项名", "color": "blueBright"}]`，`color` 可选 |
-| fields[].ai | object | 否 | - | 只能配在 `attachment` 列上 | 建成 AI 出图列（提示词 + 参考图）。`{列名}` 可引用已有列或本批一起加的列；引用写错时整批 400、一列都不加。字段、模型与触发方式见 `references/ai.md` |
+| fields[].ai | object | 否 | - | 只能配在 `attachment` 列上 | 建成 AI 出图列（按提示词出图，可带参考图）。`{列名}` 可引用已有列或本批一起加的列；引用写错时整批 400、一列都不加。字段、模型与触发方式见 `references/ai.md` |
+| fields[].lookup | object | `lookup` 列**必填** | - | 只能配在 `type: "lookup"` 列上 | 查找引用配置（引用表、取哪列、查找条件、计算方式），见文件开头 § 查找引用 |
 
 **不接受**：`baseId` / `viewId`（内部概念）、位置/顺序参数（一律追加到最后，不能插到中间——那是视图概念，这套接口不涉及）、`fldXXX`（本接口**入参**全程按名称寻址；出参里有 `fieldId`，但那是给工作流配触发条件用的）。
 
@@ -257,7 +318,7 @@
 **全有全无**：任何一项不合法（重名、类型不支持、单选缺 `choices`、超 50 列），整批拒绝、**一列都不加**，不会出现"加进去一半"。按 `errmsg` 改了重来即可。
 
 **只能加，不能改**：改列名、改类型、调顺序都不行（删列用 `deleteFields`）；不能指定位置，一律追加到最后。
-**只支持十种自足类型**：公式、汇总、关联、人员、自动编号这些**本接口不支持**——它们要引用别的表/别的字段，agent 很难一次填对；用户要这些，告诉他在页面上加（理由见文件开头「不能建的类型」）。
+**只支持十一种类型**（十种自足类型 + 查找引用 `lookup`）：公式、汇总、关联、人员、自动编号这些**本接口不支持**——它们要引用别的表/别的字段，agent 很难一次填对；用户要这些，告诉他在页面上加（理由见文件开头「不能建的类型」）。
 **`addFields` 没有首列限制**：加列不产生主字段，所以 `checkbox` / `attachment` 都能加。
 
 **其它**：
@@ -278,7 +339,14 @@
 | `缺少 name（列名）`（本地预检） | 某项没给 `name` | 补上 |
 | `在本次请求里重复了`（本地预检；服务端同样 400） | 批内重名 | 去掉重复项；名字怎么定问用户 |
 | 400 列名与已有列重名 | 表里已有同名列 | **不要改名重试**，问用户复用已有列还是换名 |
-| `type ... 不支持`（本地预检；服务端同样 400） | 类型不在十种白名单里 | 换成支持的类型，或请用户在页面上加 |
+| `type ... 不支持`（本地预检；服务端同样 400） | 类型不在十一种白名单里 | 换成支持的类型，或请用户在页面上加 |
+| `type 是 lookup，必须提供 lookup` / `lookup 里有不认识的键`（本地预检） | 漏了 `lookup` 或键名拼错 | 照 § 查找引用 的形状补齐 |
+| `lookup.tableId ... 不是你创建的`（服务端 400） | 引用了别人的表 | 只能引用 `listMyTables` 里的表；要引用别人的表请用户在页面上处理 |
+| `lookup.tableId ... 指向的表不存在` | id 写错、表在别的团队或已删 | 用 `listMyTables` 重新找 |
+| `lookup.fieldName ... 不是表「X」的列` / `conditions[i]: ... 不是表「X」的列` | 列名写错，或把**本表**列名写进了 `fieldName` | 报错里列出了被引用表的列；本表的列写进 `valueFromField` |
+| `valueFromField ... 不是本表的列` | 本表没这一列，或引用了同批的另一个查找引用列 | 先建那一列，或换一列 |
+| `computeMode "sum" 不能用在 ...` | 计算方式与被引用列类型不匹配 | 报错里列出了这一列能用的计算方式 |
+| `普通列已建好，但这几列查找引用没建成`（500 或上游错误码） | 补建那一步下游失败（普通列已经在表里了） | 用 `addFields` 只补报错里点名的那几列 |
 | `必须提供 choices`（本地预检；服务端同样 400） | 单选/多选没给 `choices` | 补上 |
 | `choices 每项必须是 {"name": "选项名"} 这样的对象`（本地预检） | 传成了字符串数组 | 改成对象数组 |
 | 403 无权改这张表的结构 | 表不在你团队里，或你在这张表上没有字段创建权限 | 换表或请表的所有者授权 |
@@ -313,7 +381,7 @@
 - 用户明确要求删掉指定的某几列；清理建错/多余的列，且已确认过。
 - 用户只是"觉得这列没用" → 先用 `listFields` 列出来给用户看，**别删**。
 - 删**行**（记录）→ `deleteRecords`，不是本操作；清空一列的值但保留这列 → 本操作做不到，用 `updateRecords` 逐行写空（都见 `references/records-write.md`）。
-- 改列名/改类型 → 做不到，请用户在页面上改；加列 → `addFields`；删整张表 → 不做，请到页面上操作。
+- 改列名/改类型 → 做不到，请用户在页面上改；加列 → `addFields`；删整张表 → `deleteTable`（进回收站，见 `references/tables.md`）。
 - 飞书/Lark 多维表格 → `lark-base`（不是同一个系统）。
 
 **调用**：`python scripts/smart_table.py deleteFields '<JSON>' --yes`

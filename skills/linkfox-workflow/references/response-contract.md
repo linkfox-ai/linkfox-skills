@@ -6,7 +6,7 @@
 
 ```json
 {
-  "action": "generate | refine | explain | validate | export | run | runs | history | not_workflow",
+  "action": "generate | refine | explain | validate | export | run | runs | history | automation | not_workflow",
   "confidence": "high | medium | low",
   "plannerStatus": "ready | needs_input | blocked",
   "requiresConfirmation": true,
@@ -32,6 +32,7 @@
    1. 一句 `已保存到工作空间:<path>`(来自 `scripts/save_workflow.py` 的 stdout)。
    2. ```json 代码块贴完整 JSON。
    3. “下一步”补配置/试跑指引。
+   3.5. flow 含记录触发或挂在多维表下的定时启动时,一句关联结果(来自 stdout 的 `tableAutomation`,话术见 `table-automation.md` §1);`effective` 不是 `true` 时这句挪到第一段。
    4. 一句版本说明(来自 stdout 的 `history`,话术见 `version-history.md` §1;没有可说的就省略)。
    5. 最后一行 `<linkfox-flow-info id="<workflowId>"></linkfox-flow-info>`。
    顺序不能颠倒——路径先于 JSON,JSON 先于指引。
@@ -53,6 +54,7 @@
    记录为空就一句"这个流程还没有执行记录",不编、不猜。**同样不输出 flow info 标签。**
 
 11. 若是 `history`:纯文字,**不贴 JSON、不贴路径**。查看按"第 N 版 · 变更人 · 时间 · 改了什么"逐条列,不输出 flow info 标签;还原先说会改回哪些节点并请求确认(预览轮不输出标签),**还原成功后**说"已还原到第 N 版,记为第 M 版",最后一行输出 `<linkfox-flow-info id="<workflowId>"></linkfox-flow-info>`,让前台画布重新拉取。
+12. 若是 `automation`:纯文字,不贴 JSON、不输出 flow info 标签(画布没变)。启停按 `tableSync.status` 一句话说结果("已停用,表里变更不再触发" / "已重新启用");退出 70 说"订阅已保存,但自动化没生效"并转述 `detail`;查看按"流程 · 数据表 · 事件 · 开/关"逐条列。
 
 ## JSON 输出规范
 

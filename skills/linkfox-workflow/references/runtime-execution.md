@@ -69,7 +69,7 @@ python scripts/run_workflow.py --workflow-id <workflowId>
 | 手动执行通过 | `run_workflow.py` + 业务断言 PASS | "手动跑过一次,逻辑通了" |
 | 自动触发真的跑过 | `list_executions.py` 里出现非本 agent 发起、时间吻合的执行记录 | "已经自动执行过一次" |
 
-记录触发还需要用户在界面上保存一次才生效(见 `nodes-linkfox-custom.md` BusinessStart 一节),这一步脚本看不到,别替用户说"已生效"。
+记录触发上传即关联,关联有没有登记上看上传 stdout 的 `tableAutomation.effective`(或 `table_automation.py list`,见 `table-automation.md`)。"已关联"只说明表里变更会推事件,不等于"已经自动执行过",后者以执行记录为准。
 
 其他参数:`--question <String>`(几乎用不到)、`--session-id <id>`(接着上一次会话跑)、`--override-config-file <path>`、`--timeout <秒>`(默认 300,上限 900)、`--inline`、`--expect-reached <nodeId>` / `--expect-not-reached <nodeId>`(可重复,见下)、`--skip-preflight`。
 

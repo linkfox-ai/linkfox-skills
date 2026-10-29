@@ -33,6 +33,15 @@ from typing import Any, NamedTuple
 
 from input_params_specs import COVERED_NAMES as INPUT_PARAMS_COVERED
 from input_params_specs import input_params_for
+from table_sync import (
+    EVENT_TYPES as RECORD_EVENT_TYPES,
+    FIELD_ID_PREFIX,
+    OPERATORS as RECORD_OPERATORS,
+    SCHEDULE_CONTEXT_INPUT,
+    SCHEDULE_TABLE_PLACEHOLDER,
+    UNSUPPORTED_EVENT_TYPES as RECORD_UNSUPPORTED_EVENTS,
+    VALUELESS_OPERATORS as RECORD_VALUELESS_OPERATORS,
+)
 
 
 class NodeSpec(NamedTuple):
@@ -140,7 +149,7 @@ NODE_SPECS: dict[str, NodeSpec] = {
         outputs=("content",),
     ),
     "executeFlowAgentflow": NodeSpec(
-        "ExecuteFlow", 1.2, "#a3b18a", ["ExecuteFlow"], "agentFlow",
+        "ExecuteFlow", 2.0, "#a3b18a", ["ExecuteFlow"], "agentFlow",
         ["executeFlowAgentflow"],
         outputs=(
             "content", "sourceDocuments", "usedTools", "artifacts", "fileAnnotations",
@@ -570,10 +579,14 @@ def validate(flow: dict) -> tuple[list[str], list[str]]:
     _check_expert_prompt(nodes, errors, warnings)
     _check_condition_inputs(nodes, errors)
     _check_python_function(nodes, node_by_id, errors, warnings)
+    _check_sandbox_env_vars(nodes, errors, warnings)
     _check_iteration_children(nodes, name_by_id, errors, warnings)
+    _check_starting_nodes(nodes, edges, name_by_id, errors)
     _check_edge_metadata(edges, name_by_id, errors, warnings)
     _check_record_trigger_consumption(nodes, edges, errors, warnings)
     _check_table_slots(nodes, errors, warnings)
+    _check_record_trigger_config(nodes, errors, warnings)
+    _check_schedule_table_context(nodes, errors, warnings)
     _check_condition_value_types(nodes, warnings)
     _check_exclusive_branch_merge(edges, name_by_id, warnings)
     return errors, warnings
@@ -898,6 +911,138 @@ def _check_table_slots(nodes: list, errors: list[str], warnings: list[str]) -> N
             )
 
 
+def _multi_value(value: Any) -> list[str]:
+    """多值字段既可能是真数组,也可能是 JSON 字符串(`"[\\"状态\\"]"`),两种服务端都认。"""
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            value = json.loads(text)
+        except json.JSONDecodeError:
+            return [text]
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    return []
+
+
+def _check_schedule_table_context(nodes: list, errors: list[str], warnings: list[str]) -> None:
+    """定时启动挂到多维表下的 `linkfoxTableAutomationContext`(docs/WORKFLOW-TABLE-BINDING-API.md §3.6)。
+
+    关联读的是上下文里的 notebookId / tableId,不是 Start 上记录触发那组。缺 notebookId 服务端
+    当成没挂表;tableId 缺失 / 形状不对存成占位 `tbl__schedule__`,侧栏归不到具体表、权限闸门
+    也不探。都不影响排期本身,所以只给 warning;tableId 填成 `nbk…` 是两级填反,算 error。
+    """
+    for raw in nodes:
+        n = _as_dict(raw)
+        data = _as_dict(n.get("data"))
+        if data.get("name") != REQUIRED_START_NAME:
+            continue
+        inputs = _as_dict(data.get("inputs"))
+        if SCHEDULE_CONTEXT_INPUT not in inputs:
+            continue
+        nid = n.get("id")
+        ctx_raw = inputs.get(SCHEDULE_CONTEXT_INPUT)
+        if isinstance(ctx_raw, str) and ctx_raw.strip():
+            try:
+                ctx_raw = json.loads(ctx_raw)
+            except json.JSONDecodeError:
+                errors.append(f"{nid} {SCHEDULE_CONTEXT_INPUT} 不是合法 JSON 对象")
+                continue
+        ctx = _as_dict(ctx_raw)
+        if inputs.get("startInputType") != "scheduleInput":
+            if ctx:
+                warnings.append(
+                    f"{nid} {SCHEDULE_CONTEXT_INPUT} 只对定时启动(scheduleInput)生效,当前启动方式下会被忽略"
+                )
+            continue
+        notebook_id = ctx.get("notebookId")
+        table_id = ctx.get("tableId")
+        if _is_blank_param(notebook_id):
+            warnings.append(
+                f"{nid} {SCHEDULE_CONTEXT_INPUT} 缺 notebookId:服务端当成没挂表,"
+                "这条定时流不会出现在多维表侧栏;要挂表就补上多维表格 id(散表 `__loose__`)"
+            )
+            continue
+        if _is_blank_param(table_id):
+            warnings.append(
+                f"{nid} {SCHEDULE_CONTEXT_INPUT} 没带 tableId:会存成占位 `{SCHEDULE_TABLE_PLACEHOLDER}`,"
+                "侧栏归不到具体表、权限闸门也不探;建议填挂载表的真实 `tbl…`"
+            )
+        elif not isinstance(table_id, str) or not table_id.startswith(TABLE_ID_PREFIX):
+            errors.append(
+                f"{nid} {SCHEDULE_CONTEXT_INPUT}.tableId={table_id!r} 不是数据表 id(必须以 `{TABLE_ID_PREFIX}` 开头);"
+                f"`{NOTEBOOK_ID_PREFIX}` 开头的是多维表格容器,应填到 notebookId"
+            )
+
+
+def _check_record_trigger_config(nodes: list, errors: list[str], warnings: list[str]) -> None:
+    """记录触发的事件 / 条件 / 字段 id,规则对齐订阅接口的 400(docs/WORKFLOW-TABLE-BINDING-API.md §5)。
+
+    事件 / 算子 / 字段 id 前缀 / 间隔写错是 error:怎么写都是错的。条件缺字段名或值只给 warning:
+    refine 时开始节点的 inputs 从 fetch 基线拷回,基线里用户没配完的条件不能把整次保存拦死;
+    这种配置保存时服务端会回 `notSaved`,上传 stdout 的 `tableAutomation.effective=false`
+    会再说一遍。新生成的流程不应出现这条 warning。
+    """
+    for raw in nodes:
+        n = _as_dict(raw)
+        data = _as_dict(n.get("data"))
+        inputs = _as_dict(data.get("inputs"))
+        if data.get("name") != REQUIRED_START_NAME or inputs.get("startInputType") != "tableRecordTrigger":
+            continue
+        nid = n.get("id")
+        event = inputs.get("recordEventType") or "recordCreated"
+        if event in RECORD_UNSUPPORTED_EVENTS:
+            errors.append(
+                f"{nid} recordEventType={event!r} 暂不支持(到达记录中的时间),服务端会拒绝;"
+                f"只能用 {' / '.join(RECORD_EVENT_TYPES)}"
+            )
+            continue
+        if event not in RECORD_EVENT_TYPES:
+            errors.append(f"{nid} recordEventType={event!r} 非法,只能用 {' / '.join(RECORD_EVENT_TYPES)}")
+            continue
+        interval = inputs.get("recordCheckIntervalMinutes")
+        if not _is_blank_param(interval) and not (
+            isinstance(interval, (int, float)) and not isinstance(interval, bool)
+            and int(interval) == interval and interval > 0
+        ):
+            errors.append(f"{nid} recordCheckIntervalMinutes={interval!r} 必须是正整数(默认 10)")
+
+        if event == "recordUpdated":
+            names = _multi_value(inputs.get("recordWatchFieldNames"))
+            ids = _multi_value(inputs.get("recordWatchFieldIds"))
+            for fid in ids:
+                if not fid.startswith(FIELD_ID_PREFIX):
+                    errors.append(f"{nid} recordWatchFieldIds 里的 {fid!r} 不是字段 id(必须以 `{FIELD_ID_PREFIX}` 开头)")
+            if names and not ids:
+                warnings.append(
+                    f"{nid} 监听字段只写了名字没写 recordWatchFieldIds:用户改列名后订阅会静默失效。"
+                    "新建时用 listFields 的 fieldId 一并写上;存量流程补 id 属于改触发配置,先问用户"
+                )
+        elif event == "recordConditionMet":
+            field = inputs.get("recordConditionFieldName")
+            op = inputs.get("recordConditionOperator") or "equal"
+            ids = _multi_value(inputs.get("recordConditionFieldId"))
+            if _is_blank_param(field):
+                warnings.append(
+                    f"{nid} 条件触发缺 recordConditionFieldName(条件字段名):订阅登记会失败,自动化不会跑"
+                )
+            if op not in RECORD_OPERATORS:
+                errors.append(f"{nid} recordConditionOperator={op!r} 非法,只能用 {' / '.join(RECORD_OPERATORS)}")
+            elif op not in RECORD_VALUELESS_OPERATORS and _is_blank_param(inputs.get("recordConditionValue")):
+                warnings.append(
+                    f"{nid} 算子 {op} 需要 recordConditionValue(空字符串视为未填):订阅登记会失败,自动化不会跑"
+                )
+            for fid in ids:
+                if not fid.startswith(FIELD_ID_PREFIX):
+                    errors.append(f"{nid} recordConditionFieldId 里的 {fid!r} 不是字段 id(必须以 `{FIELD_ID_PREFIX}` 开头)")
+            if not _is_blank_param(field) and not ids:
+                warnings.append(
+                    f"{nid} 条件字段只写了名字没写 recordConditionFieldId(数组,如 [\"fld…\"]):"
+                    "用户改列名后订阅会静默失效。新建时一并写上;存量流程补 id 先问用户"
+                )
+
+
 def start_trigger_changes(baseline: dict, flow: dict) -> list[str]:
     """对比服务端基线与新片段的开始节点,返回触发配置的变更列表(空 = 没动)。
 
@@ -1009,6 +1154,13 @@ def _check_node_contracts(nodes: list, errors: list[str], warnings: list[str]) -
             )
         if "inputAnchors" in data and _as_list(data.get("inputAnchors")) != []:
             warnings.append(f"{nid} data.inputAnchors 应为空数组")
+        # ExecuteFlow v2.0 删了 Base URL 字段,地址取 linkfoxAgentApi 凭据里的 baseUrl;
+        # 还写它说明照着 v1.x 的旧字段表在生成。
+        if name == "executeFlowAgentflow" and "executeFlowBaseURL" in _as_dict(data.get("inputs")):
+            warnings.append(
+                f"{nid} inputs.executeFlowBaseURL 是 v1.x 已删除的字段,运行时不读;"
+                "删掉它,地址取 linkfoxAgentApi 凭据里的 baseUrl"
+            )
         if not isinstance(_as_dict(n.get("position")).get("x"), (int, float)):
             warnings.append(f"{nid} 缺 position.x/position.y,画布上会堆在原点")
 
@@ -1478,6 +1630,134 @@ def _check_python_function(
         )
 
 
+# 两个自定义函数节点各有一个 Environment Variables 字段(不共用)。
+# 规则来自 Flowise 侧实现在**起沙箱之前**的校验:违例直接报错,不会白付一次沙箱钱。
+SANDBOX_ENV_FIELDS = {
+    PYTHON_NODE_NAME: "customPythonFunctionEnvVariables",
+    "customFunctionAgentflow": "customFunctionEnvVariables",
+}
+SANDBOX_ENV_MAX_ENTRIES = 32
+SANDBOX_ENV_MAX_NAME_LEN = 128
+SANDBOX_ENV_MAX_VALUE_LEN = 8192
+# 变量名比 Python 输入变量宽松(不要求是标识符,只要这条正则),单独立一条,别和
+# `_PYTHON_IDENTIFIER_RE` 共用 —— 后者改了不该连带改变沙箱环境变量的判定。
+SANDBOX_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# 沙箱里 pip / npm 安装、解释器启动、动态库加载都读这几个,让作者改掉就是
+# "代码跑了但依赖找不到"这类和自己配置看不出关系的故障。
+SANDBOX_ENV_RESERVED = {
+    "PATH", "HOME", "PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP",
+    "NODE_PATH", "NODE_OPTIONS", "LD_PRELOAD", "LD_LIBRARY_PATH",
+}
+# 运行时按工作流属主取的内置 key,只在这两个节点的 Environment Variables 里解析。
+# 写进别的字段不会被替换,原样留着 —— 这层作用域就是安全边界。
+_RUNTIME_KEY_RE = re.compile(
+    r"\{\{\s*\$vars\.(LINKFOX_AGENT_API_KEY|LINKFOXAGENT_API_KEY)\s*\}\}"
+)
+# 名字里带这些词基本就是密钥(`AUTHOR_NAME` 这类不算,所以按 `_` 分段匹配)。
+_SECRETISH_NAME_RE = re.compile(
+    r"(?:^|_)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|AUTH|CREDENTIAL)(?:_|$)", re.I
+)
+
+
+def _check_sandbox_env_vars(
+    nodes: list, errors: list[str], warnings: list[str]
+) -> None:
+    """CustomFunction / CustomPythonFunction 的 Environment Variables。
+
+    - 变量名、条数、长度、保留名、重名、值类型:运行时**起沙箱之前**就拒,报 error。
+    - 密钥手填成字面量:值会明文落在编排 JSON 里(随导出文件、数据库、日志扩散),同样报
+      error 拦在落盘前 —— 只用 `{{$vars.LINKFOX_AGENT_API_KEY}}` 这类绑定。
+    - 内置 key 写错位置:不在 Environment Variables 里就永远不替换,给 warning。
+    """
+    for node in nodes:
+        n = _as_dict(node)
+        nid = n.get("id") or "<node>"
+        data = _as_dict(n.get("data"))
+        field = SANDBOX_ENV_FIELDS.get(data.get("name"))
+        if not field:
+            continue
+        inputs = _as_dict(data.get("inputs"))
+        bindings = _as_list(inputs.get(field))
+        if len(bindings) > SANDBOX_ENV_MAX_ENTRIES:
+            errors.append(
+                f"{nid} inputs.{field} 有 {len(bindings)} 条,超过上限 "
+                f"{SANDBOX_ENV_MAX_ENTRIES} 条;运行时起沙箱前会拒"
+            )
+        seen: dict[str, int] = {}
+        for idx, item in enumerate(bindings):
+            b = _as_dict(item)
+            var_name = b.get("variableName")
+            value = b.get("variableValue")
+            if not isinstance(var_name, str) or not var_name:
+                errors.append(f"{nid} inputs.{field}[{idx}].variableName 不能为空")
+                continue
+            if not SANDBOX_ENV_NAME_RE.match(var_name):
+                errors.append(
+                    f"{nid} inputs.{field}[{idx}].variableName={var_name!r} 不合法:"
+                    "只允许字母数字下划线、不能数字开头;运行时起沙箱前会拒"
+                )
+            elif len(var_name) > SANDBOX_ENV_MAX_NAME_LEN:
+                errors.append(
+                    f"{nid} inputs.{field}[{idx}].variableName 超过 "
+                    f"{SANDBOX_ENV_MAX_NAME_LEN} 字符;运行时起沙箱前会拒"
+                )
+            if var_name in SANDBOX_ENV_RESERVED:
+                errors.append(
+                    f"{nid} inputs.{field}[{idx}].variableName={var_name!r} 是保留名"
+                    "(pip / npm 安装、解释器启动都读它);留空由沙箱自己给默认值"
+                )
+            if var_name in seen:
+                errors.append(
+                    f"{nid} inputs.{field}[{idx}].variableName={var_name!r} 与第 "
+                    f"{seen[var_name]} 条重复;运行时起沙箱前会拒"
+                )
+            else:
+                seen[var_name] = idx
+
+            if isinstance(value, (dict, list)):
+                errors.append(
+                    f"{nid} inputs.{field}[{idx}].variableValue 只能是文本 / 数字 / 布尔;"
+                    f"传 {type(value).__name__} 运行时起沙箱前会拒"
+                )
+                continue
+            if not isinstance(value, str):
+                continue
+            if len(value) > SANDBOX_ENV_MAX_VALUE_LEN:
+                errors.append(
+                    f"{nid} inputs.{field}[{idx}].variableValue 超过 "
+                    f"{SANDBOX_ENV_MAX_VALUE_LEN} 字符;运行时起沙箱前会拒"
+                )
+            if (
+                value.strip()
+                and "{{" not in value
+                and _SECRETISH_NAME_RE.search(var_name)
+            ):
+                errors.append(
+                    f"{nid} inputs.{field}[{idx}] 的名字像密钥却写成了字面量 —— "
+                    "明文会随编排 JSON 导出、进数据库和日志。密钥改用 "
+                    "{{$vars.LINKFOX_AGENT_API_KEY}} 绑定;它本来就不是密钥"
+                    "(如 TOKEN_TTL 这类配置数值)就换个不带 KEY / TOKEN / SECRET / "
+                    "PASSWORD / AUTH / CREDENTIAL 的变量名"
+                )
+
+    # 内置 key 是**按字段作用域**解析的:出现在别处不会报错,只会原样留给用户看。
+    for node in nodes:
+        n = _as_dict(node)
+        nid = n.get("id") or "<node>"
+        data = _as_dict(n.get("data"))
+        env_field = SANDBOX_ENV_FIELDS.get(data.get("name"))
+        for path, text in _iter_strings(_as_dict(data.get("inputs"))):
+            if not _RUNTIME_KEY_RE.search(text):
+                continue
+            if env_field and path.split(".")[0].split("[")[0] == env_field:
+                continue
+            warnings.append(
+                f"{nid} inputs.{path} 用了内置运行时 key($vars.LINKFOX_AGENT_API_KEY)—— "
+                "这个名字只在 CustomFunction / CustomPythonFunction 的 Environment "
+                "Variables 里解析,写在这里会原样留着;改绑进环境变量再读"
+            )
+
+
 def _check_iteration_children(
     nodes: list, name_by_id: dict[str, str], errors: list[str], warnings: list[str]
 ) -> None:
@@ -1509,6 +1789,62 @@ def _check_iteration_children(
         )
         if not has_child:
             warnings.append(f"{nid} 是 Iteration 但没有任何子节点,循环体为空")
+
+
+def _check_starting_nodes(
+    nodes: list, edges: list, name_by_id: dict[str, str], errors: list[str]
+) -> None:
+    """除 BusinessStart 外,不允许再有"没有入边"的执行节点。
+
+    linkfox-workflow 运行时把**所有入度为 0 的节点**都当起始节点(不只是 Start),多于一个
+    就整条流报 `Multiple starting nodes are not allowed`,一个节点都不跑。排除口径与运行时
+    一致:StickyNote、Iteration 子节点(`extent: "parent"`)、Loop 的回跳目标
+    (`loopBackToNode` 不画线,天然没有入边)。
+
+    典型成因是**漏了一条边**:节点有出边、没有入边,所以"孤立节点"那条校验看不见它。
+    2026-10-19 生产上 13 条「竞品监控」流程都是这么坏的 —— 「闭合 + 守恒」→「闭合与守恒通过?」
+    那条边没生成,S5 还把整段判断分支重复画了两份。完全孤立的节点由 save_workflow.py 报,这里跳过。
+    """
+    if REQUIRED_START_NAME not in name_by_id.values():
+        return  # 缺开始节点由骨架校验报,这里再报只会刷屏
+
+    has_incoming: set[str] = set()
+    has_outgoing: set[str] = set()
+    for edge in edges:
+        e = _as_dict(edge)
+        if isinstance(e.get("target"), str):
+            has_incoming.add(e["target"])
+        if isinstance(e.get("source"), str):
+            has_outgoing.add(e["source"])
+
+    loop_back_targets: set[str] = set()
+    for node in nodes:
+        data = _as_dict(_as_dict(node).get("data"))
+        target = _as_dict(data.get("inputs")).get("loopBackToNode")
+        if data.get("name") == "loopAgentflow" and isinstance(target, str) and target:
+            # 形如 `${nodeId}-${nodeLabel}`,label 自己可能带 '-',只取第一段(与运行时一致)
+            loop_back_targets.add(target.split("-")[0])
+
+    for node in nodes:
+        n = _as_dict(node)
+        nid = n.get("id")
+        name = name_by_id.get(nid, "") if isinstance(nid, str) else ""
+        if (
+            not isinstance(nid, str)
+            or name in START_NAMES
+            or name in NON_EXEC_NAMES
+            or n.get("extent") == "parent"
+            or nid in loop_back_targets
+            or nid in has_incoming
+            or nid not in has_outgoing
+        ):
+            continue
+        label = _as_dict(n.get("data")).get("label") or name
+        errors.append(
+            f"{nid}({label}) 没有入边,运行时会被当成第二个起始节点,整条流报 "
+            "`Multiple starting nodes are not allowed`、一个节点都不跑;"
+            "多半是漏了一条从上游接过来的边,补上;若是重复画的分支就删掉"
+        )
 
 
 def _check_edge_metadata(

@@ -7,10 +7,15 @@
 ⚠️ 出参是**两层**的：顶层 notebooks（多维表，分页落在这一层、total 是容器数），
 数据表在 notebooks[].tables[] 里；另有 looseTables 装不属于任何多维表的散表（为空时不返回）。
 按表名找 tableId 要遍历这两处 —— 顶层的 notebookId 是 nbk 开头的容器 id，不能拿去读记录。
+每个多维表还可能带 dashboards / folders / pages / applications（仪表盘 / 文件夹 / 页面 / 应用，
+为空时不出现），其中的 itemId 是 deleteNotebookItem 要的 id；表和这些内容带 folderId 时表示在哪个文件夹里。
+
+传 notebookId 只看这一个多维表（不回 looseTables）；它不是我创建的时 404，共享给我的会提示改用 listSharedTables。
 
 Usage:
   python smart_table.py listMyTables                       # 默认第 1 页、每页 100
   python smart_table.py listMyTables '{"page":2}'           # 指定分页
+  python smart_table.py listMyTables '{"notebookId":"nbkXXX"}'  # 只看一个多维表
   python smart_table.py listMyTables '{}' --inline          # 强制全量打印到 stdout
 """
 
@@ -93,12 +98,60 @@ def _find_main_list(obj):
     return best[0], best[1]
 
 
-def _summarize_tables(tables, indent):
-    """一行一张数据表：名字 + tableId。这是 agent 真正要找的东西。"""
+# 多维表里数据表以外的四类内容：出参数组名 → (deleteNotebookItem 的 itemType, 给人看的名字)
+NOTEBOOK_ITEM_ARRAYS = (
+    ("dashboards", "dashboard", "仪表盘"),
+    ("folders", "folder", "文件夹"),
+    ("pages", "page", "页面"),
+    ("applications", "application", "应用"),
+)
+
+
+def _folder_label(folder_id, folder_names):
+    """「在哪个文件夹里」。folders 不在出参里时（只有表级共享）只能给 id。"""
+    if not folder_id:
+        return ""
+    name = folder_names.get(folder_id)
+    return f"  [在文件夹 {name!r} 里]" if name is not None else f"  [在文件夹 {folder_id} 里]"
+
+
+def _summarize_tables(tables, indent, folder_names=None):
+    """一行一张数据表：名字 + tableId（+ 所在文件夹）。这是 agent 真正要找的东西。"""
+    folder_names = folder_names or {}
     for table in tables:
         if not isinstance(table, dict):
             continue
-        print(f"{indent}- {table.get('name')!r}  {table.get('tableId')}")
+        folder = _folder_label(table.get("folderId"), folder_names)
+        print(f"{indent}- {table.get('name')!r}  {table.get('tableId')}{folder}")
+
+
+def _summarize_notebook(notebook):
+    """一个多维表：表头一行计数，下面先列数据表，再列仪表盘 / 文件夹 / 页面 / 应用。
+
+    返回 (表数, 有没有这四类内容)。
+    """
+    tables = notebook.get("tables") if isinstance(notebook.get("tables"), list) else []
+    items = {
+        key: [x for x in notebook.get(key) if isinstance(x, dict)]
+        for key, _, _ in NOTEBOOK_ITEM_ARRAYS
+        if isinstance(notebook.get(key), list) and notebook.get(key)
+    }
+    folder_names = {f.get("itemId"): f.get("name") for f in items.get("folders", [])}
+
+    counts = [f"{len(tables)} 张表"] + [
+        f"{len(items[key])} 个{label}" for key, _, label in NOTEBOOK_ITEM_ARRAYS if key in items
+    ]
+    print()
+    print(f"  [{notebook.get('name')!r}]  {notebook.get('notebookId')}  ({'、'.join(counts)})")
+    _summarize_tables(tables, "    ", folder_names)
+    for key, item_type, label in NOTEBOOK_ITEM_ARRAYS:
+        if key not in items:
+            continue
+        print(f"    {label}（{key}，itemType={item_type}）：")
+        for item in items[key]:
+            folder = _folder_label(item.get("folderId"), folder_names)
+            print(f"      - {item.get('name')!r}  {item.get('itemId')}{folder}")
+    return len(tables), bool(items)
 
 
 def summarize(result):
@@ -135,16 +188,15 @@ def summarize(result):
         return
 
     total_tables = 0
+    has_items = False
     print()
     print(f"多维表 {len(notebooks)} 个（total={result.get('total')} 是容器数）：")
     for notebook in notebooks:
         if not isinstance(notebook, dict):
             continue
-        tables = notebook.get("tables") if isinstance(notebook.get("tables"), list) else []
-        total_tables += len(tables)
-        print()
-        print(f"  [{notebook.get('name')!r}]  {notebook.get('notebookId')}  ({len(tables)} 张表)")
-        _summarize_tables(tables, "    ")
+        table_count, notebook_has_items = _summarize_notebook(notebook)
+        total_tables += table_count
+        has_items = has_items or notebook_has_items
 
     loose = result.get("looseTables")
     if isinstance(loose, dict):
@@ -156,6 +208,11 @@ def summarize(result):
 
     print()
     print(f"数据表合计 {total_tables} 张。按表名找 tableId 时上面两处都要看。")
+    if has_items:
+        print(
+            "仪表盘 / 文件夹 / 页面 / 应用的 itemId 给 deleteNotebookItem 用，itemType 取它所在的那一组；"
+            "删文件夹会把 [在文件夹 … 里] 的那些一起带走。工作流不在这里，用 listWorkflows 看。"
+        )
 
 
 def _resolve_output_path(ts):

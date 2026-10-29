@@ -6,6 +6,7 @@
 
 ⚠️ 出参**不含流的名字** —— 名字在工作流侧，这里只给 flowId。
 ⚠️ tableId 为 null 的流不会被任何记录变化触发。
+⚠️ 关联只能看不能改：登记 / 换触发表 / 解除都由工作流侧在保存、停用、删流时自动同步。
 
 Usage:
   python smart_table.py listWorkflows
@@ -169,7 +170,9 @@ def main():
             if no_trigger:
                 print(
                     f"注意：{len(no_trigger)} 条流**没有设置触发表**，不会被任何记录变化触发："
-                    f"{no_trigger[:10]}。成因是登记时还没配触发器，或原表被删后后端自动置空了。"
+                    f"{no_trigger[:10]}。成因是工作流侧还没选触发表 / 流已停用或改成了非记录触发，"
+                    "或原表被删后后端自动置空了。要恢复只能让用户到工作流侧重新选触发表并保存，"
+                    "本技能改不了。"
                 )
 
     if inline or len(serialized.encode("utf-8")) <= SMALL_THRESHOLD:

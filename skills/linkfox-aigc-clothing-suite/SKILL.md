@@ -10,7 +10,7 @@ Generate apparel model, selling-point, seeding, size, white-background and A+ im
 ## Core Concepts
 
 - This endpoint creates one asynchronous task. A returned taskId is acceptance, not a finished asset.
-- Supply a new unique requestId for each newly requested task. Preserve it when checking or retrying the same operation; do not automatically resubmit after a timeout.
+- requestId is optional: forward it unchanged when supplied and omit it when absent. Do not generate one or automatically resubmit after a timeout; resume with the accepted taskId.
 - All source images/videos, including external HTTP(S) URLs, must use the **bundled Base64 upload** workflow in [references/file-upload.md](references/file-upload.md): run this skill's bundled `scripts/upload_file.py`, obtain `viewUrl`, then populate the generation media fields. Upload must finish before creating a task; do not use STS/OSS upload or upload again while polling.
 - Put all business fields inside the required `params` object. Keep requestId/chatId/messageId/title at the top level; do not send a top-level memberId. Read [references/api.md](references/api.md) and do not substitute legacy model aliases.
 - Poll /aigc/taskQuery, which serves both these new tasks and existing image/video tasks. There is no separate makeTaskQuery endpoint in this backend branch.
@@ -52,11 +52,10 @@ Run from a writable task working directory and unset ACPX_WORKSPACES for this in
 
 ## Example
 
-The JSON below uses the required params wrapper and illustrates low-level creation; media values must be viewUrl values from uploadByBase64. For run_task.py, supply the actual source file paths or source URLs in the media fields; it uploads them first. Example requestId/taskId values must not be reused for unrelated tasks.
+The JSON below uses the required params wrapper and illustrates low-level creation; media values must be viewUrl values from uploadByBase64. For run_task.py, supply the actual source file paths or source URLs in the media fields; it uploads them first. Example taskId values must not be reused for unrelated tasks.
 
 ```json
 {
-  "requestId": "clothing-suite-task-001",
   "params": {
     "imageList": [
       "https://example.com/clothing.png"

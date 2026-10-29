@@ -17,6 +17,13 @@ The sequence:
      the POST. Reported as ``history`` in the stdout payload.
      The binding is written before verification on purpose: the flow already exists at
      that point, so a retry after a mapping failure must update it, not create a copy.
+  6. Table automation (方式 A): when the Start node is a 多维表格记录触发 — or a 定时启动
+     carrying ``linkfoxTableAutomationContext`` (``eventType=schedule``) — the server
+     registers the subscription on the same POST/PUT and reports it in the
+     ``X-Table-Automation-Sync`` header. Reported as ``tableAutomation``; a non-effective
+     status (FAILED / SKIPPED_NO_NOTEBOOK / notSaved) does **not** fail the upload — the
+     flow is saved, only the automation won't run — so exit stays 0 and the caller must
+     read ``tableAutomation.effective``.
 
 **The linkfox-workflow flowId is the workflow's identity, not the filename.** ``sourceKey``
 is only the basename of the local file, and that basename carries a microsecond
@@ -57,6 +64,13 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 from linkfox_paths import get_api_base  # type: ignore  # noqa: E402
+from table_sync import (  # type: ignore  # noqa: E402
+    SCHEDULE_EVENT,
+    SCHEDULE_TABLE_PLACEHOLDER,
+    SYNC_HEADER,
+    classify as classify_table_sync,
+    schedule_context,
+)
 from workflow_auth import clean_key, with_auth_hint  # type: ignore  # noqa: E402
 from workflow_identity import (  # type: ignore  # noqa: E402
     check_uploadable,
@@ -316,10 +330,7 @@ def import_workflow(
         )
 
     if not 200 <= response.status < 300:
-        raise UploadError(
-            f"linkfox-workflow workflow {action} request failed: HTTP {response.status}: "
-            f"{_body_excerpt(response.body)}"
-        )
+        raise UploadError(_save_failure_message(action, response))
     data = response.json()
     response_id = str(data.get("id") or "").strip() if isinstance(data, dict) else ""
     workflow_id = response_id or existing_id
@@ -405,6 +416,88 @@ def summarize_history(
     if before and before.get("status") == "forbidden":
         info["enableForbidden"] = True
     return info
+
+
+# 保存被拒时服务端给的业务码(错误 body 不保证带文案,所以只做"认得出就翻译"的增强)。
+# 刻意不写 "HTTP 403" 字样:那会被 with_auth_hint 当成 API Key 问题,给出错误的排查方向。
+_SAVE_REJECT_HINTS = {
+    "no_table_permission": "当前账号对开始节点选的触发数据表没有权限,换一张自己有编辑权限的表",
+    "read_only_workflow": "这个工作流对当前账号是只读的(不是属主),不能保存",
+    "tenant has no member mapping": "账号的租户映射缺失,需要平台侧处理,重试无效",
+}
+
+
+def _save_failure_message(action: str, response: HttpResult) -> str:
+    excerpt = _body_excerpt(response.body)
+    if response.status in (403, 409):
+        for code, hint in _SAVE_REJECT_HINTS.items():
+            if code in excerpt:
+                return f"linkfox-workflow workflow {action} rejected ({code}, status {response.status}): {hint}"
+        if response.status == 409:
+            return (
+                f"linkfox-workflow workflow {action} rejected (status 409): 这个工作流的多维表订阅已被别的成员绑定,"
+                f"只有绑定人能改它的触发配置。服务端原文:{excerpt}"
+            )
+    return f"linkfox-workflow workflow {action} request failed: HTTP {response.status}: {excerpt}"
+
+
+def _start_inputs(flow_data: str) -> dict[str, Any] | None:
+    try:
+        flow = json.loads(flow_data)
+    except json.JSONDecodeError:
+        return None
+    for node in flow.get("nodes") or []:
+        data = node.get("data") if isinstance(node, dict) else None
+        if isinstance(data, dict) and data.get("name") == "businessStartAgentflow":
+            return data.get("inputs") if isinstance(data.get("inputs"), dict) else {}
+    return None
+
+
+def _table_binding(flow_data: str) -> dict[str, Any] | None:
+    """开始节点会登记多维表订阅时返回 `{kind, notebookId, tableId}`,否则 None。
+
+    两类:记录触发(`tableRecordTrigger`,表 id 在 Start 上);挂在多维表下的定时启动
+    (`scheduleInput` + `linkfoxTableAutomationContext`,表 id 在上下文里)。
+    """
+    inputs = _start_inputs(flow_data)
+    if inputs is None:
+        return None
+    if inputs.get("startInputType") == "tableRecordTrigger":
+        return {"kind": "record", "notebookId": inputs.get("notebookId") or "",
+                "tableId": inputs.get("tableId") or ""}
+    ctx = schedule_context(inputs)
+    if ctx:
+        return {"kind": SCHEDULE_EVENT, **ctx}
+    return None
+
+
+def summarize_table_automation(flow_data: str, save_headers: dict[str, str]) -> dict[str, Any] | None:
+    """方式 A 的关联结果。返回 None = 这次保存与多维表无关(stdout 不出现该字段)。"""
+    raw = (save_headers.get(SYNC_HEADER) or "").strip()
+    binding = _table_binding(flow_data)
+    if raw:
+        info = classify_table_sync(raw, kind=binding["kind"] if binding else "record")
+        if binding:
+            info["notebookId"] = binding["notebookId"]
+            info["tableId"] = binding["tableId"]
+            if binding["kind"] == SCHEDULE_EVENT:
+                info["eventType"] = SCHEDULE_EVENT
+                if not str(binding["tableId"]).startswith("tbl") or str(binding["tableId"]).startswith("tbl__"):
+                    # 服务端存成占位 tbl__schedule__:挂在多维表下,但归不到具体表,权限闸门也不探
+                    info["tableIdPlaceholder"] = SCHEDULE_TABLE_PLACEHOLDER
+        return info
+    if binding:
+        # 开始节点会登记订阅,服务端却没回关联头:说不清登记上没有,不能替用户说"已生效"
+        what = "记录触发" if binding["kind"] == "record" else "挂在多维表下的定时启动"
+        return {
+            "status": "",
+            "effective": None,
+            "meaning": (
+                f"开始节点是{what},但服务端没有返回关联结果;用 "
+                "table_automation.py list --workflow-id <id> 查订阅是否在、是否启用"
+            ),
+        }
+    return None
 
 
 def verify_mapping(
@@ -588,6 +681,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         mapping_status,
     )
     history_after = enable_history(proxy_url, linkfox_api_key, workflow_id) if action == "created" else None
+    table_automation = summarize_table_automation(flow_data, save_headers)
     return {
         "workflowId": workflow_id,
         "action": action,
@@ -598,6 +692,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         **({"nameReused": True} if name_reused else {}),
         # 历史记录是附加信息:任何一步失败都不影响上传成功的判定
         "history": summarize_history(action, history_before, save_headers, history_after),
+        # 与多维表关联的结果(方式 A);未生效也不让上传失败 —— flow 已经存好了
+        **({"tableAutomation": table_automation} if table_automation else {}),
     }
 
 
@@ -624,6 +720,14 @@ def main() -> None:
         f"Uploaded workflow: workflowId={result['workflowId']} action={result['action']} "
         f"mappingStatus={result['mappingStatus']}"
     )
+    automation = result.get("tableAutomation")
+    if automation and automation.get("effective") is False:
+        # 保存成功但自动化不会跑:单独一行,别让调用方只看到上面那句 "Uploaded" 就报成功
+        print(
+            f"WARNING: 工作流已保存,但多维表自动化未生效(tableAutomation.status="
+            f"{automation.get('status')}):{automation.get('meaning')}",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":

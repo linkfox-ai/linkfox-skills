@@ -6,15 +6,18 @@
 
 <op> 用接口名（与 /smartTable/<op> 一致），也接受旧 skill 后缀的写法（如 create-records）：
 
-  表      listMyTables  listSharedTables  createTable  addTable
+  表      listMyTables  listSharedTables  createTable  addTable  copyNotebook
+  删除    deleteNotebook  deleteTable  deleteNotebookItem（一律进回收站；还原只能在页面上）
+  改名    renameNotebook  renameTable  renameNotebookItem（只改名字；列名改不了）
   表头    listFields  addFields  deleteFields
   记录    listRecords  createRecords  updateRecords  deleteRecords
   附件    uploadAttachment
   AI 出图 fillAiField  getAiFillStatus
-  工作流  registerWorkflow  listWorkflows  updateWorkflowTriggerTable  unregisterWorkflow
+  工作流  listWorkflows（只读；关联的登记 / 换表 / 解除由工作流侧保存时自动同步，这里不提供）
 
 --inline  强制把完整响应打印到 stdout（默认 > 8KB 只打摘要；完整响应始终落盘）
---yes     只有 deleteFields / deleteRecords / unregisterWorkflow 认它：确认执行不可逆操作
+--yes     只有删除类操作认它（deleteFields / deleteRecords / deleteNotebook / deleteTable /
+          deleteNotebookItem）：确认执行删除；缺它一律拒绝执行（退出码 2）
 
 每个 op 的实现在同目录 op_<snake>.py（本地预检、确认闸门、摘要都在那里），本文件只做分派：
 把 sys.argv 改成 [op, ...其余参数] 后调对应模块的 main()，退出码原样透传。
@@ -32,6 +35,13 @@ OPS = {
     "listSharedTables": "list-shared-tables",
     "createTable": "create-table",
     "addTable": "add-table",
+    "copyNotebook": "copy-notebook",
+    "deleteNotebook": "delete-notebook",
+    "deleteTable": "delete-table",
+    "deleteNotebookItem": "delete-notebook-item",
+    "renameNotebook": "rename-notebook",
+    "renameTable": "rename-table",
+    "renameNotebookItem": "rename-notebook-item",
     "listFields": "list-fields",
     "addFields": "add-fields",
     "deleteFields": "delete-fields",
@@ -42,10 +52,7 @@ OPS = {
     "uploadAttachment": "upload-attachment",
     "fillAiField": "fill-ai-field",
     "getAiFillStatus": "get-ai-fill-status",
-    "registerWorkflow": "register-workflow",
     "listWorkflows": "list-workflows",
-    "updateWorkflowTriggerTable": "update-workflow-trigger-table",
-    "unregisterWorkflow": "unregister-workflow",
 }
 _BY_KEBAB = {kebab: op for op, kebab in OPS.items()}
 

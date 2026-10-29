@@ -45,7 +45,6 @@ def main():
         task_id = args.task_id
         artifact = None
     else:
-        params.setdefault("requestId", uuid.uuid4().hex)
         unknown = set(params) - {"requestId", "chatId", "messageId", "title", "params"}
         if unknown:
             parser.error("Creation accepts only requestId/chatId/messageId/title/params at the top level")

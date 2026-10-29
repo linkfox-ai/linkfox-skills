@@ -68,11 +68,13 @@ def prepare_field_ai(field, where):
         return f"{where}.ai 里有不认识的键：{', '.join(unknown)}。只支持：{', '.join(sorted(_AI_KEYS))}"
     if not str(ai.get("prompt") or "").strip():
         return f"{where}.ai.prompt 不能为空。用 {{列名}} 引用别的文本列，如「把参考图里的商品放进「{{场景}}」描述的场景里」"
+    # referenceFields 可选（上游 2026-10-14 起参考图非必填）：不传 / 传 [] = 只按提示词出图
     refs = ai.get("referenceFields")
-    if not isinstance(refs, list) or not refs or not all(isinstance(r, str) and r for r in refs):
-        return f"{where}.ai.referenceFields 必须是至少一个列名的数组：AI 出图每行至少要有一张参考图（取自 attachment 或 image 列）"
-    if len(refs) > 9:
-        return f"{where}.ai.referenceFields 最多 9 列"
+    if refs is not None:
+        if not isinstance(refs, list) or not all(isinstance(r, str) and r for r in refs):
+            return f"{where}.ai.referenceFields 必须是列名数组（取自 attachment 或 image 列）；不需要参考图就别传"
+        if len(refs) > 9:
+            return f"{where}.ai.referenceFields 最多 9 列"
 
     model = ai.setdefault("model", DEFAULT_IMAGE_MODEL)
     spec = IMAGE_MODELS.get(model)

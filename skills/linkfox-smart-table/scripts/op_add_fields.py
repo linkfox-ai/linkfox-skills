@@ -45,6 +45,9 @@ ALLOWED_TYPES = (
     # attachment 存的是文件（我们自己的存储）。建列无需选项；往格子里放图走
     # smart_table.py uploadAttachment，不能直接写 URL。加列不产生主字段，所以无首列限制。
     "attachment",
+    # 查找引用（页面上的「查找引用」）：按条件从**你自己创建的**另一张表取值，算出来的、写不进去。
+    # 必须带 lookup 配置，预检见 lookup_spec.py
+    "lookup",
 )
 CHOICE_TYPES = ("singleSelect", "multipleSelect")
 
@@ -52,6 +55,8 @@ CHOICE_TYPES = ("singleSelect", "multipleSelect")
 from linkfox_paths import get_api_base, resolve_data_path
 # 附件 AI 列的模型清单与 ai 预检（改模型只改那个文件）
 from image_models import prepare_field_ai
+# 查找引用列的 lookup 预检（三条建列脚本共用）
+from lookup_spec import check_field_lookup
 
 
 def get_api_url():
@@ -122,6 +127,13 @@ def summarize(result):
         print(f"  {field.get('name')}  ({field.get('type')}){suffix}")
         if field.get("choices"):
             print(f"      可选项: {field['choices']}")
+        lookup = field.get("lookup")
+        if isinstance(lookup, dict):
+            source = lookup.get("tableName") or lookup.get("tableId")
+            print(
+                f"      查找引用: {source}.{lookup.get('fieldName')}"
+                f"  计算方式={lookup.get('computeMode')}  条件={json.dumps(lookup.get('conditions'), ensure_ascii=False)}"
+            )
 
 
 def _resolve_output_path(ts):
@@ -183,6 +195,9 @@ def _validate(params):
             problem = prepare_field_ai(field, where)
             if problem:
                 return problem
+        problem = check_field_lookup(field, where)
+        if problem:
+            return problem
     return None
 
 
@@ -226,7 +241,8 @@ def main():
     if isinstance(result, dict) and result.get("errcode") != 200:
         print(
             f"Business error: errcode={result.get('errcode')} errmsg={result.get('errmsg')}\n"
-            "本接口是全有全无的：失败意味着**一列都没加**。\n"
+            "失败一般意味着**一列都没加**；唯一例外是报错里写了「普通列已建好，但这几列查找引用没建成」——"
+            "那时普通列已经在表里了，只用 addFields 补点名的那几列查找引用，别把整批重发（会撞重名）。\n"
             "若是重名报错：不要自己改名重试，把撞上的列名告诉用户，让他决定复用已有列还是换名字。",
             file=sys.stderr,
         )

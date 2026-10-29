@@ -16,7 +16,7 @@
 
 推荐 `scripts/run_task.py` 完成素材上传、创建、taskQuery轮询和媒体下载。params内的媒体字段在该辅助入口中允许本地路径或外部 URL；真正发给生成 API 前统一转换为 uploadByBase64 返回的 viewUrl。原官方创建脚本不承担上传或轮询，不能直接给它外部源 URL。
 
-支持 JSON 参数、`--params-file <参数文件>` 或 `-` 从 stdin 读取；缺失 requestId 时生成新的唯一 ID。超时后使用 `--task-id <已接受任务ID>` 继续查询，不再次上传或创建。恢复只接受 taskId 和可选 memberId，不能混入创建参数。
+支持 JSON 参数、`--params-file <参数文件>` 或 `-` 从 stdin 读取；requestId 仅在入参提供时原样转发，缺失时不自动生成。超时后使用 `--task-id <已接受任务ID>` 继续查询，不再次上传或创建。恢复只接受 taskId 和可选 memberId，不能混入创建参数。
 
 终态query JSON保留实际费用与任务级错误；当前后端不透出单项生成错误。成功文件下载到 `<session>/media/`，资产清单写入 `<session>/data/`；清单提供 localPath、下载失败项和费用。stdout 的 `Saved full response: [本地路径数组]` 用于前端媒体展示，不要原样复述给用户。下载失败可用 `scripts/download_results.py <终态查询JSON>` 重试，不产生新生成任务。
 
@@ -24,7 +24,7 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| requestId | String | 否 | 稳定业务请求ID；新任务使用唯一值，同一任务不得自动重复创建 |
+| requestId | String | 否 | 可选兼容字段；提供时原样转发，缺失时不补充 |
 | chatId | String | 否 | 旧Agent会话ID，最长128字符 |
 | messageId | String | 否 | 旧Agent消息ID，最长128字符 |
 | title | String | 否 | 业务展示标题 |
@@ -230,10 +230,10 @@ Content-Type: `application/json`
 curl "${LINKFOX_TOOL_GATEWAY}/aigc/salesVideo" \
   -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
   -H 'Content-Type: application/json' -H 'User-Agent: LinkFox-Skill/2.0' \
-  --data '{"requestId": "sales-video-task-001", "params": {"videoType": "doubao-seedance-2-5", "prompt": "Explain the portable bottle and demonstrate its lid", "imageList": ["https://example.com/product.png"], "videoTime": 5}}'
+  --data '{"params": {"videoType": "doubao-seedance-2-5", "prompt": "Explain the portable bottle and demonstrate its lid", "imageList": ["https://example.com/product.png"], "videoTime": 5}}'
 ```
 
-以上参数仅为结构示例；必须替换为真实素材、模型和本次任务ID，不能调用示例占位地址执行收费测试。
+以上参数仅为结构示例；必须替换为真实素材和模型，不能调用示例占位地址执行收费测试。
 
 ## 错误处理
 

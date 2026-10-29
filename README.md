@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Open%20Standard-orange)](https://agentskills.io)
-[![Skills](https://img.shields.io/badge/skills-163-brightgreen)](#skills-catalog)
+[![Skills](https://img.shields.io/badge/skills-166-brightgreen)](#skills-catalog)
 
-**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 163 API-driven skills covering product research, competitor analysis, keyword tracking, Amazon Ads reporting, patent search, compliance detection, and more.
+**LinkFox Skills** is an AI skill set designed for cross-border e-commerce. It provides 166 API-driven skills covering product research, competitor analysis, keyword tracking, Amazon Ads reporting, patent search, compliance detection, and more.
 
 Built on the [Agent Skills](https://agentskills.io) open standard, compatible with Claude Code, Cursor, GitHub Copilot, and 30+ AI agent platforms.
 
@@ -110,7 +110,9 @@ Get your API key and configure the environment before using any skill.
 | --- | --- |
 | `linkfox-echotik-batch-product-detail` | Batch-fetch detailed TikTok Shop product metrics (multi-period sales and GMV, live, video, influencer, and views data) by product ID or URL |
 | `linkfox-echotik-batch-video-detail` | Batch-fetch detailed TikTok video metrics (views with 1d/7d/30d breakdown, likes with increments, comments, shares, favorites, video sales and GMV, duration, resolution, publish date, creator, and ad/AI/selling flags) by video ID or video URL |
+| `linkfox-echotik-category` | Query EchoTik TikTok category dictionaries, category market details, and historical sales trends |
 | `linkfox-echotik-get-video-download-url` | Resolve a TikTok video URL into no-watermark and watermarked download links, plus playback URL and cover images |
+| `linkfox-echotik-influencer` | Batch-fetch EchoTik TikTok influencer profiles and query historical audience, engagement, and commerce trends |
 | `linkfox-echotik-list-new-product-rank` | Echotik List New Product Rank |
 | `linkfox-echotik-list-product` | Echotik List Product |
 | `linkfox-echotik-list-seller` | List and filter TikTok Shop sellers (stores) by region, category, 30-day GMV, sales trend, listing date, and local/cross-border type, returning store sales, GMV, followers, ratings, reviews, and influencer/video/livestream counts across 16 marketplaces |
@@ -202,7 +204,7 @@ Get your API key and configure the environment before using any skill.
 | --- | --- |
 | `linkfox-sif-asin-keywords` | Reverse lookup traffic keywords for an ASIN (organic + ad rankings) |
 | `linkfox-sif-asin-summary` | Analyze ASIN traffic sources and distribution |
-| `linkfox-sif-compliance-detection` | SIF design patent detection: find visually similar design-registration candidates from a product image, with optional title, region, source jurisdiction, Locarno and legal-status filters; candidates do not establish infringement |
+| `linkfox-sif-compliance-detection` | SIF design patent detection: find visually similar design registrations from product images or inspect registration details by ID or primary identifier, including holders, designers, status, dates and classification; results do not establish infringement |
 | `linkfox-sif-keyword-overview` | Get keyword search volume, competition, and CPC overview |
 | `linkfox-sif-keyword-summary` | Sif Keyword Summary |
 
@@ -212,6 +214,7 @@ Get your API key and configure the environment before using any skill.
 | --- | --- |
 | `linkfox-sorftime-amazon-product-detail` | Sorftime Amazon Product Detail |
 | `linkfox-sorftime-amazon-product-query` | Sorftime Amazon Product Query |
+| `linkfox-sorftime-tiktok-seller-data` | Look up TikTok Shop brands through Sorftime across eight markets by product, brand name or seller; one paid page per call |
 | `linkfox-sorftime-walmart-category-market` | Retrieve the Walmart US category tree, match natural-language category names, and analyze category markets with returned Best Seller product data via Sorftime |
 | `linkfox-sorftime-walmart-keyword-research` | Research Walmart keywords, product-keyword relationships, related terms, and saved keyword folders via Sorftime |
 | `linkfox-sorftime-walmart-product-analysis` | Find Walmart products by natural-language name and query product details, trends, and variant sales via Sorftime |
@@ -382,6 +385,7 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-wallysmarter-product-detail` | Walmart product detail with historical pricing and sales trends via WallySmarter |
 | `linkfox-wb-1688-procurement` | Wb 1688 Procurement |
 | `linkfox-wb-1688-sourcing` | Wb 1688 Sourcing |
+| `linkfox-wb-aigc` | Wb Aigc |
 | `linkfox-wb-amazon-ads` | Wb Amazon Ads |
 | `linkfox-wb-amazon-business-insight` | Wb Amazon Business Insight |
 | `linkfox-wb-amazon-front-data` | Wb Amazon Front Data |
@@ -407,6 +411,7 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-wb-shopee-official-api` | Wb Shopee Official Api |
 | `linkfox-wb-shopee-product-selection` | Wb Shopee Product Selection |
 | `linkfox-wb-shopify-data` | Wb Shopify Data |
+| `linkfox-wb-sif-compliance-detection` | Wb Sif Compliance Detection |
 | `linkfox-wb-sif-search-intelligence` | Wb Sif Search Intelligence |
 | `linkfox-wb-smart-table` | Wb Smart Table |
 | `linkfox-wb-sorftime` | Wb Sorftime |

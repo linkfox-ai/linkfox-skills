@@ -17,6 +17,8 @@
 
 **多节点 flow 的 `edges` 不得为空**;每个应由 edge 连接的节点必须至少参与一条 edge。`save_workflow.py` 会拒绝孤立节点和 BusinessStart 无出边(exit 65)。生成前先把连线画通再落笔。
 
+**除 BusinessStart 外,每个执行节点都必须有入边**(StickyNote、Iteration 子节点、Loop 的回跳目标除外)。运行时把所有入度为 0 的节点都当起始节点,多于一个就整条流报 `Multiple starting nodes are not allowed`、一个节点都不跑。最常见的成因是漏了一条边:节点有出边、没入边,画布上看着是连着的。生产上整批「竞品监控」流程就坏在「闭合 + 守恒」→「闭合与守恒通过?」这条边没生成。`save_workflow.py` 会拒绝(exit 65)。
+
 不计入连通性检查的两类节点：**StickyNote**（纯批注）和 **Iteration 子节点**（带 `parentNode` + `extent: "parent"`，靠父节点归属而非 edge 连接）。执行链**不要求**以 DirectReply 收尾，WriteFile / SendNotification / Agent 等作为末节点结束都合法。
 
 `usecases` 是字符串数组，常用值为 `Agent` / `Extraction` / `Human In Loop` / `Hierarchical Agent Teams` / `RAG` / `Iteration`。
@@ -185,6 +187,6 @@
 ## 全局限制
 
 - 不自造 `data.type` 或 `data.name`；只用索引列出的 24 个节点（原生 15 + LinkFox 自定义 9）。`save_workflow.py` 会机械校验 `data.name` / `data.type` / 顶层 `type`，未注册的节点直接拒绝落盘。
-- BusinessStart 无入边（原生 Start 已弃用，禁止生成）；Loop / DirectReply / End 无出边。
+- BusinessStart 无入边（原生 Start 已弃用，禁止生成）；其余执行节点都必须有入边（Iteration 子节点、Loop 回跳目标除外）；Loop / DirectReply / End 无出边。
 - 不嵌套 Iteration，不嵌套 Loop，也不让 Loop 和 Iteration 互嵌。
 - 需要用户可见回复的分支末端使用 DirectReply；详细限制见 `nodes-integration-and-output.md`。

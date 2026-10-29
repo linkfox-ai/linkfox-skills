@@ -3,7 +3,7 @@
 调用 /smartTable/getAiFillStatus 接口。
 
 查 fillAiField 返回的 taskId 跑到哪了：完成 / 失败 / 进行中各多少行，失败的行和原因
-（最常见：那一行没有可用的参考图）。只读。
+（最常见：提示词引用的列为空，或参考图用不了）。只读。
 
 Usage:
   python smart_table.py getAiFillStatus '{"tableId":"tblXXX","taskId":"tskXXX"}'

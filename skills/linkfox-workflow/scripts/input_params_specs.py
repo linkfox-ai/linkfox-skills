@@ -351,6 +351,25 @@ _CUSTOM_PYTHON_FUNCTION = [
         ],
     },
     {
+        # 沙箱环境变量:执行时注入 os.environ。字段级 acceptVariable 必填,否则
+        # `{{$vars.LINKFOX_AGENT_API_KEY}}` 这类值不会被替换,原样进沙箱。
+        "label": "Environment Variables",
+        "name": "customPythonFunctionEnvVariables",
+        "description": "注入沙箱的 os.environ 变量。密钥请用绑定写法（如 {{$vars.LINKFOX_AGENT_API_KEY}}），不要手填。",
+        "type": "array",
+        "optional": True,
+        "acceptVariable": True,
+        "array": [
+            {"label": "Variable Name", "name": "variableName", "type": "string"},
+            {
+                "label": "Variable Value",
+                "name": "variableValue",
+                "type": "string",
+                "acceptVariable": True,
+            },
+        ],
+    },
+    {
         "label": "Timeout (ms)",
         "name": "customPythonFunctionTimeout",
         "type": "number",
@@ -392,6 +411,25 @@ _CUSTOM_FUNCTION = [
         "name": "customFunctionInputVariables",
         "type": "array",
         "optional": True,
+        "array": [
+            {"label": "Variable Name", "name": "variableName", "type": "string"},
+            {
+                "label": "Variable Value",
+                "name": "variableValue",
+                "type": "string",
+                "acceptVariable": True,
+            },
+        ],
+    },
+    {
+        # 沙箱环境变量:vm2 路径注入 process.env 的冻结副本,E2B 路径随 Sandbox.create 下发。
+        # 字段级 acceptVariable 必填,理由同 CustomPythonFunction 的同名字段。
+        "label": "Environment Variables",
+        "name": "customFunctionEnvVariables",
+        "description": "Values to expose as process.env inside the function. Bind a secret instead of typing it here, e.g. {{$vars.LINKFOX_AGENT_API_KEY}}",
+        "type": "array",
+        "optional": True,
+        "acceptVariable": True,
         "array": [
             {"label": "Variable Name", "name": "variableName", "type": "string"},
             {

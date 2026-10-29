@@ -66,6 +66,7 @@
 | `recordConditionValue` | string | 仅 `recordConditionMet`，且算子不是 `isEmpty` / `notEmpty` 时必填（那两个算子在面板上隐藏此项） |
 | `recordCheckIntervalMinutes` | number，默认 `10` | `tableRecordTrigger` 时必须为正整数（当前不影响触发时机，见下方"记录触发是推模式"） |
 | `schedule*` | 复用原生 `Start` 的 schedule 字段 | 默认视觉配置为每周、`09:00`、周一、`Asia/Shanghai`。`BusinessStart` **没有** `scheduleCronExpression` / `scheduleInputMode` / `scheduleDefaultInput`——排期固定走 `visualPicker`、无 Cron、无默认文本。需要 Cron 或默认输入的场景本节点表达不了 |
+| `linkfoxTableAutomationContext` | object | 仅 `scheduleInput`:把定时流**挂到某张多维表下**(表格自动化侧栏可见),形如 `{"notebookId": "nbk…", "tableId": "tbl…"}`。缺 `notebookId` = 不挂表;不带整个对象 = 普通定时流。**不是记录触发**,记录变更不会触发它;id 不写在上面记录触发那组 `notebookId` / `tableId` 里。何时带、上传结果怎么回报见 `table-automation.md` §1.5 |
 
 **保存会被服务端 400 拒绝的情况**：未选 Credential；`tableId` 不以 `tbl` 开头；`recordEventType` 不在三种可用事件里（`recordTimeReached` 报 "The selected Record Event is not available yet."）；`recordConditionMet` 缺条件字段 / 算子非法 / 该带值的算子没给值；`recordCheckIntervalMinutes` 或 `storeCheckIntervalMinutes` 不是正整数；`storeChangeType` 不在五种之内。**生成阶段把 `tableId` 留 `""` 是对的**，但留占位的记录触发 flow 在 `upload_workflow.py` 阶段可能被服务端 400 顶回来（报 "Data Table is required on the Start node."）。要为记录触发出 flow 时，先跟用户确认这一点：**要么由用户在界面上先绑好表再保存，要么这条流先用手动启动上线、之后在界面上切成记录触发**。
 
@@ -99,7 +100,8 @@
 
 - **选表严格二级联动**：第二级只显示所选多维表格下的数据表。散表归在合成容器 `__loose__`（页面名「未归属多维表」）下。
 - **切换上一级不会自动刷新下一级**：换了多维表格要点数据表右侧的刷新按钮。生成时这两个值由你先用 `linkfox-smart-table` 的 `listMyTables` / `listSharedTables` 查出候选、问用户选定后填真实 id，**不要留空让用户自己去界面上选**（缺陷 #7130931254）；用户明确说以后再选才留空并带 `--table-later`。
-- **字段按名称寻址**：`recordWatchFieldNames` / `recordConditionFieldName` 存的是**字段名**，不是 `fldXXX`。
+- **字段名和字段 ID 都写**：`recordWatchFieldNames` / `recordConditionFieldName` 存字段名，`recordWatchFieldIds`（数组）/ `recordConditionFieldId`（**也是数组**，取第一项）存对应的 `fldXXX`，ID 取自 `listFields` 的 `fieldId`。只写名字时，用户改列名后订阅会静默失效。细则见 `table-automation.md` §2。
+- `recordEventType` 只用 `recordCreated` / `recordUpdated` / `recordConditionMet`；`recordTimeReached` 卡片可见但**暂不支持**，save 直接报错。
 - `isEmpty` / `notEmpty` 两个算子选中时「条件值」隐藏，运行输出的 `condition` 也不带 `value`。
 
 **记录触发的运行时输出**（凭据不进出参）：
@@ -186,14 +188,16 @@
 - 标了 `isComputed` 的列（公式 / 汇总 / 自动编号）会被自动摘掉，被摘的列名列在 `recordRows.droppedComputedFields`。
 - 翻不动时 `rows` 是**空数组而不是报错**（手动启动就是这种情况），此时 `WriteFile` 会报「没有产出任何记录」。
 
-### ⚠️ 画布上配的记录触发不会跑
+### 上传即关联：看 `tableAutomation`，HTTP 成功 ≠ 自动化生效
 
-记录触发只有在 **linkfox-workflow 系统界面上保存过一次**才会生效。后果：
+`upload_workflow.py` 保存时，服务端按开始节点自动登记订阅（换表、换事件、改条件同样随上传更新），**不需要用户再去界面上保存一次**。结果在 stdout 的 `tableAutomation`：
 
-- 只在画布上配、或只经本 skill 上传的记录触发配置**不会生效**，表里来了变更事件也**静默不跑**。
-- 事后在画布上改配置（换表、换事件）**也不会更新**已生效的触发，仍按老配置跑；需要在系统界面上重新保存一次。
+- `effective: true`（`REGISTERED` / `UPDATED` / `REASSIGNED` / `UNBOUND` / `disabled`）：告诉用户已关联到哪张表、什么事件会触发。
+- `effective: false`（`FAILED` / `SKIPPED_NO_NOTEBOOK` / `notSaved` …）：工作流已保存，但**记录变更不会触发它**。回复第一段就要说清，按状态给出补救（补 `notebookId` / 改条件 / 原样重传）。
+- `effective: null`：开始节点是记录触发，但服务端没回关联结果。先跑 `table_automation.py list --workflow-id <id>` 再下结论。
+- 从记录触发切到别的触发后上传会回 `disabled`：原来那张表的自动触发**一起停了**，要告诉用户。
 
-所以生成含 `tableRecordTrigger` 的 flow 时，**必须在补配置指引里明确告诉用户**：这条流要在 linkfox-workflow 系统界面上保存一次，触发才会生效；只在画布上配等于没配。
+状态全表、保存被拒（403 / 409）和启停自动化见 `table-automation.md`。
 
 **记录触发是推模式，不是轮询**：表里记录一变更就推送触发，并按所选事件 / 监听字段 / 条件过滤。`recordCheckIntervalMinutes` 当前**不影响触发时机**，但仍要是正整数才能过保存校验。
 
@@ -611,7 +615,7 @@ await sleep(30000);
 return 'waited 30000ms';
 ```
 
-⚠️ **单个 sleep 不超过 50 秒**：`CustomFunction` 单次执行上限 60 秒。`sleep(30000)` 安全；要等 2 分钟就让 Loop 多转几轮，**不要**写 `sleep(120000)`——会超时报错。也**不要**拿 `CustomPythonFunction` 的 `time.sleep` 当延时：同样 60 秒上限，而且每轮都要多等一次沙箱启动。
+⚠️ **单个 sleep 建议不超过 5 分钟**：`CustomFunction` 单次执行上限**默认 30 分钟**（部署配置 `E2B_SANDBOX_TIMEOUT`，部署可调），`sleep(30000)` / `sleep(300000)` 都不会超时。但等待期间这条执行一直挂着、占着并发，所以轮询间隔仍按 10–30 秒写；要等十几分钟时先问用户是否真要同步等，别自作主张 `sleep(900000)`。也**不要**拿 `CustomPythonFunction` 的 `time.sleep` 当延时：每轮都要多等一次沙箱冷启动。
 
 ⚠️ **不要用 `Atomics.wait`**。它是同步阻塞，会卡住整个实例上所有用户的流程。`await sleep()` 只挂起当前这条流程。
 
@@ -715,7 +719,7 @@ return 'waited 30000ms';
 - [ ] `WriteFile` 的 `writeDestination` 只用 `linkfoxTable` / `newLinkfoxTable` / `updateLinkfoxTable` 三者之一，没有用 `productLibrary`。写已有表、改已有行时**两级都给了**（`notebookId` + `tableId`，填用户选定的表）；新建表时用 `newTableNotebookId`（默认 `__new__`）+ `newTableName`。
 - [ ] **"改已有行"用的是 `updateLinkfoxTable`，不是先删后加、也不是写一条新记录**。记录触发的回写链里 `updateRecordId` **留空**（节点自己从上一步取 `recordRows.recordId`）；不是这条链时才手填或用变量引用。已确认上一步只给**一条**记录——多条会直接报错。
 - [ ] **选多维表的地方都是两级下拉**：`DataReader`（`linkfoxTable` 分支）、`WriteFile`（`linkfoxTable` / `updateLinkfoxTable` 分支）、`BusinessStart`（`tableRecordTrigger`）都要写 `notebookId` + `tableId` 两个字段，值是查表后用户选定的真实 id；不要只写 `tableId` 当一级下拉用。
-- [ ] **含 `tableRecordTrigger` 的 flow 已在回复里点明两件事**：① 记录触发要在 linkfox-workflow 系统界面上保存一次才会生效，只在画布上配或只经本 skill 上传等于没配；② `tableId` 留占位时服务端保存校验会 400（`Data Table is required on the Start node.`），所以触发表必须先问用户选定再生成。
+- [ ] **含 `tableRecordTrigger` 的 flow**：① 触发表是先问用户选定的真实表（`tableId` 留占位时服务端保存校验会 400，`Data Table is required on the Start node.`）；② 监听 / 条件字段**名字和 ID 都写了**（ID 取自 `listFields`）；③ 回复按上传 stdout 的 `tableAutomation` 说清关联有没有生效，`effective` 不是 true 时没有说"已生效"。
 - [ ] 记录触发的 flow 里取"这次变的那一行"用的是 **`{{businessStartAgentflow_0.output.recordEvent.*}}` 节点引用**（`.recordId` / `.recordByName.<字段名>` / `.changedFieldNames`），**没有**用 `{{$webhook.*}}`（不落执行记录、且与原生 webhookTrigger 的 `body/headers/query` 形状容易混），也没有拿 `BusinessStart.output.tableRecordTrigger` 当"本次变更数据"用（它只是订阅配置的静态回显）。
 - [ ] **记录触发要写表时，直接把 `BusinessStart` 接到 `WriteFile`**，用它吐的 `output.rows`（name-keyed），**没有**在中间塞一个只为搬数据的 `CustomFunction`，也**没有**把 `recordEvent.record` 当写入数据用（那份 key 是 `fldXXX`，写入侧回 404）。
 - [ ] 补配置指引里**没有**让用户去页面上绑定 `linkfoxAgentApi` 凭据——这个凭据由后台自动绑定。

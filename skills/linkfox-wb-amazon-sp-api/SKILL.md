@@ -6,7 +6,7 @@ description: 面向亚马逊卖家后台的统一 SP-API 能力，支持店铺�
 description_zh: 当用户需要授权或选择亚马逊店铺、查询或维护 Listings、目录、价格、订单、报告、客户反馈、A+ 内容，或执行库存、Feeds、FBA、入库、出库、面单、发票、退货及外部履约操作时使用。通过 sellerId 与 region 调用对应 Amazon SP-API；支持只读查询、异步任务跟踪和经过明确确认的写操作。完整参数、响应、限制和错误处理见 references/，通过 LinkFox MCP 执行。
 description_en: Unified Amazon seller-backend SP-API operations for store authorization, catalog and listings, pricing, orders, reports, feeds, customer feedback, A+ content, FBA, inbound, outbound, and external fulfillment. Use when the user asks to authorize or select a seller store, inspect or change marketplace data, retrieve reports, or run fulfillment workflows. Calls use sellerId and region, support read and asynchronous workflows, and require explicit confirmation for destructive or committing writes. See references/ for full contracts and MCP routing.
 icon: icons/logo.png
-version: 1.2.0
+version: 2.2.0
 author: Linkfox
 ---
 
@@ -314,6 +314,7 @@ Feed 与 Uploads 的预签名 URL PUT 不是工具网关调用，分别使用保
 7. **Amazon 保护状态**：连续收到 Amazon 400、403、404、429 时，网关可能返回自定义 450、453、454、459。立即停止自动/并发重试，优先展示 `retryAfter`/`blockedUntil`；450 检查参数，453 检查授权，454 检查资源，459 降低频率。说明这是店铺保护冷却，不是封号或积分限制。
 8. **错误可行动**：1005 指向路径白名单，401/403 检查授权和权限，400 检查必填字段/枚举/body，404 检查资源所属店铺和站点，429 遵循退避；不要通过换脚本、重复任务或改参数绕过保护。
 9. **来源与不可用字段**：说明数据来自对应 Amazon SP-API operation 和调用时间；Amazon 未返回的字段标记为不可用，不用其他接口臆测补全。
+9. **以文本形式展示链接**：授权链接只能以文本展示（plaintext），不要转成链接给用户。
 
 ## 解决认证和积分问题
 

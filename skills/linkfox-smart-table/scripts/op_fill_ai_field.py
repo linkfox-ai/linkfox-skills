@@ -6,7 +6,8 @@
 图是异步生成的（一行最长约 10 分钟），用 getAiFillStatus 查进度，完成后用 listRecords 取图。
 
 ⚠️ 会扣**调用方自己**的积分。默认 mode=emptyOnly（只填还没有图的行）；mode=all 会**整格覆盖**已有的图。
-⚠️ 同一列已有没结束的任务时不会重复入队，返回的是那个任务（reused=true）。
+⚠️ 按**单元格**去重：只有这一格已经在生成才跳过（skipped），其余格子照常入队；格子跑完就能重跑。
+   被跳过的格子在 runningTaskIds 那几个任务里，进度要去查它们。
 
 Usage:
   python smart_table.py fillAiField '{"tableId":"tblXXX","fieldName":"AI 场景图"}'
@@ -157,10 +158,19 @@ def main():
             file=sys.stderr,
         )
     elif isinstance(result, dict):
-        if result.get("reused"):
+        running = result.get("runningTaskIds") or []
+        skipped = result.get("skipped") or 0
+        if result.get("reused") and "skipped" not in result:
+            # 旧后端（还没按单元格去重）：这一列有任务在跑就整次不做，taskId 是那个在跑的任务
             print(
                 f"这一列已经有一个没结束的生成任务（taskId={result.get('taskId')}），本次没有入队任何行。"
-                "用 smart_table.py getAiFillStatus 查它的进度，结束后再调。"
+                "用 smart_table.py getAiFillStatus 查它的进度，结束后再调一次（emptyOnly 会接着填剩下的）。"
+            )
+        elif result.get("taskId") is None and skipped:
+            print(
+                f"这 {skipped} 格已经在生成中，本次没有新入队（不会重复扣费）。"
+                f"它们在任务 {', '.join(running)} 里，用 smart_table.py getAiFillStatus 逐个查进度，"
+                "全部结束后再 listRecords 取图。"
             )
         elif result.get("taskId") is None:
             if params.get("recordIds"):
@@ -176,6 +186,12 @@ def main():
                 f"已入队 {result.get('processedCount')} 行，taskId={result.get('taskId')}。图是异步生成的，"
                 "用 smart_table.py getAiFillStatus 查进度，完成后用 listRecords 取图。"
             )
+            if skipped:
+                print(
+                    f"另有 {skipped} 格已经在生成中、本次跳过（不会重复扣费），"
+                    f"它们在任务 {', '.join(running)} 里——这几个任务的进度也要查，"
+                    "都结束了才算整批完成，别只看本次的 taskId 就去取图。"
+                )
             if result.get("isLimited"):
                 print(
                     f"注意：符合条件的有 {result.get('rowCount')} 行，单次只入队了一部分。"

@@ -1,23 +1,32 @@
-# SIF-外观专利检测 API 参考（外观相似检索）
+# SIF-外观专利检测 API 参考（外观相似检索与登记详情）
+
+同一个 Skill 内按业务目的选择入口，两个接口各用一个直接调用脚本；已知登记 ID 或主号码时直接查详情，不需要先检索图片。
+
+| 能力 | POST 网关路径 | 入口脚本 | 每次新调用费用 |
+|---|---|---|---|
+| 图片外观相似检索 | `/ecDw/designSimilarSearch` | `ec_dw_design_similar_search.py` | 5 算力（￥0.05） |
+| 外观登记详情 | `/ecDw/designProfile` | `ec_dw_design_profile.py` | 2 算力（￥0.02） |
+
+按需阅读：[检索参数](#外观相似检索参数)、[响应结构](#响应结构)、[登记详情](#外观登记详情)、[缓存与费用](#缓存费用与落盘)、[错误处理](#错误与失败处理)。
 
 ## 调用规范
 
-- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/ecDw/designSimilarSearch`；网关变量缺省为 `https://tool-gateway.linkfox.com`
+- **请求地址**：检索 `${LINKFOX_TOOL_GATEWAY}/ecDw/designSimilarSearch`；详情 `${LINKFOX_TOOL_GATEWAY}/ecDw/designProfile`；网关变量缺省为 `https://tool-gateway.linkfox.com`
 - **请求方式**：POST，`Content-Type: application/json`
 - **认证方式**：`Authorization: <api_key>`；优先 `LINKFOX_AGENT_API_KEY`，回退 `LINKFOXAGENT_API_KEY`；未配置按 SKILL.md 的“解决认证和算力问题”处理
 - **User-Agent**：`LinkFox-Skill/2.0`；透传 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME`
 - **透传头取值**：建议使用 ASCII，不能含控制字符；标准库使用 Latin-1 编码 HTTP 头。中文等无法编码的值在发送前返回清晰错误，不做隐式编码或重试；JSON 参数仍正常支持 UTF-8 中文
 - **超时**：150s；Python 3.9+，仅标准库；每次至多一次请求，不自动重试、不跟随重定向
-- **上游映射**：后端调用上游工具 `search_similar_design`；签名、AccessKey/SecretKey、nonce 等由后端托管，客户端不配置上游凭据
+- **上游映射**：检索对应 `search_similar_design`，详情对应 `get_design_profile`；后端分别通过 REST 调用，每个动作一次上游请求，不自动串联。签名、AccessKey/SecretKey、nonce 等由后端托管，客户端不配置上游凭据
 
-## 请求参数
+## 外观相似检索参数
 
 POST Body（JSON）：
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |---|---|---|---|---|
-| `imageUrl` | string | 图片来源二选一 | — | 公网 HTTP(S) 地址，8–4096 字符，无内嵌 URL 凭据 |
-| `imageBase64` | string | 图片来源二选一 | — | 图片字节的纯 Base64，不含 `data:image/...;base64,` 前缀；16–12582912 字符，限制按编码字符串长度计，不是解码文件大小 |
+| `imageUrl` | string | 图片来源二选一 | — | 公网 HTTP(S) 纯 URL，8–4096 字符，无内嵌 URL 凭据；不传 Markdown 链接或 HTML 标签 |
+| `imageBase64` | string | 图片来源二选一 | — | 图片字节的纯 Base64，不含 `data:image/...;base64,` 前缀；16–20971520 字符，上限为 20 MiB Base64 文本，约对应 15 MiB 原图 |
 | `title` | string | 否 | — | 如提供则 1–4096 字符；只能辅助图片，不能代替图片。图文分别检索，原始分数不可相加 |
 | `topK` | integer | 否 | 20 | 1–200；候选上限不是用户计费单位，不能据此推算用户售价 |
 | `regions` | string[] | 否 | — | ISO-2 地区码，如 CN/US/EM；每项 2 个英文字母，最多 64 项，不重复。欧盟来源码 EU 在本参数用 EM |
@@ -28,15 +37,17 @@ POST Body（JSON）：
 
 `imageUrl` 与 `imageBase64` 必须且只能提供一个；只有 title 或同时提供两种图片来源均无效。字段使用 camelCase，由后端映射成上游 `image_url` / `image_base64` / `top_k` / `jurisdiction_codes` / `top_loc` / `locarno_classes` / `patent_status`；title 和 regions 同名透传。patentStatus 保持数组，不使用上游的标量写法。
 
-文本字段不能含首尾空白；筛选数组不能含 null 或重复项。可选参数没有使用时优先省略，不用空字符串、数字字符串或逗号拼接字符串代替正确类型。除 patentStatus 外，其他筛选数组允许空数组；省略比空数组更明确。脚本只检查 JSON 顶层为对象，业务字段校验由后端执行并返回 400。
+文本字段不能含首尾空白；筛选数组不能含 null 或重复项。可选参数没有使用时优先省略，不用空字符串、数字字符串或逗号拼接字符串代替正确类型。除 patentStatus 外，其他筛选数组允许空数组；省略比空数组更明确。脚本只检查 JSON 顶层为对象；后端校验字段组合、长度、范围及筛选格式。图片 Base64 的编码合法性、图片内容与 URL 可下载性仍由上游检查，不能把通过本地长度校验当作有效图片保证。`topK` 仅传 JSON 整数，不传小数、布尔值或数字字符串。
 
 来源归属码与 ISO-2 地区码不能混用；不要把候选的 `registration_jurisdiction_code` 或登记号中的来源标识机械改写成 regions。缺分类的登记按上游规则默认保留并计入 `metadata_unknown`，客户端不得自行删掉。法律状态 unknown/pending 的包含关系与覆盖度以实际响应为准；不承诺显式 `[0,1]` 一定留下或剔除 unknown，也不自行重筛候选。
 
 本地图可直接编码为 `imageBase64`，无需上传 helper。大图片先准备本地 UTF-8 JSON 文件，再用 `--params-file` 传入，避免 Windows 命令行长度限制；支持 UTF-8 BOM。不要向 JSON 中加入上游 URL、凭据或自定义请求头。
 
+20 MiB 是单个 Base64 字段的上限；JSON 包装还会增加整包字节数，网关/Ingress/上游整包限制是独立层级。脚本不自动压缩、裁图或改参数；遇到 413 保留错误和请求号，再核对对应入口限制。
+
 ## 响应结构
 
-下例按已验证的网关成功响应结构整理，候选及覆盖信息已删减，费用按当前 5 积分登记价格示例填写；数字和版本不表示固定数据集规模，也不代表此次改价已线上验证。脚本把实际费用响应头合入保存的 JSON：
+下例按已验证的检索网关成功响应结构整理，候选及覆盖信息已删减，费用按当前 5 算力/次示例填写；数字和版本不表示固定数据集规模。详情采用同一 envelope，业务字段见“外观登记详情”。脚本把实际费用响应头合入保存的 JSON：
 
 ```json
 {
@@ -63,6 +74,7 @@ POST Body（JSON）：
           "simple_legal_status": "inactive",
           "registration_date": "2015-03-12",
           "image_available": true,
+          "image_url": "<候选图片完整 URL>",
           "risk_level": "high",
           "risk_reasons": []
         }
@@ -75,7 +87,7 @@ POST Body（JSON）：
         "unverified_hits_dropped": 0
       },
       "warnings": ["index_hits_without_profile", "unknown_metadata_retained", "metadata_incomplete", "line_rerank_unavailable"],
-      "capability_version": "design_similar_v2.2"
+      "capability_version": "design_similar_v2.3"
     },
     "usage": {"request_units": 2, "credit_cost": 35, "credit_waived": false}
   },
@@ -92,6 +104,7 @@ POST Body（JSON）：
 | `data` | object | 上游 envelope；错误时可能不存在 |
 | `data.code`, `data.message` | string | 上游业务状态与消息；成功 code 为 OK |
 | `data.request_id`, `upstreamRequestId` | string | 上游请求标识；后者存在时由后端提取 |
+| `requestId` | string | 网关/服务错误响应可提供的请求标识，与上游 request_id 分开保留；XML 错误归一化后也保留此字段及其他已返回字段 |
 | `data.data` | object | 外观检索业务数据 |
 | `data.data.candidates` | object[] | 候选列表；空列表不代表无侵权风险 |
 | `data.data.coverage` | object | 来源覆盖信息，字段见下表 |
@@ -103,12 +116,12 @@ POST Body（JSON）：
 | `data.data.category_filter`, `data.data.risk_adjustment` | object | 来源分类筛选与风险调整元数据，见下表 |
 | `data.data.line_rerank` | object | 来源线图重排元数据；未执行或失败时可能缺省，见下表 |
 | `data.usage` | object | 来源账户用量，不是用户售价、用户算力或用户余额 |
-| `costToken`, `costCredit` | integer | 脚本将 X-Cost-Token / X-Cost-Credit 合入 JSON，响应头优先；费用示例为 9999 / 5。实际以返回头为准，缺失不代表免费 |
+| `costToken`, `costCredit` | integer | 脚本将 X-Cost-Token / X-Cost-Credit 合入 JSON，响应头优先；检索费用示例为 9999 / 5，详情为 3999 / 2。实际以返回头为准，缺失不代表免费 |
 | `httpStatus`, `error`, `details` | integer, string, string | 脚本归一化错误时可附加的 HTTP 状态、错误及非 JSON 响应正文；不会因费用字段存在就视为成功 |
 
 ### 候选字段
 
-以下是交付约定的 23 个字段及兼容的风险字段。均以 `data.data.candidates[]` 为父路径；字段可能缺省或为 null，不承诺每次全部返回。日期为 YYYY-MM-DD，缺省/null 表示来源未知：
+候选字段如下，均以 `data.data.candidates[]` 为父路径；字段可能缺省或为 null，不承诺每次全部返回。日期为 YYYY-MM-DD，缺省/null 表示来源未知：
 
 | 字段 | 类型 | 展示语义 |
 |---|---|---|
@@ -135,6 +148,7 @@ POST Body（JSON）：
 | `application_date` | string | 申请日期 |
 | `publication_date` | string | 公布日期 |
 | `image_available` | boolean | 来源图片可用提示，不等同于图片 URL |
+| `image_url` | string，可缺省/null | 候选图片 URL，按返回原值使用 |
 | `risk_level` | string | 来源规则层风险提示，不构成侵权判定 |
 | `risk_reasons` | string[] | 来源规则依据；空数组不等于无风险 |
 
@@ -147,9 +161,10 @@ POST Body（JSON）：
 | `candidate_total`, `indexed_vectors` | integer | 来源候选单位总数、已索引向量数，不等于本次返回的专利数 |
 | `candidate_unit`, `collection_name` | string | 来源计数单位、索引集合标识 |
 | `coverage_ratio` | number | 来源定义的比值，实测可大于 1；不能当成 0–1 概率或专利完整覆盖百分比 |
+| `stale`, `stale_age_ms` | boolean, integer | 来源覆盖信息的陈旧标记及年龄（毫秒），不是本次接口耗时或登记法律时效 |
 | `unresolved_hits`, `unverified_hits_dropped` | integer | 来源未解析命中数、未经核实而丢弃的命中数 |
 | `metadata_unknown` | object | 未知元数据计数，如 locarno_class、holder、registration_jurisdiction_code、legal_status（integer）；不是逐候选判定 |
-| `modalities` | object | image/text 等模态的覆盖对象；其 candidate_total、indexed_vectors、candidate_unit、collection_name、coverage_ratio 同上 |
+| `modalities` | object | image/text 等模态的覆盖对象；其 candidate_total、indexed_vectors、candidate_unit、collection_name、coverage_ratio 同上；stale 为 boolean，age_ms 为来源覆盖信息年龄（integer，毫秒） |
 
 下表路径以 `data.data` 为父路径，属于来源处理过程信息，不在用户主结果中展开内部引擎实现：
 
@@ -158,6 +173,10 @@ POST Body（JSON）：
 | `execution.engine`, `execution.elapsed_ms` | string, integer | 来源引擎标识、总耗时（毫秒） |
 | `execution.timings_ms` | object | 动态调试指标对象；不保证所有值都是耗时 |
 | `execution.timings_ms.image_embed_ms`, `image_ann_ms`, `profile_lookup_ms` | integer | 图像编码、向量查询、元数据回查耗时（均相对于 timings_ms） |
+| `execution.timings_ms.v10_image_embed_ms`, `v10_image_ann_ms` | integer | 可选 v10 分支图像编码、向量查询耗时（均相对于 timings_ms）；保留实际值，不与其他分支重复相加 |
+| `execution.timings_ms.v10_guard_applied` | integer | 来源 v10 处理标记，实测为整数 1；按原类型保留，不推断内部策略含义 |
+| `execution.timings_ms.v10_guard_selected`, `v10_collection` | string | 来源分支选择标识、索引集合标识（均相对于 timings_ms），只用于排查 |
+| `execution.timings_ms.v10_candidate_count` | integer | 来源 v10 分支候选计数，不等于本次返回条数或用户计费单位 |
 | `execution.timings_ms.line_rerank_media_lookup_ms`, `line_rerank_oss_ms`, `line_rerank_embed_ms` | integer | 线图重排的媒体回查、读取、编码耗时（均相对于 timings_ms）；成功执行时按实际返回展示 |
 | `execution.timings_ms.ann_prefilter_limit`, `ann_prefilter_codes` | integer, string | 来源预过滤上限、实际预过滤标识 |
 | `execution.timings_ms.image_query_is_line_drawing` | boolean | 来源对本次查询图片的线图判断 |
@@ -179,13 +198,115 @@ POST Body（JSON）：
 | `remaining_quota`, `remaining_credits` | number | 来源账户额度、积分余额，不展示为用户的 LinkFox 余额 |
 | `credit_breakdown` | object | 来源费用明细；cache_discount_applied、scan、model、media、rows、base 为 number，均不是用户售价 |
 
-保持返回顺序，只展示实际返回项；不得臆造图片 URL、覆盖度、持有人、分数或下载链接。当前来源包含 WIPO 海牙非 CN 与 CN 独立范围、EUIPO、USPTO；可用范围与装载缺口按本次 `coverage` / `warnings` 展示，不硬编码历史数量，也不将合法地区参数当成完整覆盖保证。覆盖度无法计算的失败不能解释为零命中。
+保持返回顺序，只展示实际返回项；不得臆造图片 URL、覆盖度、持有人、分数或下载链接。地区筛选由上游执行，逐条保留实际 `jurisdiction_iso2`、来源归属和 warnings，不把请求地区直接当成每条结果的归属或保护范围。已观察到 US/EM 请求返回 WO 记录，筛选契约差异仍待来源确认，不在客户端擅自改写地区或删除记录。当前来源包含 WIPO 海牙非 CN 与 CN 独立范围、EUIPO、USPTO；可用范围与装载缺口按本次 `coverage` / `warnings` 展示，不硬编码历史数量，也不将合法地区参数当成完整覆盖保证。覆盖度无法计算的失败不能解释为零命中。
+
+## 外观登记详情
+
+`POST /ecDw/designProfile`。使用检索返回或用户提供的外观登记标识查询详情，无需先发起新的图片检索；不提供独立的通用专利公开号查询或专利全文检索。
+
+### 详情请求
+
+| 参数 | 类型 | 约束 | 上游字段 |
+|---|---|---|---|
+| `designRegistrationIds` | string[] | 与 primaryIdentifier 严格二选一；1–200 个唯一登记 ID，每项 1–128 字符，无 null、空字符串或首尾空白 | `design_registration_ids` |
+| `primaryIdentifier` | string | 与 designRegistrationIds 严格二选一；1–128 字符，无首尾空白；主号码可能重号 | `primary_identifier` |
+| `jurisdictionIso2` | string | 可选，仅用于 primaryIdentifier 方式；两位英文字母，如 US/EM，用于收敛归属 | `jurisdiction_iso2` |
+
+所有号码均传字符串，保留前导零；不接受数字/布尔值替代字符串。优先原样使用候选的 `design_registration_id`，不要把 `registration_number` 或 `publication_number` 拼成登记 ID。一次最多 200 个，不自动拆分或逐条请求；不向详情传图片或检索筛选参数。
+
+```bash
+python scripts/ec_dw_design_profile.py '{"designRegistrationIds":["DSR:wipo_hague:EMID.001431738-0001"]}'
+```
+
+也支持 `--params-file detail-request.json`；主号码方式的 JSON 为 `{"primaryIdentifier":"001431738","jurisdictionIso2":"EM"}`。示例使用已验证标识，实际业务应替换为用户提供或检索返回的标识，不为演示重复收费查询。
+
+### 详情响应
+
+成功需同时满足 HTTP 2xx、网关 `errcode=200` 和上游 `data.code=OK`。以下按已验证生产响应的业务结构删减，详情费用已于 2026-10-28 生产验证为 2 算力/次（费用头 3999 / 2），每次仍以实际费用头为准；字段值只表示该登记的来源记录：
+
+```json
+{
+  "errcode": 200,
+  "errmsg": "ok",
+  "upstreamRequestId": "req_example",
+  "data": {
+    "code": "OK",
+    "message": "success",
+    "request_id": "req_example",
+    "data": {
+      "asset": "asset.design_profile",
+      "asset_code": "asset_ipr_design_profile",
+      "returned": 1,
+      "items": [{
+        "design_registration_id": "DSR:wipo_hague:EMID.001431738-0001",
+        "primary_identifier": "001431738",
+        "title_en": "Bottles",
+        "simple_legal_status": "inactive",
+        "as_of_date": "2026-10-09",
+        "coverage_level": "detail_ready",
+        "has_readable_image": 1,
+        "image_count": 5
+      }],
+      "execution": {"engine": "starrocks", "elapsed_ms": 27, "row_count": 1}
+    }
+  },
+  "costToken": 3999,
+  "costCredit": 2
+}
+```
+
+| 路径 | 类型 | 说明 |
+|---|---|---|
+| `data.data.items` | object[] | 登记详情列表，不能套用检索 candidates 路径；保留全部返回记录和原顺序 |
+| `data.data.returned` | integer | 本次返回记录数，不代表来源资产总量 |
+| `data.data.asset`, `data.data.asset_code` | string | 来源资产标识 |
+| `data.data.execution` | object | 来源执行元数据，实测含 engine（string）、elapsed_ms / row_count（integer）；非用户主结果 |
+| `data.usage` | object | 原始来源用量，沿用上文语义；不是用户扣费或余额 |
+| `upstreamRequestId`, `data.request_id`, `costToken`, `costCredit` | string / integer | 请求追踪和网关费用，沿用公共 envelope 规则；费用头优先 |
+
+下表列出上游字典的 30 个字段，路径均为 `data.data.items[]`。生产记录可能只返回其中部分字段；缺省/null 表示来源未知，不补值，不承诺每条记录完整返回字典字段。
+
+| 字段 | 类型 | 语义 |
+|---|---|---|
+| `design_registration_id` | string | 来源外观登记唯一 ID |
+| `primary_identifier` | string | 主展示号码，保留前导零 |
+| `application_number` | string | 申请号 |
+| `registration_number` | string | 登记号或国际登记号 |
+| `publication_number` | string | 公开号 |
+| `as_of_date` | string | 最近一次确认/重算的业务日期，不表示今天或历史快照 |
+| `data_version` | string | 来源数据版本 |
+| `right_type` | string | 权利类型，实测为 registered_design |
+| `registration_jurisdiction` | string | 来源归属原值，实测为 EM，不保证为中文国家名 |
+| `registration_jurisdiction_code` | string | 原始归属码，如 EMID/USID |
+| `jurisdiction_iso2` | string | ISO-2 归属，欧盟使用 EM |
+| `title` | string | 来源原始标题 |
+| `title_language` | string | 标题语言，可能为 unknown |
+| `title_en` | string | 来源英文标题，不自行补译 |
+| `title_en_source` | string | 英文标题来源 |
+| `simple_legal_status` | string | 归一状态，如 active/inactive/pending/unknown，保留来源口径 |
+| `raw_status` | string | 来源状态原文，实测为 DEL，不自行重新映射 |
+| `application_date` | string | 申请日期，YYYY-MM-DD |
+| `registration_date` | string | 登记日期，YYYY-MM-DD |
+| `publication_date` | string | 公开日期，YYYY-MM-DD |
+| `locarno_classes` | string[] | 来源洛迦诺分类 |
+| `holder_names` | string[] | 权利人名称 |
+| `designer_names` | string[] | 设计人名称 |
+| `classification_count` | integer | 分类事实条数 |
+| `party_count` | integer | 主体事实条数，不推断缺失的持有人或设计人 |
+| `has_readable_image` | integer | 生产实测为 1；按原类型保留，表示媒体可读提示，不是图片 URL |
+| `image_count` | integer | 来源图片事实数量，不代表可下载文件数量 |
+| `text_count` | integer | 来源文本事实数量 |
+| `data_quality_level` | string | 来源数据质量等级，如 usable/partial/insufficient |
+| `coverage_level` | string | 来源覆盖等级，如 detail_ready/search_ready/metadata_partial/identifier_only/insufficient_data |
+
+详情不返回图片地址、封面、对象存储定位或侵权结论；不能由 `has_readable_image` / `image_count` 构造下载链接。详情没有检索生成的模态分数或相似度。主号码返回多条时保留全部，不擅自认定首条为唯一结果。`404 / DATA_DESIGN_NOT_FOUND` 只表示来源未找到对应登记，不能推断不存在相关权利。
 
 ## 缓存、费用与落盘
 
 - 成功响应按网关、端点、API Key 指纹与完整参数缓存 24h；HTTP/业务失败不缓存。读取前仍要求配置当前 Key，并按其指纹隔离；缓存命中不联网验证 Key 是否仍有效。
+- 检索结果读取 `data.data.candidates`，详情结果读取 `data.data.items`，不共用列表路径。用户只要求其中一个动作时仅调用对应脚本；要求检索后查详情时，原样使用本次检索候选 ID，在用户请求范围内组成一个详情批次，不额外检索、不逐条循环。
 - 缓存命中不发新请求，费用字段来自原始响应，不是本次新扣费；`--no-cache` 主动刷新可能再次消耗，继续调用前说明这一点。
-- 登记价格为每次新检索 5 积分（￥0.05/次），由网关统一扣费。实际扣费展示以网关费用响应为准；后端成本、来源积分、`usage` 或空费用字段不作为用户扣费金额或免费依据。
+- 检索每次新调用 5 算力（￥0.05/次），详情每次新调用 2 算力（￥0.02/次），检索后查一次详情共 7 算力，由网关统一扣费。详情单次 1–200 个 ID 按次收费，不按返回条数收费。实际扣费展示以网关费用响应为准；后端成本、来源积分、`usage` 或空费用字段不作为用户扣费金额或免费依据。
 - 位置参数 JSON 与 `--params-file <UTF-8 JSON 文件>` 等价；`--inline` 仅控制显示，始终落盘。
 - 完整响应保存到 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sif-compliance-detection-<timestamp>.json`。请求前准备最终 session/data 并独占预留唯一文件；SESSION_ID 控制字符、路径字符、Windows 保留名与尾部点/空白均在请求前拒绝。当前目录不可写即报错，不回退家目录或临时目录。
 - 小于等于 8 KB 的响应打印全量；更大响应打印摘要和主列表前三条，详见 SKILL.md 的固定输出块。脚本不额外保存请求正文或原始 API Key；实际响应保持完整。
@@ -195,12 +316,16 @@ POST Body（JSON）：
 | 情况 | 处理 |
 |---|---|
 | 400 / 无效参数 | 展示实际字段错误；不自动改变图片、筛选或候选数 |
+| 400 / DATA_IMAGE_DOWNLOAD_FAILED | 来源下载图片失败；保留错误和请求号，结合实际图片 URL 与来源日志核对访问状态或下载失败原因，不擅自断言参数错误、不自动换图或改用 Base64 重试 |
+| 413 / SYSTEM_PAYLOAD_TOO_LARGE | 核对字段与整包限制，保留错误和请求号；不自动压缩、换图或重试 |
+| 404 / DATA_DESIGN_NOT_FOUND | 来源未找到详情，不自动换号码或查询方式；普通 not found 需另核对网关路由/服务版本 |
 | 上游认证错误（如 AUTH_ACCESS_KEY_INVALID）/ 数仓服务凭据未配置 | 联系后端管理员检查上游配置，保留 code/request_id；客户端不索取上游 AccessKey/SecretKey 或门户口令 |
 | LinkFox 网关 401 / 402 / 算力或余额不足 | 读取 [onboarding.md](onboarding.md)，按同类 Skill 的统一流程处理用户 Key、认证和算力问题 |
 | 403 | 按实际权限错误处理，不绕过授权或索取上游凭据 |
 | 3xx | 返回 Redirect blocked，不转发 Key、不跟随重定向 |
 | Invalid request header | 环境变量头含控制字符或不能按 Latin-1 编码；只提示头名称，不回显 Key，不发请求。将透传头改成 ASCII 标识后由用户决定后续调用 |
 | 5xx / 超时 / 连接中断 | 不自动重试；调用结果可能未知，保留已有请求标识 |
+| 502 / SR_QUERY_ERROR、503 / CAPABILITY_BACKEND_UNAVAILABLE | 来源查询失败或能力后端不可用；保留实际 code/request_id，供管理员或来源排查，不作为零命中或引导用户充值的依据 |
 | 上游 code 不是 OK 或响应含 error | 保留业务错误，不缓存、不当成功候选展示 |
 | 覆盖度不足或无法建立 | 保留来源失败/警告；不能当作零命中或无侵权结论 |
 

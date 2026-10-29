@@ -76,7 +76,8 @@ def _decode_gateway_response(body, http_status=None, reason=None):
                             code = int(code)
                         except ValueError:
                             pass
-                    return {"errcode": code, "errmsg": fields.get("errmsg", "")}
+                    fields["errcode"] = code
+                    return fields
             except ElementTree.ParseError:
                 pass
 
@@ -206,7 +207,7 @@ def _load_cache(path):
 
 def _is_success_payload(result):
     """仅保存成功的网关响应；检查原上游 envelope 的业务状态。"""
-    if not isinstance(result, dict) or "data" not in result:
+    if not isinstance(result, dict) or result.get("errcode") != 200 or "data" not in result:
         return False
     upstream = result["data"]
     if not isinstance(upstream, dict) or upstream.get("code") != "OK":
@@ -214,7 +215,8 @@ def _is_success_payload(result):
     for envelope in (result, upstream):
         if not isinstance(envelope, dict):
             continue
-        if envelope.get("error") or envelope.get("success") is False:
+        if ("error" in envelope and envelope["error"] is not None
+                or envelope.get("success") is False or envelope.get("ok") is False):
             return False
         status = envelope.get("httpStatus")
         if status is not None and str(status) not in ("200", "201", "202", "204"):
