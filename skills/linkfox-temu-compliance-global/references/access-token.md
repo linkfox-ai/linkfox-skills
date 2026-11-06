@@ -6,7 +6,7 @@ Temu **没有** LinkFox 侧自动 OAuth；`accessToken` 须在 Temu 卖家后台
 
 | 令牌 | 用途 | 获取方式 |
 |------|------|----------|
-| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token`；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理） |
+| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token`；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **执行规则 → 解决认证和算力问题** 处理） |
 | **Temu accessToken** | Temu 业务 API（经紫鸟转发） | Temu 卖家后台授权后复制 |
 
 ```bash
@@ -38,7 +38,7 @@ python scripts/check_linkfox_token.py
 3. **服务市场** → **授权管理**
 4. **获取授权** → 选择 **「Cyber-ERP酷鸟助手」**
 5. 全选授权 → 确认 → 复制 token
-6. 调用 API：`site=global` / `global` / `eu`，`managementType=semi-managed`
+6. 调用 API：`site=us` / `global` / `eu`，`managementType=semi-managed`
 
 ## 3. 全托管店铺
 
@@ -60,9 +60,9 @@ python scripts/check_linkfox_token.py
 |------|------|-----------|
 | cn | 中国站 | openapi.kuajingmaihuo.com |
 | partner | Partner 网关 | openapi-b-partner.temu.com |
-| us | 全球站 | openapi-b-global.temu.com |
+| us | 美国区 | openapi-b-global.temu.com |
 | global | 全球区 | openapi-b-global.temu.com |
-| eu | 全球站 | openapi-b-global.temu.com |
+| eu | 欧洲区 | openapi-b-global.temu.com |
 
 ## 本地保存 Token（推荐）
 

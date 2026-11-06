@@ -1,239 +1,401 @@
-# TikTok 视频市场情报 API 参考
+# 出海匠 TikTok 视频市场情报 接口说明
 
-## 调用规范
+## 公共规则
 
-- **协议**：HTTPS `POST`，JSON 请求体
-- **请求地址**：
-  - `${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/search`
-  - `${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/detail`
-  - `${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/related-products`
-  - `${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/reviews`
-- **网关变量**：`LINKFOX_TOOL_GATEWAY`；未设置时脚本回退 `https://tool-gateway.linkfox.com`
-- **认证**：`Authorization: <api_key>`；api_key 优先读取 `LINKFOX_AGENT_API_KEY`，回退 `LINKFOXAGENT_API_KEY`
-- **固定请求头**：`Content-Type: application/json`、`User-Agent: LinkFox-Skill/2.0`
-- **透传请求头**：`SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME`
-- **超时**：150 秒
-- **运行环境**：Python 3.9+，仅标准库
+### 调用规范
 
-## 入口脚本与缓存
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-| 能力 | 脚本 | 网关路径 |
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 业务脚本约定
+
+四个接口共用以下 CLI、缓存和落盘行为。
+
+### 脚本选项与运行约定
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| JSON 参数 | object | 是 | 首个位置参数，使用对应接口请求表。脚本不改写筛选值。 |
+| --inline | CLI flag | 否 | 强制完整打印，仍落盘且仍复用有效缓存。 |
+| --no-cache | CLI flag | 否 | 跳过业务缓存读写；可能再次消耗算力，仅在用户明确同意额外消耗或调试时使用。 |
+
+Python 3.9+，业务脚本仅使用标准库。优先读取 LINKFOX_AGENT_API_KEY，兼容 LINKFOXAGENT_API_KEY；网关未配置时回退正式地址。透传 SESSION_ID、MESSAGE_ID、MODE_ID、APP_NAME，会话标识去除首尾空白。
+
+业务缓存 TTL 为 24 小时，位于 `<cwd>/linkfox/.cache/linkfox-chuhaijiang-tiktok-video/`；按当前目录、密钥 SHA-256 指纹、去尾斜线网关、接口端点和完整参数隔离。命中输出 `Cache hit`，成功空结果可缓存，HTTP 或业务失败不缓存，过期/损坏缓存视为未命中。公共调用器始终传 `--no-cache`，仅由业务封装负责缓存；此内部选项不关闭业务默认缓存。
+
+落盘路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-video-<timestamp>.json`，并维护 `_meta.json` 与 `index.jsonl`；缺少 SESSION_ID 时进程内生成稳定会话标识。当前目录不可写时报错，不回退 /tmp；请求前检查输出可写性。响应不超过 8000 UTF-8 字节完整打印，超过则显示摘要及最大列表前 3 条；连续调用保留微秒级文件名。
+
+### 失败处理与缓存限制
+
+- HTTP/业务 403 为无权限，不归入普通认证或充值流程。HTTP 4xx 核对对应接口字段、类型、站点与分页；HTTP 5xx 或超时保留错误并停止，不自动连续重试付费请求。
+- 业务 401/402 或消息显示鉴权/算力不足时读取 `onboarding.md`。响应消息、追踪标识和原始错误应保留；脚本以 JSON 回显网关错误，不打印网络异常堆栈。
+- 基础响应状态与可缓存性分开：顶层 `error`、`success=false` 或失败的 `code` / `errorCode` 标记不写业务缓存；不改变公共响应码判断。
+
+## 接口：视频搜索
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/search`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| country | string | 是 | 小写请求上下文/站点码：`br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`；返回行的 `country_code` 可不同，分别保留。 |
+| keyword | string | 否 | 视频描述或相关关键词。 |
+| category | string | 否 | 视频分类，只能使用供应商认可值；Java 契约未公开枚举。 |
+| isCommercial | boolean | 否 | 是否带货。 |
+| minViews | number | 否 | 播放量下限。 |
+| maxViews | number | 否 | 播放量上限。 |
+| minLikes | number | 否 | 点赞量下限。 |
+| maxLikes | number | 否 | 点赞量上限。 |
+| minGmv30d | number | 否 | 30 天 GMV 下限。 |
+| maxGmv30d | number | 否 | 30 天 GMV 上限。 |
+| minEngagement | number | 否 | 互动率下限；契约未声明单位或范围，保持原始口径，不自行换算百分比。 |
+| maxEngagement | number | 否 | 互动率上限；契约未声明单位或范围，保持原始口径，不自行换算百分比。 |
+| accountType | integer | 否 | 只允许 `0`、`3`、`4`，业务名称未公开。 |
+| sort | string | 否 | `field:asc` 或 `field:desc`，默认 `views:desc`；除 views 外的完整字段枚举未公开。 |
+| page | integer | 否 | 页码，从 1 开始；默认值未声明。 |
+| pageSize | integer | 否 | 每页数量，最大 10；默认值未声明。先使用小页验证，再按用户范围查询。 |
+
+#### 参数约束与使用限制
+
+只发送用户明确要求的筛选字段，不为了空结果自动放宽范围、换关键词或翻页。网关使用 camelCase；上游别名 `is_commercial`、`min_views`、`max_views`、`min_likes`、`max_likes`、`min_gmv_30d`、`max_gmv_30d`、`min_engagement`、`max_engagement`、`account_type`、`page_size` 不用于网关调用。上述范围筛选可与 `accountType=0`、`sort=views:desc` 组合使用。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
 |---|---|---|
-| 视频搜索 | `chuhaijiang_video_search.py` | `/chuhaijiang/videos/search` |
-| 视频详情 | `chuhaijiang_video_detail.py` | `/chuhaijiang/videos/detail` |
-| 视频带货商品 | `chuhaijiang_video_related_products.py` | `/chuhaijiang/videos/related-products` |
-| 视频评论 | `chuhaijiang_video_reviews.py` | `/chuhaijiang/videos/reviews` |
+| errcode | integer / string / null | 业务状态；正常响应示例为 200；判断遵守公共响应码基本规则。 |
+| errmsg | string | 消息，正常响应示例为 `ok`。 |
+| request_id | string | 请求追踪标识，示例格式为 UUID。 |
+| error | string / 未声明 | 本地连接或解析失败时的错误信息，仅错误场景可能存在；其他顶层 error 标记按原值保留。 |
+| details | 任意 JSON / string | 非对象 JSON 响应或 HTTP 非 JSON 错误正文等诊断内容，仅错误场景可能存在。 |
+| success / code / errorCode | 未声明 | 脚本兼容的可选业务标记，并非已确认的正常响应字段；失败标记不缓存，正常响应状态仍按公共规则判断。 |
+| data | object | 本接口数据容器。 |
+| data.total_count | integer | 业务总条数，可大于本页列表长度。 |
+| data.items | array<object> | 本页记录；字段可能缺失或为 null，不补零。 |
 
-四个业务入口脚本默认缓存成功响应 24 小时。缓存按当前工作目录、调用身份、网关、端点和完整请求参数隔离；相同组合命中时输出 `Cache hit`，不会发起新的付费请求。HTTP 或业务失败不写入缓存；业务成功的空结果可以缓存。`--inline` 不绕过缓存；`--no-cache` 会跳过缓存读写并强制发起真实请求，可能再次消耗算力，仅在用户明确同意额外消耗或调试时使用。
+#### data.items[] 记录字段
 
-## 公共约定
+字段可缺失或为 null。表中标注“解释性类型”的类型仅用于理解字段，不代表接口保证；以实际响应为准。
 
-### 通用请求参数
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | string | 视频 ID。 |
+| video_desc | string（解释性类型，非契约保证） | 视频文案。 |
+| share_url | string（解释性类型，非契约保证） | 公开 TikTok 链接。 |
+| video_launch_time | number（时间戳）（解释性类型，非契约保证） | 发布时间，单位未声明；保留原值。 |
+| video_duration | number（解释性类型，非契约保证） | 视频时长，单位未声明。 |
+| author_id | string（解释性类型，非契约保证） | 作者 ID。 |
+| author_unique_id | string（解释性类型，非契约保证） | 作者账号。 |
+| author_nickname | string（解释性类型，非契约保证） | 作者昵称。 |
+| country_code | string（解释性类型，非契约保证） | 返回行地区，不保证等于请求 country。 |
+| account_type | integer（解释性类型，非契约保证） | 账号类型。 |
+| video_play_count | number（解释性类型，非契约保证） | 累计播放数。 |
+| video_like_count | number（解释性类型，非契约保证） | 累计点赞数。 |
+| video_comment_count | number（解释性类型，非契约保证） | 评论数。 |
+| video_share_count | number（解释性类型，非契约保证） | 分享数。 |
+| video_collect_count | number（解释性类型，非契约保证） | 收藏数。 |
+| video_engagement_rate | number（解释性类型，非契约保证） | 十进制互动率。 |
+| video_total_like_count_to_follower_count_ratio | number（解释性类型，非契约保证） | 点赞与粉丝比率。 |
+| video_30d_gpm | object | 30 天每千次播放 GMV，含 unit、value；不是百分比。 |
+| video_30d_gpm.unit | string | 供应商返回单位，例如 US；不擅自等同货币代码。 |
+| video_30d_gpm.value | number | 供应商返回原始值。 |
+| is_ad | boolean（解释性类型，非契约保证） | 广告标记，可能缺失，以实际返回为准。 |
+| is_aigc_video | boolean（解释性类型，非契约保证） | AIGC 标记，可能缺失，以实际返回为准。 |
+| 商品、30 天销量和 GMV 相关字段（字段名未声明） | 未声明（解释性类型，非契约保证） | isCommercial=true 时可返回这些指标；只按实际返回展示，不补造名称或类型。 |
 
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---:|---|
-| `country` | string | 是 | 小写请求上下文/站点码：`br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`；返回行的 `country_code` 可能不同，必须分别保留 |
-| `page` | integer | 搜索/关联/评论可选 | 页码，从 1 开始 |
-| `pageSize` | integer | 搜索/关联/评论可选 | 每页数量，最大 10；使用小页验证后再按需扩大 |
-| `id` | string | 详情/关联/评论是 | 19 位视频 ID；必须按字符串传递 |
+### 响应码规则
 
-### 公共成功响应
+#### 基础规则
 
-真实调用验证的成功外层为：
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-```json
-{
-  "errcode": 200,
-  "data": {
-    "total_count": 1,
-    "items": []
-  },
-  "errmsg": "ok",
-  "request_id": "uuid"
-}
-```
+#### 业务规则
 
-`data.items` 的行结构由端点决定。`total_count` 可以大于当前页长度。字段可能缺失或为 `null`，不得用零补齐。
+- 分类枚举未公开；使用未经供应商确认的 beauty 或作者分类标签可能返回 `errcode=501`，消息含上游 HTTP 502 / BACKEND_ERROR。停止并要求供应商认可的分类值，不猜值重试。
 
-## 视频搜索
-
-### 接口信息
-
-- **地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/search`
-- **脚本**：`chuhaijiang_video_search.py`
-- **成功数据**：`data.items[]`，总数为 `data.total_count`
-
-### 请求参数
-
-网关请求使用 camelCase；Java 服务再映射为出海匠上游的 snake_case。请求字段如下：
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---:|---|
-| `keyword` | string | 否 | 视频描述或相关关键词 |
-| `category` | string | 否 | 视频分类；Java 契约未提供可用值枚举，只能使用供应商认可的分类值 |
-| `isCommercial` | boolean | 否 | 是否带货 |
-| `minViews` / `maxViews` | number | 否 | 播放量范围 |
-| `minLikes` / `maxLikes` | number | 否 | 点赞量范围 |
-| `minGmv30d` / `maxGmv30d` | number | 否 | 30 天 GMV 范围 |
-| `minEngagement` / `maxEngagement` | number | 否 | 互动率范围；Java 契约未声明单位或范围，保持供应商原始口径，不自行做百分比换算 |
-| `accountType` | integer | 否 | 账号类型，只允许 `0`、`3`、`4` |
-| `sort` | string | 否 | `field:asc` 或 `field:desc`；默认 `views:desc` |
-| `country` | string | 是 | 请求上下文/站点码 |
-| `page` | integer | 否 | 页码，从 1 开始 |
-| `pageSize` | integer | 否 | 每页数量，最大 10 |
-
-上述字段的上游别名分别为 `is_commercial`、`min_views`、`max_views`、`min_likes`、`max_likes`、`min_gmv_30d`、`max_gmv_30d`、`min_engagement`、`max_engagement`、`account_type` 和 `page_size`。Skill 调用网关时应使用表中的 camelCase 名称。
-
-Java 侧没有定义 `category` 枚举、`accountType` 的业务名称或除 `views` 外的完整排序字段枚举。实测随意使用 `beauty` 或返回行的作者分类标签作为 `category` 时，网关返回 `errcode=501`，错误消息显示上游 HTTP 502 / `BACKEND_ERROR`；不要猜测分类值或自动换值重试。
-
-只发送用户明确要求的筛选字段。不要为了空结果自动放宽范围、换关键词或翻页。
-
-真实差分验证已覆盖 `isCommercial`、播放/点赞/30 天 GMV/互动率的最小与最大值、`accountType=0` 和 `sort=views:desc` 的组合请求；`isCommercial=true` 的独立请求返回了商品、30 天销量和 GMV 字段。
-
-### 真实响应关键字段
-
-| 字段 | 说明 |
-|---|---|
-| `id` | 视频 ID |
-| `video_desc` / `share_url` | 文案与公开链接 |
-| `video_launch_time` / `video_duration` | 发布时间戳与时长 |
-| `author_id` / `author_unique_id` / `author_nickname` | 作者身份 |
-| `country_code` / `account_type` | 返回行的地区与账号类型 |
-| `video_play_count` / `video_like_count` | 播放与点赞 |
-| `video_comment_count` / `video_share_count` / `video_collect_count` | 互动计数 |
-| `video_engagement_rate` | 十进制互动率 |
-| `video_total_like_count_to_follower_count_ratio` | 点赞与粉丝比率 |
-| `video_30d_gpm` | `{unit,value}` 结构的 30 天 GPM |
-| `is_ad` / `is_aigc_video` | 广告和 AIGC 标记，字段可能缺失 |
+### curl 示例
 
 ```bash
-python scripts/chuhaijiang_video_search.py '{"country":"us","keyword":"beauty","isCommercial":true,"sort":"views:desc","page":1,"pageSize":3}'
-```
-
-## 视频详情
-
-### 接口信息
-
-- **地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/detail`
-- **脚本**：`chuhaijiang_video_detail.py`
-- **成功数据**：`data.items[]`；`include=core` 时另有 `data.core.items[]`
-
-### 请求参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---:|---|
-| `country` | string | 是 | 小写站点码 |
-| `id` | string | 是 | 视频 ID |
-| `include` | string | 否 | 使用 `core` 取得标准化核心表现字段 |
-
-真实验证的 `data.items[0]` 包含 `video_cover`、`user_avatar`、`video_duration`、`unique_id`、`nickname`、`follower_count`、`had_product`、`has_comment`、`share_url`、`video_count`、`video_avg_play_count`、`video_avg_like_count` 与 `author_avg_engagement_rate` 等字段。
-
-`data.core.items[0]` 包含 `core_video_play_count`、`core_video_like_count`、`core_video_comment_count`、`core_video_share_count`、`core_video_collect_count`、`core_video_engagement_rate`、`core_video_like_play_ratio`、`core_video_30d_gpm` 与 `core_country_code`。
-
-```bash
-python scripts/chuhaijiang_video_detail.py '{"country":"us","id":"6788833646091504902","include":"core"}'
-```
-
-## 视频带货商品
-
-### 接口信息
-
-- **地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/related-products`
-- **脚本**：`chuhaijiang_video_related_products.py`
-- **成功数据**：`data.items[]`，总数为 `data.total_count`
-
-### 请求参数
-
-继承 `country`、`id`、`page`、`pageSize`。普通非带货视频返回 `errcode=200`、`total_count=0` 和空 `items`，这是有效结果。
-
-真实非空响应包含：
-
-- 商品：`tiktok_video_detail_product_id`、`tiktok_product_detail_product_name`、`tiktok_product_detail_product_rating`、类目、图片、SKU、库存与状态。
-- 价格：`tiktok_product_detail_floor_price` / `ceiling_price`，均保留 `{unit,value}`。
-- 商务：`tiktok_product_detail_commission_rate`、`tiktok_video_detail_product_total_sold_count`、`tiktok_video_detail_product_total_gmv`。
-- 视频归因：`tiktok_video_detail_video_id`、`tiktok_video_detail_video_30d_sold_count`、`tiktok_video_detail_video_30d_gmv`。
-
-```bash
-python scripts/chuhaijiang_video_related_products.py '{"country":"us","id":"7672655263672864013","page":1,"pageSize":3}'
-```
-
-## 视频评论
-
-### 接口信息
-
-- **地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/reviews`
-- **脚本**：`chuhaijiang_video_reviews.py`
-- **成功数据**：`data.items[]`，总数为 `data.total_count`
-
-### 请求参数
-
-继承 `country`、`id`、`page`、`pageSize`。
-
-| 字段 | 说明 |
-|---|---|
-| `tiktok_video_detail_comment_id` | 评论 ID |
-| `tiktok_video_detail_comment_text` | 评论文本 |
-| `tiktok_video_detail_comment_create_time` | 创建时间戳 |
-| `tiktok_video_detail_comment_like_count` | 点赞数 |
-| `tiktok_video_detail_comment_reply_count` | 回复数 |
-| `tiktok_video_detail_comment_unique_id` | 评论者 handle |
-| `tiktok_video_detail_comment_nickname` | 评论者昵称 |
-| `tiktok_video_detail_comment_user_avatar` | `{thumb_url,url}` 头像对象 |
-| `tiktok_video_detail_video_id` | 所属视频 ID |
-
-```bash
-python scripts/chuhaijiang_video_reviews.py '{"country":"us","id":"6788833646091504902","page":1,"pageSize":3}'
-```
-
-## 错误与失败判定
-
-| 情况 | 处理 |
-|---|---|
-| HTTP 401 或 `errcode=401` | 检查双 env key；读取 `onboarding.md`，不要绕过鉴权 |
-| `errcode=402` 或余额/算力不足 | 按 onboarding 的 billing 流程处理，不自动重试 |
-| HTTP/业务 403 | 无权限；不归入普通 auth/billing 自动处理 |
-| HTTP 4xx | 回显网关 JSON，检查 `country`、`id`、分页和字段类型 |
-| HTTP 5xx / 超时 | 保留错误并停止；不得自动连续重试付费请求 |
-| 分类值导致网关 `errcode=501`，错误消息显示上游 HTTP 502 / `BACKEND_ERROR` | 分类枚举未公开；停止并要求用户提供供应商认可的分类值 |
-| `errcode=200` 且 `items=[]` | 有效空结果，不得伪装为错误或自动换条件 |
-
-成功判定必须同时检查 HTTP 请求完成、`errcode=200`、`errmsg=ok`，且不存在顶层 `error`。脚本会把网关错误作为 JSON 回显，不打印 Python 堆栈。
-
-## 算力消耗规则
-
-| 能力 | 算力/次 |
-|---|---:|
-| 视频搜索 | 18 |
-| 视频详情 | 9 |
-| 视频带货商品 | 18 |
-| 视频评论 | 18 |
-
-## curl 示例
-
-```bash
-curl --request POST "${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/search" \
-  --header "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
-  --header "Content-Type: application/json" \
-  --header "User-Agent: LinkFox-Skill/2.0" \
-  --data '{"country":"us","keyword":"beauty","isCommercial":true,"sort":"views:desc","page":1,"pageSize":3}' \
+curl --request POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/chuhaijiang/videos/search"  \
+  --header "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}"  \
+  --header "Content-Type: application/json"  \
+  --header "User-Agent: LinkFox-Skill/2.0"  \
+  --data '{"country":"us","keyword":"beauty","isCommercial":true,"sort":"views:desc","page":1,"pageSize":3}'  \
   --max-time 150
 ```
 
+## 接口：视频详情
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/detail`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| country | string | 是 | 小写请求上下文/站点码：`br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`；返回行的 `country_code` 可不同，分别保留。 |
+| id | string | 是 | 视频 ID，19 位标识必须按 JSON 字符串传递，避免精度损失。 |
+| include | string | 否 | 仅需要标准化核心指标时使用 `core`。 |
+
+#### 参数约束与使用限制
+
+资料在 data.items[]；include=core 才额外提供 data.core.items[]。资料和核心字段的完整类型与所有键未声明，表内未声明内容以实际响应为准，不臆造枚举。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| errcode | integer / string / null | 业务状态；正常响应示例为 200；判断遵守公共响应码基本规则。 |
+| errmsg | string | 消息，正常响应示例为 `ok`。 |
+| request_id | string | 请求追踪标识，示例格式为 UUID。 |
+| error | string / 未声明 | 本地连接或解析失败时的错误信息，仅错误场景可能存在；其他顶层 error 标记按原值保留。 |
+| details | 任意 JSON / string | 非对象 JSON 响应或 HTTP 非 JSON 错误正文等诊断内容，仅错误场景可能存在。 |
+| success / code / errorCode | 未声明 | 脚本兼容的可选业务标记，并非已确认的正常响应字段；失败标记不缓存，正常响应状态仍按公共规则判断。 |
+| data | object | 本接口数据容器。 |
+| data.total_count | integer | 业务总条数，可大于本页列表长度。 |
+| data.items | array<object> | 本页记录；字段可能缺失或为 null，不补零。 |
+| data.core | object | include=core 时可返回核心指标容器。 |
+| data.core.items | array<object> | 标准化核心指标列表。 |
+| data.core.items[].core_video_play_count | number（解释性类型，非契约保证） | 核心播放数。 |
+| data.core.items[].core_video_like_count | number（解释性类型，非契约保证） | 核心点赞数。 |
+| data.core.items[].core_video_comment_count | number（解释性类型，非契约保证） | 核心评论数。 |
+| data.core.items[].core_video_share_count | number（解释性类型，非契约保证） | 核心分享数。 |
+| data.core.items[].core_video_collect_count | number（解释性类型，非契约保证） | 核心收藏数。 |
+| data.core.items[].core_video_engagement_rate | number（解释性类型，非契约保证） | 核心互动率。 |
+| data.core.items[].core_video_like_play_ratio | number（解释性类型，非契约保证） | 点赞播放比。 |
+| data.core.items[].core_video_30d_gpm | object | 核心 30 天 GPM，保留 unit/value。 |
+| data.core.items[].core_video_30d_gpm.unit | string（解释性类型，非契约保证） | 原始单位。 |
+| data.core.items[].core_video_30d_gpm.value | number（解释性类型，非契约保证） | 原始值。 |
+| data.core.items[].core_country_code | string（解释性类型，非契约保证） | 核心指标返回地区。 |
+
+#### data.items[] 记录字段
+
+字段可缺失或为 null。表中标注“解释性类型”的类型仅用于理解字段，不代表接口保证；以实际响应为准。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| video_cover | 未声明 | 视频封面，保留实际结构。 |
+| user_avatar | 未声明 | 达人头像，保留实际结构。 |
+| video_duration | number（解释性类型，非契约保证） | 视频时长，单位未声明。 |
+| unique_id | string（解释性类型，非契约保证） | 达人账号。 |
+| nickname | string（解释性类型，非契约保证） | 达人昵称。 |
+| follower_count | number（解释性类型，非契约保证） | 粉丝数。 |
+| had_product | 未声明 | 是否有关联商品标记，不替代关联商品实际查询。 |
+| has_comment | 未声明 | 是否有评论标记。 |
+| share_url | string（解释性类型，非契约保证） | 公开视频链接。 |
+| video_count | number（解释性类型，非契约保证） | 达人视频数。 |
+| video_avg_play_count | number（解释性类型，非契约保证） | 平均播放。 |
+| video_avg_like_count | number（解释性类型，非契约保证） | 平均点赞。 |
+| author_avg_engagement_rate | number（解释性类型，非契约保证） | 达人平均互动率。 |
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 示例视频标识可能失效；需要重新定位时使用用户指定的新标识或按其要求搜索，不无条件替换目标。
+
+### curl 示例
+
 ```bash
-curl --request POST "${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/detail" \
-  --header "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
-  --header "Content-Type: application/json" \
-  --header "User-Agent: LinkFox-Skill/2.0" \
-  --data '{"country":"us","id":"6788833646091504902","include":"core"}' \
+curl --request POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/chuhaijiang/videos/detail"  \
+  --header "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}"  \
+  --header "Content-Type: application/json"  \
+  --header "User-Agent: LinkFox-Skill/2.0"  \
+  --data '{"country":"us","id":"6788833646091504902","include":"core"}'  \
+  --max-time 150
+```
+
+## 接口：视频带货商品
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/related-products`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| country | string | 是 | 小写请求上下文/站点码：`br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`；返回行的 `country_code` 可不同，分别保留。 |
+| id | string | 是 | 视频 ID，19 位标识必须按 JSON 字符串传递，避免精度损失。 |
+| page | integer | 否 | 页码，从 1 开始；默认值未声明。 |
+| pageSize | integer | 否 | 每页数量，最大 10；默认值未声明。先使用小页验证，再按用户范围查询。 |
+
+#### 参数约束与使用限制
+
+仅供应商索引中关联商品的视频有带货商品数据。保留返回商品地区、价格与金额对象及字段前缀；未声明的类型和字段名不能由展示概念反推。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| errcode | integer / string / null | 业务状态；正常响应示例为 200；判断遵守公共响应码基本规则。 |
+| errmsg | string | 消息，正常响应示例为 `ok`。 |
+| request_id | string | 请求追踪标识，示例格式为 UUID。 |
+| error | string / 未声明 | 本地连接或解析失败时的错误信息，仅错误场景可能存在；其他顶层 error 标记按原值保留。 |
+| details | 任意 JSON / string | 非对象 JSON 响应或 HTTP 非 JSON 错误正文等诊断内容，仅错误场景可能存在。 |
+| success / code / errorCode | 未声明 | 脚本兼容的可选业务标记，并非已确认的正常响应字段；失败标记不缓存，正常响应状态仍按公共规则判断。 |
+| data | object | 本接口数据容器。 |
+| data.total_count | integer | 业务总条数，可大于本页列表长度。 |
+| data.items | array<object> | 本页记录；字段可能缺失或为 null，不补零。 |
+
+#### data.items[] 记录字段
+
+字段可缺失或为 null。表中标注“解释性类型”的类型仅用于理解字段，不代表接口保证；以实际响应为准。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| tiktok_video_detail_product_id | string（解释性类型，非契约保证） | 商品 ID，标识按字符串保留。 |
+| tiktok_product_detail_product_name | string（解释性类型，非契约保证） | 商品名称。 |
+| tiktok_product_detail_product_rating | number（解释性类型，非契约保证） | 商品评分。 |
+| 类目、图片、SKU、库存与状态（字段名未声明） | 未声明 | 响应可包含这些商品信息，具体字段名和结构未声明；按实际返回保留，不猜测。 |
+| tiktok_product_detail_floor_price | object | 价格下限，保留 unit/value。 |
+| ceiling_price（完整键名未声明） | object | 价格上限；完整键名未声明，保留实际返回键名，不将推定的前缀视为契约。 |
+| tiktok_video_detail_product_total_gmv | object | 商品总 GMV，金额原始结构不变。 |
+| tiktok_video_detail_video_30d_gmv | object | 视频 30 天 GMV，金额原始结构不变。 |
+| tiktok_product_detail_commission_rate | number（解释性类型，非契约保证） | 佣金率，未声明单位，不自行缩放。 |
+| tiktok_video_detail_product_total_sold_count | number（解释性类型，非契约保证） | 商品总销量。 |
+| tiktok_video_detail_video_id | string（解释性类型，非契约保证） | 关联视频 ID。 |
+| tiktok_video_detail_video_30d_sold_count | number（解释性类型，非契约保证） | 视频 30 天销量。 |
+| 地区（字段名未声明） | 未声明 | 展示商品返回的地区，保留实际键名和值。 |
+| tiktok_product_detail_floor_price.unit | string（解释性类型，非契约保证） | 供应商返回单位，不擅自等同币种或换汇。 |
+| tiktok_product_detail_floor_price.value | number（解释性类型，非契约保证） | 供应商返回的原始数值。 |
+| ceiling_price.unit（完整键名未声明） | string（解释性类型，非契约保证） | 供应商返回单位，不擅自等同币种或换汇。 |
+| ceiling_price.value（完整键名未声明） | number（解释性类型，非契约保证） | 供应商返回的原始数值。 |
+| tiktok_video_detail_product_total_gmv.unit | string（解释性类型，非契约保证） | 供应商返回单位，不擅自等同币种或换汇。 |
+| tiktok_video_detail_product_total_gmv.value | number（解释性类型，非契约保证） | 供应商返回的原始数值。 |
+| tiktok_video_detail_video_30d_gmv.unit | string（解释性类型，非契约保证） | 供应商返回单位，不擅自等同币种或换汇。 |
+| tiktok_video_detail_video_30d_gmv.value | number（解释性类型，非契约保证） | 供应商返回的原始数值。 |
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 普通非带货视频可能返回 errcode=200、total_count=0、items=[]，是有效空结果；不得宣称带货或擅自替换视频。
+
+### curl 示例
+
+```bash
+curl --request POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/chuhaijiang/videos/related-products"  \
+  --header "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}"  \
+  --header "Content-Type: application/json"  \
+  --header "User-Agent: LinkFox-Skill/2.0"  \
+  --data '{"country":"us","id":"7672655263672864013","page":1,"pageSize":3}'  \
+  --max-time 150
+```
+
+## 接口：视频评论
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/videos/reviews`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| country | string | 是 | 小写请求上下文/站点码：`br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`；返回行的 `country_code` 可不同，分别保留。 |
+| id | string | 是 | 视频 ID，19 位标识必须按 JSON 字符串传递，避免精度损失。 |
+| page | integer | 否 | 页码，从 1 开始；默认值未声明。 |
+| pageSize | integer | 否 | 每页数量，最大 10；默认值未声明。先使用小页验证，再按用户范围查询。 |
+
+#### 参数约束与使用限制
+
+公开评论可能不完整、被删除、多语言或暂不可用。标识按字符串保留，头像对象保留 thumb_url 和 url；时间戳单位未声明。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| errcode | integer / string / null | 业务状态；正常响应示例为 200；判断遵守公共响应码基本规则。 |
+| errmsg | string | 消息，正常响应示例为 `ok`。 |
+| request_id | string | 请求追踪标识，示例格式为 UUID。 |
+| error | string / 未声明 | 本地连接或解析失败时的错误信息，仅错误场景可能存在；其他顶层 error 标记按原值保留。 |
+| details | 任意 JSON / string | 非对象 JSON 响应或 HTTP 非 JSON 错误正文等诊断内容，仅错误场景可能存在。 |
+| success / code / errorCode | 未声明 | 脚本兼容的可选业务标记，并非已确认的正常响应字段；失败标记不缓存，正常响应状态仍按公共规则判断。 |
+| data | object | 本接口数据容器。 |
+| data.total_count | integer | 业务总条数，可大于本页列表长度。 |
+| data.items | array<object> | 本页记录；字段可能缺失或为 null，不补零。 |
+
+#### data.items[] 记录字段
+
+字段可缺失或为 null。表中标注“解释性类型”的类型仅用于理解字段，不代表接口保证；以实际响应为准。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| tiktok_video_detail_comment_id | string（解释性类型，非契约保证） | 评论 ID。 |
+| tiktok_video_detail_comment_text | string（解释性类型，非契约保证） | 评论文本。 |
+| tiktok_video_detail_comment_create_time | number（时间戳，单位未声明） | 创建时间，保留原始时间戳。 |
+| tiktok_video_detail_comment_like_count | number（解释性类型，非契约保证） | 点赞数。 |
+| tiktok_video_detail_comment_reply_count | number（解释性类型，非契约保证） | 回复数。 |
+| tiktok_video_detail_comment_unique_id | string（解释性类型，非契约保证） | 评论者账号。 |
+| tiktok_video_detail_comment_nickname | string（解释性类型，非契约保证） | 评论者昵称。 |
+| tiktok_video_detail_comment_user_avatar | object | 头像对象。 |
+| tiktok_video_detail_comment_user_avatar.thumb_url | string（解释性类型，非契约保证） | 头像缩略图 URL。 |
+| tiktok_video_detail_comment_user_avatar.url | string（解释性类型，非契约保证） | 头像 URL。 |
+| tiktok_video_detail_video_id | string（解释性类型，非契约保证） | 所属视频 ID。 |
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 空评论列表如实报告，不据此断言视频从未有评论，不自动翻页或更换目标。
+
+### curl 示例
+
+```bash
+curl --request POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/chuhaijiang/videos/reviews"  \
+  --header "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}"  \
+  --header "Content-Type: application/json"  \
+  --header "User-Agent: LinkFox-Skill/2.0"  \
+  --data '{"country":"us","id":"6788833646091504902","page":1,"pageSize":3}'  \
   --max-time 150
 ```
 
 ---
 
-## Feedback API
+## Feedback
 
-- **地址**：`https://skill-api.linkfox.com/api/v1/public/feedback`
-- 仅在用户明确要求提交反馈，或发现问题后用户明确授权时调用。
-- 建议字段：`skillName`、`endpoint`、`category`、`summary`、`requestId`。
-- 自动检测可列举：字段缺失、类型变化、分页异常、空结果与筛选不符、网关错误。
-- 提交前必须脱敏；禁止包含 API Key、验证码、手机号、支付信息、签名 URL、原始完整请求/响应或无关上下文。
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-chuhaijiang-tiktok-video",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

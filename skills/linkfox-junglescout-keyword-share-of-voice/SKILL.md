@@ -1,219 +1,136 @@
 ---
 name: linkfox-junglescout-keyword-share-of-voice
-description: Jungle Scout关键词市场份额（Share of Voice）分析，返回亚马逊搜索结果前3页的品牌声量占比（自然/广告/综合）、30天精确搜索量、PPC竞价中位数及TOP3 ASIN点击转化数据，覆盖10个站点。当用户提到品牌市场份额、品牌声量占比、搜索结果品牌分布、Share of Voice、SOV分析、品牌竞争格局、广告位占比、自然排名品牌占比、PPC竞价分析、品牌垄断分析、keyword share of voice, brand visibility, organic vs sponsored share, brand dominance, PPC bid analysis, search result brand distribution, competitive landscape, weighted SOV, top ASIN clicks conversions时触发此技能。即使用户未明确提及"Share of Voice"或"SOV"，只要其需求涉及分析某个亚马逊关键词搜索结果中各品牌的市场占有率或竞争格局，也应触发此技能。
+description: 分析亚马逊关键词搜索结果中的品牌声量占比（Share of Voice / SOV），提供自然、广告和综合份额、基础与加权份额、30 天精确搜索量、PPC 竞价中位数及 TOP3 ASIN 点击转化数据，覆盖 10 个站点。适用于判断特定关键词下的品牌竞争格局、品牌垄断、广告位分布及自然与广告表现差异；无需明确提及 Jungle Scout 或 SOV。不适用于历史趋势、关键词挖掘、商品销量估算、评论分析、Listing 文案优化或非亚马逊平台研究。
 ---
 
-# Jungle Scout — 关键词市场份额 Share of Voice
+# Jungle Scout 关键词市场份额 Share of Voice
 
-This skill queries Share of Voice (SOV) data for Amazon keywords via the Jungle Scout data source, returning brand visibility distribution across the first 3 pages of search results, along with search volume, PPC bid estimates, and top ASIN click/conversion metrics across 10 Amazon marketplaces.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Share of Voice measures **how much of the search results real estate a brand occupies** for a given keyword. Jungle Scout analyzes the first 3 pages of Amazon search results and calculates each brand's presence in three dimensions:
+查看特定亚马逊关键词搜索结果中的品牌占位与竞争格局，结合搜索量、竞价及头部 ASIN 的点击转化数据进行分析。
+用户说“竞争分析”“品牌分析”或“市场格局”时，若关注的是该关键词搜索页由哪些品牌占据，使用本技能。
 
-- **Organic SOV**: Brand visibility from organic (non-sponsored) search result positions
-- **Sponsored SOV**: Brand visibility from sponsored/advertising placements
-- **Combined SOV**: Overall brand visibility merging both organic and sponsored results
+**场景速查**
 
-Each dimension has two calculation methods:
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个词谁占的份额最大 | 品牌声量与头部品牌分析。 |
+| 这个关键词竞争激不激烈 | 品牌集中度与竞争格局判断。 |
+| 广告位都被谁占了 | 广告声量占比分析。 |
+| 有没有品牌垄断这个词 | 品牌主导程度判断。 |
+| 这个词的 PPC 出价大概多少 | 结合搜索量查看竞价中位数。 |
+| 搜索结果里哪些品牌排前面 | 品牌可见度与平均排名分析。 |
+| 这个词的转化率高不高 | 查看 TOP3 ASIN 的点击转化表现。 |
 
-- **Basic SOV**: Simple product count ratio — number of a brand's products ÷ total products on the 3 pages
-- **Weighted SOV**: Position-adjusted ratio that gives higher weight to top positions and factors like Amazon's Choice badge; this is the more meaningful metric for competitive analysis
+### 边界
 
-The tool also returns:
+历史搜索量趋势使用关键词历史工具，关键词建议或挖掘使用 ABA 或关键词探索工具。商品级销量、利润率、评论、Listing 优化及非亚马逊平台研究不属于本技能范围。
 
-- **30-day exact search volume**: Total estimated searches in the past 30 days
-- **PPC bid median**: Median suggested bid for this keyword, useful for advertising cost estimation
-- **TOP3 ASIN click & conversion data**: The top 3 ASINs by clicks, with click count, conversion count, and conversion rate
+## 前置条件
 
-## Data Fields
+明确用户要分析的关键词和目标站点；站点映射、默认值及接口限制见 `references/api.md`。
 
-### brands (Brand SOV Breakdown)
+## 查询与分析流程
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| Brand Name | brand | Brand name as shown in search results | Anker |
-| Organic Products | organicProducts | Number of organic listings in the first 3 pages | 5 |
-| Sponsored Products | sponsoredProducts | Number of sponsored listings | 3 |
-| Combined Products | combinedProducts | Total listings (organic + sponsored) | 8 |
-| Organic Basic SOV | organicBasicSov | Organic simple ratio (0–1) | 0.083 |
-| Organic Weighted SOV | organicWeightedSov | Organic position-weighted ratio (0–1) | 0.112 |
-| Sponsored Basic SOV | sponsoredBasicSov | Sponsored simple ratio (0–1) | 0.15 |
-| Sponsored Weighted SOV | sponsoredWeightedSov | Sponsored position-weighted ratio (0–1) | 0.18 |
-| Combined Basic SOV | combinedBasicSov | Combined simple ratio (0–1) | 0.133 |
-| Combined Weighted SOV | combinedWeightedSov | Combined position-weighted ratio (0–1) | 0.152 |
-| Organic Avg Position | organicAveragePosition | Average ranking position in organic results | 12.4 |
-| Sponsored Avg Position | sponsoredAveragePosition | Average ranking position in sponsored results | 5.0 |
-| Combined Avg Position | combinedAveragePosition | Average ranking position across all results | 9.5 |
-| Organic Avg Price | organicAveragePrice | Average price of organic products | 29.99 |
-| Sponsored Avg Price | sponsoredAveragePrice | Average price of sponsored products | 25.99 |
-| Combined Avg Price | combinedAveragePrice | Average price of all products | 28.49 |
+1. 确认目标关键词及站点，按 `references/api.md` 准备请求；保留用户关键词原文，不擅自替换或翻译。
+2. 检查已有响应或本地缓存，按用户指定范围查询；多关键词比较时先评估累计消耗，再分别取得数据。
+3. 先按接口定义判断响应状态，再读取品牌、搜索量、竞价及 TOP3 ASIN 数据；失败或空结果时解释原因，不自动改变条件连续试探。
+4. 先展示关键词、站点、搜索量和竞价背景，再展示品牌份额与 TOP3 ASIN，最后概括品牌集中度及自然与广告表现差异。
 
-### topAsins (TOP 3 ASIN Click & Conversion)
+## 执行方式
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| ASIN | asin | Amazon Standard Identification Number | B09V3KXJPB |
-| Product Name | name | Product title | Anker Portable Charger... |
-| Brand | brand | Product brand | Anker |
-| Clicks | clicks | Click count (30-day window) | 15200 |
-| Conversions | conversions | Conversion count (30-day window) | 4560 |
-| Conversion Rate | conversionRate | Conversion rate (0–1) | 0.30 |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/junglescout_keyword_sov.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 64 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### Top-Level Summary Fields
+### 输出策略
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| ID | id | Resource identifier | — |
-| Type | type | Fixed value | share_of_voice |
-| 30-Day Search Volume | estimated30DaySearchVolume | Exact search volume over 30 days | 125000 |
-| PPC Bid Median | exactSuggestedBidMedian | Median suggested PPC bid (USD) | 1.25 |
-| Product Count | productCount | Total products in the first 3 pages | 60 |
-| Updated At | updatedAt | Data freshness timestamp | 2026-04-10T00:00:00 |
-| Top ASINs Start Date | topAsinsModelStartDate | Click/conversion data window start | 2026-03-11 |
-| Top ASINs End Date | topAsinsModelEndDate | Click/conversion data window end | 2026-04-10 |
-| Cost Token | costToken | Tokens consumed by this call | 1 |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-keyword-share-of-voice-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Supported Marketplaces
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-us (United States), uk (United Kingdom), de (Germany), in (India), ca (Canada), fr (France), it (Italy), es (Spain), mx (Mexico), jp (Japan)
+## 执行规则
 
-Default marketplace is **us**. Use us when the user doesn't specify a marketplace.
+### 算力消耗预估
 
-## 调用方式
+64 算力 / 次
 
-- **API 端点**：`POST /tool-jungle-scout/keywords/share-of-voice`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/junglescout_keyword_sov.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-keyword-share-of-voice-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 解决认证和算力问题
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## How to Build Queries
+### 约束与建议
 
-Only two parameters are needed: `marketplace` and `keyword`.
+- **理解声量含义**：SOV 衡量品牌占据搜索结果展示位置的程度，不代表实际销售额份额。自然 SOV 对应非广告结果，广告 SOV 对应赞助位置，综合 SOV 合并两者。
+- **区分计算方法**：基础 SOV 为品牌商品数量占样本商品总数的比例；加权 SOV 对靠前位置及 Amazon's Choice 等因素赋予更高权重，更适合比较品牌可见度。
+- **先展示背景，再展示品牌**：表格前给出关键词、站点、30 天精确搜索量与 PPC 竞价中位数；同时标明数据更新时间和 TOP ASIN 统计窗口。币种按接口定义说明。
+- **品牌表格**：按 `combinedWeightedSov` 降序展示，突出前 5 个品牌；同时比较自然与广告份额，可按需要补充商品数、平均位置和平均价格。
+- **百分比展示**：SOV 与转化率以百分比显示，例如 0.152 展示为 15.2%；缺失值不补为零。
+- **单列 TOP3 ASIN**：TOP3 指点击量居前的 3 个 ASIN；单独展示 ASIN、商品名、品牌、点击量、转化量和转化率；这些商品的转化率不能直接当作关键词整体转化率。
+- **概括竞争格局**：说明是少数品牌主导还是分散竞争，并指出自然与广告声量的明显差距。广告声量高而自然声量低可提示对广告的依赖，但不能据此推断实际广告预算。
+- **结合指标判断机会**：用搜索量与 PPC 竞价评估需求及获客成本线索；高点击、低转化可作为进一步研究的线索。若没有品牌的综合加权份额超过 15%，可作为格局分散的经验信号，不能仅凭这一阈值断定容易进入或有利润。
+- **说明数据范围和时效**：按 `references/api.md` 的采样范围与快照限制解释结论，不外推为历史变化或全市场销售份额。
+- **解释错误原因**：依据接口响应说明问题并建议核对站点或关键词；后续查询遵守成本约束。缓存命中时说明数据来自本地缓存，避免将重复读取误认为新增调用。
 
-### Principles for Building API Calls
+## 使用示例
 
-1. **Marketplace mapping**: "美国站" → `us`, "日本站" → `jp`, "德国站" → `de`; default to `us` when unspecified
-2. **Keyword**: Pass the user's keyword as-is (lowercase English preferred)
-3. **One keyword per call**: Each request analyzes one keyword; for multi-keyword comparison, make separate calls
+### 品牌主导程度：谁占据这个关键词
 
-### Common Query Scenarios
-
-**1. Brand dominance check — Who owns this keyword?**
 ```json
-{
-  "marketplace": "us",
-  "keyword": "portable charger"
-}
+{"marketplace": "us", "keyword": "portable charger"}
 ```
-Focus on `combinedWeightedSov` to see which brands dominate the search results page.
 
-**2. PPC competitive analysis — Is this keyword worth bidding on?**
+重点比较综合加权声量，展示头部品牌及其自然与广告占位差异。
+
+### PPC 竞争：这个关键词是否值得投放
+
 ```json
-{
-  "marketplace": "us",
-  "keyword": "wireless earbuds"
-}
+{"marketplace": "us", "keyword": "wireless earbuds"}
 ```
-Compare `exactSuggestedBidMedian` with the keyword's search volume to gauge cost-efficiency. Check `sponsoredWeightedSov` to see how heavily competitors invest in ads.
 
-**3. Conversion efficiency of top ASINs**
+结合搜索量、竞价中位数与广告加权声量讨论成本和竞争线索。
+
+### 头部 ASIN 转化表现
+
 ```json
-{
-  "marketplace": "de",
-  "keyword": "kopfhörer kabellos"
-}
+{"marketplace": "de", "keyword": "kopfhörer kabellos"}
 ```
-Examine the `topAsins` array to find whether the top-clicked products convert well. High clicks + low conversion rate may indicate opportunity.
 
-**4. Identify market gaps — Are there underserved positions?**
+分别列出 TOP3 ASIN 的点击、转化和转化率，指出值得进一步核实的表现差异。
+
+### 搜索页机会与品牌分散程度
+
 ```json
-{
-  "marketplace": "jp",
-  "keyword": "ヨガマット"
-}
+{"marketplace": "jp", "keyword": "ヨガマット"}
 ```
-If no single brand has a `combinedWeightedSov` above 0.15, the keyword is fragmented and may be easier to enter. Combine with search volume to assess market size.
 
-**5. Compare organic vs sponsored presence**
+结合综合加权声量和搜索量判断品牌是否分散，不将分散直接解释为可开发结论。
+
+### 自然与广告声量对比
+
 ```json
-{
-  "marketplace": "uk",
-  "keyword": "running shoes"
-}
+{"marketplace": "uk", "keyword": "running shoes"}
 ```
-A brand with high `sponsoredWeightedSov` but low `organicWeightedSov` relies heavily on ads; this can inform competitive strategy.
 
-## Display Rules
+比较同一品牌的自然与广告加权声量，说明竞争策略线索。
 
-1. **Brand table**: Show the brands table sorted by `combinedWeightedSov` descending; highlight the **top 5 brands** for quick comprehension
-2. **SOV as percentage**: Display SOV values as percentages (multiply by 100), e.g., 0.152 → 15.2%
-3. **Context header**: Before the table, show the keyword's 30-day search volume (`estimated30DaySearchVolume`) and PPC bid median (`exactSuggestedBidMedian`) as context
-4. **Top ASINs section**: Show the TOP 3 ASIN table separately with click count, conversion count, and conversion rate
-5. **Competitive summary**: After the data, provide a brief competitive landscape summary: whether the keyword is dominated by a few brands or fragmented, and note any large gaps between organic and sponsored presence
-6. **Error handling**: When a query fails, explain the reason based on the error response and suggest adjusting parameters
+## 使用反馈
 
-## Important Limitations
-
-- **Coverage**: Only the first 3 pages of Amazon search results are analyzed (typically ~48–60 products)
-- **Single keyword**: One keyword per API call; multi-keyword comparison requires separate calls
-- **SOV is a snapshot**: Data reflects a point-in-time crawl, not a historical trend
-- **No historical SOV**: This tool does not provide SOV changes over time; use the keyword history tool for volume trends
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Brand market share and competitive analysis on Amazon search results:
-
-| User Says | Scenario |
-|-----------|----------|
-| "这个词谁占的份额最大" | Brand dominance analysis |
-| "这个关键词竞争激不激烈" | Competitive landscape assessment |
-| "广告位都被谁占了" | Sponsored SOV analysis |
-| "有没有品牌垄断这个词" | Monopoly detection |
-| "这个词的PPC出价大概多少" | PPC bid estimation |
-| "搜索结果里哪些品牌排前面" | Brand visibility ranking |
-| "这个词的转化率高不高" | Top ASIN conversion analysis |
-
-**Not applicable** — Beyond keyword Share of Voice scope:
-- Historical search volume trends (use keyword history tool)
-- Keyword suggestions / keyword mining (use ABA or keyword explorer tools)
-- Product-level sales estimation or review analysis
-- Listing optimization or copywriting advice
-- Non-Amazon platform data
-
-**Boundary judgment**: When users say "竞争分析", "品牌分析", or "市场格局", if the intent is to understand which brands occupy the search results page for a specific keyword (share of voice / brand distribution), this skill applies. If they want product-level sales data, profit margins, or historical trends, it does not apply.
-
-## 算力消耗规则
-
-消耗 64 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

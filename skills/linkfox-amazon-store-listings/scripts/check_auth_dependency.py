@@ -23,7 +23,7 @@ stderr 结构化信号:
     这是一个**不联网**的本地探测脚本。它只检查文件系统上常见的
     skill 安装路径（含 **OpenClaw**、**Hermes Agent** 的常见布局）；
     真正的"能不能调授权接口"取决于依赖 skill 的脚本是否可执行——
-    这一点由 get_report.py 在运行时再做一次二次校验（通过尝试调用
+    这一点由各刊登入口脚本 在运行时再做一次二次校验（通过尝试调用
     /spApi/storeTokens）。
 
     OpenClaw 参考: workspace 下 `<workspace>/skills`、`<workspace>/.agents/skills`，

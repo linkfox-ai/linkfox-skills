@@ -11,27 +11,27 @@ dateRange:
   dataRetentionDays: 65
 ---
 
-# SD Campaigns
+# SD 广告活动
 
-Campaign reports contain performance data broken down at the campaign level. Campaign reports include all campaigns of the requested sponsored ad type that have performance activity for the requested days. For Sponsored Display, campaign reports can also be grouped by `matchedTarget` for more granular data.
+活动报告按活动展示效果，覆盖指定广告类型在请求日期内有投放活动的全部活动。SD 活动报告还可按 `matchedTarget` 获取更细粒度数据。
 
-> **Note**
-> You can only use a filter that is supported by all groupBy values included in a report configuration. For campaign reports, this means that filters are only supported when you include a single groupBy value.
+> **说明**
+> 筛选器必须由请求中的全部 `groupBy` 值共同支持。对于活动报告，只有包含单个 `groupBy` 值时才支持筛选。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sdCampaigns |
-| Maximum date range | 31 days |
-| Data retention | 65 days |
-| timeUnit | SUMMARY or DAILY |
-| groupBy | campaign or matchedTarget |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 65 天 |
+| timeUnit | SUMMARY / DAILY |
+| groupBy | campaign / matchedTarget |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | addToCart |
 | addToCartClicks |
@@ -91,47 +91,62 @@ Campaign reports contain performance data broken down at the campaign level. Cam
 | viewabilityRate |
 | viewClickThroughRate |
 
-## Group by campaign
+## 分组：campaign
 
-**Additional metrics**: campaignBudgetAmount, campaignStatus, costType, cumulativeReach, impressionsFrequencyAverage, longTermSales, longTermROAS, newToBrandDetailPageViewClicks, newToBrandDetailPageViewRate, newToBrandDetailPageViews, newToBrandDetailPageViewViews, newToBrandECPDetailPageView, newToBrandSales
+附加指标：
 
-**Filters**: N/A
+| 字段 |
+|---|
+| campaignBudgetAmount |
+| campaignStatus |
+| costType |
+| cumulativeReach |
+| impressionsFrequencyAverage |
+| longTermSales |
+| longTermROAS |
+| newToBrandDetailPageViewClicks |
+| newToBrandDetailPageViewRate |
+| newToBrandDetailPageViews |
+| newToBrandDetailPageViewViews |
+| newToBrandECPDetailPageView |
+| newToBrandSales |
 
-## Group by matchedTarget
+**筛选**： 无
 
-**Additional metrics**: matchedTargetAsin
+## 分组：matchedTarget
 
-**Filters**: N/A
+附加指标：
 
-## Sample calls
+| 字段 |
+|---|
+| matchedTargetAsin |
 
-### Campaign summary report grouped by campaign
+**筛选**： 无
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxx' \
---data '{
-    "name": "SD campaigns report",
-    "startDate": "2025-03-05",
-    "endDate": "2025-03-10",
-    "configuration": {
-        "adProduct": "SPONSORED_DISPLAY",
-        "groupBy": ["campaign"],
-        "columns": [
-            "impressions",
-            "clicks",
-            "cost",
-            "campaignId",
-            "campaignName",
-            "startDate",
-            "endDate"
-        ],
-        "reportTypeId": "sdCampaigns",
-        "timeUnit": "SUMMARY",
-        "format": "GZIP_JSON"
-    }
-}'
+## 配置示例
+
+```json
+{
+  "name": "SD campaigns report",
+  "startDate": "2025-03-05",
+  "endDate": "2025-03-10",
+  "configuration": {
+    "adProduct": "SPONSORED_DISPLAY",
+    "groupBy": [
+      "campaign"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "campaignName",
+      "startDate",
+      "endDate"
+    ],
+    "reportTypeId": "sdCampaigns",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

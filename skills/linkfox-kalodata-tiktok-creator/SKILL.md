@@ -1,180 +1,114 @@
 ---
 name: linkfox-kalodata-tiktok-creator
-description: 通过kalodata数据搜索TikTok电商达人榜单并查询指定达人的详细资料，支持按地区、货币、语言与日期范围查看高排名带货达人，并可用creatorId获取粉丝数、视频/直播销售额与GPM、联系方式及关联店铺。当用户提到TikTok达人搜索、TikTok达人榜单、TikTok达人排行、TikTok网红排行、TikTok达人详情、TikTok达人资料、达人主页数据、达人联系方式、TikTok creator search, TikTok creator ranking, TikTok influencer leaderboard, TikTok creator detail, creator analytics, kalodata creator search/detail时触发此技能。即使用户未明确提及"kalodata"，只要其需求涉及查看TikTok平台达人排行榜或某个TikTok达人的详细带货数据，也应触发此技能。
+description: 通过 Kalodata 数据查看 TikTok Shop 达人榜单和指定达人的详细带货资料，支持地区、时间、类目等筛选，展示粉丝、观看量、销量、视频与直播销售额、GPM、联系方式及关联店铺。适用于达人发现、排行比较、达人主页和联系方式研究；不适用于按昵称或关键词找人、商品/视频/店铺/直播榜单、其他平台研究、广告管理或内容创作。
 ---
 
-# Kalodata - TikTok Creator Search & Detail
+# Kalodata TikTok 达人榜单与详情
 
-This skill supports a two-step TikTok creator workflow via the Kalodata data source:
+## 适用范围
 
-1. Browse creator leaderboards to discover high-performing TikTok Shop creators.
-2. Fetch one creator's full profile and performance detail by `creatorId`.
+### 适用
 
-Use the search endpoint when the user wants rankings, influencer discovery, or creator comparison. Use the detail endpoint when the user already has a `creatorId` or has selected one creator from a ranking result.
+查看 TikTok 电商达人排行榜，比较带货表现，或查询指定达人的资料及可用联系方式。用户无需明确提及 Kalodata。
 
-## Core Concepts
+**场景速查**
 
-The creator ranking endpoint returns a paginated leaderboard filtered by `region`, `dateRange`, `language`, and `currency`. The default ranking order is by `revenue` (GMV) descending. Each creator row includes identity, audience, content views, sales volume, video/live revenue, and revenue growth rate.
+| 用户表达 | 查询场景 |
+|---|---|
+| TikTok 达人排行榜、网红榜、top TikTok creators | 按市场和时间查看达人榜单。 |
+| 近 7 天 TikTok 带货达人榜 | 比较指定统计窗口内的达人表现。 |
+| TikTok 达人详情、达人主页数据、creator analytics | 查看指定达人的身份、粉丝与带货指标。 |
+| 达人联系方式、creator contact | 查看响应中实际提供的联系方式。 |
+| kalodata creator search/detail | 按需求选择榜单或单人详情。 |
 
-The creator detail endpoint fetches **one** creator by `creatorId`. It returns the creator's identity, audience, revenue split, video/live metrics, product/shop counts, and contact channels. The `creatorId` usually comes from the ranking response field `creator_id`.
+### 边界
 
-Both endpoints may reflect a statistical delay (T+1). See `references/api.md` for full request and response details.
+本技能覆盖达人榜单与资料研究。商品、视频、店铺和直播实体的查询使用对应 Kalodata 技能；其他平台数据、TikTok 广告管理和内容创作不属于本技能范围。
 
-## Data Fields
+## 接口清单
 
-**Ranking rows** include:
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 达人榜单 | POST `/kalodata/creator/rank` | `scripts/kalodata_creator_search.py` | 浏览筛选后的带货达人排行。 |
+| 达人详情 | POST `/kalodata/creator/detail` | `scripts/kalodata_creator_detail.py` | 查询单个达人的资料和表现。 |
 
-| Field | Description |
-|-------|-------------|
-| creator_nickname | Creator display name |
-| creator_handle | TikTok handle |
-| creator_id | Creator unique ID; pass this as `creatorId` for detail lookup |
-| creator_followers | Follower count, returned as a string |
-| content_views | Total content views, returned as a string |
-| sales_volumn | Sales volume; field is spelled `volumn` |
-| revenue | Total GMV in the requested currency |
-| video_revenue | Revenue from videos |
-| live_revenue | Revenue from livestreams |
-| revenue_growth_rate | Revenue growth rate (%) |
+## 前置条件
 
-**Detail rows** additionally include:
+先确定目标市场和统计窗口；进行单人研究时确认目标达人。参数要求、筛选边界、分页和异常处理见 `references/api.md`。
 
-| Field | Description |
-|-------|-------------|
-| creator_region / creator_status / creator_bio | Creator profile metadata |
-| new_followers | New followers in the requested date window |
-| unit_price | Average unit price in the requested currency |
-| video_number / video_views / video_gpm | Video count, views, and GPM |
-| live_number / live_views / live_gpm | Livestream count, views, and GPM |
-| product_number / shop_number | Associated product and shop counts |
-| creator_contact_* | Email and social contact fields; often empty |
+## 查询流程
 
-## Parameter Guide
+1. 用户需要排行、发现达人或比较达人时，先查达人榜单；用户已有达人编号或已选定榜单中的达人时，查询对应详情。
+2. 从榜单选取目标达人，将响应中的 `creator_id` 传为详情的 `creatorId`，沿用市场、时间和币种，保持比较口径一致。
+3. 先展示本次榜单或单人资料，再根据用户需要按接口参考继续分页或深查；保留已经取得的数据，后续请求遵守成本约束。
 
-**Creator ranking (`/kalodata/creator/rank`)**
+## 执行方式
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| region | string | No | Market region code, e.g. `US` |
-| dateRange | string | No | Time window, e.g. `last7Day`, `last30Day` |
-| pageNumber | integer | No | Page number, 1-5 |
-| pageSize | integer | No | Page size, 5-100 |
-| language | string | No | Response language, e.g. `zh-CN`, `en-US` |
-| currency | string | No | Currency for monetary metrics, e.g. `USD` |
-| category_ids | array<integer> | No | Category ID list filter |
-| shop_id | string | No | Shop ID filter |
-| revenue_range | string | No | Revenue / GMV range filter |
-| creator_type | string | No | Creator type filter |
-| followers_range | string | No | Follower range filter |
-| engagement_rate | string | No | Engagement-rate filter |
-| sortField | object | No | Sorting specification; pass `{}` for default revenue ranking |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**Creator detail (`/kalodata/creator/detail`)**
+### 输出策略
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| creatorId | string | Yes | Creator unique ID from ranking field `creator_id` |
-| shop_id | string | No | Shop ID filter |
-| category_ids | array<integer> | No | Category ID list filter |
-| region | string | No | Market region code, e.g. `US` |
-| dateRange | string | No | Time window, e.g. `last7Day`, `last30Day` |
-| language | string | No | Response language, e.g. `zh-CN`, `en-US` |
-| currency | string | No | Currency for monetary metrics, e.g. `USD` |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-creator-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 调用方式
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-- **API 端点**：`POST /kalodata/creator/rank` 或 `POST /kalodata/creator/detail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/kalodata_creator_search.py '<JSON 参数>' [--inline]` 或 `python scripts/kalodata_creator_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 执行规则
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-creator-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 <= 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq` 或 `ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Usage Examples
-
-**1. Browse top TikTok creators in the US**
-```json
-{"region":"US","dateRange":"last7Day","pageSize":10,"pageNumber":1,"currency":"USD"}
-```
-
-**2. Fetch one creator's detail**
-```json
-{"creatorId":"7153432386608251946","region":"US","dateRange":"last7Day","currency":"USD"}
-```
-
-**3. Discovery-to-detail workflow**
-```text
-Run kalodata_creator_search.py first, choose a row's creator_id, then pass that value as creatorId to kalodata_creator_detail.py.
-```
-
-## Display Rules
-
-1. Present ranking results in a table with nickname, handle, followers, content views, sales volume, revenue, video/live revenue, and growth rate.
-2. Present detail results as one grouped profile: identity, audience, revenue, video, live, products/shops, and contact.
-3. Always label `dateRange`, `region`, and `currency` when showing metrics.
-4. Treat `creator_followers` and `content_views` as string-typed counts; parse before numeric comparison.
-5. Use the exact field name `sales_volumn`.
-6. Show contact fields only when populated; otherwise say no contact was provided.
-7. Preserve ranking order unless the user explicitly requests a supported `sortField`.
-
-## Important Limitations
-
-- Ranking is not keyword search; it browses leaderboards by region and time window.
-- Detail requires `creatorId`; it cannot find a creator by nickname or handle alone.
-- The ranking response does not include total/page count; paginate until a page returns fewer than `pageSize` items.
-- `pageNumber` is limited to 1-5 and `pageSize` is limited to 5-100.
-- Transient upstream errors may appear as `errcode 501` with a Kalodata HTTP 554 message. Retry the same parameters once or twice; do not change parameters automatically.
-- Use the matching Kalodata product/video/shop/livestream skills for non-creator entities.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- TikTok creator ranking or creator profile lookup:
-
-| User Says | Scenario |
-|-----------|----------|
-| "TikTok达人排行榜", "TikTok网红榜" | Creator ranking lookup |
-| "TikTok带货达人榜", "top TikTok creators" | Creator leaderboard by region |
-| "近7天TikTok达人榜" | Time-windowed ranking |
-| "TikTok达人详情", "达人主页数据" | Creator detail lookup |
-| "达人联系方式", "creator contact" | Contact channels |
-| "kalodata creator search/detail" | Direct data source reference |
-
-**Not applicable** -- Needs beyond TikTok creators:
-
-- TikTok product/video/shop/livestream rankings or details
-- Amazon / Shopify / 1688 / other platforms' creator or product data
-- TikTok ad campaign management or content creation
-
-## 算力消耗规则
+### 算力消耗预估
 
 每次调用消耗 7.0 算力。
 
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**Feedback:**
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+### 解决认证和算力问题
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解数据口径**：榜单用于发现高表现达人，详情用于深入了解单个达人；GMV 是销售额，视频与直播分别展示。数据可能存在 T+1 统计延迟。
+- **清晰展示榜单**：用表格展示昵称、handle、粉丝数、内容观看量、销量、总销售额、视频销售额、直播销售额和增长率。保留返回的排行顺序；只有用户明确要求且接口支持时才调整排序。
+- **分组展示详情**：按身份资料、粉丝、销售额、视频、直播、关联商品/店铺和联系方式展示一个完整档案。
+- **注明统计口径**：展示指标时始终注明 `dateRange`、`region` 和 `currency`，避免将不同市场、窗口或币种直接比较。
+- **保持字段含义**：`creator_followers` 和榜单 `content_views` 是字符串计数，做数值比较前先解析；达人 ID 保留字符串，避免大整数精度丢失；销量字段使用原拼写 `sales_volumn`。
+- **如实展示联系方式**：仅在 `creator_contact_*` 有值时展示；为空时说明未提供，不推测联系方式。
+- **说明返回范围**：不把本页数量视为达人总数；分页与详情数组约定见 `references/api.md`。遇到空结果或错误时按接口参考解释，不自动变更筛选条件试探。
+
+## 使用示例
+
+### 浏览美国市场达人榜单
+
+用户：看看美国市场近 7 天的带货达人榜。
+
+查询榜单，展示排名及主要指标，并注明市场、统计窗口和币种。
+
+### 查询指定达人的详情
+
+用户：查看这个达人编号对应的带货数据和联系方式。
+
+查询单人详情，分组展示身份、粉丝和视频/直播表现，仅展示实际返回的联系方式。
+
+### 从榜单进一步研究达人
+
+用户：先看达人榜，再查看我选中的达人的详细资料。
+
+先展示榜单，取得选中行的 `creator_id` 后查询详情，保持统计口径一致，并计入两次请求的算力消耗。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

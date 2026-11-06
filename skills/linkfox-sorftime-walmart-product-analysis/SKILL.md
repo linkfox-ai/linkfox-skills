@@ -1,103 +1,117 @@
 ---
 name: linkfox-sorftime-walmart-product-analysis
-description: 调用 Sorftime 按自然语言名称搜索 Walmart 美国站商品，或查询商品详情、商品趋势与按日销量。用户提到 Walmart 商品名称搜索、按名称找产品、相关产品、ProductId、商品详情、价格、评分、类目排名、商品趋势、历史变化、销量趋势、变体销量、按日销量、昨日销量、竞品发现或竞品跟踪时使用。
+description: 使用 Sorftime 按自然语言商品名称发现 Walmart 美国站相关商品，或围绕已知 ProductId 查询商品详情、历史趋势和按日或变体销量。适用于竞品发现、当前价格与评分核对、历史变化和销量跟踪；不适用于类目市场研究、关键词指标或反查、多条件商品筛选。
 ---
-
 # Walmart 产品分析
 
-Use Sorftime to find Walmart US products by a natural-language name or inspect one product's detail, historical trend, or daily sales-volume series.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- Send exactly one `operation` per request. Never call all four operations as a default workflow.
-- Use `searchByName` to discover related products, `detail` for the current product summary, `trend` for historical product changes, and `salesVolume` for dated sales rows.
-- Every request uses a flat JSON body. `searchByName` requires `name`; the other operations require string `productId`. `operation` values are case-sensitive.
-- A follow-up operation or a different date range is another paid call. Reuse the 24-hour cache for identical JSON.
+从自然语言名称发现 Walmart 美国站相关商品，或研究已知 ProductId 的当前资料、历史变化及销量记录。
 
-## Operation Routing
+**场景速查**
 
-| Intent | operation | Parameters | Sorftime Request |
-|---|---|---|---:|
-| Find related products by name | `searchByName` | `name`, optional `pageIndex` | 2 |
-| Current product details | `detail` | `productId` | 1 |
-| Historical product trend | `trend` | `productId` | 2 |
-| Daily/variant sales rows | `salesVolume` | `productId`, optional dates/page | 1 |
+| 用户表达 | 查询场景 |
+|---|---|
+| 按商品名称找相关 Walmart 产品 | 名称发现：展示相关商品及本页范围。 |
+| 看这个 ProductId 的价格、评分或类目排名 | 商品详情：展示当前商品摘要。 |
+| 这个商品的价格、评分或排名怎么变化 | 商品趋势：识别时间序列并说明变化。 |
+| 看这个商品按日销量、变体销量或昨日销量 | 销量记录：展示指定时间范围的记录。 |
 
-Read `references/api.md` before calling for exact date and pagination rules.
+## 接口清单
 
-## Parameter Guide
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 名称搜索（`searchByName`） | POST `/sorftime/walmart/productAnalysis`；`operation=searchByName` | `scripts/sorftime_walmart_product_analysis.py` | 按自然语言名称发现相关商品。 |
+| 商品详情（`detail`） | POST `/sorftime/walmart/productAnalysis`；`operation=detail` | `scripts/sorftime_walmart_product_analysis.py` | 查询当前商品摘要。 |
+| 商品趋势（`trend`） | POST `/sorftime/walmart/productAnalysis`；`operation=trend` | `scripts/sorftime_walmart_product_analysis.py` | 查询商品历史变化。 |
+| 销量记录（`salesVolume`） | POST `/sorftime/walmart/productAnalysis`；`operation=salesVolume` | `scripts/sorftime_walmart_product_analysis.py` | 查询按日或变体销量。 |
 
-- Always treat `productId` as a string, even when it contains digits only.
-- `searchByName` accepts a natural-language product name and returns up to 100 related products per page; `pageIndex` defaults to 1.
-- `salesVolume` accepts optional `queryDate` and `queryEndDate` in `yyyy-MM-dd`. With neither, it returns the recent 30-day range; with only `queryDate`, the end defaults to the current day.
-- `pageIndex` applies to `searchByName` and `salesVolume`, starts at 1, and defaults to 1.
-- The current available historical range is controlled by Sorftime; do not promise a fixed earliest date.
+## 前置条件
 
-## 调用方式
+先确定本次需要的查询场景，以及商品名称或目标 ProductId；历史销量查询还应明确用户需要的时间范围。调用前阅读 `references/api.md` 中对应操作的定义。
 
-- **API 端点**：`POST /sorftime/walmart/productAnalysis`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sorftime_walmart_product_analysis.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 查询流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sorftime-walmart-product-analysis-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 根据用户目的选择名称发现、当前详情、历史趋势或销量记录，补齐目标信息；不得默认把四项全部查询。
+2. 按 `references/api.md` 准备对应请求，优先复用相同参数的有效缓存，执行用户要求的查询。
+3. 先查看摘要，再按需提取已保存的数据；按查询场景解释结果及实际消耗。
+4. 需要另一操作、下一页或不同日期范围时，先说明额外消耗并取得用户授权，不自动补查。失败、空结果也遵守这一要求。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行方式
 
-## 解决认证和算力问题
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sorftime_walmart_product_analysis.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+### 输出策略
 
-- **未配置 API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`
-- **响应 401 或 402 状态码**
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”或类似含义
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sorftime-walmart-product-analysis-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、HTTP 状态（`_http_status`）、常见计数（如 `total`、`costToken`、由响应头复制的 `costCredit`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Usage Examples
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-```bash
-python scripts/sorftime_walmart_product_analysis.py '{"operation":"searchByName","name":"wireless earbuds","pageIndex":1}'
-python scripts/sorftime_walmart_product_analysis.py '{"operation":"detail","productId":"5169493923"}'
-python scripts/sorftime_walmart_product_analysis.py '{"operation":"trend","productId":"5169493923"}'
-python scripts/sorftime_walmart_product_analysis.py '{"operation":"salesVolume","productId":"5169493923","queryDate":"2026-07-01","queryEndDate":"2026-07-31","pageIndex":1}'
-```
+## 执行规则
 
-## Display Rules
+### 算力消耗预估
 
-1. State the operation and supplied product name or product ID, and show returned `requestConsumed`, `costCredit`, and `costToken`. If `_cache.hit=true`, make clear that the cached values describe the original live request and no new production charge occurred.
-2. For `searchByName`, label results as related products rather than exact matches and report the requested page.
-3. For `detail`, present only fields returned by the ProductSummeryObject; do not infer missing attributes.
-4. For `trend`, identify time fields and units from the response before summarizing changes.
-5. For `salesVolume`, interpret rows as `[date, sales, type]`; `type=2` marks yesterday's sales record.
-6. Label estimates or observed values accurately; do not present them as guaranteed Walmart transactions.
+按动态规则计费：单个 Sorftime Request 参考 6 算力；名称搜索和商品趋势各消耗 2 Request，商品详情和销量记录各消耗 1 Request。多 Request 操作由网关按整单计算并取整，最终以入口脚本返回的 `costCredit` 为准，不要简单用 `requestConsumed × 6` 代替实际账单。无数据与计费的特殊判断见 `references/api.md`。
 
-## Important Limitations
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- This integration targets Walmart US only.
-- The API accepts one product name or one product ID and one operation per call.
-- Sorftime controls historical coverage and data availability.
-- Pagination or a second operation creates another paid call and requires user authorization.
-- `searchByName` is natural-language related-product discovery, not a multi-filter product database or category-market query.
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## User Expression & Scenario Quick Reference
+### 解决认证和算力问题
 
-**Applicable**: finding Walmart products from a natural-language product name, or queries centered on a known ProductId and its details, trend, or sales history.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**Not applicable**: category market research, keyword metrics/reverse lookup, or multi-condition product filtering.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**Boundary judgment**: Use `searchByName` only when the user needs related products from a name; use `detail` for a current snapshot, `trend` for historical attributes, and `salesVolume` only for dated sales rows.
+### 约束与建议
 
-## 算力消耗规则
+- **区分查询目的**：名称搜索用于自然语言相关商品发现；详情用于当前快照；趋势用于历史属性；销量记录用于带日期的销量，不将名称搜索解释为多条件商品库或类目市场查询。
+- **说明查询与消耗**：注明本次操作、商品名称或编号及返回的 `requestConsumed`、`costCredit`、`costToken`。缓存命中时说明这些数值来自原请求，本次没有新增生产扣费。
+- **相关性与分页**：名称搜索结果标为相关商品，不承诺精确匹配；同时说明本次请求页码。
+- **忠实展示详情**：仅展示 ProductSummeryObject 实际返回的字段，不推断缺失属性。
+- **正确解释趋势和销量**：先从响应确认时间字段、单位及编码，再总结变化；销量记录的解析及昨日记录标记见 `references/api.md`。
+- **区分估算与事实**：准确标注预估销量、预估销售额或观测值，不将其称为已确认的 Walmart 交易。
+- **说明数据覆盖**：历史覆盖及指标可用性由 Sorftime 决定；不承诺固定最早日期，不补造缺失数据。
 
-按动态规则计费：单个 Sorftime Request 当前显示为 6 算力；多 Request 操作由网关按整单计算并取整，最终以入口脚本返回的 `costCredit` 为准，不要简单用 `requestConsumed × 6` 代替实际账单。
+## 使用示例
 
-> 用户会因算力消耗而支付费用。不要未经确认补调另一 operation 或下一页。
+### 按名称发现相关商品
 
-**Feedback:**
+用户：找一下 Walmart 上和无线耳机相关的商品。
 
-Auto-detect and report feedback via the Feedback API when behavior or results mismatch intent, the user expresses praise or dissatisfaction, or an improvement is apparent. Follow `references/api.md` without interrupting the user's flow.
+使用名称搜索，展示相关商品和本次返回范围，不自动查询每个商品的详情。
+
+### 查看当前详情
+
+用户：查 ProductId 5169493923 的当前价格和评分。
+
+读取指定商品详情，仅使用返回字段展示当前摘要。
+
+### 查看商品历史趋势
+
+用户：看 ProductId 5169493923 的价格和排名变化。
+
+读取趋势，确认日期编码、金额单位和类目排名结构后解释变化。
+
+### 查看指定时间范围的销量
+
+用户：查 ProductId 5169493923 在 2026 年 7 月的按日销量。
+
+按用户指定范围读取销量记录，说明返回记录与数据覆盖情况；补查其他页需先说明额外消耗并取得授权。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

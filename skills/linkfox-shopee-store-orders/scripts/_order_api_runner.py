@@ -11,6 +11,7 @@ from _shopee_orders_common import (
     developer_proxy_call,
     ensure_auth_skill_available,
     merge_shopee_body,
+    normal_response,
     qs_add,
 )
 
@@ -116,9 +117,29 @@ def run_order_api(api_name: str, params: dict, caller: Optional[str] = None) -> 
         print(f"Unknown api: {api_name}. Valid: {', '.join(sorted(ORDER_ENDPOINTS))}", file=sys.stderr)
         sys.exit(1)
 
+    if not isinstance(params, dict):
+        print("JSON parameters must be an object", file=sys.stderr)
+        raise SystemExit(1)
+    params = dict(params)
     spec = ORDER_ENDPOINTS[api_name]
+    required_params = params
+    if spec["method"] == "POST":
+        explicit = params.get("body", params.get("requestBody"))
+        if isinstance(explicit, str):
+            try:
+                explicit = json.loads(explicit)
+            except json.JSONDecodeError:
+                if api_name != "upload_invoice_doc":
+                    print("body/requestBody must contain valid JSON", file=sys.stderr)
+                    raise SystemExit(1)
+        if "body" in params or "requestBody" in params:
+            if isinstance(explicit, dict):
+                required_params = explicit
+            elif api_name != "upload_invoice_doc" or not isinstance(explicit, str):
+                print("body/requestBody must be an object", file=sys.stderr)
+                raise SystemExit(1)
     for field in spec.get("required") or []:
-        if field not in params or params[field] is None or params[field] == "":
+        if field not in required_params or required_params[field] is None or required_params[field] == "":
             print(f"Missing required field: {field}", file=sys.stderr)
             sys.exit(1)
 
@@ -144,25 +165,22 @@ def run_order_api(api_name: str, params: dict, caller: Optional[str] = None) -> 
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
-        path,
-        method,
-        shop_id=shop_id,
-        merchant_id=merchant_id,
-        query_string=query_string,
-        body=body,
-        content_type=content_type,
+    def transform(status, proxy):
+        out = {"api": api_name, "developerProxy": proxy, "resolvedPath": path,
+               "transportHttpStatus": status}
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            try:
+                out["requestBody"] = json.loads(body) if body else None
+            except json.JSONDecodeError:
+                out["requestBody"] = body
+        if normal_response(status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
+        path, method, shop_id=shop_id, merchant_id=merchant_id,
+        query_string=query_string, body=body, content_type=content_type,
+        transform=transform, operation=api_name,
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

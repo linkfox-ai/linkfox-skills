@@ -1,127 +1,108 @@
 ---
 name: linkfox-mpstats-ozon-product-search
-description: MPSTATS Ozon 俄罗斯站商品搜索与反查。按俄语关键词或 SKU 在 MPSTATS 数据库中检索 Ozon 商品，返回商品 ID、标题、品牌和卖家信息，是 Ozon 选品与竞品链路的起点。当用户提到 Ozon 选品、Ozon 商品搜索、俄罗斯电商选品、Ozon 关键词搜索、Ozon SKU 查询、MPSTATS Ozon、Ozon product search, MPSTATS Ozon, Russian marketplace, Ozon SKU lookup, Ozon keyword search 时触发此技能。即使用户未明确提到"MPSTATS"，只要其意图是在 Ozon 俄罗斯站按关键词或 SKU 发现或反查商品，也应触发此技能。
+description: 按俄语关键词或 SKU 列表在 MPSTATS 数据库中搜索、反查 Ozon 俄罗斯站商品，获取商品编号、标题、品牌、卖家、商品链接和图片。适用于 Ozon 选品发现、批量 SKU 身份核对和竞品研究的起点，无需明确提及 MPSTATS。不适用于价格、销量、收入、评分、库存、周转、排名或趋势分析，也不适用于 Wildberries 等其他平台。
 ---
 
-# MPSTATS Ozon Product Search
+# MPSTATS Ozon 商品搜索与反查
 
-This skill searches Ozon (Russia) products in the MPSTATS analytics database by Russian keyword or SKU list. It is the **entry point** for Ozon product discovery and competitor lookup — downstream drill-downs (brand/category/seller/detail/trend) typically start from the IDs returned here.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**MPSTATS Ozon coverage**: Ozon is Russia's largest general-category marketplace. MPSTATS indexes Ozon product listings and sales history. This endpoint returns the **basic identity card only** — 10 fields: `productId` / `title` / `productPageUrl` / `imageUrl` / `brand` / `brandId` / `sellerName` / `sellerId` plus `sourceType` / `sourceTool`. Per-SKU price / sales / rating / stock / turnover / ranking are **not** returned here — the backend `OzonProductSearchItem` DTO is intentionally narrow. For those metrics, chain into `mpstats-ozon-product-detail` (batch full card, 36 fields) or the `brand/category/seller-products` drill-downs (39 fields).
+按关键词发现 Ozon 商品，或通过已有 SKU 列表核对商品身份，为后续商品、品牌、类目和卖家研究提供线索。
 
-**Language requirement**: Keywords must be in **Russian** (Cyrillic) — or the Latin-script form actually used on the Ozon storefront. If the user supplies an English or Chinese keyword, translate it to Russian first and note the translation.
+**场景速查**
 
-**At-least-one input rule**: The input schema marks both filters as optional, but the tool's business rule requires at least one of `keyword` / `productIds` to be supplied. The two can be combined to narrow results. For brand- or seller-scoped discovery, use `mpstats-ozon-brand-products` / `mpstats-ozon-seller-products` instead.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 帮我在 Ozon 找运动鞋或耳机 | 关键词发现：展示商品、品牌和卖家。 |
+| 我有一批 Ozon SKU，查一下名称 | 批量反查：核对商品身份。 |
+| 把这个中文词翻成俄语，再搜索 Ozon | 跨语言发现：说明翻译后的检索词。 |
 
-## Parameters
+### 边界
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| keyword | string | conditional | Russian search keyword, e.g., `кроссовки` (sneakers) |
-| productIds | array<integer\|string> | conditional | Ozon SKU list |
-| startDate | string | no | Stats window start, `YYYY-MM-DD`; defaults to one year ago |
-| endDate | string | no | Stats window end, `YYYY-MM-DD`; defaults to yesterday, **cannot** be today or future |
+- 需要单个或一批 SKU 的价格、销量、收入、评分、库存等指标时，使用 `linkfox-mpstats-ozon-product-detail`；需要单品时间序列时，使用 `linkfox-mpstats-ozon-product-trend`。
+- 已确定品牌、卖家或类目并要查看该维度商品及指标时，直接使用 `linkfox-mpstats-ozon-brand-products`、`linkfox-mpstats-ozon-seller-products` 或 `linkfox-mpstats-ozon-category-products`。品牌查询使用品牌展示名，卖家查询使用卖家 ID；类目查询需已知类目路径，本技能不负责类目树导航。
+- Wildberries 及其他非 Ozon 平台不属于本技能范围。
 
-At least one of `keyword` / `productIds` must be supplied. The endpoint returns at most ~36 records in a single call (an upstream-acknowledged cap), and there are no pagination / sort / filter inputs — narrow via keyword/SKU and date window instead.
+## 前置条件
 
-## 调用方式
+**先明确检索目标**：区分发现商品、核对 SKU 与指标深查，收集用户的关键词或已有商品编号。请求要求与日期约定见 `references/api.md`。
 
-- **API 端点**：`POST /mpstats/ozon/productSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/mpstats_ozon_product_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 检索与下钻流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-product-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 确认用户要查找或识别 Ozon 商品；已知研究维度且只需要指标时，按边界直接转交对应技能。
+2. 准备检索词或商品编号；中文、英文检索词先翻成俄语并说明译词。按 `references/api.md` 核对输入和统计窗口。
+3. 在已说明算力消耗的任务范围内检索一次，先查看摘要，按需读取已保存文件。
+4. 展示商品身份信息与本次实际返回范围。后续需要指标时，从结果中选取商品编号交给详情或趋势技能；按品牌、卖家、类目研究时交给对应维度技能。
+5. 空结果或异常按 `references/api.md` 解释，保留已有数据；调整条件及后续调用遵守成本约束。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 执行方式
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/mpstats_ozon_product_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## Usage Examples
+### 输出策略
 
-**1. Keyword search — sneakers in Russian**
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-product-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+按动态规则计费：消耗算力 = 12；商品列表为空时消耗 0 算力 （限时）。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分商品身份与经营指标**：本技能用于身份解析。缺少经营指标不是偶发漏值，不能靠换日期重查补齐；需要指标时转交详情或维度商品技能。完整响应契约见 `references/api.md`。
+- **清晰展示身份信息**：表格优先展示 `productId`、`title`、`brand`、`sellerName`，以 `productPageUrl` 和 `imageUrl` 作为辅助列。不得增加或编造价格、销量、评分、库存、周转、排名等列，也不得从身份信息推估这些指标。
+- **保留俄语原文**：保留商品原始俄语标题；用户需要时另附中文或英文翻译。
+- **说明结果范围**：区分命中总数与本次实际返回条数；命中数更大时按接口参考建议收窄检索范围，不承诺可继续翻页或取得全部命中商品。
+- **利用已有数据**：同一请求优先复用缓存，按需读取已保存结果；缓存位置、禁用选项和运行约定见 `references/api.md`。
+- **解释错误原因**：结合原始消息说明问题，按接口参考建议补充或修正输入；不要为排错自动连续发起收费请求。
+
+## 使用示例
+
+### 俄语关键词搜索：运动鞋
+
 ```json
 {"keyword": "кроссовки"}
 ```
 
-**2. SKU batch reverse lookup**
+### SKU 批量反查
+
 ```json
 {"productIds": [1786874757, 151623766, 142257239]}
 ```
 
-**3. Dated window for period-specific search**
+### 指定统计窗口：T 恤
+
 ```json
 {"keyword": "футболка", "startDate": "2025-02-01", "endDate": "2025-02-28"}
 ```
 
-## How to Chain with Other Ozon Skills
+## 使用反馈
 
-1. **Keyword → drill-down**: Search → pick `productId` → call `mpstats-ozon-product-detail` (batch metrics) or `mpstats-ozon-product-trend` (single-SKU time-series).
-2. **Brand drill-down**: For brand-scoped product listings with full metrics, call `mpstats-ozon-brand-products` directly with the brand display name.
-3. **Seller drill-down**: For seller-scoped product listings with full metrics, call `mpstats-ozon-seller-products` directly with the seller ID.
-
-## Display Rules
-
-1. **Lead with identity columns** — this endpoint returns only 10 identity fields. Headline the table with `productId`, `title`, `brand`, `sellerName`; include `productPageUrl` / `imageUrl` as secondary columns. Do **not** add price / sales / rating / stock columns — they are not in the response.
-2. **Russian titles** — preserve the original Russian title; optionally offer an English or Chinese translation on user request.
-3. **Result count** — the endpoint returns at most ~36 records and has no pagination. If `total` exceeds what was returned, suggest narrowing the keyword/SKU set or date window rather than asking for more pages.
-4. **Route to drill-downs for any business metric** — business metrics are never in this response. If the user asks for sales / price / rating / stock / turnover / ranking, **always** route to `mpstats-ozon-product-detail` (single or batch) or the `*-products` drill-downs. Do not fabricate or estimate from identity fields.
-5. **Error handling** — when `code` / `errcode` is non-200, explain the reason from `msg` / `errmsg` and suggest adjusting inputs (supply at least one of `keyword` / `productIds`, use Russian, narrow date range).
-
-## Important Limitations
-
-- **At least one of `keyword` / `productIds` required** — empty payloads are rejected by the tool's business rule even though `required` is empty in inputSchema.
-- **Russian / Latin only** — non-Russian keywords generally return empty results.
-- **Date range** — `endDate` cannot be today or a future date; data is T-1.
-- **Hard result cap** — upstream returns at most ~36 records per call and exposes no pagination/sort/filter. Cannot be bypassed; narrow the query instead.
-- **No business metrics** — price / sales / rating / stock / turnover / ranking are **not** in this endpoint's response at all. The backend `OzonProductSearchItem` DTO declares exactly 10 identity fields. This is a hard contract, not a sparse payload — do not assume missing metric fields could be filled in by re-calling with different dates.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Ozon product discovery / identity resolution:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Search Ozon for sneakers / headphones / ..." | Keyword discovery |
-| "I have a list of Ozon SKUs, pull their names" | Batch SKU reverse lookup |
-| "Translate this keyword to Russian and search Ozon" | Cross-language discovery |
-
-**Not applicable** — Needs beyond discovery:
-
-- Reliable per-SKU sales / revenue / stock / rating metrics → use `mpstats-ozon-product-detail` (batch card) or the `*-products` drill-down skills.
-- Brand-scoped product listing → use `mpstats-ozon-brand-products` directly.
-- Seller-scoped product listing → use `mpstats-ozon-seller-products` directly.
-- Time-series trend for a single SKU → use `mpstats-ozon-product-trend`.
-- Wildberries or other non-Ozon Russian marketplaces → not covered here.
-- Category-tree navigation / Russian category path lookup → use `mpstats-ozon-category-products` with a known path.
-
-**Boundary judgment**: If the user wants to **find or identify** Ozon products, start here. If they already have an ID or a dimension (brand / category / seller) and want **metrics** under it, go to the corresponding drill-down skill directly.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 12。列表为空返回 0
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Temu accessToken authorization guide - LinkFox Skill
-Returns step-by-step instructions from TEMU_API_README.md by shop type.
+Temu accessToken 授权指导 - LinkFox Skill
+按店铺类型返回授权步骤，详见 references/access-token.md。
 
 Usage:
   python temu_token_guide.py '{"shopType":"semi-managed","tokenPurpose":"product-inventory","site":"cn"}'

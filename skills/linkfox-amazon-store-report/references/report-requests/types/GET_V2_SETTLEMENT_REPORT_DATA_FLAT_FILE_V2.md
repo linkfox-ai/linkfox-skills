@@ -1,18 +1,18 @@
 # `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2`
 
-> **分类**：14. Settlement/Payments Reports  
-> **说明**：Enhanced settlement report  
-> **可用范围**：Seller only
+> **分类**：14. 结算与支付报告  
+> **说明**：增强结算报告  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Settlement Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-settlement#flat-file-v2-settlement-report)（章节：**Flat File V2 Settlement Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting)
-- **Availability**：Seller Central sellers
-- **Report output type**：Tab-delimited flat file
-- **要点**：A settlement report. This report replaces the Flat File Settlement Report and XML Settlement Report. Price columns are condensed into three general-purpose columns: The amount-type and amount-description columns contain the type of charge or fee you have incurred, and indicates whether different fees are related to a common type. Amount values always populate in a single amount column, so there's no need to parse the rows to find a number, even if new fees or transaction types are introduced in the future. Additionally, amounts are displayed in local currency formats (for example, 95,00 for EU instead of 95.00). For Seller Central sellers only.
+- **角色**：[Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting)
+- **可用范围**：Seller Central 卖家
+- **输出格式**：制表符分隔的平面文件
+- **要点**：结算报告，替代 Flat File Settlement Report 和 XML Settlement Report。价格列合并为三个通用列：amount-type 与 amount-description 描述收费类型并关联同类费用，所有金额统一放在 amount 列，即使新增费用或交易类型也无需扫描其他列找金额。金额按本地格式展示，例如 EU 用 95,00 而不是 95.00；仅限 Seller Central 卖家。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-settlement#flat-file-v2-settlement-report>
 

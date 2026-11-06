@@ -1,18 +1,18 @@
 # `GET_MFN_PANEU_OFFER_STATUS`
 
-> **分类**：7. Inventory Reports  
-> **说明**：MFN Pan-EU offer status  
-> **可用范围**：Seller only
+> **分类**：7. 库存报告  
+> **说明**：卖家配送泛欧报价状态  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Inventory Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory)（章节：**GET_MFN_PANEU_OFFER_STATUS**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [库存报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory)（章节：**GET_MFN_PANEU_OFFER_STATUS**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Marketplace availability**：Spain, UK, France, Germany, and Italy marketplaces.
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **要点**：Contains eligibility information for the Pan-European FBA Program for each of the seller's self-fulfilled listings. Self-fulfilled listings are not allowed in the Pan-European FBA program, and this report can help sellers determine whether to convert any of their self-fulfilled listings to Amazon-fulfilled listings in order to enroll them in the program. For more information, refer to Seller Central Help.
+- **站点范围**：Spain, UK, France, Germany, and Italy marketplaces.
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：按每个卖家自配送刊登提供 Pan-European FBA 资格信息。自配送刊登不能直接参加该计划，报告帮助判断是否转换为 Amazon 配送后报名；更多说明见 Seller Central 帮助。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory>
 

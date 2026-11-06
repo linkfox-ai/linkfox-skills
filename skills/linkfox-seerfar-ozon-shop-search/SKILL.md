@@ -1,142 +1,119 @@
 ---
 name: linkfox-seerfar-ozon-shop-search
-description: Seerfar Ozon 店铺商品搜索：按 Ozon 店铺（卖家）ID 拉取该店铺的商品列表，返回每个商品的近30天销量、价格、评分、重量、配送方式（FBO/FBS）、卖家类型（本土/跨境）、退货取消率，以及店铺近30天总销量。用于竞品店铺商品分析、店铺爆品挖掘、卖家商品结构拆解。当用户提到 Ozon 店铺商品、Ozon 卖家商品列表、竞品店铺分析、Ozon 店铺爆品、Ozon 卖家分析、Seerfar Ozon 店铺搜索、Ozon shop search, Ozon seller products, competitor shop analysis, Ozon store products 时触发此技能。即使用户未明确提到"Seerfar"，只要其意图是查看某 Ozon 店铺/卖家的商品与销量数据，也应触发此技能。
+description: 按 Ozon 店铺或卖家编号查询 Seerfar 数据库中的商品列表，查看近 30 天销量、价格、评分、重量、配送方式、卖家类型、退货取消率及店铺汇总数据。适用于竞品店铺商品分析、畅销商品挖掘、新品和价格带研究；用户希望查看某个 Ozon 店铺的商品与销量时使用，无需明确提及 Seerfar。不适用于市场关键词发现、类目浏览或单个商品的完整详情查询。
 ---
 
-# Seerfar Ozon Shop Search
+# Seerfar Ozon 店铺商品搜索
 
-This skill lists the products of a specific Ozon shop (seller) from the Seerfar analytics database. Given a shop `id`, it returns each product's 30-day sales, price, rating, weight, fulfillment model (FBO/FBS), seller type (local / cross-border) and return/cancellation rate, plus the shop's total 30-day sales — the starting point for competitor-shop product analysis, best-seller mining, and seller catalog teardown.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Unit of data is the product, scoped to one shop**: pass a single shop `id` and receive that shop's product catalog with performance metrics. This is a *shop-level* view, not a keyword or category view.
+查看单个 Ozon 店铺或卖家的商品及表现数据。
+用户已有店铺编号，或可从商品数据取得卖家编号，希望列举该店铺商品，或按销量、上架时间、价格、评分排序时，使用本技能。
 
-**Where the shop `id` comes from**: `id` is the Seerfar seller/shop identifier — the same `sellerId` returned by other Seerfar Ozon tools (e.g. product report / product detail search). Negative ids (e.g. `-2` Ozon Express, `-4` Ozon Fresh) are Ozon's own platform sellers; positive ids are third-party sellers. If the user only has a shop name or product, first obtain the `sellerId` from a product-level Seerfar Ozon source, then call this skill.
+**场景速查**
 
-**Seller type**: each product carries `sellerType` — `0` local (本土), `1` cross-border (跨境). A shop is typically all one type; use it to judge whether a competitor is a domestic or cross-border seller.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 分析下这个 Ozon 店铺的商品，这个卖家在卖什么 | 店铺商品目录。 |
+| 这家店最畅销的商品是什么 | 畅销商品：按销量排序。 |
+| 这家店最近上了哪些新品 | 新品：按上架时间排序。 |
+| 这个竞品店铺的价格带或客单价 | 价格带：查看商品价格并排序。 |
+| 这家店是本土还是跨境卖家 | 卖家类型：查看商品所属卖家类型。 |
+| 这个店铺总销量多少 | 店铺表现：查看全店汇总数据。 |
 
-**Sales & price currency**: `sales` / `monthlySalesUnits` are 30-day units; `price` is in Russian rubles (₽), indicated by `currency`.
+### 边界
 
-## Parameters
+市场级关键词发现、类目树浏览和单品完整详情使用对应 Seerfar Ozon 数据源。根据商品寻找所属店铺时，先从商品数据取得卖家编号，再使用本技能查看该店商品。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| id | integer | yes | Shop (seller) ID — the `sellerId` from other Seerfar Ozon tools. Negative = Ozon platform seller. |
-| page | object | yes | Pagination `{page, pageSize, orders[]}`. |
-| page.page | integer | no | Page number, from 1 (default 1). |
-| page.pageSize | integer | no | Page size, default 20. **Max 20** — larger values are rejected (`errcode 1002`). |
-| page.orders | array | no | Sort rules, elements `{field, direction}`; `direction` `DESC`/`ASC`. Common fields: `sales`, `price`, `reviewRating`, `upTime`. |
-| uId | string | no | User ID. |
-| memberId | string | no | Member ID (data attribution). |
+## 前置条件
 
-Only `id` and `page` are required.
+**先确定店铺编号**：仅有店铺名称或商品名称时，先从商品报告、商品详情等 Seerfar Ozon 商品数据源取得 `sellerId`。编号来源与请求要求见 `references/api.md`。
 
-## 调用方式
+## 查询流程
 
-- **API 端点**：`POST /seerfar/ozon/shopSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/seerfar_ozon_shop_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+1. 确认目标店铺；缺少编号时，先取得该店铺对应的 `sellerId`，不根据店名猜测编号。
+2. 按用户目标选择排序方式：查畅销商品按销量降序，查新品按上架时间降序，查高价商品按价格降序；始终准备排序规则，具体参数、分页上限和使用限制见 `references/api.md`。
+3. 执行本次指定范围的查询，先阅读摘要，再从保存文件提取所需字段。需要更多页时，先说明额外消耗，遵守成本约束。
+4. 先展示全店汇总，再展示本页商品；根据接口说明解释空结果与错误，保留已取得的数据，不自动连续试探。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-shop-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/seerfar_ozon_shop_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：接口每次调用消耗 12 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 输出策略
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-shop-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Usage Examples
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**1. A shop's best-sellers (sort by 30-day sales)**
+## 执行规则
+
+### 算力消耗预估
+
+12 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **数据视角**：每行代表一个商品，范围限定在同一店铺。店铺编号与其他 Seerfar Ozon 数据源的 `sellerId` 对应；平台自营与第三方卖家的编号区别见接口说明。
+- **清晰展示数据**：使用表格展示可用指标，不附加主观建议。
+- **先展示店铺背景，再展示商品**：先列出 `totalSales`、`totalRevenue`、`productCount`、`dailySales`、店铺 `rating` 及顶层 `fulfillment` 分布，再展示 `sku`、`price`、`sales`、`reviewRating`、`weight`、`sellerType`、商品 `fulfillment`、`returnCancellationRate`。
+- **区分全店和本页**：全店销量、销售额、日均销量及配送分布不受分页影响；`productCount` 是全店商品总数，`total` 是本页记录数，不能混用。
+- **标明统计口径和单位**：`sales` 与 `monthlySalesUnits` 按近 30 天销量展示；价格和销售额以卢布（₽）展示，使用响应的 `currency`，重量标明 g，退货取消率标明 %。
+- **展示卖家类型**：将 `sellerType` 的 `0` / `1` 展示为本土 / 跨境；同一店铺通常属于同一类型，以实际返回为准。
+- **区分配送分布与商品配送方式**：顶层 `fulfillment` 展示各方式商品数（如 FBO 72 / FBS 4）；商品的数组值用 `/` 连接。
+- **兼容缺失字段**：平台自营卖家的退货取消率可能缺失，展示 `-`，不因此报错；其他不返回的字段及别名映射见接口说明，不补造数据。
+- **说明分页情况**：`hasNextPage` 为真时，告知用户还有更多页，并提示分页上限见接口说明；继续查询遵守成本约束。
+- **解释空结果与错误**：不存在的店铺编号可能返回正常响应和空列表，提示核对编号；异常按 `references/api.md` 的响应码规则解释 `msg` / `errmsg`，给出补充分页、调小分页大小或限流后稍候重试等建议，不另设成功判定条件。
+
+## 使用示例
+
+### 店铺畅销商品：按近 30 天销量降序
+
 ```json
 {"id": 1362816, "page": {"page": 1, "pageSize": 20, "orders": [{"field": "sales", "direction": "DESC"}]}}
 ```
 
-**2. A shop's newest listings (sort by upload time)**
+### 店铺最新上架商品
+
 ```json
 {"id": 1362816, "page": {"page": 1, "pageSize": 20, "orders": [{"field": "upTime", "direction": "DESC"}]}}
 ```
 
-**3. A shop's highest-priced products**
+### 店铺高价商品
+
 ```json
 {"id": 1362816, "page": {"page": 1, "pageSize": 20, "orders": [{"field": "price", "direction": "DESC"}]}}
 ```
 
-**4. Page deeper into a shop's catalog**
+### 查询店铺第二页商品
+
 ```json
 {"id": 1362816, "page": {"page": 2, "pageSize": 20, "orders": [{"field": "sales", "direction": "DESC"}]}}
 ```
 
-## How to Build Queries
+## 使用反馈
 
-1. **Always pass `page.orders`**: the catalog can be large — sort by the metric you care about (`sales` DESC for best-sellers, `upTime` DESC for new arrivals, `price` DESC for premium SKUs).
-2. **Keep `pageSize` ≤ 20**: the gateway caps page size at 20. Use `page.page` to paginate; check `hasNextPage` to know whether more pages exist.
-3. **Resolve the shop `id` first**: if the user gives a shop/product name rather than an id, obtain the `sellerId` from a product-level Seerfar Ozon source before calling this skill.
-4. **Use shop-level aggregates for context**: `totalSales` / `totalRevenue` / `dailySales` are shop-wide totals (independent of the page), `productCount` is the full catalog size, `rating` is the shop rating, and top-level `fulfillment` shows the FBO/FBS split — all quick health indicators for the whole shop.
-
-## Display Rules
-
-1. **Present data only**: show the shop's product metrics in a clear table without subjective advice.
-2. **Lead with shop context, then product columns**: state shop-level aggregates first — `totalSales` (30-day total), `totalRevenue` (total revenue, ₽), `productCount` (catalog size), `dailySales`, `rating`, and `fulfillment` distribution (e.g. FBO 72 / FBS 4) — then a table of `sku`, `price`, `sales`, `reviewRating`, `weight`, `sellerType`, `fulfillment`, `returnCancellationRate`.
-3. **Seller type label**: render `sellerType` as 本土/跨境 (0/1) so the user reads it at a glance.
-4. **Fulfillment**: `fulfillment` is an array (e.g. `["FBO"]`); join multiple values with `/`.
-5. **Missing `returnCancellationRate`**: for Ozon platform sellers (negative `id`) this field is often absent — show `-` rather than failing.
-6. **Pagination guidance**: when `hasNextPage` is true, tell the user more pages are available via `page.page`; remind them `pageSize` is capped at 20.
-7. **Empty shop**: a non-existent `id` returns success with `total=0` and no data — tell the user the id may be wrong rather than reporting a system error.
-8. **Error handling**: when `code` is not `"200"` (or `errcode` is not `200`), explain the reason from `msg` / `errmsg` and suggest fixes (add `page`, lower `pageSize`, retry on rate-limit).
-
-## Important Limitations
-
-- **`id` and `page` are both required**; omitting either returns `errcode 400`.
-- **`pageSize` max 20**: exceeding it returns `errcode 1002`.
-- **`total` is the page row count**, not the shop's full catalog size — use `hasNextPage` to decide whether to fetch more pages.
-- **No text/keyword filter**: this endpoint filters by shop only; to find a shop by name, use another Seerfar Ozon source first.
-- **Field variance by seller type**: `returnCancellationRate` is populated for third-party sellers but frequently absent for Ozon platform sellers (negative `id`). Schema-defined `productPageUrl`, `monthlySalesRevenue`, `brand` are not returned (upstream has no source, omitted rather than null).
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — analyzing one Ozon shop/seller's catalog:
-
-| User Says | Scenario |
-|-----------|----------|
-| "分析下这个 Ozon 店铺的商品" / "这个卖家在卖什么" | Shop product catalog |
-| "这家店最畅销的商品是什么" | Best-seller mining (sort by sales) |
-| "这家店最近上了哪些新品" | New arrivals (sort by upTime) |
-| "这个竞品店铺的价格带/客单价" | Price-band analysis (sort by price) |
-| "这家店是本土还是跨境卖家" | Seller type check (sellerType) |
-| "这个店铺总销量多少" | Shop health (totalSales) |
-
-**Not applicable** — Needs beyond one shop's catalog:
-- Discovering Ozon keywords by market metrics → use the Seerfar Ozon market keyword search skill.
-- A single product's full detail → use a product-level Seerfar Ozon source (this skill returns catalog-level fields only).
-- Browsing the category tree → use a category-level Seerfar Ozon source.
-- Finding which shop sells a given product → use a product-level Seerfar Ozon source to get the `sellerId` first.
-
-**Boundary judgment**: if the user already has a shop/seller ID (or a `sellerId` obtained from a product lookup) and wants to enumerate or rank that shop's products by sales/price/rating, start here. If they want market-level keyword discovery or a single product's deep detail, route to the corresponding Seerfar Ozon skill.
-
-## 算力消耗规则
-
-消耗 15 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

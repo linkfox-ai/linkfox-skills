@@ -1,23 +1,27 @@
 # `GET_FLAT_FILE_ORDER_REPORT_DATA_TAX`
 
-> **分类**：9. Order Reports  
-> **说明**：Order tax (flat file)  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：订单税务（平面文件）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#requested-or-scheduled-flat-file-order-report-tax)（章节：**Requested or Scheduled Flat File Order Report (Tax)**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#requested-or-scheduled-flat-file-order-report-tax)（章节：**Requested or Scheduled Flat File Order Report (Tax)**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
+- **角色**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
 - **Order Fulfillment Channel**：MFN
-- **Availability**：Seller Central sellers
-- **Marketplace availability**：NA
-- **Requested/scheduled**：Requested or scheduled
-- **Report output type**：Tab-delimited flat file
-- **要点**：Contains orders from the previous 60 days for NA region only. Seller Central sellers can only schedule one GET_ORDER_REPORT_DATA_TAX or GET_FLAT_FILE_ORDER_REPORT_DATA_TAX report at a time. If you have one of these reports scheduled and you schedule a new report, the existing report is canceled. 📘NoteThe format of this report will differ slightly depending on whether it is scheduled or requested. This report accepts the following reportOptions values:
-- **reportOptions（摘录）**：
-  - ShowSalesChannel: A Boolean value that indicates whether an additional column is added to the report that shows the sales channel. Default: false. Example: "reportOptions":{"ShowSalesChannel":"true"}
+- **可用范围**：Seller Central 卖家
+- **站点范围**：NA
+- **按需/计划**：Requested or scheduled
+- **输出格式**：制表符分隔的平面文件
+- **要点**：仅面向 NA，包含过去 60 天的订单。Seller Central 卖家同时仅可计划一份 GET_ORDER_REPORT_DATA_TAX 或 GET_FLAT_FILE_ORDER_REPORT_DATA_TAX；新增计划会取消已有计划。按需请求与计划生成的文件格式略有不同；接受下列 reportOptions。
+
+#### reportOptions 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| ShowSalesChannel | boolean / string | 布尔值，控制是否增加销售渠道列。默认 false；示例："reportOptions":{"ShowSalesChannel":"true"}。 |
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#requested-or-scheduled-flat-file-order-report-tax>
 

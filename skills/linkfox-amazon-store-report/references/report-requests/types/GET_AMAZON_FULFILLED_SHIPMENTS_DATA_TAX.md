@@ -1,19 +1,19 @@
 # `GET_AMAZON_FULFILLED_SHIPMENTS_DATA_TAX`
 
-> **分类**：6.1 FBA Shipments  
-> **说明**：FBA shipments tax data  
-> **可用范围**：Seller only
+> **分类**：6.1 FBA 配送货件  
+> **说明**：FBA 货件税务数据  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-amazon-fulfilled-shipments-report-tax)（章节：**FBA Amazon Fulfilled Shipments Report (Tax)**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
-- **Availability**：FBA sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **要点**：This report is for calculating and remitting taxes in the NA region. You can request up to one month of data in a single report. Content updated in near real-time in Europe (EU), Japan, and North America (NA). 📘Note:In most cases, there will be a delay of approximately one to three hours from the time a fulfillment order ships and the time the items in the fulfillment order appear in the report. In some rare cases there could be a delay of up to 24 hours.
+- **角色**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
+- **可用范围**：FBA 卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：用于 NA 税款计算和缴纳，单份报告最多一个月。EU、日本和 NA 近实时更新；发货到出现在报告中通常延迟约 1–3 小时，极少数情况可达 24 小时。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-amazon-fulfilled-shipments-report-tax>
 

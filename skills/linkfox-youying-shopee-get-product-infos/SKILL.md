@@ -1,250 +1,141 @@
 ---
 name: linkfox-youying-shopee-get-product-infos
-description: 友鹰Shopee商品选品工具，支持Shopee全站点的商品查询与筛选，覆盖马来西亚、中国台湾、印尼、泰国、菲律宾、新加坡、越南、巴西、墨西哥、智利、哥伦比亚等11个站点。当用户提到Shopee选品、虾皮商品搜索、Shopee爆款、虾皮市场分析、Shopee品类选品、虾皮关键词选品、Shopee销量筛选、虾皮价格筛选、东南亚电商选品、Shopee product search, Shopee product selection, Shopee bestsellers, Shopee market analysis时触发此技能。即使用户未明确提及"友鹰"或"Shopee"，只要其需求涉及在虾皮平台上搜索商品或筛选Shopee商品数据，也应触发此技能。
+description: 查询和筛选友鹰数据库中的 Shopee 商品，覆盖马来西亚、中国台湾、印尼、泰国、菲律宾、新加坡、越南、巴西、墨西哥、智利和哥伦比亚 11 个站点，支持关键词、价格、销量、上架时间、类目、店铺和商品属性组合筛选。适用于虾皮商品搜索、爆款与新品发现、品类选品、市场数据查看和竞品店铺商品比较，无需明确提及友鹰；不适用于其他平台搜索、Shopee 广告策略、店铺运营建议、物流仓储方案或已有本地数据文件的处理。
 ---
 
-# 友鹰-Shopee 商品选品
+# 友鹰 Shopee 商品选品
 
-This skill guides you on how to query and filter Shopee product data across 11 marketplaces, helping cross-border sellers discover trending products and market opportunities on Shopee.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-友鹰（YouYing）Shopee 商品选品工具提供 Shopee 全站商品的结构化查询能力。卖家可通过关键词、价格区间、销量、上架时间、店铺属性等多维度条件灵活组合筛选，发现爆款货源与市场机会。
+按用户条件搜索和筛选 Shopee 商品，查看价格、销量、销售额、评分和店铺等数据。
+用户提到“东南亚选品”“虾皮市场分析”或“跨境电商选品”，且具体需求是搜索或筛选 Shopee 商品时，使用本技能。
 
-**核心数据维度**：
-- **销量数据**：前30天销售件数（sold）、估算前30天销售件数（estimateSold）、商品总销售件数（historicalSold）、前30天销售额（payment）
-- **价格数据**：默认价（price）、最低价（minPrice）、最高价（maxPrice）
-- **店铺数据**：店铺名称、是否官方店铺、虾皮优选、本地/海外、跨境/本土
-- **商品属性**：评分、评分数、收藏数、浏览数、SKU 数量、上架时间、类目结构
+**场景速查**
 
-## Data Fields
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 虾皮上什么好卖、Shopee 爆款 | 按销量查热销商品。 |
+| 帮我在 Shopee 搜某种商品 | 按标题关键词搜索。 |
+| 马来站最近上架的新品 | 按上架日期发现新品。 |
+| 销量过千的商品有哪些 | 按销量范围筛选。 |
+| 东南亚哪些品类有机会 | 查看指定站点与类目的商品数据。 |
+| 帮我看看这个店铺的商品 | 检索竞品店铺商品。 |
+| 跨境商品和本土商品对比 | 按发货类型筛选与比较。 |
+| Shopee 优选商品筛选 | 按优选标识筛选。 |
+| 低价高销量的商品 | 组合价格和销量条件。 |
 
-### Product Fields (Output)
+## 前置条件
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| 商品ID | pid | 商品唯一标识 | 12345678 |
-| 商品标题 | title | 商品名称 | Storage Box Organizer |
-| 商品描述 | description | 商品详细描述 | ... |
-| 商品主图 | imageUrl | 商品主图URL | https://... |
-| 商品链接 | productUrl | Shopee商品页面链接 | https://... |
-| Shopee商品链接 | shopeeUrl | Shopee域名下的商品链接 | https://shopee.sg/... |
-| 默认价 | price | 商品默认价格（当地货币） | 29.90 |
-| 最低价 | minPrice | SKU最低价 | 19.90 |
-| 最高价 | maxPrice | SKU最高价 | 39.90 |
-| 前30天销售件数 | sold | 近30天实际销量 | 1500 |
-| 估算前30天销量 | estimateSold | 估算的近30天销量 | 1200 |
-| 总销售件数 | historicalSold | 商品累计总销量 | 50000 |
-| 前30天销售额 | payment | 近30天销售金额（当地货币） | 45000 |
-| 商品评分 | rating | 0-5分 | 4.8 |
-| 评分数 | ratings | 收到的评分总数 | 320 |
-| 收藏数 | favorite | 被收藏次数 | 2800 |
-| 浏览数 | viewCount | 浏览次数 | 15000 |
-| 库存 | stock | 当前库存数量 | 500 |
-| SKU数量 | skuNumber | SKU变体数量 | 8 |
-| 上架时间 | genTime | 商品首次上架日期 | 2025-06-01 |
-| 类目结构 | categoryStructure | 所属类目层级路径 | Home & Living > Storage |
-| 店铺名称 | shopName | 所属店铺名称 | BestHome Official |
-| 店铺链接 | shopUrl | 店铺页面链接 | https://... |
-| 是否官方店铺 | isOfficialShop | 1=是, 0=否 | 1 |
-| 虾皮优选 | isShopeeVerified | 1=优选, 0=非优选 | 1 |
-| 发货类型 | cbOption | 1=跨境, 0=本土 | 0 |
-| 店铺所在地类型 | shippingIconType | 0=本地, 1=海外 | 0 |
-| 商品状态 | status | 1=正常, 0=下架 | 1 |
+**先确定目标站点**：用户未说明站点时，先询问要查询哪个 Shopee 站点。站点名称、代码及全部筛选条件见 `references/api.md`。
 
-## Supported Marketplaces
+## 查询流程
 
-| 站点 | station 值 | 代码 |
-|------|-----------|------|
-| 马来西亚 | malaysia | MY |
-| 中国台湾 | taiwan_china | Taiwan_CHN |
-| 印度尼西亚 | indonesia | ID |
-| 泰国 | thailand | TH |
-| 菲律宾 | philippines | PH |
-| 新加坡 | singapore | SG |
-| 越南 | vietnam | VN |
-| 巴西 | brazil | BR |
-| 墨西哥 | mexico | MX |
-| 智利 | chile | CL |
-| 哥伦比亚 | columbia | CO |
+1. 确认用户要查询的站点及商品范围，理解其关键词、类目、店铺、日期、价格和销量条件。
+2. 阅读 `references/api.md`，将自然语言精确映射到对应筛选项；明确关键词匹配、排除逻辑、数值范围、排序和分页意图，避免添加用户未要求的条件。
+3. 按用户条件构建请求并执行一次查询；后续检索遵守执行方式中的成本约束。
+4. 先检查响应与保存文件的摘要，再按需读取商品字段；按接口定义解释错误和空结果，给出可调整的查询方向，由用户决定是否继续。
+5. 用表格呈现核心商品数据，说明站点、币种、统计口径和本次返回范围；有图片时展示图片供用户判断。
 
-`station` 为**必填**参数，可传站点名（如 `malaysia`）或代码（如 `MY`）。当用户未指定站点时，需要**询问用户**想查询哪个站点。
+## 执行方式
 
-## 调用方式
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/youying_shopee_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 4 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **API 端点**：`POST /youying/shopee/getProductInfos`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/youying_shopee_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 输出策略
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-youying-shopee-get-product-infos-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-youying-shopee-get-product-infos-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 执行规则
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 算力消耗预估
 
-## How to Build Queries
+4 算力 / 次
 
-根据用户需求，将自然语言转换为 API 参数组合。核心原则是**精确映射用户的筛选条件到对应参数**。
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### Principles for Building API Calls
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-1. **必填站点**：每次调用必须指定 `station`。用户说"马来""马来西亚"→ `malaysia`；"中国台湾"→ `taiwan_china`；"印尼"→ `indonesia` 等
-2. **关键词搜索**：`keyword` 为标题关键词，搭配 `keywordType` 控制匹配模式（1=整句匹配，2=多词AND，3=多词OR）
-3. **数值范围**：大多数筛选条件使用 Start/End 或 Min/Max 成对参数，按需设置单侧或双侧
-4. **排序**：`orderBy` 指定排序字段，`orderByType` 指定升/降序（默认 DESC 降序）
-5. **分页**：`page` 从 1 开始，`pageSize` 范围 1-1000，默认 1000
-6. **排除逻辑**：`notExistKeyword` 可排除包含特定词的商品，`notExistShopIdList` 可排除特定店铺
+### 解决认证和算力问题
 
-### Common Query Scenarios
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**1. 关键词选品 — 按销量筛选热销商品**
-```
-station: malaysia
-keyword: Storage Box
-keywordType: 2
-soldMin: 100
-orderBy: sold
-orderByType: DESC
-pageSize: 100
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解数据维度**：销量包括近 30 天实际销量、近 30 天估算销量和累计销量；价格包括默认价与 SKU 最低、最高价。店铺数据区分官方店、虾皮优选、本地或海外、跨境或本土；商品数据还包括评分、评分数、收藏、浏览、SKU 数量、上架时间及类目。
+- **区分销量口径**：展示时明确 `sold` 为前 30 天销量、`estimateSold` 为估算前 30 天销量、`historicalSold` 为累计销量、`payment` 为前 30 天销售额，避免混用。
+- **清晰展示数据**：使用表格，优先展示标题、`price`、`sold`、`payment` 和 `rating`，不附加主观经营建议。
+- **标明币种**：展示价格和销售额时提醒用户其为目标站点的当地货币。各站点币种对应关系见接口定义。
+- **说明返回范围**：结果较多时先展示核心数据，告知可通过分页查看更多；实际继续调用遵守成本约束，分页限制见接口定义。
+- **展示图片**：返回 `imageUrl` 时附商品图片，帮助用户直观判断。
+- **说明数据时效**：数据取决于友鹰抓取进度，使用 `lastModiTime` 说明更新情况，不将其表述为实时成交数据。
+- **解释失败原因**：依据接口定义及实际错误消息解释查询失败，建议核对站点或筛选条件；不把空结果直接解释为市场没有需求。
+
+## 使用示例
+
+### 关键词选品：按销量筛选热销商品
+
+```json
+{"station":"malaysia","keyword":"Storage Box","keywordType":2,"soldMin":100,"orderBy":"sold","orderByType":"DESC","pageSize":100}
 ```
 
-**2. 新品发现 — 近期上架且有一定销量的商品**
-```
-station: thailand
-keyword: Phone Case
-listingDateFrom: 2025-06-01
-soldMin: 50
-orderBy: gen_time
-orderByType: DESC
+### 新品发现：近期上架且有一定销量
+
+```json
+{"station":"thailand","keyword":"Phone Case","listingDateFrom":"2025-06-01","soldMin":50,"orderBy":"gen_time","orderByType":"DESC"}
 ```
 
-**3. 高潜力商品 — 低价高销量**
-```
-station: indonesia
-keyword: LED Light
-priceMax: 50000
-soldMin: 500
-orderBy: payment
-orderByType: DESC
+### 低价高销量商品
+
+```json
+{"station":"indonesia","keyword":"LED Light","priceMax":50000,"soldMin":500,"orderBy":"payment","orderByType":"DESC"}
 ```
 
-**4. 跨境卖家商品筛选**
-```
-station: malaysia
-keyword: Wireless Earbuds
-cbOption: 1
-soldMin: 200
-orderBy: sold
-orderByType: DESC
+### 跨境卖家商品筛选
+
+```json
+{"station":"malaysia","keyword":"Wireless Earbuds","cbOption":1,"soldMin":200,"orderBy":"sold","orderByType":"DESC"}
 ```
 
-**5. 品类选品 — 按类目 + 销售额筛选**
-```
-station: vietnam
-pL1Id: 11036379
-paymentStart: 10000000
-orderBy: payment
-orderByType: DESC
-pageSize: 200
+### 品类选品：按类目和销售额筛选
+
+```json
+{"station":"vietnam","pL1Id":"11036379","paymentStart":10000000,"orderBy":"payment","orderByType":"DESC","pageSize":200}
 ```
 
-**6. 竞品店铺分析 — 查看特定店铺的商品**
-```
-station: malaysia
-shopIdList: 123456789
-orderBy: sold
-orderByType: DESC
+### 竞品店铺商品
+
+```json
+{"station":"malaysia","shopIdList":"123456789","orderBy":"sold","orderByType":"DESC"}
 ```
 
-**7. 优选商品筛选 — 虾皮优选 + 高评分**
-```
-station: philippines
-keyword: Beauty
-isShopeeVerified: 1
-ratingMin: 4.5
-soldMin: 100
-orderBy: rating
-orderByType: DESC
+### 优选且高评分的商品
+
+```json
+{"station":"philippines","keyword":"Beauty","isShopeeVerified":1,"ratingMin":4.5,"soldMin":100,"orderBy":"rating","orderByType":"DESC"}
 ```
 
-**8. 大卖排除 — 发现中小卖家机会**
-```
-station: taiwan_china
-keyword: 收纳盒
-notExistShopIdList: 111111,222222,333333
-soldMin: 50
-soldMax: 500
-orderBy: sold
-orderByType: DESC
+### 排除大卖店铺
+
+```json
+{"station":"taiwan_china","keyword":"收纳盒","notExistShopIdList":"111111,222222,333333","soldMin":50,"soldMax":500,"orderBy":"sold","orderByType":"DESC"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data only**: Show query results in clear tables without subjective business advice
-2. **Currency notice**: Different marketplaces use different currencies (MYR, TWD, IDR, THB, PHP, SGD, VND, BRL, MXN, CLP, COP). Always remind users of the currency context when showing price/payment data
-3. **Volume notice**: When results are large, show core data (title, price, sold, payment, rating) and remind users they can view more via pagination
-4. **Key metrics highlight**: Prioritize showing `sold` (前30天销量), `payment` (前30天销售额), `price`, `rating` as these are the most decision-relevant metrics
-5. **Error handling**: When a query fails, explain the reason based on the error response and suggest adjusting query criteria
-6. **Image display**: When `imageUrl` is available, include product images to help users make visual assessments
-
-## Important Limitations
-
-- **Result cap**: `pageSize` maximum is 1000 records per request
-- **Required field**: `station` is always required — if missing, ask the user which marketplace to query
-- **Price currency**: Prices are in local currency of the selected marketplace, not USD
-- **Data freshness**: Data depends on 友鹰's crawling schedule, see `lastModiTime` for last update time
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** - Shopee product search and filtering:
-
-| User Says | Scenario |
-|-----------|----------|
-| "虾皮上什么好卖" "Shopee爆款" | Hot-selling product discovery |
-| "帮我在Shopee上搜xx商品" | Keyword product search |
-| "马来站最近上架的新品" | New product discovery by listing date |
-| "销量过千的商品有哪些" | Volume-based product filtering |
-| "东南亚哪些品类有机会" | Category-level opportunity scan |
-| "帮我看看这个店铺的商品" | Competitor shop analysis |
-| "跨境商品和本土商品对比" | Cross-border vs local comparison |
-| "Shopee优选商品筛选" | Shopee Verified product filtering |
-| "低价高销量的商品" | Price-volume opportunity mining |
-
-**Not applicable** - Needs beyond Shopee product search:
-- Amazon, TikTok, eBay, 1688 等其他平台的商品搜索
-- Shopee 广告投放策略
-- Shopee 店铺运营建议
-- Shopee 物流/仓储方案
-- 已有本地 Shopee 数据文件的处理
-
-**Boundary judgment**: When users say "东南亚选品", "虾皮市场分析", or "跨境电商选品", if it boils down to searching and filtering products on Shopee by various criteria, this skill applies. If they're asking about logistics planning, advertising strategy, or store operations, it does not apply.
-
-## 算力消耗规则
-
-消耗 4 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,19 +1,19 @@
 # `FEE_DISCOUNTS_REPORT`
 
-> **分类**：1. Amazon Business Reports  
-> **说明**：Amazon Business fee discounts  
-> **可用范围**：Seller only
+> **分类**：1. Amazon Business 报告  
+> **说明**：Amazon Business 费用折扣  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Amazon Business Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-amazon-business#referral-fee-discounts-report)（章节：**Referral Fee Discounts Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Amazon Business 报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-amazon-business#referral-fee-discounts-report)（章节：**Referral Fee Discounts Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
-- **Availability**：Amazon Business sellers
-- **Requested/scheduled**：This report can be requested or scheduled.
-- **Report output type**：Microsoft Excel Workbook file (.xlsx)
-- **要点**：Contains a summary of the seller's fee discounts. 📘NoteInformation in this report can be up to 24 hours old. Do not request a report more than once within a 24-hour period.
+- **角色**：[Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
+- **可用范围**：Amazon Business 卖家
+- **按需/计划**：本报告可按需请求或计划生成。
+- **输出格式**：Microsoft Excel 工作簿（.xlsx）
+- **要点**：汇总卖家的费用折扣。数据可能延迟最多 24 小时，24 小时内不要重复请求。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-amazon-business#referral-fee-discounts-report>
 

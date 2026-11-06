@@ -10,7 +10,6 @@ Official docs: https://open.shopee.com/documents/v2/v2.fbs.<api>?module=126&type
 """
 
 from __future__ import annotations
-from _shopee_fbs_common import emit_result, lf_inline_flag
 
 import json
 import sys
@@ -21,14 +20,13 @@ from _fbs_endpoints import list_api_names
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print(f"Usage: fbs_api.py '<JSON with api field>'\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
+        print(f"Usage: fbs_api.py '<JSON with api field>' [--inline] [--no-cache]\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
-    inline = lf_inline_flag()
-    emit_result(run_fbs_api(str(params["api"]), params, "fbs_api.py"), inline)
+    run_fbs_api(str(params["api"]), params, "fbs_api.py")
 
 
 if __name__ == "__main__":

@@ -1,166 +1,175 @@
-# 推荐供货价查询 — `temu.local.goods.recommendedprice.query`
+# 推荐供货价查询 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_price_recommendedprice_query.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a（`sub_menu_code` 以 Partner 后台该接口页为准） |
-| **网关** | `POST /temu/proxy`，`type`=`temu.local.goods.recommendedprice.query`，业务载荷放在 Body 的 `params` |
+脚本运行、无缓存和认证兼容见 [公共运行约定](../api.md#脚本运行约定)；认证或用量引导见 [onboarding.md](../onboarding.md)。
 
-**Description:** Support merchants in querying the recommended supply prices（支持商家查询推荐供货价）。
+## 公共规则
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 `request`。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Request 结构（官方业务参数）
+### 响应码基本规则
 
-```text
-params
-└── request (OBJECT, 选填)
-    ├── language
-    ├── recommendedPriceType    ← 必填
-    └── goodsIdList[]           ← 必填，1～100 个
-```
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-### `request` 内字段
+## 接口：推荐供货价查询（temu.local.goods.recommendedprice.query）
+
+> Partner US：[商品菜单](https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a)，具体 `sub_menu_code` 以后台接口页为准。
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关请求体
 
 | 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| language | STRING | 否 | Language（语言） |
-| recommendedPriceType | INTEGER | **是** | Recommended price type（推荐价类型） |
-| goodsIdList | LONG[] | **是** | Search param: list of Goods ID（商品 ID 列表），**列表长度须在 1～100 之间** |
+|---|---|---|---|
+| site | string | 是 | 本技能默认 `us`；通用入口支持 `cn` / `partner` / `us` / `global` / `eu`，值须小写。 |
+| managementType | string | 是 | 本技能默认 `semi-managed`；通用入口支持 `full-managed` / `semi-managed`，值须小写。 |
+| accessToken | string | 是 | Temu 店铺令牌；脚本也可用 `storeKey` 本地解析后填入。 |
+| type | string | 是 | `temu.local.goods.recommendedprice.query`；不是 URL path。 |
+| params | object | 否 | Temu 业务参数，当前接口业务块放在 `params.request`。 |
+
+#### 脚本认证与控制参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| accessToken | string | 与 storeKey 二选一 | 直接传入优先于本地保存的令牌。 |
+| storeKey | string | 与 accessToken 二选一 | 本地店铺键，结合 site、managementType、tokenPurpose 精确取令牌。 |
+| tokenPurpose | string | 否 | 美国站包装默认 `product-inventory`；通用入口默认 `default`。仅用于本地取令牌，不发往网关。 |
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox 用户密钥，按列出的顺序取首个非空值，优先于两种环境变量；仅用于请求头。 |
+| --inline | CLI flag | 否 | 全量打印，仍保存响应。 |
+| --no-cache | CLI flag | 否 | 兼容通用调用器选项；本技能业务封装始终加入，不读取或保存响应缓存。 |
+
+业务 JSON 优先使用对象类型的 `params`；否则将顶层非认证、非控制字段整体作为 `params`，保留 `request` 包装。`type`、`app_key`、`access_token`、`sign`、`timestamp` 不应放入业务 `params`，上游加签由网关处理。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| params.request | OBJECT | 否 | 官方业务参数包装对象；内部必填字段见下表。 |
+
+#### `request` 内字段
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| language | STRING | 否 | 语言 |
+| recommendedPriceType | INTEGER | **是** | 推荐价类型 |
+| goodsIdList | LONG[] | **是** | 商品 ID 列表，**列表长度须在 1～100 之间** |
 
 #### `recommendedPriceType`
 
 | 值 | 说明 |
-|----|------|
-| `10` | Low traffic（低流量） |
-| `20` | Restricted traffic（限流/受限流量） |
+|---|---|
+| `10` | 低流量 |
+| `20` | 限流/受限流量 |
 
-### 网关 `params` 写法
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "language": "en",
-    "recommendedPriceType": 10,
-    "goodsIdList": [123456789, 123456790]
-  }
-}
-```
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| transportHttpStatus | integer / null | 脚本追加的 LinkFox 外层 HTTP 状态码，连接失败时为 null；与网关 code、errcode 和内层 Temu errorCode 分别判断。直接调用网关时从 HTTP 响应读取。 |
+| errcode | integer / string / null | 若返回，按公共响应码基本规则判断；不将 0 或 false 当作空值。 |
+| errmsg | string | 网关消息，若返回则保留并解释。 |
+| code | integer | 网关业务错误码：1002 为参数或 Token 问题，1003 为转发失败。 |
+| body | string | Temu 原始 JSON 字符串；须先判断网关状态，再解析。 |
+| temuBody | object / array / 标量 / null | 代理脚本在 body 为合法 JSON 字符串时追加的解析结果；body 为空、非字符串或解析失败时不追加。此字段是脚本输出，非网关原生字段。 |
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "recommendedPriceType": 20,
-    "goodsIdList": [111111111]
-  }
-}
-```
-
----
-
-## Response（Temu `body` 解析后）
-
-```text
-response
-├── success
-├── errorCode
-├── errorMsg
-└── result
-    └── goodsList[]
-        ├── goodsId
-        └── skuList[]
-            ├── skuId
-            └── recommendedSupplyPrice
-                ├── amount
-                └── currency
-```
-
-### `response` 顶层字段
+#### Temu 业务响应顶层字段
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | Whether it was successful or not（当前请求是否成功） |
-| errorCode | INTEGER | Error code（错误码） |
-| errorMsg | STRING | Error message（错误信息） |
-| result | OBJECT | Specific information（业务结果） |
+|---|---|---|
+| success | BOOLEAN | 当前请求是否成功 |
+| errorCode | INTEGER | 错误码 |
+| errorMsg | STRING | 错误信息 |
+| result | OBJECT | 业务结果 |
 
-### `result`
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| goodsList | OBJECT[] | Goods recommended price info list（商品推荐供货价信息列表） |
-
-### `result.goodsList[]`
+#### `result`
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| goodsId | LONG | Goods ID（商品 ID） |
-| skuList | OBJECT[] | SKU recommended price info list（SKU 推荐供货价信息列表） |
+|---|---|---|
+| goodsList | OBJECT[] | 商品推荐供货价信息列表 |
 
-### `result.goodsList[].skuList[]`
+#### `result.goodsList[]`
 
 | 参数 | 类型 | 说明 |
-|------|------|------|------|
+|---|---|---|
+| goodsId | LONG | 商品 ID |
+| skuList | OBJECT[] | SKU 推荐供货价信息列表 |
+
+#### `result.goodsList[].skuList[]`
+
+| 参数 | 类型 | 说明 |
+|---|---|---|
 | skuId | LONG | SKU ID |
-| recommendedSupplyPrice | OBJECT | Recommended supply price（推荐供货价） |
+| recommendedSupplyPrice | OBJECT | 推荐供货价 |
 
-### `recommendedSupplyPrice`
+#### `recommendedSupplyPrice`
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| amount | STRING | Amount（金额） |
-| currency | STRING | Currency（币种） |
+|---|---|---|
+| amount | STRING | 金额 |
+| currency | STRING | 币种 |
 
-### 响应示例（结构示意）
+### 响应码规则
 
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "errorMsg": "",
-  "result": {
-    "goodsList": [
-      {
-        "goodsId": 123456789,
-        "skuList": [
-          {
-            "skuId": 58224724203874,
-            "recommendedSupplyPrice": {
-              "amount": "12.99",
-              "currency": "USD"
-            }
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+#### 基础规则
 
----
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-## 与相关接口区分
+#### 业务规则
 
-| 接口 | 场景 |
-|------|------|
-| `temu.local.goods.recommendedprice.query`（本接口） | 按**已存在商品** `goodsIdList` 查询平台**推荐供货价**（低流量/限流等类型） |
-| `temu.local.goods.baseprice.recommend` | 发品/改价前按**类目+规格+站外价**等**估算**推荐基础价 |
-| `bg.local.goods.priceorder.query` | 白名单商家查询定价单/报价列表（含 `supplierPrice` 等） |
+- 网关 `code=1002` 表示参数或 Token 问题；`code=1003` 表示转发失败，应检查 Temu 令牌、IP 白名单或网络。网关失败时不能将嵌套数据解释成业务成功。
+- 网关正常后解析 `body`，检查 Temu 的 `success`、`errorCode`、`errorMsg` 和 `result`；业务示例的 `success=true`、`errorCode=0` 属于内层 Temu 状态，不改变外层 `errcode` 规则。
 
----
-
-## 示例
+### curl 示例
 
 ```bash
-python scripts/us_price_recommendedprice_query.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '
+{
+  "site": "us",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "request": {
-    "recommendedPriceType": 10,
-    "goodsIdList": [123456789]
+  "type": "temu.local.goods.recommendedprice.query",
+  "params": {
+    "request": {
+      "recommendedPriceType": 10,
+      "goodsIdList": [
+        123456789
+      ]
+    }
   }
 }'
+```
+
+---
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-price-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

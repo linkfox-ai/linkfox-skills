@@ -1,12 +1,31 @@
-# 卖家精灵-查竞品 API 参考
+# 卖家精灵竞品查询 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：竞品查询
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/sellersprite/competitor-lookup`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
 
-## 请求参数
+### 请求参数
 
 POST Body（JSON）：
 
@@ -28,17 +47,39 @@ POST Body（JSON）：
 
 > **分页上限**：无论 `total` 显示多少条匹配结果，接口最多只能查询当前排序结果中的前 2000 条记录。若需查看第 2000 条之后的数据，请增加或收紧筛选条件后重新查询。
 
-### 排序对象（order）
+不要假定接口支持未定义的评分、价格或配送方式筛选入参；可在取得商品后按实际返回指标分析。
+
+#### 排序对象（order）
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | field | string | 是 | 排序字段。可选值：`total_units`（月销量）、`total_amount`（月销售额）、`bsr_rank`（BSR排名）、`price`（价格）、`rating`（评分）、`reviews`（评分数）、`profit`（毛利率）、`reviews_rate`（留评率）、`available_date`（上架时间）、`questions`（Q&A数）、`total_units_growth`（月销量增长率）、`total_amount_growth`（月销售额增长率）、`reviews_increasement`（月新增评分数）、`bsr_rank_cv`（近7天BSR增长数）、`bsr_rank_cr`（近7天BSR增长率）、`amz_unit`（子体销量）。默认：`total_units` |
 | desc | string | 是 | 排序方向。`true` = 降序，`false` = 升序。默认：`true` |
 
-## 响应结构
+#### 脚本选项与运行约定
+
+| 参数 / 约定 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| JSON 参数 | object | 是 | 命令行首个位置参数为 JSON 对象，字段见上述请求参数；脚本透传，不擅自添加筛选条件 |
+| --inline | CLI flag | 否 | 强制完整打印到标准输出，同时保存完整响应 |
+| --no-cache | CLI flag | 否 | 绕过默认缓存的读取和写入 |
+| 默认响应缓存 | 本地文件 | 否 | 有效期 24 小时；目录为 `<cwd>/linkfox/.cache/linkfox-sellersprite-competitor-lookup/`；文件名为 `linkfox-sellersprite-competitor-lookup-<hash>.json`；hash 为 `json.dumps(params, ensure_ascii=False, sort_keys=True)` 的 UTF-8 字节经 SHA-256 后取前 16 位十六进制字符 |
+| 缓存命中标记 | object | 否 | 命中后在响应中添加 `_cache.hit=true`，仍保存完整响应并展示缓存命中提示；不再发起请求 |
+| 会话数据目录 | 本地目录 | 是 | 业务入口固定使用当前工作目录的 `linkfox/`，不会因 `ACPX_WORKSPACES` 或公共调用器的回退目录改变输出位置。当前目录不可写，或在非 Windows 系统的 `/tmp` 下运行时，在请求前报错；目录检查不另建响应缓存 |
+| LINKFOX_TOOL_GATEWAY | 环境变量 | 否 | 优先使用该网关地址，去掉末尾 `/`；默认值见公共规则 |
+| LINKFOX_AGENT_API_KEY / LINKFOXAGENT_API_KEY | 环境变量 | 调用时是 | 前者优先，兼容后者；缺失时退出并引导认证 |
+| SESSION_ID / MESSAGE_ID / MODE_ID / APP_NAME | 环境变量 | 否 | 按同名请求头透传，未配置时为空字符串 |
+| Accept | 请求头 | 否 | 业务封装设置 `Accept: application/json` 请求头，请求由公共调用器发送 |
+
+公共调用器统一处理请求、缓存和输出，业务脚本不额外维护第二层缓存。HTTP 错误 JSON 或连接错误均保留供解释，不自动重试。
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| errcode | integer / string / null | 业务状态码，按公共响应码基本规则判断；认证失败示例值为 401 |
+| errmsg | string | 网关消息或错误原因 |
+| errorCode | 以实际响应为准 | 业务状态字段：200 表示成功、其他值表示业务错误，未授权值为 401。字段名以实际响应为准，不假定它与 `errcode` 同时存在或等价；HTTP 状态与 `errcode` 的判断统一遵循公共规则，不以此字段替换公共规则 |
 | total | integer | 匹配结果总数 |
 | sourceType | string | 来源类型（如 `amazon`） |
 | message | string | 执行消息或错误描述 |
@@ -48,7 +89,7 @@ POST Body（JSON）：
 | products | array | 竞品列表（见下方说明） |
 | costToken | integer | 消耗token |
 
-### 竞品对象字段（products）
+#### 竞品对象字段（products[*]）
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -110,84 +151,67 @@ POST Body（JSON）：
 | badge | object | 标识详情对象，包含：`bestSeller`、`amazonChoice`、`newRelease`、`ebc`、`video`（均为 Y/N 字符串） |
 | subcategories | array | 子类目排名，每项包含 `code`（类目code）、`rank`（排名）、`label`（名称） |
 
-## curl 示例
+#### 标识详情（products[*].badge）
 
-### 关键词搜索
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| bestSeller | string | Best Seller 标识，Y/N |
+| amazonChoice | string | Amazon's Choice 标识，Y/N |
+| newRelease | string | New Release 标识，Y/N |
+| ebc | string | A+ 页面标识，Y/N |
+| video | string | 视频介绍标识，Y/N |
+
+#### 子类目排名（products[*].subcategories[*]）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| code | 以实际响应为准 | 类目 code，保留实际响应值 |
+| rank | 以实际响应为准 | 类目排名，保留实际响应值 |
+| label | 以实际响应为准 | 类目名称，保留实际响应值 |
+
+`columns` 的元素结构以实际响应为准，不假定额外字段。
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 竞品结果从 `products` 读取，`total` 是匹配结果总数，可能超过可访问的分页范围。不要将商品结果解释为流量关键词列表。
+- 查询失败时，除公共规则中的 `errmsg` 外，结合接口的 `message` 说明业务原因；连接错误或非 JSON HTTP 错误会由脚本保留在 `error`、`details` 等错误信息中，不将其视为商品数据。
+
+### curl 示例
 
 ```bash
 curl -X POST https://tool-gateway.linkfox.com/sellersprite/competitor-lookup \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"marketplace": "US", "keyword": "wireless earbuds", "matchType": 1, "size": 20}'
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{"marketplace": "US", "keyword": "wireless earbuds", "matchType": 1, "order": {"field": "total_units", "desc": "true"}, "page": 1, "size": 20}'
 ```
 
-### ASIN查询
+### 响应示例
 
-```bash
-curl -X POST https://tool-gateway.linkfox.com/sellersprite/competitor-lookup \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"marketplace": "US", "asinList": "B072MQ5BRX,B08N5WRWNW"}'
-```
-
-### 按月销售额排序并分页
-
-```bash
-curl -X POST https://tool-gateway.linkfox.com/sellersprite/competitor-lookup \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"marketplace": "US", "keyword": "phone case", "order": {"field": "total_amount", "desc": "true"}, "page": 1, "size": 50}'
-```
-
-### 历史快照查询
-
-```bash
-curl -X POST https://tool-gateway.linkfox.com/sellersprite/competitor-lookup \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"marketplace": "US", "keyword": "space heater", "dataSnapshotMonth": "202412", "order": {"field": "total_units", "desc": "true"}, "size": 20}'
-```
-
-## 错误码
-
-正常情况下，接口的 HTTP 状态码均为 200，业务的成功与否通过响应体中的 errorCode 字段区分（errorCode = 200 表示成功，其他值表示业务错误）。当遇到未授权等情况时，HTTP 状态码为 401，且对应的 errorCode 也是 401。
-
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析 `products` 等业务字段 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 402 | 算力不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
-
-错误响应示例：
+认证失败示例：
 
 ```json
-{
-    "errcode": 401,
-    "errmsg": "authorized error"
-}
+{"errcode": 401, "errmsg": "authorized error"}
 ```
 
----
+## Feedback
 
-## Feedback API
-
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "skillName": "linkfox-xxx-xxx",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "skillName": "linkfox-sellersprite-competitor-lookup",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter
-- `sentiment`: Choose ONE — `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE — `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

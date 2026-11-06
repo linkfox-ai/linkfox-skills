@@ -1,18 +1,18 @@
 # `GET_FBA_FULFILLMENT_LONGTERM_STORAGE_FEE_CHARGES_DATA`
 
-> **分类**：6.3 FBA Fees & Charges  
-> **说明**：Long-term storage fees  
-> **可用范围**：Seller only
+> **分类**：6.3 FBA 费用  
+> **说明**：长期仓储费用  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-long-term-storage-fee-charges-report)（章节：**FBA Long Term Storage Fee Charges Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **要点**：Contains the charge data for long-term storage. 📘Note:To ensure the correctness of the report generated, the time between the dataStartTime and the dateEndTime attributes of the CreateReportSpecification should be equal to one month.
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **要点**：包含长期仓储收费数据。为保证正确性，CreateReportSpecification 的 日期范围应为一个月；日期名称 dataStartTime 与 dateEndTime 须与 CreateReport 字段定义核对，创建请求字段见 [接口说明](../../api.md)。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-long-term-storage-fee-charges-report>
 

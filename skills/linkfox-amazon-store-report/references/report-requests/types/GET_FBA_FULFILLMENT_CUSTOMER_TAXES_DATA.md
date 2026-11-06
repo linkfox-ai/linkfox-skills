@@ -1,19 +1,19 @@
 # `GET_FBA_FULFILLMENT_CUSTOMER_TAXES_DATA`
 
-> **分类**：6.1 FBA Shipments  
-> **说明**：FBA customer taxes  
-> **可用范围**：Seller only
+> **分类**：6.1 FBA 配送货件  
+> **说明**：FBA 客户税务数据  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-customer-taxes)（章节：**FBA Customer Taxes**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Availability**：FBA sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment), [Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
-- **要点**：Tab-delimited flat file report for tax-enabled US sellers. This report contains data through February 28, 2013. All new transaction data can be found in the Sales Tax Report.
+- **可用范围**：FBA 卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment), [Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
+- **要点**：面向启用税务功能的美国卖家的制表符分隔文件，数据仅截至 2013-02-28。新交易数据见 Sales Tax Report。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-customer-taxes>
 

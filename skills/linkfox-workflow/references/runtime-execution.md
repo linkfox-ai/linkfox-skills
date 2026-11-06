@@ -54,8 +54,8 @@ python scripts/run_workflow.py --workflow-id <workflowId>
 | --- | --- |
 | `chatInput`(手动启动,默认) | 不传 |
 | `scheduleInput`(按业务时间) | 不传。手动执行等于"提前触发一次",不影响定时配置;**不证明**定时已登记或会按时跑 |
-| `storeAuthorization`(店铺授权事件) | 不传。手动执行没有真实店铺事件载荷,跑通不代表事件触发已生效 |
 | `tableRecordTrigger`(多维表格记录触发) | 不传。手动执行**没有变更载荷**:`BusinessStart` 的 `recordEvent` / `rows` / `recordRows` 三个 key 整个不出现(不是空对象),引用 `{{businessStartAgentflow_0.output.recordEvent.*}}` 的地方保留字面量;接了 `WriteFile` 会就地报"没有产出任何记录"。执行前先说清这一点,别把"跑通了"当成"记录触发配好了",也别把这个报错当成 flow 有问题 |
+| `storeAuthorization`(已下线) | 2026-10-30 起不存在这个触发方式。存量 flow 里还有这种开始节点时,`run_workflow.py` 不会给出触发相关的提示,只照常跑一次;回复里说明"这条流的触发方式已下线,手工跑通不代表它会自动跑",并建议用户换成定时 / 记录触发 / 手动 |
 
 原生 `Start` 的 `formInput` / `webhookTrigger` 形态(用户自己改过的老 flow)才需要 `--form-file <path>` / `--webhook-file <path>`:值先 `Write` 成 JSON 文件再传路径,**不要塞进 Bash argv**。
 

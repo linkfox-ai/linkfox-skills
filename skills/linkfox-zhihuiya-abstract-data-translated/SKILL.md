@@ -1,148 +1,109 @@
 ---
 name: linkfox-zhihuiya-abstract-data-translated
-description: 从智慧芽（PatSnap）专利数据库获取专利标题和摘要的翻译版本。当用户要求专利摘要翻译、专利标题翻译、翻译后的专利摘要、其他语言的专利内容、中文/英文/日文的专利摘要，或需要通过专利ID或公开号查询特定专利的摘要、标题、patent abstract translation, patent title translation, PatSnap, patent translation, abstract lookup时触发此技能。当用户提到智慧芽、PatSnap或专利摘要查询时也应触发，即使未明确说"翻译"。
+description: 按智慧芽（PatSnap）专利 ID 或公开（公告）号获取专利标题和摘要的中文、英文或日文翻译，支持批量查询及按需采用同族专利摘要。适用于专利摘要查询、标题翻译和指定语言的摘要阅读；用户询问已知专利的内容时也可使用。不适用于专利全文、权利要求、说明书获取，或按关键词、分类号、申请人搜索专利，以及法律状态、引用、专利布局、估值和侵权分析。
 ---
 
-# Zhihuiya Patent Abstract (Translated)
+# 智慧芽专利标题与摘要翻译
 
-This skill guides you on how to retrieve translated patent titles and abstracts from the Zhihuiya (PatSnap) patent database, supporting Chinese, English, and Japanese translations.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Zhihuiya (PatSnap) is a leading patent intelligence platform. This tool queries its database to return translated titles and abstracts for one or more patents. You can look up patents by **patent ID** or **publication (announcement) number**, and receive translations in Chinese, English, or Japanese.
+查询已知专利的标题与摘要翻译。用户提供单条或多条专利标识，希望了解专利概述、获取指定语言版本，或明确希望在原摘要缺失时查看同族摘要时，使用本技能。
 
-**Patent identification**: Each patent can be identified by either a `patentId` (internal Zhihuiya identifier) or a `patentNumber` (public publication/announcement number such as `US20200012345A1` or `CN112345678A`). If both are provided, the patent ID takes priority.
+**场景速查**
 
-**Family patent fallback**: When the original patent has no abstract available, you can optionally substitute the abstract from a related family patent by enabling the replacement option.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 翻译这件专利的摘要和标题 | 单条专利翻译。 |
+| 这个公开号的专利主要讲什么 | 已知专利的摘要查询。 |
+| 给我这件专利的中文或日文摘要 | 指定目标语言。 |
+| 批量翻译这些专利 | 多条专利摘要翻译。 |
+| 原摘要没有时可以用同族专利 | 按用户要求使用同族摘要。 |
 
-## Parameter Guide
+## 前置条件
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| patentId | string | At least one of patentId or patentNumber | Zhihuiya internal patent ID. Separate multiple IDs with commas. Max length 60,000 characters. |
-| patentNumber | string | At least one of patentId or patentNumber | Publication (announcement) number. Separate multiple numbers with commas. Max length 60,000 characters. |
-| replaceByRelated | integer | No | Whether to substitute a family patent abstract when the original is unavailable. `1` = yes, `0` = no. Default `0`. |
-| lang | string | No | Target translation language. `en` = English (default), `cn` = Chinese, `jp` = Japanese. |
+先确定待查专利标识、用户期望的目标语言及是否接受同族摘要；标识、语言和替代选项的填写规则见 `references/api.md`。
 
-### Key Rules
+## 查询流程
 
-1. **At least one identifier is required**: You must provide either `patentId` or `patentNumber` (or both). If both are supplied, `patentId` takes priority.
-2. **Batch queries**: Multiple patents can be queried at once by separating values with commas.
-3. **Default language is English**: When the user does not specify a language, use `en`.
-4. **Family fallback**: Set `replaceByRelated` to `1` only when the user explicitly wants a substitute abstract from a family patent if the original is missing.
+1. 从用户提供的信息中识别待查专利，按 `references/api.md` 整理单条或批量请求；缺少专利标识时先补充，不将关键词当作标识。
+2. 确定目标语言及同族摘要选项，按接口定义采用默认值；仅在用户明确要求时启用同族替代，不因空结果静默改变语言或替代来源。
+3. 按本次查询范围预估算力并提醒用户，由用户决定是否继续，再执行查询；同一参数优先复用缓存，继续检索遵守成本约束。
+4. 按接口规则检查响应，区分请求失败、未返回翻译和同族替代；从保存的完整响应提取结果，按下方展示建议交付。
 
-## Response Fields
+## 执行方式
 
-| Field | Description |
-|-------|-------------|
-| total | Number of patent records returned |
-| data | Array of patent objects (see below) |
-| data[].patentId | Zhihuiya internal patent ID |
-| data[].pn | Publication (announcement) number |
-| data[].title | Translated patent title |
-| data[].abstractText | Translated patent abstract |
-| data[].pnRelated | Publication number of the substitute family patent (only present when family replacement was used) |
-| costToken | Tokens consumed by this request |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_abstract_translated.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换专利标识、目标语言或同族替代选项连续试探；需要再次请求时，先向用户说明额外消耗。
 
-## Usage Examples
+### 输出策略
 
-**1. Translate a single patent abstract to English by publication number**
-```
-Look up patent number US20200012345A1 and give me the English abstract.
-```
-Parameters: `patentNumber = "US20200012345A1"`, `lang = "en"`
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-abstract-data-translated-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**2. Translate multiple patents to Chinese**
-```
-Get the Chinese translation of abstracts for patents CN112345678A and US20200067890A1.
-```
-Parameters: `patentNumber = "CN112345678A,US20200067890A1"`, `lang = "cn"`
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**3. Look up by patent ID with family fallback**
-```
-Get the Japanese abstract for patent ID 12345678. If the abstract is unavailable, use a family patent instead.
-```
-Parameters: `patentId = "12345678"`, `lang = "jp"`, `replaceByRelated = 1`
+## 执行规则
 
-**4. Batch query by patent IDs**
-```
-Translate the titles and abstracts for these patent IDs: 111111, 222222, 333333.
-```
-Parameters: `patentId = "111111,222222,333333"`, `lang = "en"`
+### 算力消耗预估
 
-## Display Rules
+预计每次接口请求消耗 3 算力，按请求次数估算；批量返回的专利条数不作为该预估的乘数。拆分成多个请求或额外重新查询时，按新增请求次数累计预估，最终以实际扣除为准。
 
-1. **Present data clearly**: Show results in a well-structured table with patent number, title, and abstract.
-2. **Indicate language**: Mention the translation language in the output header so users know which language the results are in.
-3. **Family patent notice**: If `pnRelated` is present in any result, explicitly inform the user that the abstract was sourced from a family patent and show the substitute publication number.
-4. **Long abstracts**: For very long abstracts, display the full text without truncation so users can review the complete content.
-5. **Error handling**: Report the actual error. An empty translation result means the requested translation was not returned; it does not establish that the patent is absent or that all same-language requests are unsupported. If the user needs the original abstract, use `/zhihuiya/simpleBibliography` and verify the returned patent and text language. Keep the requested target language; do not silently switch it or substitute a family patent.
-6. **No subjective commentary**: Present the translated text as-is without adding interpretation or legal analysis of the patent content.
-## 调用方式
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- **API 端点**：`POST /zhihuiya/abstractDataTranslated`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_abstract_translated.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-abstract-data-translated-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 解决认证和算力问题
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 约束与建议
 
-## Important Limitations
+- **理解标识与同族摘要**：专利 ID 是智慧芽内部标识，公开号是公开（公告）编号；同族替代指原专利无可用摘要时，采用相关同族专利的摘要，不能视为原专利自身的摘要。
+- **清晰展示结果**：用表格呈现公开号、翻译标题与摘要，在标题中注明翻译目标语言。长摘要必须完整展示，不截断；必要时按专利逐段展示完整摘要。
+- **标明同族来源**：结果出现 `pnRelated` 时，明确告知摘要来自同族专利，并展示替代专利的公开号。
+- **谨慎解释空结果**：未返回翻译不代表专利不存在，也不证明所有同语言请求都不受支持。保留用户请求的语言，不静默换语言或使用同族摘要。
+- **核验原文**：用户需要原始摘要时，转交智慧芽基础著录项能力，通过 `/zhihuiya/simpleBibliography` 核验返回的专利及文本语言；该原文查询不属于本技能定义的操作。
+- **保持原文含义**：如实呈现翻译文本，不附加专利内容的主观解读或法律分析；失败时报告实际错误。
 
-- **Identifier required**: At least one of patent ID or publication number must be provided; the tool cannot perform keyword-based searches.
-- **Translation languages**: Only Chinese (`cn`), English (`en`), and Japanese (`jp`) are supported.
-- **No full-text retrieval**: This tool returns only titles and abstracts, not full patent claims or descriptions.
-- **Family replacement is optional**: The substitute family patent abstract is only provided when explicitly requested via `replaceByRelated = 1`.
+## 使用示例
 
-## User Expression & Scenario Quick Reference
+### 按公开号查询英文摘要
 
-**Applicable** -- Patent abstract and title translation queries:
+用户：查询 US20200012345A1 的英文标题和摘要。
 
-| User Says | Scenario |
-|-----------|----------|
-| "Translate this patent abstract" | Single patent translation |
-| "What does patent XX say / what is it about" | Abstract lookup |
-| "Get the Chinese/Japanese version of this patent" | Specific language translation |
-| "Look up the abstract for patent number XX" | Publication number lookup |
-| "Translate these patents in batch" | Batch translation |
-| "The abstract is missing, try a family patent" | Family patent fallback |
+核对专利标识和语言，说明预估消耗后查询，完整展示标题和摘要。
 
-**Not applicable** -- Needs beyond abstract translation:
+### 批量查询中文摘要
 
-- Full patent text, claims, or description retrieval
-- Patent search by keyword, classification, or applicant
-- Patent legal status, citation analysis, or landscape reports
-- Patent valuation or infringement analysis
+用户：给我 CN112345678A 和 US20200067890A1 的中文摘要。
 
-## 算力消耗规则
+按接口定义整理批量请求，按预计返回条数说明消耗，逐条呈现结果。
 
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利摘要翻译结果
+### 按专利 ID 查询日文摘要并接受同族替代
 
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+用户：查专利 ID 12345678 的日文摘要，缺失时可以用同族专利。
 
-**Feedback:**
+根据用户明确要求启用同族替代；结果使用同族摘要时标明其公开号。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+### 按专利 ID 批量查询
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+用户：翻译专利 ID 111111、222222、333333 的标题和摘要。
 
+采用接口默认目标语言并明确告知用户，说明预估消耗后执行批量查询。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

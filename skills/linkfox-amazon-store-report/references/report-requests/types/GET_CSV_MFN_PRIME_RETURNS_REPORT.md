@@ -1,18 +1,18 @@
 # `GET_CSV_MFN_PRIME_RETURNS_REPORT`
 
-> **分类**：13. Returns Reports  
-> **说明**：MFN Prime returns (CSV)  
-> **可用范围**：Seller only
+> **分类**：13. 退货报告  
+> **说明**：MFN Prime 退货（CSV）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Returns Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-returns#csv-prime-returns-report-by-return-date)（章节：**CSV Prime Returns Report by Return Date**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [退货报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-returns#csv-prime-returns-report-by-return-date)（章节：**CSV Prime Returns Report by Return Date**）。**与专页其它段落冲突时以官方英文文档为准。**
 
-- **受限报告**：未在相邻 Note 中写明，但 **Role** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
-- **Role**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
-- **Requested/scheduled**：This report can be requested or scheduled.
-- **Report output type**：Comma-separated flat file
-- **要点**：Contains detailed Seller Fulfilled Prime returns information, including return request date, RMA ID, label details, ASIN, and return reason code. You can request up to 60 days of data in a single report.
+- **受限报告**：未在相邻 Note 中写明，但 **角色** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
+- **角色**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
+- **按需/计划**：本报告可按需请求或计划生成。
+- **输出格式**：逗号分隔的平面文件
+- **要点**：包含 Seller Fulfilled Prime 退货明细，如退货申请日期、RMA ID、标签详情、ASIN 和退货原因码。单份最多 60 天。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-returns#csv-prime-returns-report-by-return-date>
 

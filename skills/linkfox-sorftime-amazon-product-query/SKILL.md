@@ -1,215 +1,120 @@
 ---
 name: linkfox-sorftime-amazon-product-query
-description: 基于Sorftime数据的亚马逊多维度产品搜索与筛选，涵盖14个站点，支持历史月份快照回看。当用户提到Sorftime产品搜索、亚马逊产品筛选、竞品调研、类目分析、品牌热销、卖家分析、季节性产品、历史快照回看、产品搜索、月销量月销额、ABA关键词找产品、价格范围筛选、新品发现、多条件组合筛选、product search, competitor research, category analysis, brand bestsellers, seller analysis, seasonal products, historical snapshot时触发此技能。即使用户未明确提及"Sorftime"，只要其需求涉及亚马逊产品搜索、筛选、对比或类目/品牌/卖家维度的产品探索，也应触发此技能。
+description: 基于 Sorftime 数据搜索和筛选亚马逊商品，覆盖 14 个站点，支持按相似 ASIN、类目、品牌、卖家、ABA 关键词、标题属性、价格、销量、季节性等条件发现和对比商品，并回看历史月份快照。适用于选品探索、竞品发现、类目研究、新品筛选和卖家商品组合研究，无需明确提及 Sorftime。不适用于单个 ASIN 的详细历史趋势、ABA 搜索量或搜索词排名、广告策略、评论正文分析或专利商标核查。
 ---
 
-# Sorftime Product Search
+# Sorftime 亚马逊产品搜索
 
-This skill guides you on how to search and filter Amazon products via Sorftime across multiple dimensions, helping Amazon sellers discover products, analyze competitors, and explore market opportunities.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Sorftime Product Search supports multi-dimensional product retrieval with 16 query types, single or multi-condition AND combinations, and historical monthly snapshot lookback from January 2024. Data covers pricing, BSR rankings, monthly sales, FBA fees, and profit analysis.
+按多种条件发现、筛选和比较亚马逊商品，或将历史月份快照与当前数据进行对照。
+用户说“竞品分析”或“市场调研”时，若需要从类目、品牌、卖家或其他条件出发寻找商品，使用本技能。
 
-**Key differentiator**: This tool is for searching and filtering across products. If you need detailed trend data (sales/price/BSR history) for a specific ASIN, use the Sorftime Product Detail skill instead.
+**场景速查**
 
-## Data Fields
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 找一下这个类目下卖得好的产品 | 类目探索。 |
+| Anker 品牌有哪些热销产品 | 品牌商品组合研究。 |
+| 这个 ASIN 的竞品有哪些 | 相似商品发现。 |
+| 帮我找一些季节性产品 | 按旺季月份寻找商品。 |
+| 新品中月销量超过 500 的有哪些 | 新品与销量组合筛选。 |
+| 去年双十一这个类目的价格快照 | 历史月份快照对比。 |
+| 这个卖家还卖了什么产品 | 按卖家名称或 ID 查商品组合。 |
+| 帮我筛选利润率高于 30% 的 FBA 产品 | 先查配送条件，再按已返回的利润指标整理。 |
+| 月销量 1000 以上，评分 4 星以上的产品 | 多条件组合筛选。 |
+| 标题包含 wireless charger 的产品 | 标题或属性匹配。 |
+| 用 ABA 关键词 Power Bank 找产品 | 按 ABA 关键词寻找商品。 |
 
-Response data covers the following categories (see `references/api.md` for complete field reference):
+### 边界
 
-- **Basic info**: ASIN, title, brand, listing URL, images (main + list), parent ASIN, variation count, weight, size
-- **Pricing & profit**: current price, sale price (after coupon), strikethrough price, coupon, FBA fees (with detail breakdown), platform fee, profit amount & rate
-- **Sales**: monthly sales units, monthly revenue, daily sales, daily revenue (values of -1 = cannot estimate)
-- **Rankings**: BSR rank, category, sub-category rankings
-- **Ratings**: rating score, rating count
-- **Listing info**: listing date, days online
-- **Seller**: Buybox seller name/ID/country, FBA status, seller count
-- **Listing features**: A+ content, video, brand store
+- 单个 ASIN 的销量、价格、BSR 历史趋势转交 Sorftime 商品详情技能；相似 ASIN 搜索用于发现竞品。
+- ABA 搜索量或搜索词排名转交 ABA 数据探索技能。
+- 广告或 PPC 策略、评论正文分析、专利或商标核查不属于本技能范围。
 
-## Supported Marketplaces
+## 前置条件
 
-US (United States), GB (United Kingdom), DE (Germany), FR (France), IN (India), CA (Canada), JP (Japan), ES (Spain), IT (Italy), MX (Mexico), AE (United Arab Emirates), AU (Australia), BR (Brazil), SA (Saudi Arabia)
+确定查询目标与站点，准备用户提供的 ASIN、类目编号、品牌、卖家或筛选条件。构造请求前阅读 `references/api.md`，核对查询模式、条件格式与历史回看支持范围。
 
-Default marketplace is **US**. Use `us` when the user doesn't specify a marketplace.
+## 查询流程
 
-**Note**: Sorftime uses lowercase codes (e.g., `us`, `gb`, `de`), and UK is coded as `gb` (not `uk`).
+1. 确定用户要发现哪些商品，以及是否需要历史快照。未指定站点时采用接口定义中的默认站点约定。
+2. 根据单一目标或组合条件选择查询方式，按 `references/api.md` 构造条件；核对单位、范围表达和组合条件的字段大小写。
+3. 调用前说明动态算力成本，并由用户决定是否继续；同一参数优先复用已有结果或本地缓存。
+4. 发起查询并查看摘要，按需读取已保存文件中的商品数据；仅在用户明确要求时翻页。失败或空结果时先解释原因，后续查询遵守成本约束。
+5. 需要历史对照时，先核对站点支持范围，在用户已决定承担额外消耗的范围内，分别查询历史月份与当前数据，再对照价格、排名及销量。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /sorftime/amazon/productQuery`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sorftime_product_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sorftime_product_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按 Sorftime 内部查询次数 × 6 消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sorftime-amazon-product-query-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sorftime-amazon-product-query-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## How to Build Queries
+### 算力消耗预估
 
-The key parameters are `marketplace` (required), `queryMode`, `queryType`, and `queryValue`. The query system has two modes and 16 filter types that can be combined flexibly.
+消耗算力 = Sorftime 内部查询次数 × 6。不同查询条件可能需要不同次数，具体次数由 Sorftime 决定。
 
-### Principles for Building Queries
+本服务按倍数动态计费，单次可能消耗大量算力；必须在调用前提醒用户，并由用户决定是否继续。
 
-1. **Always specify the marketplace**: Use lowercase site codes, e.g., `us`, `de`, `jp`
-2. **Choose the right query mode**: Use `queryMode=1` for a single filter; use `queryMode=2` to combine multiple filters with AND logic
-3. **Match queryType with queryValue format**: Each queryType expects a specific format - see the table below. Mismatched formats will cause errors
-4. **Mind price units**: Price filters (queryType=8) use smcurrency unit (cents for USD), so $19.99 = `1999`
-5. **Use open ranges when appropriate**: Omit one end for open range - `,1000` means "up to 1000"; `100,` means "100 or more"
-6. **Use queryMonth for historical comparison**: Format `yyyy-MM`; compare with a second call without queryMonth to see changes over time
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### Query Types (queryType, for queryMode=1)
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-| queryType | Name | queryValue Format | Example |
-|-----------|------|-------------------|---------|
-| 1 | ASIN Similar | ASIN | `B0CVM8TXHP` |
-| 2 | Category | NodeId | `3743561` |
-| 3 | Brand | Brand name | `Anker` |
-| 4 | Seller Name | Store name | `AnkerDirect` |
-| 5 | Seller ID | SellerId | `A294P4X9EWVXLJ` |
-| 6 | ABA Keyword | Keyword | `Power Bank` |
-| 7 | Title/Attribute Match | Keywords | `10,000mAh 30W` |
-| 8 | Price Range | `min,max` (in cents) | `1,1000` (=$0.01~$10) |
-| 9 | Monthly Sales Range | `min,max` | `100,1000` |
-| 10 | Seasonal Products | Month list | `1,2,3` (peak in Jan-Mar) |
-| 11 | Listing Date Range | `start,end` (yyyy-MM-dd) | `2024-06-01,2024-12-01` |
-| 12 | Rating Range | `min,max` | `3,5` |
-| 13 | Review Count Range | `min,max` | `10,500` |
-| 14 | Rank Range | `bsr_min,bsr_max;sub_min,sub_max` | `500,5000;1,100` |
-| 15 | Fulfillment | `FBA` / `FBM` | `FBA,FBM` |
-| 16 | Variation Count | `min,max` | `1,50` |
+### 解决认证和算力问题
 
-**Important**: queryType=1 (ASIN Similar) finds products similar to the given ASIN, not the ASIN itself. To query a single product's detail, use the Sorftime Product Detail skill.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### Historical Snapshots (queryMonth)
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-Set `queryMonth` (format `yyyy-MM`) to query a past month's product data snapshot. This lets users compare historical prices, rankings, and sales with current data.
+### 约束与建议
 
-- Supported range: January 2024 to present (~2 years)
-- US, GB, DE support full "unlimited" lookback mode
-- Other sites support Top 100 products only in lookback
-- AU, BR, IN do **not** support lookback
+- **理解查询能力**：支持多维度单条件或 AND 组合查询。历史快照用于比较不同月份的商品状态，不等同于单个 ASIN 的连续趋势曲线。
+- **明确数据覆盖**：可查看商品基本资料、图片与变体，价格和利润，销量和销售额，BSR 与类目排名，评分、上架信息、Buybox 卖家与配送，以及 A+、视频和品牌店标记。完整字段及计算口径见 `references/api.md`。
+- **清晰展示数据**：用表格展示查询结果，不附加主观商业建议；价格、销售额和利润注明站点币种，排名说明数值越小越好。
+- **说明估算口径**：销量与销售额不可估算时展示“无法预估”，避免把占位值解释为实际负销量；具体取值约定见接口定义。
+- **利润筛选**：依据返回的利润指标整理已取得的商品；服务端支持的筛选条件以接口定义为准，不添加未定义参数，也不把单页结果推断为全市场结果。
+- **说明分页情况**：结果较多时先展示重点和本次返回范围，再提醒用户可以继续查看；分页上限见接口定义，后续调用遵守成本约束。
+- **解释失败**：按接口文档判断响应，结合 `msg`、`errmsg` 或脚本保留的错误信息解释原因，建议用户核对查询条件；不得自动连续试探。
 
-### Query Examples for Common Scenarios
+## 使用示例
 
-**1. Fititors of a given ASIN**
-```
-queryMode: 1, queryType: 1, queryValue: B0CVM8TXHP, marketplace: us
-```
+### 发现竞品或浏览品牌、类目、卖家
 
-**2. Browse a category's top products**
-```
-queryMode: 1, queryType: 2, queryValue: 3743561, marketplace: us
-```
+用户：找这个 ASIN 的相似产品，再看看指定品牌或卖家有哪些商品。
 
-**3. Analyze a brand's product portfolio**
-```
-queryMode: 1, queryType: 3, queryValue: Anker, marketplace: us
-```
+根据用户指定目标逐项构造查询，展示匹配商品及返回范围。常见条件格式与示例见 `references/api.md`。
 
-**4. Search by ABA keyword**
-```
-queryMode: 1, queryType: 6, queryValue: Power Bank, marketplace: us
-```
+### 寻找新品、季节性商品或低价高销量商品
 
-**5. Discover seasonal products (Q4 peak)**
-```
-queryMode: 1, queryType: 10, queryValue: 10,11,12, marketplace: us
-```
+用户：找新品中销量较高的 FBA 商品，或者寻找第四季度旺季产品。
 
-**6. Compare historical vs current data**
-```
-queryMonth: 2024-11, queryMode: 1, queryType: 2, queryValue: 3743561, marketplace: us
--> Compare with current data (no queryMonth) to see price/sales changes
-```
+确定用户需要的条件组合，核对条件与单位后查询，按返回数据列出商品，不自动扩展筛选条件。
 
-**7. Multi-condition: new FBA products with good sales**
-```
-queryMode: 2
-queryValue: [{"QueryType":11,"Content":"2024-06-01,"},{"QueryType":9,"Content":"300,"},{"QueryType":15,"Content":"FBA"}]
-marketplace: us
-```
+### 对比历史与当前数据
 
-**8. Find low-price high-sales products**
-```
-queryMode: 2
-queryValue: [{"QueryType":8,"Content":",2000"},{"QueryType":9,"Content":"500,"}]
-marketplace: us
-```
+用户：对比这个类目去年十一月与现在的价格和销量。
 
-**9. Check a seller's product portfolio**
-```
-queryMode: 1, queryType: 4, queryValue: AnkerDirect, marketplace: us
-```
+核对历史回看支持范围，说明两次查询的动态消耗，在用户决定继续后获取两个时间口径的数据并列表对照。
 
-## Display Rules
+## 使用反馈
 
-1. **Present data only**: Show query results in clear tables without subjective business advice
-2. **Ranking clarification**: When showing ranking data, remind users that lower values mean better rankings
-3. **Pagination notice**: Search results return max 100 products per page, up to 200 pages. If results are large, show highlights and remind users to paginate
-4. **Sales estimation caveat**: Values of `-1` in sales/revenue fields mean "cannot estimate" - explain this to the user rather than showing -1 directly
-5. **Error handling**: When a query fails, explain the reason based on the `msg` field and suggest adjusting query criteria
-
-## Important Limitations
-
-- **Pagination**: Max 100 products per page, max 200 pages
-- **Historisupported
-- **Non-structured data**: Results do not support secondary analysis via `_dataQuery_executeDynamicQuery`
-- **Sales estimation**: Products in non-standard categories may return -1 for sales fields
-- **ABA keyword search** (queryType=6): Currently only supports ABA keywords, not arbitrary search terms
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** - Product search and filtering on Amazon:
-
-| User Says | Scenario |
-|-----------|--------|
-| "找一下这个类目下卖得好的产品" | Category exploration |
-| "Anker品牌有哪些热销产品" | Brand analysis |
-| "这个ASIN的竞品有哪些" | Competitor discovery |
-| "帮我找一些季节性产品" | Seasonal product discovery |
-| "新品中月销量超过500的有哪些" | Filtered product discovery |
-| "去年双十一这个类目的价格快照" | Historical snapshot comparison |
-| "这个卖家还卖了什么产品" | Seller portfolio |
-| "帮我筛选利润率高于30%的FBA产品" | Profit-focused filtering |
-| "月销量1000以上，评分4星以上的产品" | Multi-condition filtering |
-| "标题包含wireless charger的产品" | Title keyword search |
-
-**Not applicable** - Needs beyond product search:
-- Detailed trend/history data for a specific ASIN (use Sorftime Product Detail)
-- ABA search term ranking data (use ABA Data Explorer)
-- Advertising / PPC strategy
-- Product reviews content analysis
-- Patent or trademark checks
-
-**Boundary judgment**: When users say "competitor analysis" or "market research", if they need to discover and compare products across dimensions (category, brand, price range, etc.), this skill applies. If they need historical trend curves for a specific ASIN, use the Prt Detail skill. If they need keyword search volume data, use ABA Data Explorer.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = Sorftime内部查询次数 × 6。Sorftime内部查询次数：不同查询条件需要的查询次数可能不同，该次数由Sorftime决定。
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

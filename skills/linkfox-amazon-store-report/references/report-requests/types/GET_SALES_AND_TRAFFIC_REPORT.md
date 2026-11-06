@@ -1,19 +1,19 @@
 # `GET_SALES_AND_TRAFFIC_REPORT`
 
-> **分类**：2. Analytics Reports  
-> **说明**：Sales and traffic by date  
-> **可用范围**：Seller only
+> **分类**：2. 分析报告  
+> **说明**：按日期汇总的销售与流量  
+> **可用范围**：仅卖家
 
 ## 官方索引（Report type values）
 
 - **Schema 专页（请求体、`reportOptions`、结果 JSON）**：[`sellerSalesAndTrafficReport.md`](../sellerSalesAndTrafficReport.md)
-- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[Analytics Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#sales-and-traffic-business-report)（章节：**Sales and Traffic Business Report**）
+- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[分析报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#sales-and-traffic-business-report)（章节：**Sales and Traffic Business Report**）
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
-- **Availability**：Sellers
-- **Requested/scheduled**：This report can be requested or scheduled.
-- **Report output type**：JSON
+- **角色**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
+- **可用范围**：卖家
+- **按需/计划**：本报告可按需请求或计划生成。
+- **输出格式**：JSON
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#sales-and-traffic-business-report>
 

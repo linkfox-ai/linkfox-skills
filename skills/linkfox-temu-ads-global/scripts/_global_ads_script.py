@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Factory for thin US Ads API CLI scripts."""
+"""全球站广告操作的 CLI 入口。"""
 
 import sys
 

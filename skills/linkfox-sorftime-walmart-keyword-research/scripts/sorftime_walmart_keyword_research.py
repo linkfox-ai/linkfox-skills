@@ -1,28 +1,17 @@
 #!/usr/bin/env python3
-"""
-Walmart 关键词研究 - LinkFox Skill
-调用 /sorftime/walmart/keywordResearch 接口。
-
-Usage:
-  python sorftime_walmart_keyword_research.py '<JSON parameters>'           # 始终落盘；小结果全量输出，大结果输出摘要
-  python sorftime_walmart_keyword_research.py '<JSON parameters>' --inline  # 强制全量打印到 stdout
-
-输出策略（脚本默认行为）：
-  - **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sorftime-walmart-keyword-research-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-  - 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-  - 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-  - 加 `--inline` 强制全量打印到 stdout（同样落盘）
-"""
-
-import json
+"""Walmart 关键词研究业务封装：提供 CLI、24 小时缓存、XML 解析与计费头处理。"""
 import hashlib
+import io
+import json
 import os
 import sys
 import time
-import secrets
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
+from contextlib import contextmanager
+from urllib.error import HTTPError
 from xml.etree import ElementTree
+from unittest.mock import patch
+
+import call_api as api_runner
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -31,41 +20,13 @@ for _stream in (sys.stdout, sys.stderr):
         except Exception:
             pass
 
-
 API_PATH = "/sorftime/walmart/keywordResearch"
 SLUG = "linkfox-sorftime-walmart-keyword-research"
-
-# stdout 全量输出阈值；所有响应仍会落盘
-SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
 UNCACHEABLE_OPERATIONS = frozenset({"favoriteAdd", "favoriteChange", "favoriteList"})
 
-_SESSION_CACHE: dict[str, str] = {}
-
-def get_api_base() -> str:
-    """网关基础地址：env LINKFOX_TOOL_GATEWAY 优先，缺省回退正式地址。"""
-    return (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
-
-def get_api_url():
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
-    return get_api_base() + API_PATH
-
-
-def get_api_key():
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key not configured. Please complete authorization first:\n"
-            "1. Visit https://skill.linkfox.com/linkfoxskills/guide.htm to obtain your Key\n"
-            "2. Set the environment variable: export LINKFOX_AGENT_API_KEY=your-key-here",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
-
-
 def _decode_gateway_response(body, http_status=None, reason=None):
-    """Parse JSON responses and normalize gateway ToolErrorResponse XML."""
+    """解析 JSON 响应，并统一网关 ToolErrorResponse XML 的格式。"""
     if body:
         try:
             return json.loads(body)
@@ -100,7 +61,7 @@ def _decode_gateway_response(body, http_status=None, reason=None):
 
 
 def _attach_gateway_cost_headers(result, headers):
-    """Expose gateway billing headers in the normalized JSON result."""
+    """将网关计费头保留到标准化后的 JSON 响应。"""
     if not isinstance(result, dict) or headers is None:
         return result
     for header, field in (
@@ -114,41 +75,9 @@ def _attach_gateway_cost_headers(result, headers):
             value = int(value)
         except (TypeError, ValueError):
             pass
-        # The gateway headers are the authoritative values for this request.
+        # 本次请求以网关费用头为准。
         result[field] = value
     return result
-
-
-def call_api(params):
-    api_url = get_api_url()
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": os.environ.get("SESSION_ID", ""),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(
-        api_url,
-        data=data,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            body = response.read().decode("utf-8")
-            result = _decode_gateway_response(body)
-            return _attach_gateway_cost_headers(result, response.headers)
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        result = _decode_gateway_response(body, e.code, e.reason)
-        return _attach_gateway_cost_headers(result, e.headers)
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
 
 
 def _cache_key(params):
@@ -186,238 +115,126 @@ def _save_cache(path, payload):
         pass
 
 
-def _find_main_list(obj):
-    """递归找到元素数最多的 list 字段。不写死字段名，适配任何结构。"""
-    best = (None, None, -1)
 
-    def walk(node, path):
-        nonlocal best
-        if isinstance(node, list):
-            if len(node) > best[2]:
-                best = (path, node, len(node))
-        elif isinstance(node, dict):
-            for k, v in node.items():
-                walk(v, f"{path}.{k}" if path else k)
+class _Response:
+    """将公共传输层返回的响应转换为其可读取的 JSON，保留状态与计费头。"""
+    def __init__(self, body, status, headers, reason=None):
+        result = _decode_gateway_response(body, status if status and status >= 300 else None, reason)
+        if isinstance(result, dict):
+            # 公共 run 不输出传输状态，需在业务结果中保留供认证与错误判断。
+            result["_http_status"] = status
+        self.status = status
+        self.headers = headers
+        self.body = json.dumps(_attach_gateway_cost_headers(result, headers), ensure_ascii=False).encode("utf-8")
 
-    walk(obj, "")
-    return best[0], best[1]
+    def read(self):
+        return self.body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
 
 
-def summarize(result):
-    """打印紧凑摘要。"""
-    if not isinstance(result, dict):
-        print(f"Response type: {type(result).__name__}")
-        print(json.dumps(result, ensure_ascii=False)[:500])
-        return
+@contextmanager
+def _normalize_responses():
+    """仅包装公共调用器的接收结果，不自行构造请求、重试或增加网络调用。"""
+    public_open = api_runner.urlopen
 
-    print(f"Top-level keys: {list(result.keys())}")
-
-    for k in ("errcode", "errorCode", "code", "errmsg", "msg",
-              "total", "totalCount", "count", "currentPage", "perPage",
-              "costToken", "costTime", "success"):
-        if k in result:
-            v = result[k]
-            if isinstance(v, (int, float, bool, str)):
-                print(f"  {k}: {v}")
-
-    list_path, main_list = _find_main_list(result)
-    if list_path is not None and main_list:
-        print(f"\nMain list field: `{list_path}` (length={len(main_list)})")
-        sample = main_list[:3]
-        print(f"Sample (first {len(sample)} of {len(main_list)}):")
-        print(json.dumps(sample, indent=2, ensure_ascii=False))
-
-def _ensure_meta(root: str, session_dir: str, date_str: str, sid: str, ts: float) -> None:
-    """会话首次出现时创建 _meta.json，并向 index.jsonl 追加一条。"""
-    meta_path = os.path.join(session_dir, "_meta.json")
-    if os.path.exists(meta_path):
-        return
-    meta = {
-        "session_id": sid,
-        "date": date_str,
-        "started_at": _format_iso(ts),
-        "skills_called": [],
-        "deliverables": [],
-        "data_files": [],
-        "media_files": [],
-    }
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
-    try:
-        with open(os.path.join(root, "index.jsonl"), "a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "session_id": sid,
-                        "date": date_str,
-                        "path": os.path.relpath(session_dir, root),
-                        "started_at": _format_iso(ts),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except OSError:
-        pass
-
-def _linkfox_root() -> str:
-    """选择可写的 linkfox 根目录。
-
-    优先级：
-      1. $ACPX_WORKSPACES 第一个路径下的 linkfox/（真实的工作目录）
-      2. 当前工作目录下的 linkfox/
-      3. ~/linkfox/
-      4. $TMPDIR/linkfox/
-
-    当某路径只读（如 cwd 为 /tmp 或只读目录）时，自动回退到后序选项。
-    选定结果在进程内缓存，保证同一次运行内所有落盘路径稳定一致。
-    """
-    cached = _SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    # 1. ACPX_WORKSPACES（真实的工作目录，优先级最高）
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    # 2. 当前工作目录
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    # 3. 家目录
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    # 4. 临时目录
-    import tempfile
-    candidates.append(os.path.join(tempfile.gettempdir(), "linkfox"))
-
-    for root in candidates:
+    def receive(*args, **kwargs):
         try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _SESSION_CACHE["_root"] = fallback
-    return fallback
+            with public_open(*args, **kwargs) as response:
+                return _Response(response.read().decode("utf-8"), response.status, response.headers)
+        except HTTPError as error:
+            try:
+                body = error.read().decode("utf-8") if error.fp else ""
+                normalized = _Response(body, error.code, error.headers, error.reason)
+            finally:
+                error.close()
+            # 公共调用器继续处理 HTTPError，保留原始 HTTP 状态。
+            raise HTTPError(error.url, error.code, error.reason, error.headers, io.BytesIO(normalized.read())) from error
 
-def _format_iso(ts: float) -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(ts))
+    with patch.object(api_runner, "urlopen", receive):
+        yield
 
-def _session_id(ts: float) -> str:
-    """优先 env SESSION_ID；缺省按 HHMMSS-<6 hex> 生成（同一进程内稳定）。"""
-    env = os.environ.get("SESSION_ID")
-    if env:
-        return env.strip()
-    if "_auto" not in _SESSION_CACHE:
-        _SESSION_CACHE["_auto"] = (
-            time.strftime("%H%M%S", time.localtime(ts)) + "-" + secrets.token_hex(3)
-        )
-    return _SESSION_CACHE["_auto"]
 
-def _ensure_session(ts: float) -> tuple[str, str]:
-    """返回 (linkfox_root, session_dir)；session_dir 一定存在。"""
-    date_str = time.strftime("%Y-%m-%d", time.localtime(ts))
-    sid = _session_id(ts)
-    root = _linkfox_root()
-    session_dir = os.path.join(root, date_str, sid)
-    os.makedirs(session_dir, exist_ok=True)
-    _ensure_meta(root, session_dir, date_str, sid, ts)
-    return root, session_dir
+def _cwd_root():
+    """当前目录不可写即报错，不回退到家目录或临时目录。"""
+    root = os.path.join(os.getcwd(), "linkfox")
+    os.makedirs(root, exist_ok=True)
+    probe = os.path.join(root, f".keyword-write-probe-{os.getpid()}")
+    with open(probe, "w", encoding="utf-8") as stream:
+        stream.write("")
+    os.remove(probe)
+    return root
 
-def _update_meta(session_dir: str, *, skill: str, kind: str, file_rel: str, ts: float) -> None:
-    """把本次输出写入 _meta.json 的对应分类列表。kind ∈ {data, deliverable, media}。"""
-    meta_path = os.path.join(session_dir, "_meta.json")
+
+@contextmanager
+def _response_output():
+    """请求前预留可写文件，避免付费后才发现无法落盘，以及同秒覆盖。"""
+    root = _cwd_root()
+    with patch.object(api_runner, "_linkfox_root", lambda: root):
+        _, session_dir = api_runner._ensure_session(time.time())
+        data_dir = os.path.join(session_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        # 使用纳秒时间戳，并以排他创建确保不会覆盖已有完整响应。
+        out_path = os.path.join(data_dir, f"{SLUG}-{time.time_ns()}.json")
+        with open(out_path, "x", encoding="utf-8"):
+            pass
+        try:
+            # 公共调用器沿用已检查的路径，完整响应仍由 run 写入。
+            with patch.object(api_runner, "_resolve_output_path", lambda slug, ts: out_path):
+                yield
+            if os.path.getsize(out_path) == 0:
+                raise OSError(f"完整响应未保存：{out_path}")
+            api_runner._update_meta(
+                session_dir, skill=SLUG, kind="data",
+                file_rel=os.path.relpath(out_path, session_dir), ts=time.time(),
+            )
+        finally:
+            # 认证失败或落盘失败时不留下空文件；不触碰已有响应。
+            if os.path.isfile(out_path) and os.path.getsize(out_path) == 0:
+                os.remove(out_path)
+
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv or "--help" in argv or "-h" in argv:
+        print("用法：sorftime_walmart_keyword_research.py '<JSON 参数>' [--inline] [--no-cache]")
+        print("只读研究默认使用 24 小时缓存；收藏新增、变更、列表始终不缓存。")
+        return 0 if argv else 1
+    args = [arg for arg in argv if arg not in ("--inline", "--no-cache")]
     try:
-        with open(meta_path, encoding="utf-8") as f:
-            meta = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return
-    if skill and skill not in meta.setdefault("skills_called", []):
-        meta["skills_called"].append(skill)
-    bucket = {"data": "data_files", "deliverable": "deliverables", "media": "media_files"}.get(
-        kind, "data_files"
-    )
-    files = meta.setdefault(bucket, [])
-    if file_rel not in files:  # 去重：并发或重复注册同一路径时不留重复条目
-        files.append(file_rel)
-    meta["last_used_at"] = _format_iso(ts)
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
+        params = json.loads(args[0])
+        if not isinstance(params, dict):
+            raise ValueError("参数必须为 JSON 对象")
+    except (IndexError, ValueError) as error:
+        print(f"参数格式无效：{error}", file=sys.stderr)
+        return 1
 
-def resolve_data_path(slug: str, ts: float, ext: str = "json") -> str:
-    """普通 skill 的原始数据落到 <session>/data/<slug>-<ts>.<ext>。"""
-    _, session_dir = _ensure_session(ts)
-    sub = os.path.join(session_dir, "data")
-    os.makedirs(sub, exist_ok=True)
-    out = os.path.join(sub, f"{slug}-{int(ts * 1_000_000)}.{ext}")
-    _update_meta(session_dir, skill=slug, kind="data", file_rel=os.path.relpath(out, session_dir), ts=ts)
-    return out
+    use_cache = "--no-cache" not in argv and params.get("operation") not in UNCACHEABLE_OPERATIONS
+    public_call = api_runner.call_api
 
-def _resolve_output_path(ts):
-    """落到 <cwd>/linkfox/<日期>/<session>/data/<slug>-<ts>.json，按 SESSION_ID 聚合到同一会话。"""
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
-    return resolve_data_path(SLUG, ts)
-
-
-def main():
-    argv = sys.argv[1:]
-    inline = False
-    use_cache = True
-    if "--inline" in argv:
-        inline = True
-        argv = [a for a in argv if a != "--inline"]
-    if "--no-cache" in argv:
-        use_cache = False
-        argv = [a for a in argv if a != "--no-cache"]
-
-    if not argv:
-        print(
-            "Usage: sorftime_walmart_keyword_research.py '<JSON parameters>' [--inline]",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    try:
-        params = json.loads(argv[0])
-    except json.JSONDecodeError as e:
-        print(f"Invalid parameter format: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    if isinstance(params, dict) and params.get("operation") in UNCACHEABLE_OPERATIONS:
-        use_cache = False
-
-    cache_path = _cache_path(params) if use_cache else None
-    result = _load_cache(cache_path) if use_cache else None
-    if result is None:
-        result = call_api(params)
+    def cached_call(api_path, payload):
+        path = _cache_path(payload) if use_cache else None
+        cached = _load_cache(path) if use_cache else None
+        if cached is not None:
+            # 缓存中的状态属于原请求；旧缓存未记录时不补造 HTTP 200。
+            return cached.get("_http_status") if isinstance(cached, dict) else None, cached
+        status, result = public_call(api_path, payload)
         if use_cache:
-            _save_cache(cache_path, result)
+            _save_cache(path, result)
+        return status, result
 
-    serialized = json.dumps(result, ensure_ascii=False, indent=2)
-    ts = int(time.time())
-    out_path = _resolve_output_path(ts)
     try:
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(serialized)
-        print(f"Saved full response: {out_path} ({len(serialized)} bytes)")
-        if result.get("_cache", {}).get("hit"):
-            print(f"Cache hit: {cache_path}")
-    except OSError as e:
-        print(f"Failed to save to {out_path}: {e}", file=sys.stderr)
-
-    if inline or len(serialized.encode("utf-8")) <= SMALL_THRESHOLD:
-        if result.get("_cache", {}).get("hit"):
-            print(f"Cache hit: {cache_path}", file=sys.stderr)
-        print(serialized)
-    else:
-        summarize(result)
+        with _response_output(), _normalize_responses(), patch.object(api_runner, "call_api", cached_call):
+            api_runner.run(API_PATH, SLUG, argv=argv + ["--no-cache"])
+    except OSError as error:
+        print(f"当前目录无法保存响应：{error}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

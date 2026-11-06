@@ -1,183 +1,120 @@
 ---
 name: linkfox-sif-compliance-detection
-description: SIF-外观专利检测，支持按商品图片查找相似外观登记候选，以及按登记 ID 或主号码查询登记详情、权利人、设计人、法律状态、日期与分类。检索支持地区、来源归属、洛迦诺分类和法律状态筛选；用于产品外观候选审查，不作侵权判定。
+description: SIF-外观专利检测，当前提供商品图片外观相似检索，返回相似外观登记候选，支持辅助标题、地区、来源归属、洛迦诺分类和法律状态筛选。用于以图查外观登记和产品外观风险候选排查；结果仅供候选审查，不作侵权判定。
 ---
 
-# SIF Design Patent Detection
+# SIF 外观专利检测
 
-Find similar design registrations from a product image, or inspect registration details by ID or primary identifier. Both operations belong to this SIF skill. Present the source's evidence and coverage for review; do not issue an infringement verdict.
+## 适用范围
 
-## Endpoints
+### 适用
 
-| User goal | POST endpoint | Entry script | Cost per new call |
-|---|---|---|---|
-| Find similar designs from a product image | `/ecDw/designSimilarSearch` | `ec_dw_design_similar_search.py` | 5 算力 |
-| Inspect known registration IDs or a primary number | `/ecDw/designProfile` | `ec_dw_design_profile.py` | 2 算力 |
+使用用户提供或选定的商品图片查找相似外观登记，按返回顺序展示多视图、相似度、法律状态、保护法域和来源 TRO 线索，供人工审查。公开登记入口为图片检索。已有登记 ID 或主号码时，仍可按需使用兼容的详情脚本。
 
-Call only the operation needed for the user's request. A known ID or primary number goes directly to details without an image search. When the user requests search followed by details, reuse IDs from that search; one search plus one detail batch costs 7 credits. Keep both operations in this single skill, with one direct script per endpoint.
+**场景速查**
 
-## Core Concepts
-
-- For image search, supply exactly one image source: `imageUrl` or `imageBase64`. A title supplements the image and cannot replace it. Image and title searches use separate modalities; their raw scores must not be added. Detail lookup needs no image.
-- `topK` defaults to 20 and accepts 1–200. Candidate count does not determine the user's price.
-- `regions` uses ISO-2 identifiers such as CN/US/EM; the upstream source uses EU where this input uses EM. `jurisdictionCodes` uses source identifiers such as USID/EMID. When both filters are supplied, their intersection applies.
-- `topLoc` filters two-digit Locarno prefixes; `locarnoClasses` filters full NN-NN codes. Missing classification remains unknown; do not remove such candidates yourself.
-- `patentStatus` is an optional integer array: `[0]`, `[1]` or `[0,1]`. Omission adds no status preference. Preserve returned unknown/pending status and coverage; do not infer whether those rows were included or excluded, or refilter them locally.
-- Current upstream coverage includes an independent CN scope. Determine usable coverage and loading gaps from returned `coverage` and `warnings`; do not assume every jurisdiction has equal coverage or hardcode dataset counts.
-- The backend handles upstream signing and credentials. The skill sends only business parameters and a LinkFox gateway Key.
-- Detail lookup accepts 1–200 unique registration IDs, or one primary identifier with an optional ISO-2 jurisdiction. Use IDs supplied by the user or returned by search; never construct an ID from a number. Do not automatically fetch details for every search candidate.
-
-## Data Fields
-
-Check both the gateway `errcode` (200 on success) and upstream `data.code` (`OK` on success). HTTP 200 alone is insufficient. Use the response path for the chosen endpoint:
-
-| Operation | Result path | Context |
-|---|---|---|
-| Image search | `data.data.candidates[]` | `data.data.coverage` and `data.data.warnings` |
-| Registration details | `data.data.items[]` | `data.data.returned`, with each item's source status, dates and coverage |
-
-Business fields may be missing or null; both mean an unknown source fact. The full envelope, optional processing metadata and field types are documented in [references/api.md](references/api.md).
-
-Registration details are at `data.data.items`; `data.data.returned` is the returned row count. Show actual identifiers, holders/designers, dates, status, classification and coverage. Preserve `as_of_date` and `data_version` when available; the confirmation date is not necessarily today. Details do not create new similarity scores or image URLs.
-
-| Candidate fields | Use |
+| 用户表达 | 查询场景 |
 |---|---|
-| `design_registration_id`, `primary_identifier`, `application_number`, `registration_number`, `publication_number` | Source identifiers for follow-up review |
-| `registration_jurisdiction_code`, `jurisdiction_iso2`, `locarno_classes` | Source jurisdiction and classification; do not interchange the two jurisdiction fields |
-| `title`, `title_en`, `title_language`, `title_en_source` | Returned title, language and English-title provenance; do not invent translations |
-| `holder_names`, `designer_names` | Source holder and designer information |
-| `image_score`, `text_score`, `similarity`, `matched_modality` | Separate raw modality scores and the source's 0–100 similarity conversion; similarity is not a probability |
-| `simple_legal_status`, `registration_date`, `application_date`, `publication_date` | Source status and YYYY-MM-DD dates, when returned |
-| `image_available` | Image availability hint; it does not supply an image URL |
-| `image_url` | Candidate-image URL; use the returned value unchanged |
+| 用 SIF 查这个商品的外观相似候选 | 根据商品图片检索外观登记。 |
+| 找这个产品的外观登记候选 | 展示登记标识与匹配证据。 |
+| 按 USID 和洛迦诺分类筛相似外观 | 按用户明确的来源及分类条件检索。 |
+| 查这个登记 ID 或主号码的详情 | 直接查询外观登记详情，无需重新图片检索。 |
 
-Also preserve `risk_level` and `risk_reasons` when returned. These existing source rule hints remain compatible with this skill; they do not constitute an infringement finding.
+## 前置条件
 
-Read [references/api.md](references/api.md) for the request limits, envelope, failures and feedback contract.
+**先确定动作与输入**：图片检索使用用户提供或选定的图片，仅采用用户明确要求的地区、来源、分类和法律状态条件；登记详情使用用户提供或检索返回的登记 ID，或主号码及可选归属地区。图片输入、20 MiB Base64 字段上限和详情二选一规则见 [接口说明](references/api.md)。
 
-## Parameter Guide
+填写 `regions` 时查阅 [国家与区域覆盖](references/api.md#国家与区域覆盖)。按欧盟筛选使用 `EM`。
 
-### Image search
+**准备图片来源**：已有公网可访问的 HTTP(S) 图片 URL，直接传 `imageUrl`。本地图片或附件优先用随 Skill 提供的 `scripts/upload_file.py` 上传原图。上传前说明文件将获得公开可访问的 URL，取得用户明确同意后再上传。读取成功项的 `url`，作为检索请求唯一的图片来源。敏感或私密图片不上传；用户不愿公开时，可按下方示例由脚本直接编码原图并用 `--params-file` 提交。
 
-| Parameter | Required | Default | Meaning |
-|---|---|---|---|
-| `imageUrl` | One image source | — | Public HTTP(S) image URL |
-| `imageBase64` | One image source | — | Raw Base64, 16–20,971,520 characters (20 MiB text, approximately 15 MiB original image); no data URL prefix or imageUrl |
-| `title` | No | — | Optional image context, up to 4096 characters |
-| `topK` | No | 20 | Integer 1–200 |
-| `regions` | No | — | Up to 64 unique two-letter ISO-2 identifiers, e.g. `["CN","US","EM"]` |
-| `jurisdictionCodes` | No | — | Source identifiers, e.g. `["USID","EMID"]`; intersects regions when both are supplied |
-| `topLoc` | No | — | Up to 32 unique two-digit Locarno prefixes, e.g. `["09","22"]` |
-| `locarnoClasses` | No | — | Locarno codes, e.g. `["22-06"]` |
-| `patentStatus` | No | — | Gateway array only: `[0]` (inactive), `[1]` (active), or `[0,1]`; no default preference |
+## 检索流程
 
-For a local image, encode its bytes into `imageBase64` in a UTF-8 JSON file. This supported input avoids an upload dependency. The script does not transform image formats.
+1. 按用户目标选择图片检索或登记详情，按接口说明准备请求；已有登记标识时直接查详情，不静默选择法律状态或来源地区。
+2. 运行入口脚本一次，按接口说明检查网关及上游业务结果；需要摘要之外的细节时读取已保存文件。错误响应不能当作候选列表。
+3. 检索读取 `data.data.candidates`；详情读取 `data.data.items`，保留全部返回记录和原顺序。检索展示实际返回的候选与图片；详情展示来源登记信息与可用的覆盖信息。用户要求检索后查详情时，原样使用本次候选 ID 组成一个详情批次，不额外检索或逐条循环。
+4. 失败或候选为空时报告实际结果并停止。来源失败不能解释为零命中；不自动换图片、筛选条件或候选数量，也不拆分成探索请求。
 
-### Registration details
+## 执行方式
 
-| Parameter | Required | Meaning |
-|---|---|---|
-| `designRegistrationIds` | One identifier mode | Array of 1–200 unique strings, each 1–128 characters; reuse exact user-provided or search-returned IDs |
-| `primaryIdentifier` | One identifier mode | One exact primary number as a string, 1–128 characters; preserve leading zeros |
-| `jurisdictionIso2` | No | Two letters such as US/EM; accepted only with `primaryIdentifier` to narrow ambiguous numbers |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：图片检索用 `python scripts/ec_dw_design_similar_search.py '<JSON 参数>' [--inline]`；登记详情用 `python scripts/ec_dw_design_profile.py '<JSON 参数>' [--inline]`。两个入口均支持 `--params-file`。
+- **调用约束**：同一会话、同一端点与参数组合默认只调用一次。脚本提供 24 小时本地缓存，外观检索按 v3 响应契约隔离旧缓存。失败或空结果时，不自动改换图片、筛选条件或候选数量。
 
-The two identifier modes are mutually exclusive. Values must be strings without leading/trailing whitespace; do not mix search fields into detail requests. Details are exact lookups, and one batch is one paid call. Read the [detail contract](references/api.md#外观登记详情) for the full field dictionary.
+### 输出策略
 
-## 调用方式
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sif-compliance-detection-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-- **API 端点**：检索 `POST /ecDw/designSimilarSearch`；详情 `POST /ecDw/designProfile`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：检索 `python scripts/ec_dw_design_similar_search.py '<JSON 参数>' [--inline]`；详情 `python scripts/ec_dw_design_profile.py '<JSON 参数>' [--inline]`
-- **成本约束**：按上表端点分别收费，详情 1–200 个登记 ID 按一次收费；相同端点和参数默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换参数连续试探；需要继续调用时先说明可能产生额外消耗，不自动逐条查详情或拆分批次。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sif-compliance-detection-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行规则
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需抽取，避免整份 JSON 进入上下文。
+### 算力消耗预估
 
-Large image payloads use `python scripts/ec_dw_design_similar_search.py --params-file <UTF-8 JSON file> [--inline]`. UTF-8 BOM is accepted. `--no-cache` deliberately refreshes a result and can incur another charge; it does not enable retries.
+检索与登记详情当前均为 0 算力/次（￥0/次），详情单次支持 1–200 个登记 ID。以网关实际费用为准，若返回非零费用，原样展示并提示管理员核对网关配置。缓存命中不发新请求，缓存里的费用字段来自原始响应。
 
-The detail script accepts the same `--params-file`, `--inline` and `--no-cache` options. Both scripts use the same skill slug; cache entries are isolated by endpoint, gateway, Key fingerprint and parameters. The 20 MiB limit applies to the Base64 field; JSON adds overhead to the whole HTTP request.
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 解决认证和算力问题
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **LinkFox 网关响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-仅处理用户网关 Key、认证和余额问题。若错误明确来自上游服务凭据、授权或额度，按 `references/api.md` 联系服务管理员，不引导用户重复注册或充值。
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## Workflow
+### 约束与建议
 
-1. Choose the requested operation. For image search, use the user's image and requested filters. For details, use the user's ID/primary identifier or a saved candidate ID; an image search is unnecessary when an identifier is already known.
-2. Call the matching script once. Require HTTP success, gateway `errcode: 200` and upstream `data.code: OK`; inspect the saved file for fields omitted by the summary. An error response is not a result list.
-3. If the user requested search followed by details, pass the selected candidate's `design_registration_id` unchanged to the detail script. Perform both authorized steps without asking again; account for the 5-credit search and 2-credit detail call (7 credits total). A search-only request does not require a detail call.
-4. Present candidates with matching evidence, or details with source facts and coverage. Preserve all returned matches for an ambiguous primary number. On failure/empty results, report the actual outcome and stop; a coverage failure or 404 does not establish absence of a patent or risk.
+- **候选审查的边界**：匹配证据、来源风险等级和 TRO 线索仅供人工复核。空结果不证明可以自由实施，`tro_cases=[]` 仅表示当前 TRO 语料未关联。
+- **保留原始顺序**：按候选数组顺序展示 Top-K，包括同分项。`similarity` 是最终 0–100 排序分，不重新排序、计算、乘以 100 或当作侵权概率。风险等级与法律状态分别展示。
+- **按实际字段展示**：保留标题、权利人、设计人、地址、日期、分类和来源说明。缺省或 null 为“来源未提供”，保留原始 Locarno 代码并标明估算到期日及其依据。
+- **区分登记与保护范围**：登记归属和请求地区不等同于保护法域。海牙登记按实际 `protected_jurisdictions` 展示指定保护地区；不自行重筛候选或推算来源覆盖。检索 v3 不返回旧版诊断信息。
+- **展示返回的签名图片**：优先展示首图，其余按需加载。保留完整 URL 和图片数组顺序，`image_url` 与首张图片重复时只展示一次。签名有效期 7 天，缓存不能延长图片有效期。不批量下载或自动重复检索刷新链接。详情的媒体计数不能用来构造图片地址。
+- **区分费用和来源用量**：按网关实际费用展示。候选数、后端成本、来源积分和缺失费用字段均不能推算用户扣费，`data.usage` 仅为来源账户用量。
+- **反馈脱敏**：反馈遵守用户授权范围，仅发送问题摘要，不包含密钥、上游凭据、图片/Base64 或原始业务行。
 
-## Usage Examples
+## 使用示例
 
-For a local bottle image and an explicitly requested US/EM search, prepare a request from the actual image bytes. Replace `./product.png` with the user's local image path:
+### 上传本地图后检索
+
+确认图片可公开后执行：
+
+```bash
+python scripts/upload_file.py "./product.jpg"
+```
+
+上传脚本使用现有 LinkFox 网关授权获取 OSS 临时凭证，需要 Python 和 `oss2`。如缺少依赖，提示用户或环境管理员安装。上传失败时停止，不把本地路径或错误信息作为图片地址。成功后将返回的 `url` 原样填入 `imageUrl`，运行一次检索，例如：
+
+```bash
+python scripts/ec_dw_design_similar_search.py '{"imageUrl":"<上传返回的 URL>","topK":20}'
+```
+
+### 用 Base64 检索本地图
+
+用户提供瓶子图片并明确要求检索 US/EM 时，将下面的 `./product.png` 替换为实际图片路径，按真实商品调整标题。脚本直接读取原始字节并把完整 Base64 写入 UTF-8 JSON，然后用 `--params-file` 提交。不要打印、分段读取、复制或手工拼接 Base64，也无需转码。
 
 ```bash
 python -c 'import base64,json,sys; from pathlib import Path; params={"imageBase64":base64.b64encode(Path(sys.argv[1]).read_bytes()).decode("ascii"),"title":"Bottle","regions":["US","EM"],"topK":20}; Path("request.json").write_text(json.dumps(params,ensure_ascii=False),encoding="utf-8")' ./product.png
 python scripts/ec_dw_design_similar_search.py --params-file request.json
 ```
 
-Adapt the title and filters to the user's product and request. An image URL can instead be supplied in `imageUrl`; use a real reachable image, and omit `imageBase64`. Optional array filters retain leading zeros, for example `"topLoc":["09"],"locarnoClasses":["09-01"],"patentStatus":[0,1]`.
+文件入参、缓存刷新及运行约定见 [接口说明](references/api.md#脚本选项与运行约定)。仅需查看完整结果时优先读取已保存文件；同一请求的成功缓存仍在有效期内时，也可带 `--inline` 查看，命中会输出 `Cache hit`。
 
-Read the already saved JSON file first when more fields are needed. `--inline` also shows the full response: if a valid success cache exists for the same gateway, endpoint, Key and parameters, it prints `Cache hit` without a new request. A missing or expired cache can cause another paid call.
-
-For a request to inspect the following actual candidate ID, use the detail entry directly:
+### 直接查询登记详情
 
 ```bash
 python scripts/ec_dw_design_profile.py '{"designRegistrationIds":["DSR:wipo_hague:EMID.001431738-0001"]}'
 ```
 
-Replace the example with the ID supplied by the user or returned by their search. For a known primary number, the alternative request is `{"primaryIdentifier":"001431738","jurisdictionIso2":"EM"}`. Use one identifier mode, preserve leading zeros and do not guess a number from an image.
+实际使用应替换为用户提供或检索返回的登记 ID；也可传 `{"primaryIdentifier":"001431738","jurisdictionIso2":"EM"}`，保留前导零。两种号码方式严格二选一，不将公开号拼成登记 ID，不为演示重复查询。详情不存在不表示不存在相关权利，参数及结果字段见 [登记详情](references/api.md#接口外观登记详情)。
 
-## Display Rules
+## 使用反馈
 
-1. Preserve the returned candidate order and identifiers. Show titles, holder names, classifications, dates and status only when present; missing information remains unknown.
-2. Attribute scores, modality, risk labels and risk reasons to the source. `similarity` is already on a 0–100 scale; do not multiply it again, call it a probability, or add image/text scores. Matching evidence and a source rule label are not a legal conclusion.
-3. Preserve coverage/warnings and each row's actual `jurisdiction_iso2` and source jurisdiction. Do not relabel or discard a returned row solely to match requested `regions`, or treat those filters as proof of protection territory. Source `coverage_ratio` may exceed 1; it is not a guaranteed patent-coverage percentage. Do not turn unavailable coverage or a service error into “no matching designs”.
-4. Display candidate `image_url` as a Markdown image when returned; use the complete URL unchanged. Do not construct a URL from `image_available`.
-5. Detail `has_readable_image` (observed as integer 1) and `image_count` indicate source media facts, not image URLs. Do not convert them into a cover or download link. Show raw status and confirmation date when relevant without inferring current legal validity.
-
-## Important Limitations
-
-- An empty result does not establish freedom to operate. A separate legal investigation requires a separate user request.
-- Search accepts its nine documented fields; details accept only `designRegistrationIds`, `primaryIdentifier` and `jurisdictionIso2`. Do not mix the schemas or add `query_mode`.
-- Calls never automatically retry, follow redirects, change images/filters or split into exploratory requests.
-- Success cache is isolated by gateway, endpoint, API Key fingerprint and parameters; HTTP/business failures are not cached. A cache hit sends no request and displays fees from the original response, not a new charge.
-- Detail batches accept at most 200 IDs. Do not split a larger list automatically or query every search candidate individually.
-- Upstream `data.usage` describes the provider account, including its quota and credits; never present it as the user's LinkFox balance. Internal engine, collection and timing fields are troubleshooting metadata.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable**: “用 SIF-外观专利检测查外观相似候选”, “找这个产品的外观登记候选”, “按 USID 和洛迦诺分类筛相似外观”, “查看这个候选的登记详情/权利人/法律状态”.
-
-**Not applicable**: issuing an infringement verdict, patent full-text retrieval, trademark/TRO checks, or seller-account operations.
-
-**Boundary judgment**: Use this skill for image-based design-registration retrieval and exact registration detail lookup. It does not provide the separate general-patent publication-number lookup. If the user asks for a verdict, explain that the returned facts and source hints support further review only.
-
-## 算力消耗规则
-
-检索每次新调用消耗 5 算力（￥0.05/次），详情每次新调用消耗 2 算力（￥0.02/次）；检索后查一次详情合计 7 算力，由网关统一计费。详情单次支持 1–200 个登记 ID，按次收费，不按条数收费。缓存命中不发起新请求，不产生新的调用费用；缓存中的费用字段来自原始响应。实际扣费展示以网关费用响应为准；后端成本、上游积分或空费用字段不作为用户扣费金额或免费依据。继续真实调用前说明可能的额外消耗。
-
-## Feedback
-
-Feedback can cover:
-
-1. Described functionality does not match actual behavior.
-2. Results do not match the user's intent.
-3. The user expresses dissatisfaction or praise.
-4. A concrete improvement is identified.
-
-Follow the Feedback API in `references/api.md` when user authorization or the task permits feedback. Send only a redacted issue summary; exclude credentials, images/Base64 and raw response rows.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

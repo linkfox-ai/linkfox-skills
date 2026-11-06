@@ -1,19 +1,19 @@
 # `GET_BRAND_ANALYTICS_REPEAT_PURCHASE_REPORT`
 
-> **分类**：2. Analytics Reports  
-> **说明**：Repeat purchase behavior analysis  
-> **可用范围**：Both
+> **分类**：2. 分析报告  
+> **说明**：重复购买行为分析  
+> **可用范围**：卖家与 Vendor
 
 ## 官方索引（Report type values）
 
 - **Schema 专页（请求体、`reportOptions`、结果 JSON）**：[`sellingPartnerRepeatPurchaseReport.md`](../sellingPartnerRepeatPurchaseReport.md)
-- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[Analytics Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#repeat-purchase)（章节：**Repeat Purchase**）
+- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[分析报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#repeat-purchase)（章节：**Repeat Purchase**）
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
-- **Availability**：Sellers and vendors who have the Brand Analytics Selling Partner API role and are registered in [Amazon Brand Registry](https://brandservices.amazon.com/).
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：JSON
+- **角色**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
+- **可用范围**：具备 Brand Analytics Selling Partner API 角色且已注册品牌备案的卖家与 Vendor： [Amazon Brand Registry](https://brandservices.amazon.com/).
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：JSON
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#repeat-purchase>
 

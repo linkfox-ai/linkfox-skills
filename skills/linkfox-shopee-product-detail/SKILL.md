@@ -1,117 +1,94 @@
 ---
 name: linkfox-shopee-product-detail
-description: 查询单个 Shopee 公共商品详情。输入带有 -i.数字店铺ID.数字商品ID 的商品直链，支持新加坡、印度尼西亚、马来西亚、菲律宾、泰国、台湾、越南和巴西站点，返回来源当前可获取的价格、折扣、销量、库存、SKU 变体、图片、品牌、类目、店铺与评分等结构化数据。当用户提到 Shopee 商品详情、虾皮商品链接解析、价格库存核对、SKU 变体、竞品页面拆解、Shopee product details、Shopee listing lookup 时触发。即使用户未明确说“商品详情”，只要提供 Shopee 商品直链并希望读取当前公开页面数据，也应触发此技能。
+description: 查询单个 Shopee 公共商品的当前详情，支持新加坡、印度尼西亚、马来西亚、菲律宾、泰国、台湾、越南和巴西站点，提取来源可用的价格、折扣、销量、库存、SKU 变体、图片、品牌、类目、店铺和评分。适用于虾皮商品链接解析、价格库存核对、竞品页面拆解和公开店铺身份核对；用户提供商品链接并希望读取公开页面数据时使用。不适用于关键词搜索、批量筛品、逐条评论采集、历史趋势查询或卖家账号运营。
 ---
 
-# Shopee Product Detail Lookup
+# Shopee 商品详情查询
 
-Fetch the current public detail of one Shopee product from a supported marketplace URL.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- **One product per call**: `productUrl` identifies one listing; this is not a keyword-search tool.
-- **Market from URL**: the storefront, currency, and locale are inferred from the URL.
-- **Direct-listing mode**: the tool auto-detects the supplied product URL and requests exactly one matching listing row.
-- **Current snapshot**: available price, inventory, sales, rating, and shop values reflect the public page at request time.
+读取一个已知 Shopee 商品的当前公开页面数据，用于商品核对、竞品资料整理和变体内容提取。
 
-## Data Fields
+**场景速查**
 
-Each object in `data` can contain:
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查这个虾皮商品链接 | 获取指定商品详情。 |
+| 看一下价格、销量和库存 | 核对商品当前公开指标。 |
+| 提取变体、图片和品牌 | 整理 SKU 与商品内容。 |
+| 这个店铺是不是官方店 | 分别查看公开店铺身份标识。 |
 
-| Group | Representative fields |
-|-------|------------------------|
-| Identity | `itemId`, `shopId`, `url`, `name`, `brand`, `categoryId`, `categoryBreadcrumb` |
-| Media | `image`, `images`, `videos` |
-| Pricing | `price`, `priceBeforeDiscount`, `priceMin`, `priceMax`, `discountPercent`, `currency` |
-| Demand | `sold`, `soldDisplayed`, `rating`, `ratingCount`, `ratingDistribution`, `likedCount` |
-| Inventory | `stock`, `tierVariations`, `models` |
-| Shop | `shopName`, `shopRating`, `shopLocation`, `isMall`, official and verification signals, nested `shop` data |
-| Content | `description`, `attributes`, category data, availability and condition when supplied |
+## 前置条件
 
-Less-common and newly introduced top-level fields are preserved in the returned product object. Fields may be absent or `null`.
+**先确定商品链接**：用户提供明确的商品链接；链接格式、支持站点与可用数据边界见 `references/api.md`。
 
-## Parameter Guide
+## 查询流程
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| productUrl | Yes | - | Shopee HTTPS product URL whose path ends with `-i.<numeric shopId>.<numeric itemId>` |
+1. 明确用户要核对的商品及所需数据，按 `references/api.md` 核对链接。
+2. 使用同一会话已有结果或本地缓存；需要请求时，查询指定商品，不附带其他商品检索。
+3. 按接口参考判断响应是否正常，核对返回商品与请求目标是否一致。业务错误、无效商品和来源异常按参考中的规则解释。
+4. 先展示商品摘要，再按用户需要提取变体、图片或店铺等内容。失败或空结果时遵守成本约束，不连续试探。
 
-Supported hosts: `shopee.sg`, `shopee.co.id`, `shopee.com.my`, `shopee.ph`, `shopee.co.th`, `shopee.tw`, `shopee.vn`, and `shopee.com.br`.
+## 执行方式
 
-## 调用方式
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/shopee_product_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次实际请求消耗 53 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **API 端点**：`POST /shopee/product/detail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/shopee_product_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 输出策略
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-shopee-product-detail-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-shopee-product-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## 解决认证和算力问题
+## 执行规则
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+### 算力消耗预估
 
-- `LINKFOX_AGENT_API_KEY` 与 `LINKFOXAGENT_API_KEY` 均未配置。
-- 响应状态为 401 或 402。
-- 响应提示算力、余额、套餐或配额不足。
+53 算力 / 次
 
-## Usage Example
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-```bash
-python scripts/shopee_product_detail.py '{"productUrl":"https://shopee.sg/%28LENECT-OFFICIAL-STORE%29-Flash-I-Aurora-Dual-Highlighter-7.2g-COCOMO-i.9641401.29691169956"}'
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **当前快照**：价格、库存、销量、评分与店铺信息反映来源页面在请求时可见的状态；缓存结果沿用原查询快照，不能称为重新抓取的数据。
+- **先展示商品摘要**：优先展示商品名称、商品 ID、店铺、站点、当前价格、币种、库存与公开销量。
+- **原样展示价格**：按来源展示当前价、原价和折扣，用户未要求时不换算币种。
+- **紧凑展示变体**：可用时用表格列出 SKU 模型与各变体库存；变体独立价格的可用性见接口参考。
+- **适量展示图片**：有助于核对商品时内嵌少量图片，避免大量铺图。
+- **独立解释身份**：Shopee Mall、官方店和认证卖家标识分别说明，不相互替代，也不据其中一个标识推断其他身份。
+- **说明缺失内容**：明确指出描述、变体、库存、销量或其他扩展数据缺失或为空，不能把缺失值当作零或补造字段。站点差异与评价数据边界见接口参考。
+- **按需读取明细**：完整响应保留低频和新增顶层字段；仅在用户需要时从已保存 JSON 提取较大的嵌套内容。
+
+## 使用示例
+
+### 查询一个商品的当前详情
+
+```json
+{"productUrl":"https://shopee.sg/%28LENECT-OFFICIAL-STORE%29-Flash-I-Aurora-Dual-Highlighter-7.2g-COCOMO-i.9641401.29691169956"}
 ```
 
-## Display Rules
+查询后先列出商品、店铺与当前指标；用户需要时再整理变体表和图片，明确说明来源未提供的内容。
 
-1. Lead with the listing name, item ID, shop, marketplace, current price, currency, stock, and public sold count.
-2. Show current/original price and discount exactly as returned; do not convert currencies unless requested.
-3. Present SKU models and per-variant stock in a compact table when available.
-4. Render a small selection of images inline when useful instead of flooding the response.
-5. Treat Shopee Mall, official-shop, and verified-seller flags independently.
-6. State when descriptions, models, inventory, sold count, or other enrichment fields are unavailable.
-7. Read exact large nested sections from the saved JSON only when the user needs them.
+## 使用反馈
 
-## Important Limitations
-
-1. The URL must use a documented `-i.<shopId>.<itemId>` path; canonical `/product/<shopId>/<itemId>` URLs are not accepted by this tool.
-2. Customer review rows are not returned. `ratingCount` and `ratingDistribution` are only aggregate signals when the source supplies them.
-3. Public fields vary by market, listing state, seller, and source-page completeness. Indonesia, Singapore, Malaysia, Thailand, and the Philippines usually expose richer detail on the cloud source; Vietnam, Brazil, and Taiwan may return a lighter record.
-4. `models` provides variant stock, while a separate price for every individual variant may be unavailable.
-5. Invalid, removed, or market-mismatched listings return an error rather than a successful empty list.
-6. This tool does not search Shopee, provide historical trends, or manage an authorized seller account.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — one known Shopee listing:
-
-| User Says | Scenario |
-|-----------|----------|
-| “查这个虾皮商品链接” | Listing detail lookup |
-| “看一下价格、销量和库存” | Current listing audit |
-| “提取变体、图片和品牌” | SKU and content extraction |
-| “这个店铺是不是官方店？” | Public shop-signal check |
-
-**Not applicable**:
-
-- Keyword search, rankings, or bulk product screening
-- Full customer-review collection or sentiment mining
-- Historical price and inventory monitoring
-- Authorized seller listing, order, promotion, or account operations
-
-## 算力消耗规则
-
-消耗 53 算力。
-
-> 用户会因算力消耗而支付费用。重复查询不同商品会分别计费；继续调用前应让用户知晓额外消耗。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when the described capability differs from actual behavior, results miss the user's intent, the user expresses praise or dissatisfaction, or the skill can be improved. Follow `references/api.md` without interrupting the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

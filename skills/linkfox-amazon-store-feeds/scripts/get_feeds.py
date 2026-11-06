@@ -19,7 +19,7 @@ from _spapi_feeds_common import (
     developer_proxy_call,
     emit_result,
     ensure_auth_skill_available,
-        lf_inline_flag,
+    lf_inline_flag,
     load_cli_params,
     merge_success_json,
     require_seller_region,
@@ -83,7 +83,7 @@ def main() -> None:
     out: dict = {"developerProxy": proxy, "resolvedPath": path, "queryString": qs}
     merge_success_json(out, proxy, "feeds")
     inline = lf_inline_flag()
-    emit_result(out, inline)
+    emit_result(out, inline=inline)
 
 
 if __name__ == "__main__":

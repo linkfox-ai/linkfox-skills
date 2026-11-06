@@ -38,7 +38,6 @@ from _common import (  # noqa: E402
     DEFAULT_PAGE_SIZE,
     build_sd_query,
     ensure_auth_skill_available,
-    get_access_token,
     list_sd_entities,
     parse_argv_params,
     require_fields,
@@ -73,11 +72,9 @@ def main() -> None:
     server_query, use_extended, _client_filters = build_sd_query(params, FILTER_KEYS)
     entity_path = ENTITY_PATH_EXTENDED if use_extended else ENTITY_PATH_BASIC
 
-    access_token = get_access_token(profile_id)
     result = list_sd_entities(
         region=region,
         profile_id=profile_id,
-        access_token=access_token,
         entity_path=entity_path,
         response_key=RESPONSE_KEY,
         server_query=server_query,
@@ -86,7 +83,7 @@ def main() -> None:
     )
 
     if "error" in result:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        emit_result(result, inline=lf_inline_flag())
         sys.exit(1)
 
     items = result.get("items", [])
@@ -98,7 +95,7 @@ def main() -> None:
         "truncated": result.get("truncated", False),
     }
     inline = lf_inline_flag()
-    emit_result(output, inline)
+    emit_result(output, inline=inline)
     print(
         f"\n✓ Fetched {len(items)} SD negative targeting clauses across {output['pagesFetched']} page(s)"
         f"{' (truncated at maxPages)' if output['truncated'] else ''}",

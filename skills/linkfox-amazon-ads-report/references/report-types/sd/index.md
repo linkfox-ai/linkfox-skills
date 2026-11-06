@@ -1,4 +1,4 @@
-# Sponsored Display (SD) Report Types
+# Sponsored Display (SD) 报告类型
 
 `adProduct = SPONSORED_DISPLAY`
 

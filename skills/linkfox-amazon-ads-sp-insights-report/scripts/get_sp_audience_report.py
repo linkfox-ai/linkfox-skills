@@ -9,7 +9,7 @@ Usage:
   python get_sp_audience_report.py '<JSON parameters>' --no-cache # 跳过 24h 成功结果缓存
 
 输出策略（脚本默认行为）：
-  - **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-ads-sp-insights-report-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
+  - **始终**将完整响应写入 `<根>/<YYYY-MM-DD>/<session>/data/linkfox-amazon-ads-sp-insights-report-<timestamp>.json`；根目录优先为 `ACPX_WORKSPACES` 第一个路径下的 `linkfox/`，其次为 `<cwd>/linkfox/`，均不可写则报错，不回退家目录或系统临时目录。会话标识优先由 `SESSION_ID` 清理生成，未设置时自动生成并在进程内稳定。
   - 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
   - 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
   - 加 `--inline` 强制全量打印到 stdout（同样落盘）
@@ -23,44 +23,21 @@ import time
 import secrets
 import subprocess
 from pathlib import Path
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
 
 from reporting_v1_workflow import run_report_workflow
+from _linkfox_transport import invoke_proxy
 
 
-API_PATH = "/amazonAds/developerProxy"
 SLUG = "linkfox-amazon-ads-sp-insights-report"
 REPORT_KIND = "audience"
 REQUIRED_SKILL = "linkfox-amazon-ads-auth"
 DEPENDENCY_EXIT_CODE = 42
 
-# 响应小于等于该字节数时，直接全量输出，不落文件
+# 响应小于等于该字节数时，落盘后全量输出
 SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
 
 _SESSION_CACHE: dict[str, str] = {}
-
-def get_api_base() -> str:
-    """网关基础地址：env LINKFOX_TOOL_GATEWAY 优先，缺省回退正式地址。"""
-    return (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
-
-def get_api_url():
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
-    return get_api_base() + API_PATH
-
-
-def get_api_key():
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key not configured. Please complete authorization first:\n"
-            "1. Visit https://skill.linkfox.com/linkfoxskills/guide.htm to obtain your Key\n"
-            "2. Set the environment variable: export LINKFOX_AGENT_API_KEY=your-key-here",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
 
 
 def ensure_auth_skill_available():
@@ -97,35 +74,8 @@ def ensure_auth_skill_available():
 
 
 def call_api(params):
-    api_url = get_api_url()
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": os.environ.get("SESSION_ID", ""),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(
-        api_url,
-        data=data,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        try:
-            return json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
-        except Exception:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+    """保留业务缓存，通过公共调用器执行每个 LinkFox 操作。"""
+    return invoke_proxy(params, resolve_data_path, SLUG)
 
 
 def _cache_key(params):
@@ -155,11 +105,16 @@ def _load_cache(path):
     try:
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
-        if isinstance(payload, dict):
-            for item in payload.get("dataFiles") or []:
-                if isinstance(item, dict) and item.get("path") and not os.path.isfile(item["path"]):
-                    return None
-            payload.setdefault("_cache", {})["hit"] = True
+        if not isinstance(payload, dict) or payload.get("success") is not True:
+            return None
+        if payload.get("_cacheable") is False or not isinstance(payload.get("dataFiles"), list):
+            return None
+        for item in payload["dataFiles"]:
+            if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+                return None
+            if not os.path.isfile(item["path"]):
+                return None
+        payload["_cache"] = {"hit": True}
         return payload
     except (OSError, json.JSONDecodeError):
         return None
@@ -337,8 +292,7 @@ def resolve_data_path(slug: str, ts: float, ext: str = "json") -> str:
     return out
 
 def _resolve_output_path(ts):
-    """落到 <cwd>/linkfox/<日期>/<session>/data/<slug>-<ts>.json，按 SESSION_ID 聚合到同一会话。"""
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
+    """落到所选工作区根目录的 <日期>/<session>/data/，会话标识由 _session_id 解析。"""
     return resolve_data_path(SLUG, ts)
 
 
@@ -367,6 +321,8 @@ def main():
         sys.exit(1)
 
     ensure_auth_skill_available()
+    # 在发起请求前确认业务输出目录可写，不允许公共调用器回退到临时目录。
+    _ensure_session(time.time())
 
     cache_path = _cache_path(params)
     result = _load_cache(cache_path) if use_cache else None

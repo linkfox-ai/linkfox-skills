@@ -1,245 +1,115 @@
 ---
 name: linkfox-1688-search-by-image
-description: 1688平台以图搜图，通过商品图片精准检索外观相似或同款的1688货源，返回标题、价格、起批量、月销量、复购率、交易评分等核心数据。当用户提到1688以图搜图、1688找货源、以图找同款、跨境找工厂、1688识图、图片找货源、找相似货源、image search 1688、find supplier by image时触发此技能。即使用户未明确提及"以图搜图"，只要用户提供了图片URL并希望在1688上查找匹配或相似的货源商品，也应触发此技能。
+description: 通过商品图片在 1688 查找外观相似或同款货源，支持本地图片、图片链接及后续翻页，返回批发价、一件代发价、起批量、月销量、复购率、交易评分和商家身份。适用于 1688 以图搜图、图片找货源、跨境找工厂，以及从 Amazon 商品图片反查 1688 货源；不适用于纯关键词搜索、热销榜、其他平台图搜、图片创作、评论分析或价格历史研究。
 ---
 
-# 1688 Image-Based Product Search
+# 1688 以图搜图
 
-This skill performs visual product searches on the 1688 platform using an image URL, helping cross-border sellers find visually similar supplier products for sourcing.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-1688 Image Search uses visual recognition to find products with similar appearance on the 1688 wholesale marketplace. It returns supplier product data including title, price, minimum order quantity, monthly sales, repurchase rate, trade score, and seller identity badges.
+用户提供图片并希望在 1688 查找相似外观或同款商品时使用，无需明确提及“以图搜图”。支持本地图片上传和图搜结果的后续查询。
 
-## Data Fields
+**场景速查**
 
-| Field | Description |
-|-------|-------------|
-| offerId | Product ID on 1688 |
-| title | Product title |
-| imageUrl | Product main image |
-| price | Wholesale price (CNY) |
-| consignPrice | Dropship price (CNY) |
-| salesQuantity | Monthly sales volume |
-| estimatedSalesAmount | Estimated monthly revenue |
-| quantityBegin | Minimum order quantity |
-| repurchaseRate | Repurchase rate |
-| tradeScore | Product trade score |
-| compositeServiceScore | Composite service experience score |
-| sellerIdentities | Seller identity (超级工厂/实力商家/诚信通会员) |
-| offerIdentities | Product badge (严选) |
-| sendGoodsAddressText | Shipping origin |
-| deliveryTime | Delivery time (24/48 hours) |
-| isOnePsale | Supports dropshipping (是/否) |
-| isJxhy | Premium sourcing (是/否) |
-| hasPromotion | Has promotion (是/否) |
-| isPatentProduct | Patent product (是/否) |
+| 用户表达 | 查询场景 |
+|---|---|
+| 用这张图找 1688 同款 | 根据图片查找相似货源。 |
+| 这个 Amazon 商品在 1688 有货源吗 | 用商品图片反查 1688 供应商品。 |
+| 跨境找工厂，图片是这个 | 按图片发现货源并展示商家身份。 |
+| 找严选商品，按价格或月销量排序 | 在图搜支持范围内筛选与排序。 |
+| 看下一页或指定价格区间 | 使用已有图搜结果的图片标识继续查询。 |
 
-## Parameter Guide
+### 边界
 
-**Image Rules:**
-1. JPEG and PNG are passed through unchanged. WebP is detected from its real file bytes and transparently converted to JPEG before the 1688 call.
-2. Base64 string must be pure encoded content WITHOUT the `data:image/jpeg;base64,` prefix.
-3. Image source — one of imageUrl, imageBase64, or imageId must be provided (at least one required).
+纯关键词搜索与热销榜使用店雷达 1688 选品库或商品榜单；Amazon 图搜使用对应平台技能。图片生成编辑、评论分析和历史趋势研究不属于本技能范围。
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| imageUrl | Conditional | - | Public image URL (max 1000 chars). JPEG/PNG pass through; WebP is converted automatically |
-| imageBase64 | Conditional | - | Pure Base64 without a data URL prefix. JPEG/PNG pass through; WebP is converted automatically |
-| imageId | Conditional | - | 1688 image ID from previous search result (speeds up pagination) |
-| page | No | 1 | Page number, starting from 1 |
-| pageSize | No | 20 | Results per page (1-50) |
-| priceStart | No | - | Min price filter (CNY) |
-| priceEnd | No | - | Max price filter (CNY) |
-| filter | No | - | Filter conditions, comma-separated (see supported filters below) |
-| sort | No | {"monthSold":"desc"} | Sort as JSON: {field: direction} (see supported sort fields below) |
-| keyword | No | - | Keyword to further filter results |
-| productCollectionId | No | - | Product collection ID (see supported IDs below) |
+## 接口清单
 
-### Supported Filters
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 以图搜图 | POST `/alibaba1688/imageSearch` | `scripts/alibaba1688_image_search.py` | 查询外观相似或同款商品。 |
+| 获取图片上传凭证 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 获取预签名 URL；脚本随后向 OSS 上传本地文件。 |
 
-Multiple filters can be combined with commas (e.g. `1688Selection,totalEpScoreLv1,qrr0`).
+## 前置条件
 
-| Filter Value | Description |
-|--------------|-------------|
-| 1688Selection | 1688严选 |
-| certifiedFactory | 认证工厂 |
-| totalEpScoreLv1 | 综合体验分5星 |
-| totalEpScoreLv2 | 综合体验分4星 |
-| totalEpScoreLv3 | 综合体验分3星 |
-| totalEpScoreLv4 | 综合体验分2星 |
-| qrr0 | 无品质退款 |
-| qrr1 | 品质退款率<1% |
-| qrr5 | 品质退款率<5% |
-| qrr10 | 品质退款率<10% |
-| shipInToday | 当日发货 |
-| shipIn24Hours | 24小时发货 |
-| shipIn48Hours | 48小时发货 |
-| noReason7DReturn | 7天无理由退货 |
-| isOnePsale | 一件代发 |
-| isOnePsaleFreePost | 一件代发包邮 |
-| new7 | 7天内新品 |
-| new30 | 30天内新品 |
-| isQqyx | 全球严选 |
-| JPFL | 日本专线 |
-| USFL | 美国专线 |
-| KRFL | 韩国专线 |
-| VNFL | 越南专线 |
-| SAFL | 沙特专线 |
-| RUFL | 俄罗斯专线 |
-| KZFL | 哈萨克斯坦专线 |
-| HKFL | 香港专线 |
-| MOFL | 澳门专线 |
-| TWFL | 台湾专线 |
+**先准备图片和运行环境**：按 [图片与环境准备](references/image-preparation.md) 选择真实可用的 `<PYTHON>`，完成 Pillow WebP 能力检查；用户提供本地文件时先上传取得公开链接。图片要求及支持的筛选、排序见 [接口定义](references/api.md)。
 
-### Supported Sort Fields
+## 图搜流程
 
-| Field | Direction | Description |
-|-------|-----------|-------------|
-| price | asc/desc | Price ascending/descending |
-| monthSold | asc/desc | Monthly sales ascending/descending |
-| rePurchaseRate | asc/desc | Repurchase rate ascending/descending |
+1. 确认用户希望在 1688 找同款或相似货源，收集图片与筛选目标，按前置条件完成运行环境准备。
+2. 本地图片先运行 `<PYTHON> scripts/upload_image.py <本地图片路径>`，使用输出的公开链接；图片链接及其他图片来源按接口定义准备。
+3. 必须通过图搜业务脚本执行图片预处理和查询；它按实际文件字节识别 WebP 并自动转成 JPEG。图片链接读取、WebP 下载或转换失败时先停止，不进入收费图搜，不要求用户手工转换；未识别为 WebP 的输入传递规则见接口定义。
+4. 先复用同参数缓存，再进行必要查询。结合结果与摘要展示商品；需要后续页时优先复用首次结果中的图片标识，按用户要求继续检索并遵守成本约束。
 
-Sort format example: `{"price":"asc"}` for price low to high.
+## 执行方式
 
-### Supported Product Collection IDs
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`；接口示例用于说明请求格式，执行图搜仍须通过业务脚本完成图片预处理和查询。
+- **脚本调用（图搜必用）**：`<PYTHON> scripts/alibaba1688_image_search.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：图搜每次消耗 5 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改筛选条件连续试探；需要继续检索时，先向用户说明额外消耗。
 
-| ID | Usage |
-|----|-------|
-| 262105288 | 跨境货盘 |
-| 262105286 | 跨境货盘 |
-| 262105253 | 跨境货盘 |
-| 262105281 | 跨境货盘 |
-| 262105280 | 跨境货盘 |
-| 262105277 | 跨境货盘 |
-| 262105276 | 跨境货盘 |
-| 262105274 | 跨境货盘 |
-| 262105269 | 跨境货盘 |
-| 262185282 | 跨境货盘 |
+### 输出策略
 
-## 调用方式
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-1688-search-by-image-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-- **API 端点**：`POST /alibaba1688/imageSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 解释器选择**：调用前先选择一个真实可用的 Python 命令并在本次任务中始终复用，记为 `<PYTHON>`。Windows 按 `py -3`、`python`、`python3` 的顺序尝试，其他系统按 `python3`、`python` 的顺序尝试；候选命令必须执行 `<候选命令> -c "import sys; print(sys.executable)"` 后退出码为 0 且 stdout 含非空解释器路径，否则视为不可用（WindowsApps 的空输出占位命令不得选用）。
-- **Python 脚本**：`<PYTHON> scripts/alibaba1688_image_search.py '<JSON 参数>' [--inline]`
-- **无感图片预处理**：必须通过上述脚本调用。JPEG/PNG 保持原逻辑；WebP 由 Agent 使用 Pillow 转成 JPEG 后再按原逻辑调用，不要求用户手工转换。
-- **Pillow 首次初始化**：在当前运行环境第一次调用本 Skill 前，Agent 必须用 `<PYTHON>` 执行 `<PYTHON> -c "from PIL import features; ok=features.check('webp'); print('WEBP_OK' if ok else 'WEBP_MISSING'); raise SystemExit(0 if ok else 1)"`。只有退出码为 0 且 stdout 包含 `WEBP_OK` 才算检查通过。如果检查失败，静默执行 `<PYTHON> -m pip install --disable-pip-version-check "Pillow>=10.4,<13"`，然后用同一 `<PYTHON>` 重新检查一次。检查通过后再运行图搜脚本；第二次仍失败时停止并报告依赖初始化失败，不得进入收费接口，也不得循环安装或要求用户手工处理。后续调用检查通过即可直接执行，不重复安装。
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-1688-search-by-image-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行规则
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 算力消耗预估
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+图搜消耗 5 算力 / 次；上传凭证的独立算力消耗未单独列明，以实际扣除为准。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## Local Image Upload
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-This tool requires a **publicly accessible image URL**. If the user provides a local image file path, you must upload it first to obtain a public URL.
+### 解决认证和算力问题
 
-Run the upload script:
-```bash
-<PYTHON> scripts/upload_image.py /path/to/local/image.png
-```
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-The script will return a public URL (valid for 24 hours) that can be used as the imageUrl parameter.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## Usage Examples
+### 约束与建议
 
-**1. Basic image search**
-```
-在1688搜索与图片相似的商品，图片地址为 https://m.media-amazon.com/images/I/719mRAn2VrL._AC_SL1500_.jpg
-```
+- **理解结果**：图搜通过视觉识别查找外观相似商品，返回采购货源数据；相似外观不能直接证明同一厂家或完全同款。
+- **清晰展示数据**：用表格展示商品图片、标题、批发价、一件代发价、月销量、起批量、复购率和商家身份；需要时补充交易评分、综合服务体验分、发货地与发货时间。
+- **展示图片与徽章**：响应含商品图片时内联显示以便比对；突出超级工厂、实力商家、诚信通会员等商家身份和严选商品标。
+- **注明币种**：价格使用人民币 CNY（¥）展示。
+- **说明返回范围**：告知本页数量、当前页和总页数；不要把本页数量误报为全部商品总数。还有后续页时提示用户可以请求下一页，不主动翻页。
+- **遵守能力边界**：支持的筛选、排序及实时数据使用限制统一见 [接口定义](references/api.md)，遇到不支持的要求时说明可用选项。
+- **读取完整数据**：摘要不够时按需从保存的 JSON 提取字段，不将本地读取误解为接口支持任意二次筛选。
 
-**2. Search with filters**
-```
-在1688搜索与图片相似的商品，图片地址为 https://m.media-amazon.com/images/I/719mRAn2VrL._AC_SL1500_.jpg，查询第1页，筛选1688严选，并按价格从高到低排序
-```
+## 使用示例
 
-**3. Search with sorting**
-```
-在1688搜索与图片相似的商品，图片地址为 https://example.com/product.jpg，按价格从高到低排序
-```
+### 根据图片找相似货源
 
-**4. Paginated search**
-```
-在1688搜索与图片相似的商品，图片地址为 https://example.com/product.jpg，查询第2页，每页50条
-```
+用户：在 1688 找与这张商品图相似的产品。
 
-**5. Price range filter**
-```
-在1688搜索与图片相似的商品，图片地址为 https://example.com/product.jpg，价格区间10-100元
-```
+完成图片与环境准备后运行图搜，展示商品图片及核心采购指标。
 
-## Display Rules
+### 按筛选条件找货源
 
-1. **Present data clearly**: Show results in a structured table with key columns: product image, title, price, dropship price, monthly sales, minimum order quantity, repurchase rate, and seller identity
-2. **Image display**: When the response includes imageUrl for products, display them inline for visual comparison
-3. **Price display**: Always show price in CNY (¥) format
-4. **Seller badges**: Display seller identity badges (超级工厂/实力商家/诚信通会员) and product badges (严选) prominently
-5. **Result count**: Always inform the user of total results and current page/total pages
-6. **Pagination hint**: When more pages are available, suggest the user can request the next page
-7. **Filter/sort limitation**: If the user requests a sort or filter not in the supported list, do NOT attempt any workaround. Inform the user of the supported options
-8. **No secondary processing**: Results are real-time and not stored in a database, so secondary SQL/data processing is not available
+用户：筛选 1688 严选，按价格从高到低，价格区间 10 到 100 元。
 
-## Important Limitations
+核对支持的条件后发起一次图搜；参数字段及取值见接口定义。
 
-1. **Data real-time nature**: Results are live searches, not stored in any database. Cannot use `_dataQuery_executeDynamicQuery` for secondary processing.
-2. **Logic constraint**: If the user requests sort or filter conditions not in the preset supported list, do NOT call any other tool or logic to compensate.
-3. **Image input**: One of imageUrl, imageBase64, or imageId is required. For page > 1, prefer passing imageId from the first page result to speed up queries.
-4. **Image format**: JPEG/PNG follow the original path. The bundled script transparently converts WebP to JPEG before calling 1688. GIF and other formats retain their original behavior.
-5. **Base64 format**: The imageBase64 value must be the raw Base64 string only — do NOT include the `data:image/jpeg;base64,` prefix.
-6. **Page size**: Maximum 50 results per page.
+### 本地图片与翻页
 
-## User Expression & Scenario Quick Reference
+用户：用本地图片找货源，再看第二页，每页 50 条。
 
-**Applicable** -- Visual product sourcing scenarios on 1688:
+先上传本地图片，再图搜；用户明确要求后续页时复用返回的图片标识，说明额外算力消耗。
 
-| User Says | Scenario |
-|-----------|----------|
-| "1688以图搜图" / "用图片找1688货源" | Basic image search |
-| "帮我在1688找这个图片的同款" | Find same-style products |
-| "跨境找工厂，图片是..." | Cross-border supplier sourcing |
-| "这个Amazon产品在1688有没有货源" | Reverse sourcing from Amazon image |
-| "筛选1688严选的相似商品" | Filtered image search |
-| "按月销量排序找相似货源" | Sorted image search |
-| "查看第2页结果" | Pagination |
+## 使用反馈
 
-**Not applicable** -- Needs beyond 1688 image search:
-
-- Text/keyword-based 1688 search (use 店雷达-1688选品库)
-- 1688 product rankings/trending (use 店雷达-1688商品榜单)
-- Amazon image search (use 亚马逊前端-以图搜图)
-- Image generation or editing
-- Product review analysis
-- Price history or trend analysis
-
-**Boundary judgment**: When users say "找货源" or "找同款", if they provide an image URL and the intent is to find visually similar products on 1688, this skill applies. If they want keyword-based search or ranking data on 1688, use the 店雷达 tools instead.
-
-## 算力消耗规则
-
-消耗 5 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

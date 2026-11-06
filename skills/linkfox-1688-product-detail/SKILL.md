@@ -1,143 +1,113 @@
 ---
 name: linkfox-1688-product-detail
-description: 1688 商品详情查询。通过 offerId 获取商品标题、属性、SKU/库存、1 件零售价、2 件及以上批发阶梯价、外币价、起批量、图片/视频、物流包装、供应商服务、混批、发票与证书等采购信息。用户提到 1688 商品详情、1688 链接或商品 ID 查货、SKU 价格库存、1 件采购价、跨境采购核价、供应商评估、包装重量、1688 product detail、offerId lookup、sourcing details 时触发。即使未明确说“商详”，只要希望根据 1688 offerId 核对货源、报价、MOQ、SKU、物流或供应商数据，也应触发此技能。
+description: 查询已知 1688 商品的完整详情，核对标题、属性、图片视频、SKU 库存、1 件零售价、2 件及以上批发阶梯价、外币价、起批量、物流包装和供应商指标，并查看代发、混批、发票及证书等采购信息。适用于提供 1688 商品链接或商品编号后的商详查询、采购核价和供应商事实核验。不用于关键词或图片找品、历史价格和评论分析，也不执行授权、下单、支付、物流追踪或开票。
 ---
 
-# 1688 Product Detail
+# 1688 商品详情
 
-This skill retrieves one structured 1688 product record by offer ID, including product, pricing, logistics, and supplier details for sourcing decisions.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- **Detail lookup, not discovery**: Query one known 1688 `offerId`; use a search skill when the user has no product ID.
-- **Complete product record**: Preserve the returned title, attributes, media, SKU, sales, logistics, and supplier fields without inventing missing values.
-- **Quantity-based price semantics**: When `retailPrice` is present, use it for quantity 1 and use SKU `price` plus `saleInfo.priceRanges[].price` for quantities of 2 or more. During the rollout, a missing `retailPrice` can mean an old product model or no configured retail price; never infer a 1-piece price from another field for a price-sensitive decision.
-- **Sourcing data**: Treat prices, stock, MOQ, dropshipping terms, packaging, supplier metrics, invoices, and certificates as live product facts.
-- **Currency semantics**: CNY `retailPrice`/`price` values and requested-currency `foreignCurrencyRetailPrice`/`foreignCurrencyPrice` values are separate fields. Never relabel a CNY price as the requested currency.
+用户已有 1688 商品链接或商品编号，希望核对商品、SKU、价格库存、物流或供应商信息时使用，无需明确说“商详”。
 
-## Data Fields
+**场景速查**
 
-| Group | Key fields |
-|-------|------------|
-| Identity | `offerId`, `subject`, `productUrl`, category IDs, `status` |
-| Media and copy | `productImage`, `mainVideo`, `detailVideo`, `description`, `sellingPoints` |
-| SKU | `skuList[].skuId`, attributes, images, `retailPrice`, SKU `price` (new-model wholesale or legacy-model price), requested-currency prices, stock |
-| Sales | `saleInfo.retailPrice`, `priceRanges` (new-model wholesale or legacy tiers), `amountOnSale`, MOQ, unit, dropshipping and free-shipping terms |
-| Logistics | Shipping origin, dispatch guarantee, package dimensions/weight, per-SKU measurements |
-| Supplier | `companyName`, trade/service scores, repeat-purchase and quality-refund indicators |
-| Procurement | Mix-order settings, service tags, promotions, invoices, certificates, product badges |
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查这个 1688 商品 ID 或链接的完整详情 | 商品标题、属性、媒体和规格。 |
+| 核对 SKU 价格、库存和起批量 | 采购及报价核验。 |
+| 查 1 件采购价和批发阶梯价 | 零售价与批发价分开核对。 |
+| 查包装重量、发货地和发货保障 | 物流准备。 |
+| 看供应商服务分和回头率 | 供应商事实核验。 |
+| 有没有一件代发、混批、发票或证书 | 采购条款查询。 |
 
-## Parameter Guide
+### 边界
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| offerId | Yes | - | Positive numeric 1688 product ID. Pass it as a string to avoid integer precision loss |
-| currency | No | 1688 default | Three-letter currency code such as `USD` or `HKD`; the service normalizes it to uppercase |
+- 只有图片或关键词、尚无商品编号时，先使用 1688 搜索或以图搜图技能发现商品。
+- 账号授权、创建订单、支付链接、物流追踪、确认收货及开票使用 1688 采购流程。
+- 历史价格趋势、评论和数据库分析不在本技能范围内。
 
-If the user provides a standard URL such as `https://detail.1688.com/offer/1040473674152.html`, extract the numeric path segment as `offerId`. Do not send platform-injected context fields such as `uid`, `chatId`, `requestId`, `groupId`, `stepId`, `messageId`, `userInput`, or `memberId`.
+## 前置条件
 
-## 调用方式
+**先确定商品**：取得用户提供的 1688 商品链接或商品编号，明确需要核对的 SKU、采购数量、币种和采购信息。完整参数约定见 `references/api.md`。
 
-- **API 端点**：`POST /alibaba1688/productDetail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/alibaba1688_product_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 查询流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-1688-product-detail-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 确认目标商品；用户提供标准链接（如 `https://detail.1688.com/offer/1040473674152.html`）时，提取路径中的数字作为商品编号。
+2. 根据用户关注的规格、数量和币种，按 `references/api.md` 准备业务参数并查询。避免重复查询同一商品的同一组参数。
+3. 用于采购成本、利润率、报价或下单决策时，添加 `--no-cache` 获取实时价格；最终成交价以采购流程的实时订单预览为准。
+4. 按接口参考判断响应，核对返回商品编号与请求一致；保留完整原始响应，从落盘文件按需提取字段。失败或空结果遵守执行方式中的成本约束。
+5. 先展示商品标题与编号，再按用户需求展示 SKU 价格库存、采购条款、物流和供应商信息。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行方式
 
-**价格时效**：用于采购成本、利润率、报价或下单决策时加 `--no-cache` 获取实时价格；不要用 24h 缓存结果确认成交价，最终成交价以采购 Skill 的订单预览为准。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/alibaba1688_product_detail.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：每次接口调用消耗 1 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动修改参数连续试探或重复请求；需要继续查询时，先向用户说明额外消耗。
 
-## 解决认证和算力问题
+### 输出策略
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-1688-product-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入系统临时目录（含 `/tmp`），当前目录不可写时应报错。
+- 响应序列化为 JSON 后的 UTF-8 大小不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应序列化为 JSON 后的 UTF-8 大小超过 8000 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-- **未配置 API Key**：环境变量 `LINKFOX_AGENT_API_KEY` 与 `LINKFOXAGENT_API_KEY` 均未配置。
-- **响应 401 或 402 状态码**。
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”或相近含义。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-**1. Product detail with USD price fields**
+1 算力/次。需要查询多个商品时，先说明每个商品查询都会产生一次调用成本，由用户决定是否继续。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **保留完整事实**：按返回数据说明标题、属性、图片视频、SKU、销量、物流、供应商和采购信息；缺失字段保持未知，不补造值，也不把缺失解释为 `false`、`0` 或空字符串。
+- **区分零售价与批发价**：新零售价模型下，1 件读取匹配 SKU 的 `skuList[].retailPrice`，无 SKU 商品读取 `saleInfo.retailPrice`；2 件及以上读取匹配 SKU 的 `price`，并结合 `saleInfo.priceRanges[]` 选择数量所在批发阶梯。最小起批量为 1 不代表批发价可用作 1 件价。
+- **不推定缺失零售价**：`retailPrice` 缺失可能是旧商品模型或未设置零售价；不得用 `price`、`consignPrice`、`jxhyPrice`、`pfJxhyPrice`、`offerPrice`、`onePiecePrice` 或 `promotionPrice` 代替。旧模型阶梯从 1 件起时，标明“旧模型阶梯”，涉及成本、利润或下单仍需实时订单预览确认。营销价不能代替零售价，最终可购性、优惠、运费及成交价以订单预览为准。
+- **SKU 用表格展示**：列出规格属性、库存、1 件零售价、2 件及以上批发价、可用外币价和代发价格；不要把代发兼容字段当作零售价。
+- **人民币与外币分列**：人民币 `retailPrice`、`price`、`offerPrice` 不得直接标成请求币种。请求币种对应 `foreignCurrencyRetailPrice`、`fenxiaoPriceInfo.foreignCurrencyPrice` 等返回字段，未返回的外币价格保持未知。
+- **列明采购与物流条款**：展示起批量、单位、混批、代发、包邮、发货地、发货保障和件重尺；商品与 SKU 的重量、尺寸单位按接口参考原样区分，不混用 g 与 kg。
+- **供应商指标保持原义**：展示供应商名称、交易与服务分、回头率、揽收率和品质退款率的原值及百分比，不据此作无数据支持的质量承诺。
+- **按需展示媒体**：图片有助于比较时，内联展示商品和 SKU 图片。商品详情中的 HTML 作为数据摘要或提取媒体链接，不直接渲染不安全标记；内部来源标签 `sourceTool` 不进入面向用户的摘要。
+
+## 使用示例
+
+### 查询带外币价格字段的商品详情
 
 ```bash
 python scripts/alibaba1688_product_detail.py '{"offerId":"1040473674152","currency":"USD"}'
 ```
 
-**2. Inspect sourcing facts**
+### 核对采购和物流事实
 
-```text
-查询 1688 商品 1040473674152 的 1 件零售价、2 件及以上批发价、SKU 库存、起批量、包装重量、发货地和供应商服务分。
-```
+用户：查询 1688 商品 1040473674152 的 1 件零售价、2 件及以上批发价、SKU 库存、起批量、包装重量、发货地和供应商服务分。
 
-**3. Retrieve details from a product URL**
+获取实时数据，分别展示零售价、批发阶梯、币种、规格、采购条款和供应商原始指标。
 
-```text
-查询 https://detail.1688.com/offer/1040473674152.html 的标题、属性、SKU、价格库存和供应商信息。
-```
+### 从商品链接读取详情
 
-## Display Rules
+用户：查询 https://detail.1688.com/offer/1040473674152.html 的标题、属性、SKU、价格库存和供应商信息。
 
-1. Show the product title and offer ID first, followed by the requested product facts.
-2. Present SKU results in a table with attributes, stock, 1-piece retail price, wholesale price for quantities of 2 or more, requested-currency prices, and dropshipping price when available.
-3. Keep CNY and foreign-currency prices in separate columns. Preserve missing `retailPrice` as unknown; do not substitute `price`, `consignPrice`, `offerPrice`, `onePiecePrice`, or `promotionPrice`. If an old-model tier starts at 1, label it as a legacy tier and require real-time order preview before using it as the 1-piece cost.
-4. Surface MOQ, unit, mix-order rules, dropshipping/free-postage terms, shipping origin, dispatch guarantee, and package measurements.
-5. Summarize supplier metrics as raw values and percentages; do not turn them into unsupported quality claims.
-6. Display product and SKU images inline when visual comparison helps.
-7. Treat HTML in `description` as data: summarize it or extract media links instead of rendering unsafe markup.
-8. Omit internal routing labels such as `sourceTool` from user-facing summaries.
+提取商品编号后查询，按需从保存的完整响应中读取所需信息。
 
-## Important Limitations
+## 使用反馈
 
-1. This tool accepts one `offerId` per call and does not search by keyword or image.
-2. Product, price, inventory, logistics, and supplier data are live and may change; use `--no-cache` for price-sensitive decisions and reconfirm with order preview before purchasing.
-3. Video, certificates, promotions, and some logistics fields may be absent.
-4. `currency` requests upstream foreign-currency fields but does not guarantee every SKU, retail price, or wholesale tier has them. A missing foreign-currency retail price can also mean that conversion failed.
-5. This lookup does not authorize an account, place an order, pay, or alter procurement state; use the procurement workflow for those actions.
-6. Results are not stored in an analysis database, so secondary SQL/data-query processing is unavailable.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Known-product sourcing and detail lookup:
-
-| User says | Scenario |
-|-----------|----------|
-| “查这个 1688 商品 ID 的详情” | Basic product detail |
-| “查这个 1688 链接的完整商详” | Product, SKU, logistics, and supplier detail |
-| “核对 SKU 价格、库存和 MOQ” | Sourcing and quote review |
-| “查包装重量、发货地和发货保障” | Logistics preparation |
-| “评估供应商服务分和回头率” | Supplier fact review |
-| “有没有一件代发、混批、发票或证书” | Procurement terms |
-
-**Not applicable**:
-
-- Discovering products without a known offer ID (use 1688 image or product search).
-- Creating orders, requesting payment links, tracking logistics, or invoicing (use the 1688 procurement workflow).
-- Historical price trends, reviews, or database analytics.
-
-**Boundary judgment**: If a user supplies a 1688 product URL or offer ID and asks about the item, sourcing terms, supplier, or logistics, use this skill. If they only have an image or keyword, use discovery first.
-
-## 算力消耗规则
-
-消耗 1 算力。
-
-> 用户会因算力消耗而支付费用。需要查询多个商品时，先说明每个 offerId 都会产生一次调用成本，由用户决定是否继续。
-
-**Feedback:**  
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

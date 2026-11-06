@@ -3,16 +3,7 @@
 
 import json
 
-from _temu_common import (
-    FILE_DOWNLOAD_URL,
-    PROXY_URL,
-    call_temu_api,
-    emit_result,
-    lf_inline_flag,
-    load_json_arg,
-    parse_nested_body,
-    resolve_access_token,
-)
+from _temu_common import FILE_DOWNLOAD_URL, PROXY_URL, call_temu_api, emit_result, lf_inline_flag, parse_nested_body, resolve_access_token
 
 # Partner EU 促销：默认欧洲站半托管 + 商品/促销场景 token
 DEFAULT_SITE = "eu"
@@ -39,21 +30,26 @@ def extract_business_params(params: dict) -> dict:
         return dict(params["params"])
     return {k: v for k, v in params.items() if k not in RESERVED_KEYS}
 
-def build_eu_proxy_body(params: dict, api_type: str, business=None) -> dict:
-    site = str(params.get("site", DEFAULT_SITE)).strip().lower() or DEFAULT_SITE
-    management_type = (
+def _normalize_eu_params(params: dict) -> dict:
+    """让请求体与本地令牌查找使用相同的区域和托管类型。"""
+    normalized = dict(params)
+    normalized["site"] = (
+        str(params.get("site", DEFAULT_SITE)).strip().lower() or DEFAULT_SITE
+    )
+    normalized["managementType"] = (
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
-    if "tokenPurpose" not in params and params.get("storeKey") and not params.get("accessToken"):
-        params = dict(params)
-        params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
-        params.setdefault("site", site)
-        params.setdefault("managementType", management_type)
+    if params.get("storeKey") and not params.get("accessToken"):
+        normalized.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
+    return normalized
+
+def build_eu_proxy_body(params: dict, api_type: str, business=None) -> dict:
+    params = _normalize_eu_params(params)
 
     body = {
-        "site": site,
-        "managementType": management_type,
+        "site": params["site"],
+        "managementType": params["managementType"],
         "accessToken": resolve_access_token(params),
         "type": api_type,
     }
@@ -67,20 +63,13 @@ def eu_proxy_call(params: dict, api_type: str, business=None, timeout: int = 150
     return call_temu_api(PROXY_URL, body, timeout=timeout, linkfox_params=params)
 
 def eu_file_download_call(params: dict, timeout: int = 150) -> dict:
-    if "tokenPurpose" not in params and params.get("storeKey") and not params.get("accessToken"):
-        params = dict(params)
-        params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
+    params = _normalize_eu_params(params)
 
     from _temu_common import require_text  # noqa: E402
 
-    site = str(params.get("site", DEFAULT_SITE)).strip().lower() or DEFAULT_SITE
-    management_type = (
-        str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
-        or DEFAULT_MANAGEMENT_TYPE
-    )
     body = {
-        "site": site,
-        "managementType": management_type,
+        "site": params["site"],
+        "managementType": params["managementType"],
         "accessToken": resolve_access_token(params),
         "url": require_text(params, "url"),
     }

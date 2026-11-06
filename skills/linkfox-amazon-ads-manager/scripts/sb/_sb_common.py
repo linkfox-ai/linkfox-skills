@@ -15,10 +15,11 @@ from _common import (  # noqa: E402
     DEFAULT_MAX_PAGES,
     DEFAULT_PAGE_SIZE,
     _developer_proxy_call,
+    _list_failure,
+    _upstream_ok,
     build_filter_body,
     emit_result,
     ensure_auth_skill_available,
-    get_access_token,
     lf_inline_flag,
     list_sp_entities,
     mutate_entity,
@@ -130,14 +131,16 @@ def _extract_structure_flags(node: Any) -> tuple[str | None, bool | None]:
             multi = _as_boolish(node.get("isMultiAdGroupsEnabled"))
         for value in node.values():
             child_structure, child_multi = _extract_structure_flags(value)
-            structure = structure or child_structure
-            if multi is None:
+            if child_structure == "MULTI_AD_GROUP" or not structure:
+                structure = child_structure
+            if child_multi is True or multi is None:
                 multi = child_multi
     elif isinstance(node, list):
         for item in node:
             child_structure, child_multi = _extract_structure_flags(item)
-            structure = structure or child_structure
-            if multi is None:
+            if child_structure == "MULTI_AD_GROUP" or not structure:
+                structure = child_structure
+            if child_multi is True or multi is None:
                 multi = child_multi
     return structure, multi
 
@@ -147,8 +150,9 @@ def _legacy_guard(params: dict[str, Any]) -> None:
     structure = _normalize_structure(params.get("campaignStructure"))
     multi = _as_boolish(params.get("isMultiAdGroupsEnabled"))
     payload_structure, payload_multi = _extract_structure_flags(params.get("payload"))
-    structure = structure or (payload_structure or "")
-    if multi is None:
+    if payload_structure == "MULTI_AD_GROUP" or not structure:
+        structure = payload_structure or ""
+    if payload_multi is True or multi is None:
         multi = payload_multi
 
     if structure == "MULTI_AD_GROUP" or multi is True:
@@ -169,14 +173,14 @@ def _prepare(
     params: dict[str, Any],
     *,
     api_version: str,
-) -> tuple[int, str, str]:
+) -> tuple[int, str]:
     if not params.get("skipDepCheck"):
         ensure_auth_skill_available()
     require_fields(params, ["profileId", "region"])
     if api_version == "V3":
         _legacy_guard(params)
     profile_id = int(params["profileId"])
-    return profile_id, str(params["region"]), get_access_token(profile_id)
+    return profile_id, str(params["region"])
 
 
 def _emit_list(
@@ -187,6 +191,8 @@ def _emit_list(
     resource_version: str,
 ) -> None:
     if "error" in result:
+        result = {**result, 'apiVersion': api_version,
+                  'amazonResourceVersion': resource_version}
         emit_result(result, inline=lf_inline_flag())
         sys.exit(1)
     items = result.get("items", [])
@@ -250,7 +256,7 @@ def run_get_offset_list(
 ) -> None:
     """Run legacy GET lists using startIndex/count offset pagination."""
     params = params if params is not None else parse_argv_params(usage)
-    profile_id, region, access_token = _prepare(params, api_version=api_version)
+    profile_id, region = _prepare(params, api_version=api_version)
     page_size = max(1, min(int(params.get("maxResults") or DEFAULT_PAGE_SIZE), 100))
     fetch_all = _parse_bool(params.get("fetchAll"), default=True, field="fetchAll")
     max_pages = int(params.get("maxPages") or DEFAULT_MAX_PAGES)
@@ -282,7 +288,6 @@ def run_get_offset_list(
             region=region,
             path=path,
             method="GET",
-            access_token=access_token,
             profile_id=profile_id,
             body=None,
             content_type=None,
@@ -291,25 +296,19 @@ def run_get_offset_list(
         )
         if "error" in resp:
             _emit_list(
-                {
-                    "error": resp["error"],
-                    "details": resp.get("details"),
-                    "pagesFetched": pages,
-                },
+                _list_failure(resp, collected, pages, response_key),
                 response_key=response_key,
                 api_version=api_version,
                 resource_version=resource_version,
             )
             return
         status = resp.get("httpStatus")
-        if status is None or status // 100 != 2:
+        if not _upstream_ok(status):
             _emit_list(
-                {
+                _list_failure({
+                    **resp,
                     "error": f"Upstream HTTP {status}",
-                    "httpStatus": status,
-                    "body": resp.get("body"),
-                    "pagesFetched": pages,
-                },
+                }, collected, pages, response_key),
                 response_key=response_key,
                 api_version=api_version,
                 resource_version=resource_version,
@@ -319,18 +318,32 @@ def run_get_offset_list(
             parsed = json.loads(resp.get("body") or "[]")
         except (json.JSONDecodeError, TypeError) as exc:
             _emit_list(
-                {
+                _list_failure({
+                    **resp,
                     "error": f"Failed to parse upstream body: {exc}",
-                    "pagesFetched": pages,
-                },
+                }, collected, pages, response_key),
                 response_key=response_key,
                 api_version=api_version,
                 resource_version=resource_version,
             )
             return
+        if not isinstance(parsed, (list, dict)):
+            _emit_list(
+                _list_failure({**resp, 'error': '上游分页响应必须是数组或 JSON 对象'},
+                              collected, pages, response_key),
+                response_key=response_key, api_version=api_version,
+                resource_version=resource_version,
+            )
+            return
         page_items = parsed if isinstance(parsed, list) else parsed.get(response_key, [])
         if not isinstance(page_items, list):
-            page_items = []
+            _emit_list(
+                _list_failure({**resp, 'error': f'上游 {response_key} 必须是数组'},
+                              collected, pages, response_key),
+                response_key=response_key, api_version=api_version,
+                resource_version=resource_version,
+            )
+            return
         collected.extend(page_items)
         pages += 1
         if not fetch_all or len(page_items) < page_size:
@@ -367,7 +380,7 @@ def run_post_token_list(
 ) -> None:
     """Run POST /list resources that paginate with nextToken."""
     params = params if params is not None else parse_argv_params(usage)
-    profile_id, region, access_token = _prepare(params, api_version=api_version)
+    profile_id, region = _prepare(params, api_version=api_version)
     body = dict(request_body if request_body is not None else (params.get("payload") or {}))
     for key in ("filters", "maxResults", "nextToken", "includeExtendedDataFields"):
         if key in params and key not in body:
@@ -383,7 +396,6 @@ def run_post_token_list(
         request_body=body,
         fetch_all=_parse_bool(params.get("fetchAll"), default=True, field="fetchAll"),
         max_pages=int(params.get("maxPages") or DEFAULT_MAX_PAGES),
-        access_token=access_token,
         accept=accept,
     )
     _emit_list(
@@ -408,7 +420,7 @@ def run_get_token_list(
 ) -> None:
     """Run GET list resources that paginate with a nextToken query."""
     params = params if params is not None else parse_argv_params(usage)
-    profile_id, region, access_token = _prepare(params, api_version=api_version)
+    profile_id, region = _prepare(params, api_version=api_version)
     token = params.get("nextToken")
     page_size = max(1, min(int(params.get("pageSize") or params.get("maxResults") or DEFAULT_PAGE_SIZE), 100))
     fetch_all = _parse_bool(params.get("fetchAll"), default=True, field="fetchAll")
@@ -427,7 +439,6 @@ def run_get_token_list(
             region=region,
             path=path,
             method="GET",
-            access_token=access_token,
             profile_id=profile_id,
             body=None,
             content_type=None,
@@ -435,14 +446,12 @@ def run_get_token_list(
             accept=accept,
         )
         status = resp.get("httpStatus")
-        if "error" in resp or status is None or status // 100 != 2:
+        if "error" in resp or not _upstream_ok(status):
             _emit_list(
-                {
+                _list_failure({
+                    **resp,
                     "error": resp.get("error") or f"Upstream HTTP {status}",
-                    "httpStatus": status,
-                    "body": resp.get("body"),
-                    "pagesFetched": pages,
-                },
+                }, items, pages, response_key),
                 response_key=response_key,
                 api_version=api_version,
                 resource_version=resource_version,
@@ -452,12 +461,20 @@ def run_get_token_list(
             parsed = json.loads(resp.get("body") or "{}")
         except (json.JSONDecodeError, TypeError) as exc:
             _emit_list(
-                {
+                _list_failure({
+                    **resp,
                     "error": f"Failed to parse upstream body: {exc}",
-                    "pagesFetched": pages,
-                },
+                }, items, pages, response_key),
                 response_key=response_key,
                 api_version=api_version,
+                resource_version=resource_version,
+            )
+            return
+        if not isinstance(parsed, dict):
+            _emit_list(
+                _list_failure({**resp, 'error': '上游分页响应必须是 JSON 对象'},
+                              items, pages, response_key),
+                response_key=response_key, api_version=api_version,
                 resource_version=resource_version,
             )
             return
@@ -468,6 +485,14 @@ def run_get_token_list(
             if isinstance(candidate, list):
                 page_items = candidate
                 break
+            if candidate is not None:
+                _emit_list(
+                    _list_failure({**resp, 'error': f'上游 {key} 必须是数组'},
+                                  items, pages, response_key),
+                    response_key=response_key, api_version=api_version,
+                    resource_version=resource_version,
+                )
+                return
         if isinstance(page_items, list):
             items.extend(page_items)
         pages += 1
@@ -497,7 +522,7 @@ def run_mutation(
     params: dict[str, Any] | None = None,
 ) -> None:
     params = params if params is not None else parse_argv_params(usage)
-    profile_id, region, access_token = _prepare(params, api_version=api_version)
+    profile_id, region = _prepare(params, api_version=api_version)
     require_fields(params, ["payload"])
     result = mutate_entity(
         region=region,
@@ -506,11 +531,10 @@ def run_mutation(
         method=method,
         content_type=content_type,
         payload=params["payload"],
-        access_token=access_token,
         accept=accept,
     )
     status = result.get("httpStatus")
-    if "error" in result or status is None or status // 100 != 2:
+    if "error" in result or not _upstream_ok(status):
         if "error" not in result:
             result["error"] = f"Upstream HTTP {status}"
             result["success"] = False

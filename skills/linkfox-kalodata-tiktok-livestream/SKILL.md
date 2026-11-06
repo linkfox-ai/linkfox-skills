@@ -1,197 +1,113 @@
 ---
 name: linkfox-kalodata-tiktok-livestream
-description: 通过kalodata数据搜索TikTok电商直播排行榜并查询指定直播的详细数据，支持按地区、货币、语言与日期范围查看高排名、高销量的TikTok带货直播，并可用livestreamId获取直播销售额、观看人数、时长、GPM及带货商品数。当用户提到TikTok直播榜单、TikTok直播排行、TikTok带货直播榜、TikTok热销直播、TikTok直播排名、TikTok直播详情、TikTok直播数据、直播观看人数、kalodata直播搜索、kalodata直播榜、TikTok livestream ranking, TikTok live ranking, TikTok top livestreams, TikTok live shopping ranking, TikTok livestream detail, kalodata livestream search/detail, live analytics时触发此技能。即使用户未明确提及"kalodata"，只要其需求涉及查看TikTok平台的直播排行榜或某个TikTok直播的详细数据，也应触发此技能。
+description: 通过 Kalodata 数据查看 TikTok Shop 带货直播排行榜，按地区、统计时间、语言和币种浏览直播表现，并查询指定直播的销售额、观看人数、时长、GPM 和带货商品数。适用于 TikTok 直播榜单发现与单场直播数据核对；不适用于按关键词或标题搜索直播、达人/商品/视频/店铺榜单、其他平台数据、广告管理或内容创作。
+---
+# Kalodata TikTok 直播榜单与详情
+
+## 适用范围
+
+### 适用
+
+浏览 TikTok Shop 带货直播榜单，或核对一场直播的详细表现。用户无需明确提及 Kalodata；TikTok 电商语境中的“直播榜”“直播排行”归入本技能。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| TikTok 直播排行榜、TikTok 热销直播、top TikTok livestreams | 浏览带货直播榜单。 |
+| 美国近 7 天 TikTok 直播排名、Kalodata 直播榜 | 按目标市场和时间窗口查看榜单。 |
+| TikTok 直播详情、TikTok livestream detail | 查看指定单场直播。 |
+| 这场直播有多少观看人数、卖了多少钱、GPM 是多少 | 核对单场直播的观看与销售指标。 |
+
+### 边界
+
+达人、商品、视频和店铺的榜单或详情使用对应 Kalodata 技能；其他平台直播数据、TikTok 广告管理与内容创作不在本技能范围。
+
+## 接口清单
+
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 直播榜单 | POST `/kalodata/livestream/rank` | `scripts/kalodata_livestream_search.py` | 发现高排名、高销售额带货直播。 |
+| 直播详情 | POST `/kalodata/livestream/detail` | `scripts/kalodata_livestream_detail.py` | 查看选定直播的完整表现。 |
+
+## 前置条件
+
+先确定用户希望浏览榜单还是查询单场直播。查询单场直播需取得明确的直播标识；可由用户提供，或从用户选定的榜单记录取得。完整参数与限制见 `references/api.md`。
+
+## 查询流程
+
+1. 用户需要排名、热销直播或发现候选时，先查询直播榜单；用户已有直播标识时，直接查询详情。
+2. 从榜单选定直播后，将该记录的 `livestream_id` 作为 `livestreamId` 传入详情查询，沿用用户指定的市场、统计时间与币种。
+3. 先展示本次数据和覆盖范围。需要更多页或更多直播详情时，按用户任务范围继续，并遵守成本约束与接口参考中的停止条件。
+4. 空结果或业务错误按 `references/api.md` 解释；瞬时上游错误的有限重试与不支持排序的处理也以该文档为准，不自动改参数连续试探。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-livestream-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、响应中存在的常见计数（如 `costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+每个接口每次调用消耗 7.0 算力。榜单后再查询一场详情，预计共消耗 14.0 算力；命中本地缓存时不产生新的接口请求。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **清晰展示数据**：榜单用表格展示直播标题、达人账号、销售额、观看数、时长、件单价和起止时间；详情按单场直播分组展示，不列为排行榜。不附加主观商业建议。
+- **保留榜单顺序**：默认按 GMV 降序，位置由响应顺序体现，不能虚构排名字段；仅按用户明确要求使用受支持的排序。
+- **区分两类指标**：榜单的观看数为 `views`，详情的观看人数为 `viewers`；榜单金额需先解析为数值再比较和格式化。完整字段类型见接口参考，不能直接套用另一接口的字段。
+- **标明货币与时间窗口**：销售额、件单价和 GPM 标注请求币种，注明统计时间范围。GPM 表示每千次展示 GMV，按适当精度（如 903.79）显示，不表示百分比。
+- **转换时间单位**：展示起止时间时将 epoch 毫秒转为可读本地时间并标明时区，直播时长按秒转换。
+- **说明分页情况**：返回满页时可提示用户请求下一页，不推断总页数或总直播数；翻页边界和停止条件见接口参考。
+- **按需读取完整数据**：摘要可包含 `costToken`；需要具体字段时用 `jq` 或 `ConvertFrom-Json` 按当前接口字段名提取，保留直播和达人标识的字符串精度。
+
+## 使用示例
+
+### 浏览美国近 7 天热销直播
+
+用户：看看美国近 7 天 TikTok 带货直播榜。
+
+使用榜单入口查询，保留返回顺序，展示销售额、观看数、时长等数据，并注明市场、时间范围和币种。
+
+### 查看榜单中某场直播
+
+用户：查看榜单第一场直播的销售额、观看人数和 GPM。
+
+从已有榜单选定该直播，将其标识传给详情入口，按单场直播展示完整表现。
+
+### 用户已提供直播标识
+
+用户：查询这场 TikTok 直播的详情，我有直播 ID。
+
+直接查询详情，无需重复获取榜单；若只有标题，先说明无法仅凭标题定位，并取得明确标识。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Kalodata - TikTok Livestream Search & Detail
-
-This skill supports a two-step TikTok livestream workflow via the Kalodata data source:
-
-1. Browse TikTok Shop livestream leaderboards to discover top-performing shoppable livestreams (带货直播).
-2. Fetch one livestream's full performance detail by `livestreamId`.
-
-Use the search (rank) endpoint when the user wants rankings, hot livestreams, or livestream discovery. Use the detail endpoint when the user already has a `livestreamId` or has selected one livestream from a ranking result.
-
-## Core Concepts
-
-The livestream ranking endpoint returns a paginated leaderboard filtered by `region`, `dateRange`, `language`, `currency`, and optional `sortField`. The default ranking order is by `revenue` (GMV) descending. Each livestream row includes identity, timing, scale, and creator fields. Results are paginated with `pageNumber` (1-5) and `pageSize` (5-100). The response does **not** include a total count — paginate until a page returns fewer than `pageSize` items. Money fields (`revenue`, `unit_price`) are returned as **strings** on the ranking endpoint.
-
-The livestream detail endpoint fetches **one** shoppable TikTok livestream by `livestreamId`. It returns a **1-element array** with the single livestream's full detail (12 fields), including `viewers`, numeric `revenue`, `gpm`, and `product_number`. There is no pagination and no `total`. The `livestreamId` usually comes from the ranking response field `livestream_id`.
-
-> **Field names/types differ between the two endpoints**: DETAIL uses `viewers` (RANK uses `views`); DETAIL `revenue` is a **number** (RANK `revenue` is a **string**); DETAIL has `gpm` and lacks `unit_price` (RANK has `unit_price` and lacks `gpm`). Do not assume field names/types carry over between the two endpoints.
-
-Both endpoints may reflect a statistical delay (T+1). See `references/api.md` for full request and response details.
-
-## Data Fields
-
-**Ranking rows** (each item in `data` from `/kalodata/livestream/rank`):
-
-| Field | Type | Description |
-|-------|------|-------------|
-| livestream_id | string | Livestream unique ID; pass this as `livestreamId` for detail lookup |
-| livestream_title | string | Livestream title |
-| creator_id | string | Creator unique ID (string to preserve precision) |
-| creator_handle | string | Creator handle / username |
-| livestream_start_time | integer | Start time, epoch milliseconds |
-| livestream_end_time | integer | End time, epoch milliseconds |
-| livestream_duration | integer | Duration in seconds |
-| revenue | string | Total revenue / GMV in the requested `currency` — **returned as a string**, e.g. `"185590.52"` |
-| unit_price | string | Average unit price in the requested `currency` — **returned as a string**, e.g. `"265.89"` |
-| views | integer | Total views (note: RANK uses `views`) |
-| record_type | string | Record type (e.g. `SHORT`) |
-
-**Detail rows** (the single item in `data` from `/kalodata/livestream/detail`):
-
-| Field | Type | Description |
-|-------|------|-------------|
-| livestream_id | string | Livestream unique ID (matches the requested `livestreamId`) |
-| livestream_title | string | Livestream title (e.g. `24 HOUR STREAM`) |
-| creator_id | string | Creator unique ID (string to preserve precision) |
-| creator_handle | string | Creator handle / username (e.g. `pokepiglt`) |
-| livestream_start_time | integer | Start time, epoch milliseconds |
-| livestream_end_time | integer | End time, epoch milliseconds |
-| livestream_duration | integer | Duration in seconds |
-| record_type | string | Record type (e.g. `SHORT`) |
-| viewers | integer | Total viewers (note: DETAIL uses `viewers`, NOT `views`) |
-| revenue | number | Livestream revenue / GMV as a **number** in the requested `currency` (e.g. `185590.52`) — a number here, a string on the RANK endpoint |
-| gpm | number | GMV per mille (revenue per 1,000 impressions) — DETAIL-only, absent from RANK |
-| product_number | integer | Number of products sold/promoted during the livestream |
-
-> **Money fields are strings on RANK, numbers on DETAIL.** Parse RANK `revenue`/`unit_price` (`float()`, `Number()`, or `ConvertFrom-Json`) before numeric comparison or formatting. Use the exact field name for the endpoint you are reading (`views` on RANK, `viewers` on DETAIL).
-
-## Parameter Guide
-
-**Livestream ranking (`/kalodata/livestream/rank`)** — all parameters optional:
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| region | string | No | Market region code, e.g. `US` |
-| dateRange | string | No | Time window, e.g. `last7Day`, `last30Day` |
-| pageNumber | integer | No | Page number, 1-5 |
-| pageSize | integer | No | Page size, 5-100 |
-| language | string | No | Response language, e.g. `zh-CN`, `en-US` |
-| currency | string | No | Currency for monetary metrics, e.g. `USD` |
-| category_id | string | No | Category ID filter |
-| shop_id | string | No | Shop ID filter |
-| creator_id | string | No | Creator ID filter |
-| product_id | string | No | Product ID filter |
-| followers_range | string | No | Creator follower range filter |
-| sortField | object | No | Sorting specification; pass `{}` for the default ranking order |
-
-**Livestream detail (`/kalodata/livestream/detail`)**:
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| livestreamId | string | Yes | Target livestream's unique ID (camelCase), e.g. `7661409374878878494`. Typically obtained from the ranking field `livestream_id` |
-| region | string | No | Market region code, e.g. `US` |
-| dateRange | string | No | Time window, e.g. `last7Day`, `last30Day` |
-| language | string | No | Response language, e.g. `zh-CN`, `en-US` |
-| currency | string | No | Currency for monetary metrics, e.g. `USD` |
-
-## 调用方式
-
-- **API 端点**：`POST /kalodata/livestream/rank`（榜单）或 `POST /kalodata/livestream/detail`（详情）（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/kalodata_livestream_search.py '<JSON 参数>' [--inline]`（榜单）或 `python scripts/kalodata_livestream_detail.py '<JSON 参数>' [--inline]`（详情）
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-livestream-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq` 或 `ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Usage Examples
-
-**1. Browse top TikTok livestreams in the US**
-```json
-{"region":"US","dateRange":"last7Day","pageSize":10,"pageNumber":1}
-```
-
-**2. Fetch one livestream's detail**
-```json
-{"livestreamId":"7661409374878878494","region":"US","dateRange":"last7Day"}
-```
-
-**3. Discovery-to-detail workflow**
-```text
-Run kalodata_livestream_search.py first, choose a row's livestream_id, then pass that value as livestreamId to kalodata_livestream_detail.py.
-```
-
-## Display Rules
-
-1. **Present data only**: Show the ranking in a clear table (livestream title, creator handle, revenue, views, duration, unit price, start/end times) and the detail as one grouped profile, without subjective business advice.
-2. **Ranking order**: The default order is `revenue` (GMV) descending; there is no explicit `rank` field — position is implied by order. Preserve it unless the user explicitly requests a supported `sortField`.
-3. **Currency awareness**: Display the requested `currency` alongside `revenue`/`unit_price` (rank) or `revenue`/`gpm` (detail).
-4. **Money as strings on RANK**: RANK `revenue` and `unit_price` are returned as **strings** (e.g. `"185590.52"`) — parse them before numeric comparison or formatting. DETAIL `revenue` is a number. Use the exact field name when extracting with `jq` / `ConvertFrom-Json`.
-5. **Viewers vs views**: Use `views` for ranking rows and `viewers` for detail rows — do not mix them.
-6. **GPM**: `gpm` is GMV per mille (detail-only) — present with appropriate precision (e.g. `903.79`), not as a percentage.
-7. **Time fields**: `livestream_start_time`/`livestream_end_time` are epoch **milliseconds**; `livestream_duration` is **seconds**. Format human-readable local times when displaying.
-8. **Time window**: Always label which `dateRange` the data covers (e.g. "last 7 days").
-9. **Pagination hint**: The ranking response has no total/page count; if a full page is returned, suggest the user can request the next page (up to `pageNumber` 5).
-10. **Single entity**: The detail is one livestream — do not present it as a ranking or leaderboard.
-
-## Important Limitations
-
-- **Ranking is not keyword search**: It browses a livestream leaderboard filtered by region/time; it does not search livestreams by keyword.
-- **Detail requires `livestreamId`**: It cannot find a livestream by title alone. Obtain `livestreamId` from the ranking field `livestream_id`.
-- **Max 5 pages, page size 5-100**: `pageNumber` is limited to 1-5; out of range returns `errcode 501, errmsg "page_number 范围为 1-5，当前: <n>"`. `pageSize` must be between 5 and 100.
-- **No total/page count**: Neither response includes `total` or page-count fields; paginate the ranking until a page returns fewer than `pageSize` items.
-- **Field names/types differ between endpoints**: DETAIL uses `viewers` (RANK uses `views`); DETAIL `revenue` is a **number** (RANK `revenue` is a **string**); DETAIL has `gpm` and lacks `unit_price` (RANK has `unit_price` and lacks `gpm`). Do not assume field names/types carry over.
-- **Data delay**: Both endpoints may have a statistical delay (T+1).
-- **Transient upstream errors**: The gateway may occasionally return `errcode 501, errmsg "调用 Kalodata 接口失败: Kalodata API HTTP 554: "` (a transient upstream Kalodata error). Retry the same parameters once or twice; do not change parameters.
-- **Unsupported sort/filter**: If a requested `sortField` is not accepted by the gateway, do NOT attempt workarounds — inform the user and fall back to the default ranking order.
-- **Use the matching Kalodata skills for non-livestream entities**: creator/product/video/shop rankings or details.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- TikTok livestream ranking or livestream detail lookup:
-
-| User Says | Scenario |
-|-----------|----------|
-| "TikTok直播排行榜", "TikTok直播排行" | Livestream ranking lookup |
-| "TikTok热销直播", "top TikTok livestreams" | Livestream leaderboard by region |
-| "近7天TikTok直播榜", "美国TikTok直播排名" | Time-windowed / region-filtered ranking |
-| "Kalodata直播榜" | Direct data source reference |
-| "TikTok直播详情", "TikTok直播数据" | Single livestream detail lookup |
-| "这场直播的观看人数", "这场直播卖了多少钱" | Viewers / revenue / GPM for a specific livestream |
-| "TikTok livestream detail", "kalodata livestream search/detail" | Direct detail/rank fetch |
-
-**Not applicable** -- Needs beyond TikTok livestreams:
-
-- TikTok creator/product/video/shop rankings or details (use the corresponding Kalodata skills)
-- A livestream's detail without a known `livestreamId` (first obtain the ID via the ranking endpoint)
-- Amazon / Shopify / 1688 / other platforms' livestream data
-- TikTok ad campaign management or content creation
-
-**Boundary judgment**: When users say "直播榜" or "直播排行" in a TikTok Shop / TikTok e-commerce context, use the ranking endpoint. When they ask about a *specific* livestream's detailed metrics (revenue, viewers, duration, GPM) and a `livestreamId` is available (or can be obtained from the ranking), use the detail endpoint.
-
-## 算力消耗规则
-
-每次调用消耗 7.0 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
----
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

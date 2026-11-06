@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: download_to_label.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_logistics_api("download_to_label", params, "download_to_label.py"), indent=2, ensure_ascii=False))
+    run_logistics_api("download_to_label", params, "download_to_label.py")
 
 
 if __name__ == "__main__":

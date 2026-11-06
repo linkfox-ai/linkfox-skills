@@ -1,99 +1,93 @@
 ---
 name: linkfox-junglescout-keyword-by-keyword
-description: Jungle Scout关键词拓展工具，根据种子关键词扩展出相关关键词列表，包含搜索量、趋势、PPC竞价、排名难度等数据，覆盖美国、英国、德国、日本等10个亚马逊站点。当用户提到关键词拓展、关键词挖掘、长尾词挖掘、相关关键词、关键词建议、拓词、PPC竞价研究、关键词竞争度、关键词发现、Jungle Scout关键词、keyword expansion, keyword discovery, keyword scout, related keywords, long-tail keywords, keyword suggestions, PPC bid research, keyword competition, seed keyword expansion, keyword mining时触发此技能。即使用户未明确提及"Jungle Scout"，只要其需求涉及从一个种子关键词出发找到更多相关关键词及其搜索量、竞争度等指标，也应触发此技能。
+description: 使用 Jungle Scout 从一个亚马逊种子关键词拓展相关词和长尾词，提供搜索量、月度与季度趋势、PPC 建议出价、相关性和排名难度，覆盖美国、英国、德国、日本等 10 个站点。适用于关键词挖掘、关键词发现、关键词建议、低竞争词筛选、PPC 竞价研究和综合关键词调研，无需明确提及 Jungle Scout。单个关键词历史搜索量、ABA 搜索排名、ASIN 反查、商品搜索、Listing 分析和非亚马逊关键词研究不适用。
 ---
 
-# Jungle Scout — 根据关键词扩展关键词信息 (Keyword by Keyword)
+# Jungle Scout 根据关键词扩展关键词信息
 
-This skill expands a seed keyword into a list of related keywords with search volume, trends, PPC bids, ranking difficulty, and other competitive metrics via the Jungle Scout data source, covering 10 Amazon marketplaces.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Jungle Scout Keyword by Keyword 工具是亚马逊关键词研究的核心工具之一，从一个**种子关键词**出发，挖掘与之相关的大量关键词及其竞争指标。主要应用场景包括：
+从种子关键词发现相关词、扩充 Listing 词库、寻找长尾机会，结合搜索需求、竞争和广告出价开展关键词研究。
 
-- **关键词拓展/发现**：输入核心词，获取数百个相关关键词，扩充 listing 关键词库
-- **长尾词挖掘**：通过 `minWordCount` 筛选 3+ 词的长尾关键词，发现低竞争高转化机会
-- **PPC 竞价研究**：查看精确/广泛匹配 PPC 出价和品牌广告出价，规划广告预算
-- **竞争度评估**：通过 `easeOfRankingScore` 和 `organicProductCount` 判断关键词排名难度
-- **趋势分析**：查看月度趋势和季度趋势百分比变化，识别增长型关键词
+**场景速查**
 
-## Data Fields
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 帮我拓展这个关键词 | 从种子词发现相关词。 |
+| 这个词有哪些相关关键词 | 相关词挖掘。 |
+| 找一些长尾词 | 按词数筛选长尾关键词。 |
+| 竞争度低的词有哪些 | 综合排名容易度和自然商品数量评估竞争。 |
+| 这个词的 PPC 出价多少 | 查看精确匹配、广泛匹配和品牌广告建议出价。 |
+| 搜索量大的相关词 | 高搜索量关键词筛选。 |
+| 德国站有什么相关词 | 非美国站关键词拓展。 |
+| 帮我做关键词调研 | 结合搜索量、趋势、相关性与竞争开展综合研究。 |
 
-### Output Fields (keywordInfoList)
+### 边界
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| 关键词 | name | 关键词名称 | yoga mat thick |
-| 站点 | country | 市场代码 | us |
-| 精确搜索量 | monthlySearchVolumeExact | 月均精确匹配搜索量 | 45000 |
-| 广泛搜索量 | monthlySearchVolumeBroad | 月均广泛匹配搜索量 | 120000 |
-| 月度趋势 | monthlyTrend | 环比月度搜索量变化百分比 | 15.3 |
-| 季度趋势 | quarterlyTrend | 环比季度搜索量变化百分比 | -5.2 |
-| 主类目 | dominantCategory | 搜索结果中占比最高的品类 | Sports & Outdoors |
-| 相关性评分 | relevancyScore | 与种子词的相关性评分 | 856 |
-| 排名难度 | easeOfRankingScore | 排名容易度评分（越高越容易） | 3 |
-| 自然商品数 | organicProductCount | 搜索结果中的自然排名商品数量 | 342 |
-| 广告商品数 | sponsoredProductCount | 搜索结果中的广告商品数量 | 28 |
-| PPC精确出价 | ppcBidExact | 精确匹配 PPC 建议出价（美元） | 1.25 |
-| PPC广泛出价 | ppcBidBroad | 广泛匹配 PPC 建议出价（美元） | 0.89 |
-| 品牌广告出价 | spBrandAdBid | Sponsored Brand 广告建议出价（美元） | 2.50 |
-| 推荐促销 | recommendedPromotions | 推荐促销赠品数量 | 150 |
-| 消耗Token | costToken | 本次调用消耗的 token 数 | 1 |
+单个关键词随时间变化的历史搜索量应使用关键词历史查询能力；ABA 搜索词排名、ASIN 反查关键词、商品搜索、Listing 分析及非亚马逊数据不在本技能范围。用户只说“关键词研究”时，根据其要拓展词表还是查看历史趋势判断。
 
-## Supported Marketplaces
+## 前置条件
 
-10 Amazon marketplaces: `us` (default), `uk`, `de`, `in`, `ca`, `fr`, `it`, `es`, `mx`, `jp`. When the user does not specify a marketplace, use `us`.
+先确定用户提供的种子词、目标市场和研究目的，按 `references/api.md` 中的站点映射、默认值和筛选约定准备查询。
 
-| 站点 | marketplace 值 | 说明 |
-|------|---------------|------|
-| 美国 | us | Amazon.com |
-| 英国 | uk | Amazon.co.uk |
-| 德国 | de | Amazon.de |
-| 印度 | in | Amazon.in |
-| 加拿大 | ca | Amazon.ca |
-| 法国 | fr | Amazon.fr |
-| 意大利 | it | Amazon.it |
-| 西班牙 | es | Amazon.es |
-| 墨西哥 | mx | Amazon.com.mx |
-| 日本 | jp | Amazon.co.jp |
+## 关键词研究流程
 
-## 调用方式
+1. 确认用户要拓词、寻找长尾机会、筛选低竞争或高需求词，还是研究 PPC 出价；保留用户种子词原意。
+2. 阅读 `references/api.md`，按目标市场映射、返回数量、排序和筛选条件构造一次查询；常见组合见“使用示例”。
+3. 先说明动态算力消耗，结合用户已授权范围确定是否继续；优先复用同一参数组合的已有结果，避免重复付费。
+4. 执行查询并保存完整数据，先查看摘要，再按需从文件提取指标；遵守接口定义中的调用限制。
+5. 用表格展示关键词与指标，再说明需求、趋势和竞争方面的发现；查询失败时根据实际错误说明原因，给出参数调整建议。
 
-- **API 端点**：`POST /tool-jungle-scout/keywords/by-keyword`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/junglescout_keyword_by_keyword.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 执行方式
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-keyword-by-keyword-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/junglescout_keyword_by_keyword.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按实际查询页数计费，具体公式见“算力消耗预估”。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 输出策略
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-keyword-by-keyword-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## How to Build Queries
+## 执行规则
 
-必填参数：`marketplace`、`searchTerms`（单个种子关键词字符串）。
+### 算力消耗预估
 
-### Principles for Building API Calls
+按动态规则计费：消耗算力 = 实际查询页数 × 63.75。
 
-1. **站点映射**：用户说"美国站"→ `us`，"日本站"→ `jp`，"德国站"→ `de`；未指定时默认 `us`
-2. **种子关键词**：原样传入用户提供的关键词（英文小写为佳），仅支持单个关键词
-3. **结果数量**：默认返回数量有限，若用户需要更多结果，设置 `needCount`
-4. **排序选择**：默认按精确搜索量降序 (`-monthly_search_volume_exact`)，根据用户意图切换排序字段
-5. **筛选过滤**：充分利用 `min/max` 参数缩小结果范围，避免返回无关低质量关键词
+本服务按倍数动态计算，单次可能消耗大量算力，必须提醒用户，由用户决定是否继续。
 
-### Common Query Scenarios
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**1. 扩展种子关键词 — 获取相关关键词列表**
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **研究概念**：关键词拓展用于扩充 Listing 词库；长尾词用于寻找更具体的需求。竞争判断结合 `easeOfRankingScore` 和 `organicProductCount`，PPC 研究结合精确、广泛和品牌广告建议出价，趋势研究结合月度和季度变化。
+- **表格优先**：核心展示列为关键词、精确搜索量、广泛搜索量、月度趋势、PPC 精确出价和排名难度。PPC 研究侧重出价列，拓词侧重搜索量和趋势，按用户目的裁剪。
+- **趋势标注**：月度和季度趋势为正值时标注上升 ↑，负值标注下降 ↓；不将月均估算口径解释为实时搜索数据，数据范围见接口定义。
+- **难度解读**：`easeOfRankingScore` 越高越容易排名，1–3 为困难、4–6 为中等、7–10 为容易；避免将容易度高误读为竞争更激烈。
+- **补充洞察**：表格后简述高搜索量词的主类目分布、长尾词竞争优势和增长词，依据实际返回指标形成结论。
+- **错误和空结果**：按 `references/api.md` 解释返回情况，保留原始错误信息；不凭空补造关键词或未返回指标。
+
+## 使用示例
+
+### 扩展种子关键词 — 获取相关关键词列表
+
 ```json
 {
   "marketplace": "us",
@@ -101,7 +95,8 @@ Jungle Scout Keyword by Keyword 工具是亚马逊关键词研究的核心工具
 }
 ```
 
-**2. 挖掘长尾关键词（3+ 词）**
+### 挖掘长尾关键词（3+ 词）
+
 ```json
 {
   "marketplace": "us",
@@ -111,7 +106,8 @@ Jungle Scout Keyword by Keyword 工具是亚马逊关键词研究的核心工具
 }
 ```
 
-**3. 低竞争关键词发现**
+### 低竞争关键词发现
+
 ```json
 {
   "marketplace": "us",
@@ -122,7 +118,8 @@ Jungle Scout Keyword by Keyword 工具是亚马逊关键词研究的核心工具
 }
 ```
 
-**4. 高搜索量关键词筛选**
+### 高搜索量关键词筛选
+
 ```json
 {
   "marketplace": "us",
@@ -133,7 +130,8 @@ Jungle Scout Keyword by Keyword 工具是亚马逊关键词研究的核心工具
 }
 ```
 
-**5. PPC 竞价研究 — 按广泛出价排序**
+### PPC 竞价研究 — 按广泛出价排序
+
 ```json
 {
   "marketplace": "us",
@@ -144,7 +142,8 @@ Jungle Scout Keyword by Keyword 工具是亚马逊关键词研究的核心工具
 }
 ```
 
-**6. 德国站广泛搜索量关键词**
+### 德国站广泛搜索量关键词
+
 ```json
 {
   "marketplace": "de",
@@ -154,62 +153,10 @@ Jungle Scout Keyword by Keyword 工具是亚马逊关键词研究的核心工具
 }
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **表格优先**：以表格展示关键词列表，核心列包括：关键词、精确搜索量、广泛搜索量、月度趋势、PPC精确出价、排名难度
-2. **按需裁剪列**：根据用户意图决定展示列——PPC研究场景侧重出价列，拓词场景侧重搜索量和趋势
-3. **趋势标注**：月度趋势和季度趋势为正值标注上升↑，负值标注下降↓
-4. **排名难度解读**：`easeOfRankingScore` 1-3 为困难，4-6 为中等，7-10 为容易
-5. **数据洞察**：在表格后提供简要总结，如高搜索量词集中在哪个类目、长尾词的竞争优势等
-6. **Error handling**: When a query fails, explain the reason based on the error response and suggest adjusting parameters
-
-## Important Limitations
-
-- **单次单关键词**：`searchTerms` 仅接受一个种子关键词，多关键词需拆分多次调用
-- **数据周期**：搜索量为月均估算值，非实时数据
-- **站点限制**：仅覆盖 10 个亚马逊站点，不含澳大利亚、荷兰等
-- **排序字段固定**：仅支持预定义的排序字段，不支持自定义组合排序
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — 关键词拓展与竞争分析：
-
-| User Says | Scenario |
-|-----------|----------|
-| "帮我拓展这个关键词" | 种子词扩展 |
-| "这个词有哪些相关关键词" | 相关词挖掘 |
-| "找一些长尾词" | 长尾关键词筛选（minWordCount ≥ 3） |
-| "竞争度低的词有哪些" | 低竞争关键词（排名难度 + 商品数量筛选） |
-| "这个词的PPC出价多少" | PPC 竞价数据查询 |
-| "搜索量大的相关词" | 高搜索量关键词筛选 |
-| "德国站有什么相关词" | 非美国站关键词拓展 |
-| "帮我做关键词调研" | 综合关键词研究 |
-
-**Not applicable** — 超出关键词拓展范围：
-- 关键词历史搜索量趋势（需要 keyword-history 工具）
-- ABA 搜索词排名（需要 ABA 工具）
-- 商品搜索或 listing 分析
-- 非亚马逊平台的关键词数据
-- ASIN 反查关键词
-
-**Boundary judgment**: When users say "关键词", "拓词", or "关键词研究", if they want to expand a seed keyword into a list of related keywords with metrics, this skill applies. If they want to see a single keyword's historical search volume trend over time, use the keyword-history skill instead.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 实际查询页数 × 63.75。
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

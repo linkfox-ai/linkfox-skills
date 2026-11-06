@@ -24,11 +24,15 @@ Partner Platform for US 菜单：**Promotion**（`menu_code=873ac072a78249c893e5
 
 ## 通用脚本
 
+| 脚本 | 说明 |
+|------|------|
 | `temu_us_proxy.py` | 任意 type |
 | `temu_us_file_download.py` | 加签下载 |
 
 ## 相关 skill
 
+| 场景 | 技能 |
+|------|------|
 | 促销 | **`linkfox-temu-promotion-us`** |
 | 商品 | `linkfox-temu-manage-product-us` |
 | 价格 | `linkfox-temu-price-us` |
@@ -36,3 +40,7 @@ Partner Platform for US 菜单：**Promotion**（`menu_code=873ac072a78249c893e5
 | 全球站促销 | `linkfox-temu-promotion-global` |
 
 Token：**`tokenPurpose=product-inventory`**。
+
+## 后续接口接入维护约定
+
+只在用户提供新的 Partner type、sub_menu_code、接口文档 URL 及完整请求/响应表后扩展接口。每项操作维护独立 references/apis/<type-slug>.md，完整展开字段层级；专用 scripts/us_promotion_<slug>.py 复用 _us_promotion_script.run_cli。同步更新本目录、apis/README.md 与 SKILL.md 接口清单，不以通用透传能力代替新接口文档。

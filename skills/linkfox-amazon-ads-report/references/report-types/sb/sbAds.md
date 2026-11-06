@@ -14,27 +14,27 @@ dateRange:
   dataRetentionDays: 60
 ---
 
-# SB Ads
+# SB 广告
 
-Advertised product reports contain performance data for campaigns at the ad level.
+此报告在广告层级展示活动效果。
 
-> **Note**
-> This report is currently available in preview. During the preview period, data related to Sponsored Brands campaigns with flag isMultiAdGroupsEnabled set to FALSE won't be available. Once version 3 reporting supports all Sponsored Brands campaigns, we will announce general availability in the release notes.
+> **说明**
+> 报告预览期不提供 `isMultiAdGroupsEnabled=False` 的 SB 活动数据。v3 报告支持全部 SB 活动的正式可用状态以 Amazon 版本说明为准，不能假定此限制已解除。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sbAds |
-| Maximum date range | 31 days |
-| Data retention | 60 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 60 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | ads |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | addToCart |
 | addToCartClicks |
@@ -100,32 +100,39 @@ Advertised product reports contain performance data for campaigns at the ad leve
 | viewabilityRate |
 | viewableImpressions |
 
-## Group by ads
+## 分组：ads
 
-**Additional metrics**: N/A
+无附加指标。
 
-**Filters**:
-- adStatus (values: ENABLED, PAUSED, ARCHIVED)
+**筛选**：
 
-## Sample call
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| adStatus | array[string] | ENABLED, PAUSED, ARCHIVED |
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxxx' \
---data '{
-    "name":"SB advertised product report 9/5-9/10",
-    "startDate":"2023-09-05",
-    "endDate":"2023-09-10",
-    "configuration":{
-        "adProduct":"SPONSORED_BRANDS",
-        "groupBy":["ads"],
-        "columns":["impressions","clicks","cost","campaignId","adId","adGroupId"],
-        "reportTypeId":"sbAds",
-        "timeUnit":"SUMMARY",
-        "format":"GZIP_JSON"
-    }
-}'
+## 配置示例
+
+```json
+{
+  "name": "SB advertised product report 9/5-9/10",
+  "startDate": "2023-09-05",
+  "endDate": "2023-09-10",
+  "configuration": {
+    "adProduct": "SPONSORED_BRANDS",
+    "groupBy": [
+      "ads"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "adId",
+      "adGroupId"
+    ],
+    "reportTypeId": "sbAds",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

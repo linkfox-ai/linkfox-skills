@@ -1,61 +1,85 @@
-# 获取区域可用物流商 — `bg.logistics.companies.get`
+# Temu 欧洲站 获取区域可用物流商 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/eu_self_fulfilled_logistics_companies_get.py` |
-| **Partner 文档** | https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896（按 `type` 在 Partner EU 后台打开） ||
-| **网关** | `POST /temu/proxy`，`type`=`bg.logistics.companies.get`，业务载荷放在 Body 的 `params` |
+[接口导航](../api.md)；[授权与脚本兼容约定](../api.md#运行约定)。
 
-**Description:** Obtain full logistics providers that support shipping at the corresponding region（获取指定区域下支持发货的全部物流服务商列表）。
+## 公共规则
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 `request`。建议使用 **`tokenPurpose=order-shipping`**。自发货确认物流、创建运单前，通常需先调用本接口取得 `logisticsServiceProviderId` 等。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Request 结构（官方顶层）
+### 响应码基本规则
 
-```text
-params
-└── request (OBJECT, 选填)
-    └── regionId              ← 必填
-```
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-### `request` 内字段
+## 接口：获取区域可用物流商（bg.logistics.companies.get）
+
+> 官方：[Partner EU 文档](https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| regionId | INTEGER | **是** | Region ID（区域 ID）。完整编码表见 Partner 文档：[regionId 编码说明](https://partner.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896)。欧洲站常用示例：**211**（USA，与 `linkfox-temu-order-eu` 订单接口一致）。 |
+| site | string | 是 | 本技能默认 `eu`；必须匹配店铺令牌所属站点。 |
+| managementType | string | 是 | 本技能默认 `semi-managed`；合作仓仅支持半托管。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；与 LinkFox API Key 不同。脚本调用网关前解析本地选店并填入此字段。 |
+| storeKey | string | 与 accessToken 二选一 | 本地令牌库中的店铺键，指向 `~/.linkfox/temu-access-tokens.json`；当前脚本在本地读取并转换为 `accessToken`，不发送此字段。 |
+| tokenPurpose | string | 否 | 建议 `order-shipping`；脚本用于本地令牌选择，不发送至网关。 |
+| type | string | 是 | 当前操作的 Temu 接口标识，见本接口说明。 |
+| params | object | 否 | Temu 业务参数；通常使用下方 `request` 对象。 |
+
+本操作的 `type` 固定为 `bg.logistics.companies.get`。脚本：`scripts/eu_self_fulfilled_logistics_companies_get.py`（相对技能根目录）。
+
+#### params 业务对象
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| request | OBJECT | 否（请求表标注） | 业务请求对象；其子字段、条件必填与特殊约定见下文。业务请求以各子字段要求为准。 |
+
+#### 业务前提与限制
+
+（获取指定区域下支持发货的全部物流服务商列表）。
+
+
+#### `request` 内字段
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| regionId | INTEGER | **是** | Region ID（区域 ID）。完整编码表见 Partner 文档：[regionId 编码说明](https://partner.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896)。示例 **211** 表示 USA；这不是欧洲站通用默认值，须从实际订单确认目的地区域。 |
 
 > 官方表将顶层 **`request`** 标为选填（False），但 **`request.regionId`** 为必填；实际调用时**应始终传入 `request` 且包含 `regionId`**，否则无法按区域筛选物流商。
 
-### 网关 `params` 写法
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "regionId": 211
-  }
-}
-```
+#### 网关与脚本响应
 
----
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 若返回此字段，按公共规则判断，不将 `0` 或 `false` 视为空。 |
+| errmsg | string | 若返回此字段，为网关消息；保留原文。 |
+| body | string | Temu 原始 JSON 字符串；先判断网关状态，再解析业务内容。 |
+| code | integer | 网关错误码：`1002` 为参数或 Token 无效，`1003` 为转发失败；不可当作 Temu 错误码。 |
+| temuBody | object / array / scalar | 脚本在 `body` 可解析为 JSON 时增加的字段，完整保留原 `body`；不可解析时不增加。 |
+| _http_status | integer / null | 仅脚本附加的本次 HTTP 状态码，不是网关字段；连接失败无 HTTP 响应时为 `null`，错误原因仍保留在 `error`。大响应摘要也展示该状态。 |
 
-## Response（Temu `body` 解析后）
+网关正常响应后，解析 `body`；若存在 `response` 包装则读取其业务对象。以下为 Temu 业务字段，不能替代外层 HTTP 与 `errcode` 判断。
 
-```text
-response
-├── success          ← 请求级是否成功
-├── errorCode
-├── errorMsg
-└── result[]         ← 物流服务商列表（OBJECT 数组）
-    ├── logisticsServiceProviderId
-    ├── logisticsServiceProviderName
-    └── logisticsBrandName
-```
-
-### 顶层字段
+#### 顶层字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -64,51 +88,61 @@ response
 | errorMsg | STRING | error message（错误信息） |
 | result | OBJECT[] | 该区域下支持发货的物流服务商列表；无数据时可能为空数组 `[]` |
 
-### `result[]` 元素字段
+#### `result[]` 元素字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | logisticsServiceProviderId | INTEGER | logistics Service Provider Id（物流服务商 ID；后续发货/创建运单等接口常作为承运商标识入参） |
 | logisticsServiceProviderName | STRING | logistics Service Provider Name（物流服务商名称） |
-| logisticsBrandName | STRING | logistics Brand Name（物流品牌名称；Partner 原文描述为 “logistics Service Provider Name”，与 `logisticsServiceProviderName` 字段区分，以实际返回为准） |
+| logisticsBrandName | STRING | logistics Brand Name（物流品牌名称；Partner 描述为 “logistics Service Provider Name”，与 `logisticsServiceProviderName` 字段区分，以实际返回为准） |
 
 > 调用成功时先判断 **`response.success === true`**，再遍历 **`result`** 选用 `logisticsServiceProviderId` / `logisticsServiceProviderName`。`errorCode` / `errorMsg` 非空或 `success === false` 时以错误信息为准。
 
----
+### 响应码规则
 
-## 示例
+#### 基础规则
 
-```bash
-export LINKFOXAGENT_API_KEY="<key>"
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-# 专用脚本（欧洲站 regionId=211）
-python scripts/eu_self_fulfilled_logistics_companies_get.py '{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "regionId": 211
-  }
-}'
-```
+#### 业务规则
+
+网关正常后，判断 Temu 的 `success`、`errorCode`、`errorMsg` 与各项业务状态；`success=true` 不代表异步履约或审核已最终完成。业务错误保留原文，不自动重试写入。
+
+### curl 示例
 
 ```bash
-# 通用代理（等价）
-python scripts/temu_eu_proxy.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '
+{
+  "site": "eu",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
   "type": "bg.logistics.companies.get",
   "params": {
     "request": {
       "regionId": 211
     }
   }
-}'
+}
+'
 ```
 
----
+## Feedback
 
-## 典型用法
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
-1. 从订单接口（如 `bg.order.detail.v2.get`）或业务上下文确认 **`regionId`**（欧洲站多为 **211**）。
-2. 调用本接口获取该区域可用 **`logisticsServiceProviderId`** 列表。
-3. 用户或后续脚本选择承运商后，再调用自发货相关创建运单 / 确认发货等接口（待接入）。
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-fulfillment-eu",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

@@ -10,17 +10,13 @@ GET `externalFulfillment/2024-09-11/shipments`
 
 from __future__ import annotations
 
-import sys
 
 from _spapi_ef_common import (
     PATH_SHIPMENTS,
     build_query,
-    developer_proxy_call,
-    emit_result,
+    run_proxy,
     ensure_auth_skill_available,
-    lf_inline_flag,
     load_params_or_exit,
-    merge_json_body,
     require_fields,
 )
 
@@ -48,16 +44,7 @@ def main() -> None:
             ("paginationToken", params.get("paginationToken")),
         ]
     )
-    proxy = developer_proxy_call(
-        str(params["region"]),
-        PATH_SHIPMENTS,
-        "GET",
-        str(params["sellerId"]),
-        query_string=qs,
-    )
-    out = {"developerProxy": proxy, "resolvedPath": PATH_SHIPMENTS, "queryString": qs}
-    merge_json_body(out, proxy, "shipments")
-    emit_result(out, inline=lf_inline_flag())
+    run_proxy(str(params['region']), PATH_SHIPMENTS, 'GET', str(params['sellerId']), query_string=qs, result_field='shipments', operation='get_shipments', output_fields={'queryString': qs})
 
 
 if __name__ == "__main__":

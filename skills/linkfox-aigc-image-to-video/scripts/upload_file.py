@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read a file or download a source URL, then use the official Base64 upload entry."""
+"""读取本地素材或下载外部 URL，在进程内编码后通过公共入口上传。"""
 import base64
 import importlib.util
 import json
@@ -67,6 +67,9 @@ def read_source(params):
 
 
 def main():
+    if "--help" in sys.argv[1:] or "-h" in sys.argv[1:]:
+        print("用法：upload_file.py '<JSON：filePath 或 url，可选 fileName>' [--inline]")
+        return
     if len(sys.argv) < 2:
         raise SystemExit("Usage: upload_file.py '<JSON with filePath or url>' [--inline]")
     try:
@@ -84,10 +87,14 @@ def main():
     payload = {"fileName": name, "base64": base64.b64encode(content).decode("ascii")}
     inline = "--inline" in sys.argv[2:]
     # File bytes stay in this process, outside the OS command line and request files.
-    sys.argv = [str(entry), json.dumps(payload, ensure_ascii=False), "--no-cache"]
-    if inline:
-        sys.argv.append("--inline")
-    module.main()
+    previous = sys.argv
+    try:
+        sys.argv = [str(entry), json.dumps(payload, ensure_ascii=False), "--no-cache"]
+        if inline:
+            sys.argv.append("--inline")
+        module.main()
+    finally:
+        sys.argv = previous
 
 
 if __name__ == "__main__":

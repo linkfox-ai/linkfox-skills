@@ -6,13 +6,15 @@ Temu **没有** LinkFox 侧自动 OAuth；`accessToken` 须在 Temu 卖家后台
 
 | 令牌 | 用途 | 获取方式 |
 |------|------|----------|
-| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token`；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理） |
+| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token` / `linkfoxToken` / `linkfox_token`（完整优先级见 [api.md](api.md)）；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理） |
 | **Temu accessToken** | Temu 业务 API（经紫鸟转发） | Temu 卖家后台授权后复制 |
 
 ```bash
 export LINKFOXAGENT_API_KEY="<your-key>"
 python scripts/check_linkfox_token.py
 ```
+
+上述检查仅在需要诊断时执行，会发送一次代理探测请求；不作为每次促销操作的自动前置步骤。网关参数错误不代表 Temu 店铺授权有效。
 
 ## tokenPurpose 与场景
 

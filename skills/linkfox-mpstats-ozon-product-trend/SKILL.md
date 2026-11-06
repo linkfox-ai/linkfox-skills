@@ -1,143 +1,111 @@
 ---
 name: linkfox-mpstats-ozon-product-trend
-description: MPSTATS Ozon 俄罗斯站单个 SKU 的分日时间序列表现。按日期粒度返回一个 Ozon 商品的销量、价格、库存、评分等指标，可选附带搜索位次/可见性数据，用于验证增长趋势、季节性、异常波动。当用户提到 Ozon 趋势、Ozon 销量趋势、Ozon 价格走势、Ozon 分日数据、Ozon 库存走势、Ozon 搜索位次、Ozon 商品历史、MPSTATS trend, Ozon daily performance, Ozon time series, Ozon search visibility, Russian marketplace product history 时触发此技能。即使用户未明确说"MPSTATS"，只要意图是看某个 Ozon 商品的分日/时间段走势，也应触发此技能。
+description: 查询 MPSTATS Ozon 俄罗斯站单个商品的分日销量、价格、库存、评分和评论走势，可选查询搜索位次与可见性，用于判断增长、季节性、断货和异常波动。用户希望查看某个 Ozon 商品随时间变化时使用，无需明确提及 MPSTATS。不适用于多商品期间汇总、品牌/类目/卖家筛选、商品发现或其他平台。
 ---
 
-# MPSTATS Ozon Product Trend (Daily Time-Series)
+# MPSTATS Ozon 商品趋势（分日）
 
-This skill returns a daily time-series of a single Ozon (Russia) SKU — sales units, price, stock, rating, and optionally search-position / visibility metrics. It is the go-to for validating growth, seasonality, or anomalies for a specific product.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Single-SKU scope**: Each call analyzes exactly **one** `productId`. For batch per-SKU snapshots (period aggregates), use `mpstats-ozon-product-detail` instead.
+查看单个 Ozon 商品在指定时间段内的逐日表现，解释增长、波动、季节性和库存变化。
 
-**Daily granularity**: The response is an array of daily points (top-level field `data`) across the `[startDate, endDate]` window. Each point carries a `hasData` boolean — if `hasData=false`, the day has no observation (distinct from `sales=0` with `hasData=true`).
+**场景速查**
 
-**T-1 delay**: MPSTATS trend data is delayed by one day; the latest selectable end date is **yesterday**. Today or future dates are rejected.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 看这个 Ozon 商品上个月的销量走势 | 月度分日序列。 |
+| 这个商品有季节性还是表现稳定 | 结合覆盖时间观察季节性和稳定程度。 |
+| 最近有没有断货 | 核对有观测日期的库存变化。 |
+| 看这个商品第一季度的价格变化 | 价格走势。 |
+| 搜索排名有没有改善 | 查看实际返回的搜索可见性信息。 |
 
-**Search-visibility add-on**: Set `includeSearchStats: true` to append search-position / visibility signals. Some niches (especially small categories) may not have search-stats coverage — expect partial or empty fields in those cases.
+### 边界
 
-## Parameters
+多商品期间汇总使用 MPSTATS Ozon 商品详情技能；按品牌、类目或卖家筛选使用对应商品列表技能；尚未确定商品时先使用 MPSTATS Ozon 商品搜索技能。本技能不覆盖 Wildberries 或其他平台。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| productId | integer | yes | Ozon SKU (numeric) |
-| startDate | string | no | Window start, `YYYY-MM-DD`; latest = yesterday |
-| endDate | string | no | Window end, `YYYY-MM-DD`; latest = yesterday |
-| includeFbs | boolean | no | Include FBS data alongside FBO |
-| includeSearchStats | boolean | no | Attach search position / visibility signals |
+## 前置条件
 
-## 调用方式
+**先确定商品和观察区间**：取得用户提供或上游发现的 Ozon SKU，明确要观察的时间范围与指标。调用前阅读 `references/api.md`，核对日期、可选数据及接口限制。
 
-- **API 端点**：`POST /mpstats/ozon/productTrend`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/mpstats_ozon_product_trend.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 查询与分析流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-product-trend-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 明确用户要观察的商品、时间段和问题；商品可以来自关键词搜索，也可以来自品牌、类目或卖家商品列表。
+2. 按接口定义核对请求，估算调用次数与算力；优先复用同一参数的本地缓存，避免重复查询。
+3. 取得分日序列后，先核对实际时间覆盖和缺失情况，再分析销量、价格、库存及评分变化。期间汇总适合概览，本技能用来解释其背后的逐日形态。
+4. 展示表格或简洁趋势图，标注缺失、峰值和连续库存为零的日期；需要进一步查询时遵守成本约束。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 执行方式
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/mpstats_ozon_product_trend.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按下方算力规则计费。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## Usage Examples
+### 输出策略
 
-**1. Monthly trend for a SKU**
-```json
-{
-  "productId": 1786874757,
-  "startDate": "2025-03-01",
-  "endDate": "2025-03-31"
-}
-```
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-product-trend-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**2. Trend with search visibility**
-```json
-{
-  "productId": 1786874757,
-  "startDate": "2025-02-01",
-  "endDate": "2025-02-28",
-  "includeSearchStats": true
-}
-```
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**3. Combined FBO+FBS trend**
-```json
-{
-  "productId": 151623766,
-  "startDate": "2025-01-01",
-  "endDate": "2025-01-31",
-  "includeFbs": true
-}
-```
+## 执行规则
 
-## How to Chain with Other Ozon Skills
+### 算力消耗预估
 
-1. **Discovery → trend**: Use `mpstats-ozon-product-search` to find a SKU, then check growth / volatility here before committing.
-2. **Aggregate vs time-series**: `mpstats-ozon-product-detail` gives a one-number-per-metric period view; this skill shows the day-by-day shape behind those numbers.
-3. **Drill-down → trend**: After `brand-products` / `category-products` / `seller-products` surfaces a hot SKU, use this skill to validate whether the hotness is recent, seasonal, or sustained.
+按动态规则计费：消耗算力 = 12；列表为空返回 0 （限时）。
 
-## Display Rules
+本技能服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
 
-1. **Prefer a simple table or sparkline-friendly output** — one row per date with `date`, `price`, `sales`, `balance`, `rating`, `comments`; do not overfit a 90-point series into a single paragraph.
-2. **Use `hasData` to distinguish gaps from zero sales** — `hasData=false` means the day has no observation; don't report it as a zero-sale day.
-3. **Call out anomalies** — large single-day spikes or stockouts (`balance=0` runs where `hasData=true`) should be flagged factually, not as buying advice.
-4. **Currency is RUB** unless upstream layer is already converting (the `currency` field per point carries the symbol, e.g. `₽`); state the currency when showing price movement.
-5. **Revenue is not returned per day** — if the user asks for daily revenue, estimate via `sales * price` and note it's an estimate.
-6. **`includeSearchStats` gaps** — when no search-visibility fields come back, note "搜索位次数据在该赛道暂不可用" rather than silently omitting.
-7. **No business advice** — present the shape; leave "should we buy this listing?" to the user.
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## Important Limitations
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-- **Single SKU per call** — cannot pass a list of `productId`s; loop at the Agent layer if needed.
-- **T-1 data** — `endDate` cannot be today or a future date.
-- **Search stats optional** — `includeSearchStats=true` doesn't guarantee coverage for all niches.
-- **Ozon-only** — Wildberries and other Russian marketplaces are not covered.
-- **Missing days** — the series may have nulls / gaps where no data was captured; do not treat nulls as zero sales.
+### 解决认证和算力问题
 
-## User Expression & Scenario Quick Reference
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**Applicable** — Single-SKU temporal analysis:
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-| User Says | Scenario |
-|-----------|----------|
-| "What's the sales trend of Ozon SKU 1786874757 last month" | Monthly time-series |
-| "Is this Ozon listing seasonal or stable" | Seasonality check |
-| "Did this Ozon product have stockouts recently" | Stock anomaly detection |
-| "Price walk for this Ozon product over Q1" | Price movement |
-| "Did this listing's search position improve" | Search visibility (requires `includeSearchStats`) |
+### 约束与建议
 
-**Not applicable** — Needs beyond single-SKU time-series:
+- **分日展示**：每行一个日期，优先展示 `date`、`price`、`sales`、`balance`、`rating`、`comments`；较长序列用表格或简洁趋势图，不把大量日期挤在一段文字里。
+- **缺失不等于零**：`hasData=false`、null 和序列缺口表示缺少观测；只有 `hasData=true` 且 `sales=0` 才能描述为有观测的零销量。
+- **客观标注异常**：指出单日销量尖峰及有观测日期中连续 `balance=0` 的情况；库存与销量是不同指标，不用库存变化替代销量。
+- **标明币种**：默认按 RUB（卢布）理解价格，展示时使用每日 `currency` 符号；上游已换汇时说明实际币种。
+- **销售额估算**：用户要求每日销售额时，用 `sales × price` 估算并明确标注，缺失日不补零或推算。
+- **搜索数据缺口**：已设置 `includeSearchStats=true` 却没有返回搜索可见性信息时，说明“本次未返回搜索位次数据，可能是该赛道暂不覆盖”，不补造字段或排名；未启用该选项时，不据此判断赛道覆盖情况。
+- **只解释数据**：展示增长、季节性、波动和异常，不据此给出采购或投资建议；是否开发该商品由用户决定。
+- **解释结果**：正常响应与业务异常按接口定义判断；空序列表示本次无可用数据，不自动扩大时间范围或轮询。CLI 的缓存开关及存储约定见 `references/api.md`。
 
-- Batch snapshot of many SKUs → `mpstats-ozon-product-detail`
-- Brand / category / seller drill-down → matching `*-products` skill
-- Pre-IDed discovery → `mpstats-ozon-product-search`
+## 使用示例
 
-**Boundary judgment**: Use this skill when the question starts with "how did this ONE product change over time". For multi-SKU comparisons or dimension-level filtering, go elsewhere.
+### 查看月度销量趋势
 
-## 算力消耗规则
+用户：看看这个 Ozon 商品上个月每天的销量。
 
-按动态规则计费：消耗算力 = 12。列表为空返回 0
+确认商品和月份，查询后展示逐日销量、价格及数据缺口。
 
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+### 检查搜索可见性
 
-**Feedback:**
+用户：这个商品最近的搜索位置有没有改善？
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+按接口定义启用可选搜索数据，仅解释实际返回的可见性信息；数据缺失时说明覆盖情况。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 同时观察 FBO 与 FBS
+
+用户：把 FBS 也纳入这个商品的走势。
+
+按接口定义选择配送数据范围，保留返回序列中的库存含义，不将其解释成未返回的 FBS 独立库存。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

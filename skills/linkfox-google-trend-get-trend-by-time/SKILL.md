@@ -1,141 +1,121 @@
 ---
 name: linkfox-google-trend-get-trend-by-time
-description: 查询并分析Google Trends在指定时间范围和国家/地区的实时热门话题与热搜。当用户提到谷歌趋势、热门话题、实时热搜、流行趋势、当前热点、近期热门、病毒式话题、时间段热度、区域趋势分析、Google Trends, real-time hot topics, trending topics, popular trends, recent trending searches, trend discovery时触发此技能。即使用户未明确说"Google Trends"，只要其需求涉及发现特定市场近期热门或正在流行的话题和搜索词，也应触发此技能。
+description: 查询并分析 Google Trends 在指定近期时间范围和国家或地区的实时热门话题、热搜词、相对搜索量和热度涨幅。适用于当前热点、最近一天或一周热门搜索、区域趋势和爆发话题发现，无需明确提及 Google Trends。不适用于长期历史关键词分析、亚马逊关键词或 ASIN 分析、广告管理、社交平台趋势、SEO 排名、反向链接、竞品网站流量或股票走势研究。
 ---
 
-# Google Trends Time-Range Analysis
+# Google Trends 时下流行趋势分析
 
-This skill guides you on how to query and analyze Google Trends data for trending topics within a configurable time window, helping users discover real-time popular searches and emerging trends across 18 supported regions.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Google Trends reflects real user search interest on Google. This tool retrieves **trending topics** (recently popular queries) for a chosen country/region over a specified number of recent days. It is ideal for spotting what is currently gaining traction in a market.
+发现特定市场近期在 Google 上流行的搜索词，了解热门话题与新兴趋势。用户说“市场趋势”或“最近流行什么”时，若实际意图是了解某地区当前的 Google 搜索热点，使用本技能。
 
-**Key data points per trending query**:
-- **query** -- the trending search term
-- **searchVolume** -- relative search volume value
-- **increasePercentage** -- percentage change in search interest (-100 to 100, unit: %)
-- **startTime / endTime** -- timestamps bounding the trend observation window
+**场景速查**
 
-A positive `increasePercentage` means rising interest; a negative value means declining interest. A value near 100 signals an explosive spike.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 现在有哪些热门话题 | 实时热门搜索概览。 |
+| 某个国家最近有哪些热搜 | 区域热门话题发现。 |
+| 本周大家都在搜什么 | 一周热门搜索概览。 |
+| 这个市场有什么突然爆火的话题 | 热度激增与新兴话题发现。 |
+| 看一下某地区的 Google Trends | 指定地区趋势查询。 |
+| 过去 24 小时有什么热点 | 短时间窗口热点扫描。 |
 
-## Parameter Guide
+### 边界
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| days | integer | No | 7 | Time range in days. Common values: 1 (last 24 hours), 2, 7 (past week) |
-| region | string | No | US | Country/region code. See Supported Regions below |
+长期历史关键词搜索量分析使用专门的 Google Trends 历史工具；亚马逊关键词或 ASIN 分析使用 ABA 等对应数据工具。股票走势、社交平台热度、广告管理、SEO 排名、反向链接和竞品网站流量研究不属于本技能范围。
 
-### Supported Regions
+## 前置条件
 
-US (United States), GB (United Kingdom), JP (Japan), CA (Canada), MX (Mexico), DE (Germany), FR (France), IT (Italy), ES (Spain), NL (Netherlands), AU (Australia), SG (Singapore), AE (United Arab Emirates), BR (Brazil), IN (India), TR (Turkey), PL (Poland), SE (Sweden)
+确定用户要查询的市场和近期时间窗口；未指定时采用接口默认值。支持地区、默认值及时间参数约定见 `references/api.md`。
 
-Default region is **US**. Use US when the user does not specify a region.
+## 趋势查询流程
 
-## 调用方式
+1. 确认需求属于 Google 近期热门话题发现，依据 `references/api.md` 准备查询条件。
+2. 查询前检查同一参数组合是否已有可复用结果，按成本约束执行一次查询。
+3. 先查看摘要，再从保存的响应按需提取趋势或图表数据，进行筛选和排序。
+4. 展示热门搜索与显著涨幅，说明地区及观察窗口。失败时根据接口参考解释原因，可建议调整地区或时间范围，后续查询遵守成本约束。
 
-- **API 端点**：`POST /googleTrend/getTrendByTime`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/google_trends_rising.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 执行方式
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-google-trend-get-trend-by-time-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/google_trends_rising.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口调用消耗 6 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换地区或时间范围连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 输出策略
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-google-trend-get-trend-by-time-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Usage Examples
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**1. What's trending in the US over the past week?**
+## 执行规则
+
+### 算力消耗预估
+
+6 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解趋势含义**：Google Trends 反映真实用户在 Google 上的搜索兴趣。本技能关注最近流行的搜索话题；搜索量是相对数值，不能解释为绝对搜索次数。
+- **清晰展示数据**：用表格展示搜索词、相对搜索量和涨幅，按用户目标选择搜索量或涨幅排序。
+- **突出热度变化**：正涨幅表示兴趣上升，负值表示下降；接近 100 的涨幅表示显著激增。对超过 50% 等明显上涨的话题加以标注。
+- **注明时间与地区**：在摘要中说明查询市场和时间范围，并结合返回的观察起止时间解释结果。
+- **解释图表**：响应包含 `chartOption` 时，说明图表标题、横纵轴和数据点代表的趋势。
+- **分析已保存的数据**：从本地响应的 `chartOption.data` 按需筛选或排序。`_dataQuery_executeDynamicQuery` 查询 SLS 中的 LinkFox 会话数据，不是通用 JSON 文件读取器；没有受支持的存储映射时，不得直接将该响应交给它。
+- **处理失败与空结果**：依据实际响应说明情况，保留已取得的数据，不虚构热点；参数调整建议不代表自动执行下一次收费查询。
+
+## 使用示例
+
+### 美国过去一周的热门搜索
+
 ```json
 {"days": 7, "region": "US"}
 ```
 
-**2. Hot topics in Japan in the last 24 hours**
+### 日本过去 24 小时的热门话题
+
 ```json
 {"days": 1, "region": "JP"}
 ```
 
-**3. Trending searches in Germany over the past 2 days**
+### 德国最近两天的热搜
+
 ```json
 {"days": 2, "region": "DE"}
 ```
 
-**4. Recent buzz in Brazil this week**
+### 巴西本周的热门话题
+
 ```json
 {"days": 7, "region": "BR"}
 ```
 
-**5. What's gaining popularity in the UK right now?**
+### 英国当前的流行搜索
+
 ```json
 {"days": 1, "region": "GB"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data clearly**: Show trending queries in a well-formatted table with columns for query, search volume, and increase percentage. Sort by search volume or increase percentage as appropriate.
-2. **Highlight spikes**: When `increasePercentage` is notably high (e.g., above 50%), call attention to these breakout topics.
-3. **Time context**: Always state the time range and region in your summary so the user knows exactly what window the data covers.
-4. **Chart data**: If the response includes `chartOption`, describe the chart structure (title, axes, data points) so the user understands the visual trend.
-5. **Error handling**: When a query fails, explain the reason based on the error response and suggest adjusting parameters (e.g., try a different region code or time range).
-## Important Limitations
-
-- **Data analysis**: The response is JSON. Read `chartOption.data` from the saved response to filter or sort the returned rows. `_dataQuery_executeDynamicQuery` queries Linkfox session data stored in SLS; it is not a general JSON-file reader, so do not pass this response to it without a supported stored-data mapping.
-- **Relative volumes**: Search volume values are relative, not absolute counts.
-- **Short time windows**: The `days` parameter controls recency; this tool is designed for recent/real-time trends, not long historical analysis.
-- **Region coverage**: Only the 18 listed regions are supported. Unsupported region codes will produce errors.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Queries about trending/popular topics on Google:
-
-| User Says | Scenario |
-|-----------|----------|
-| "What's trending right now" | Real-time trending topics |
-| "Hot searches in [country]" | Regional trend discovery |
-| "What topics are popular this week" | Weekly popularity overview |
-| "Any viral topics in [market]" | Breakout / spike detection |
-| "Show me Google Trends for [region]" | Region-specific trend query |
-| "What's buzzing in the last 24 hours" | Short-window trend scan |
-| "Trending searches in [country] recently" | Recent trend analysis |
-| "What are people searching for in [region]" | General search interest exploration |
-
-**Not applicable** -- Needs beyond trending topic discovery:
-
-- Historical keyword search volume over months/years (use a dedicated Google Trends historical tool)
-- Amazon-specific keyword or ASIN analysis (use ABA tools)
-- Advertising / PPC campaign management
-- Social media trend analysis (Twitter/X, TikTok, etc.)
-- SEO ranking or backlink analysis
-- Competitor website traffic estimation
-
-**Boundary judgment**: When users say "market trends" or "what's popular", if it boils down to discovering what people are currently searching for on Google in a specific region, this skill applies. If they are asking about stock market trends, social media virality, or long-term historical search patterns, it does not apply.
-
-## 算力消耗规则
-
-消耗 6 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

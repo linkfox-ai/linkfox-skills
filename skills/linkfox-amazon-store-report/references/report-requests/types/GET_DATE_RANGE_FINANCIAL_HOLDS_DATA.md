@@ -1,18 +1,18 @@
 # `GET_DATE_RANGE_FINANCIAL_HOLDS_DATA`
 
-> **分类**：10. Payment Reports  
-> **说明**：Financial holds by date range  
-> **可用范围**：Seller only
+> **分类**：10. 支付报告  
+> **说明**：指定日期范围的财务冻结  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Payment Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-payment#deferred-transaction-report)（章节：**Deferred Transaction Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [支付报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-payment#deferred-transaction-report)（章节：**Deferred Transaction Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Availability**：Seller Central sellers
-- **Report output type**：Comma-separated flat file
-- **Roles**：[Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting)
-- **要点**：A point-in-time report that contains a list of deferred transactions. A single report can provide up to 10 years of data. 🚧ImportantYou must request the Deferred Transaction Report through the Payments Reports Repository on [Seller Central](https://developer-docs.amazon.com/sp-api/docs/seller-central-urls) before you can use the [Reports v2021-06-30](https://developer-docs.amazon.com/sp-api/reference/reports-v2021-06-30) API to retrieve the Deferred Transaction Report.
+- **可用范围**：Seller Central 卖家
+- **输出格式**：逗号分隔的平面文件
+- **角色**：[Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting)
+- **要点**：延迟交易的时点快照，单份可提供最多 10 年数据。必须先在 [Seller Central](https://developer-docs.amazon.com/sp-api/docs/seller-central-urls) 的 Payments Reports Repository 请求 Deferred Transaction Report，才能用 [Reports v2021-06-30](https://developer-docs.amazon.com/sp-api/reference/reports-v2021-06-30) 获取。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-payment#deferred-transaction-report>
 

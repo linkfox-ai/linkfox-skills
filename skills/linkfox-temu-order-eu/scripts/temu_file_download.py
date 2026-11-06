@@ -18,8 +18,6 @@ import sys
 from _temu_common import (
     FILE_DOWNLOAD_URL,
     call_temu_api,
-    emit_result,
-    lf_inline_flag,
     load_json_arg,
     require_text,
     resolve_access_token,
@@ -53,8 +51,7 @@ def main():
 
     params = load_json_arg(sys.argv)
     body = build_request(params)
-    result = call_temu_api(FILE_DOWNLOAD_URL, body, timeout=150, linkfox_params=params)
-    emit_result(result, inline=lf_inline_flag())
+    call_temu_api(FILE_DOWNLOAD_URL, body, timeout=150, linkfox_params=params, display=True)
 
 if __name__ == "__main__":
     main()

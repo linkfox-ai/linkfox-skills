@@ -21,7 +21,7 @@
 | `salesRegion` | string | 美国 | 销售国家/地区，决定模特人种与软装风格 | `{salesRegion}` |
 | `platform` | string | 亚马逊 | 发布平台（Amazon / TikTok / Shopee），决定构图与合规 | `{platform}` |
 
-> 字段映射规范：任意为 null 的入参都会被替换成空字符串 `""`，避免占位符残留在最终 prompt 里。
+> 字段映射规范：空值 `point`/`imageDesc`/`brandGeneJson` 替换为空串；空值 `language`/`salesRegion`/`platform` 分别采用英文/美国/亚马逊默认值，避免占位符残留。
 
 ## 步骤 2：构造最终 prompt（辅助脚本构建参数 → textgen 改写）
 
@@ -34,7 +34,7 @@
      ```
   2. 使用 `scripts/build_textgen_params.py` 一条命令完成模板读取、占位符填充、JSON 参数文件写入（脚本自动选择模板 `scripts/templates/close-up.txt`、设置 `model=GEM_3_FLASH`、`thinkingLevel=low`）。**禁止手动用 Write 工具构造 textgen 参数文件**。
      ```bash
-     python scripts/build_textgen_params.py \
+     python <本skill根目录>/scripts/build_textgen_params.py \
        --type CLOSE_UP \
        --image-urls '<imageUrls JSON 数组>' \
        --point '<point>' \
@@ -46,13 +46,13 @@
        --out "$DATADIR/textgen_close_up.json"
      ```
      > 品牌基因也可用 `--brand-gene-json '<brandGeneJson>'` 代替 `--brand-gene-file`（短 JSON 时）；套图场景优先用 S1 落盘文件。
-  3. 按本 skill **SKILL.md「步骤2」给出的标准链式调用**执行 textgen：把上面产出的 `$DATADIR/textgen_close_up.json` 经 `--stdin --content-only` 取出单行 prompt，由模型完成品类与风格基调识别、分离外观/用法信息、定位关键细节区域后吐出一条专注清晰细节展示的英文 prompt（换行已压平为 `⏎`）。**具体命令以 SKILL.md 步骤2 为准，此处不重复。**
+  3. 按本 skill **SKILL.md「商品图工作流程」给出的标准链式调用**执行 textgen：把上面产出的 `$DATADIR/textgen_close_up.json` 经 `--stdin --content-only` 取出单行 prompt，由模型完成品类与风格基调识别、分离外观/用法信息、定位关键细节区域后吐出一条专注清晰细节展示的英文 prompt（换行已压平为 `⏎`）。**具体命令以 SKILL.md「商品图工作流程」 为准，此处不重复。**
 - 这一步**不做敏感词过滤**——特写图正文不产出 Text on Image 文案，敏感词风险低，省一次调用换更短链路。
 - **输出**：取出的 prompt 即步骤 3 的来源，用 `jq` 内联拼进下游 imagegen 参数 JSON（下游自动把 `⏎` 还原为换行符）。
 
 ## 提示词正文（DictKey `agentProductCloseUp`）
 
-> **运行时模板唯一来源**：`scripts/templates/close-up.txt`，运营更新直接改该 .txt。步骤 2 的 `build_textgen_params.py` 脚本自动读取该模板、填充占位符后交 `linkfox-aigc-textgen`（`model=GEM_3_FLASH`）生成最终 prompt。`entry_name=agentProductCloseUp` 仅为来源标注（原后端 `ai_dict_def` 同名记录），**非运行时数据源**。
+> **运行时模板唯一来源**：`scripts/templates/close-up.txt`，运营更新直接改该 .txt。步骤 2 的 `scripts/build_textgen_params.py` 脚本自动读取该模板、填充占位符后交 `linkfox-aigc-textgen`（`model=GEM_3_FLASH`）生成最终 prompt。`entry_name=agentProductCloseUp` 仅为来源标注（后端 `ai_dict_def` 同名记录），**非运行时数据源**。
 
 ## 执行自检
 

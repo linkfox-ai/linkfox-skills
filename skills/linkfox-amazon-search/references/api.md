@@ -1,12 +1,31 @@
-# 亚马逊前端搜索模拟 API 参考
+# 亚马逊前台搜索 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：亚马逊前台搜索
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/amazon/search`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
 
-## 请求参数
+### 请求参数
 
 POST Body（JSON）：
 
@@ -22,7 +41,7 @@ POST Body（JSON）：
 | device | string | 否 | 设备类型：`desktop`、`mobile`、`tablet`，默认 `desktop`（最大长度1000） |
 | includeSellerSpriteData | boolean | 是（Skill 调用） | 高级参数，每次 Skill 调用必须显式传入；`true` 时调用卖家精灵补全销量、销售额、品牌、履约等竞品数据，并按成功批次追加动态算力消耗，不需要补全时传 `false`。服务端为兼容旧调用，缺省时仍按 `false` 处理 |
 
-### 支持的 amazonDomain 值
+#### 支持的 amazonDomain 值
 
 | 域名 | 国家 |
 |------|------|
@@ -49,7 +68,7 @@ POST Body（JSON）：
 | amazon.cn | 中国 |
 | amazon.eg | 埃及 |
 
-### 常用 language 值
+#### 常用 language 值
 
 | 区域代码 | 说明 |
 |----------|------|
@@ -78,7 +97,7 @@ POST Body（JSON）：
 | zh_CN | 中国站 中文 |
 | pt_MX | 墨西哥站 西班牙语 |
 
-### 常用 deliveryZip 值
+#### 常用 deliveryZip 值
 
 | 国家 | 城市 | 邮编 |
 |------|------|------|
@@ -105,10 +124,34 @@ POST Body（JSON）：
 | 中国 | 北京 | 100000 |
 | 埃及 | 开罗 | 11511 |
 
-## 响应结构
+#### 补全开关与使用限制
+
+- 只有需求包含月销量、月销售额、品牌、卖家数量、履约方式或其他卖家精灵竞品字段，或用户明确要求启用时，才传 `true`；启用前说明额外动态费用。不能仅因“找竞品”自动开启。
+- 关键词应使用目标站点语言。接口仅提供实时前台结果，不提供历史搜索量或历史排名；历史聚合分析应使用 ABA 等数据源。
+- 每页约 20 个商品；每一页是独立请求并分别计费。每次调用模拟一次真实搜索，避免短时间连续高频请求。
+- 同一会话同一参数组合默认只调用一次。失败或空结果不得自动更换关键词、翻页或修改邮编连续试探；继续检索前先向用户说明额外消耗。
+
+#### 脚本选项与运行约定
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| JSON 参数 | object | 是 | 第一个位置参数为请求对象的 JSON 字符串，字段同上；保留原样传递，不自动改写关键词或补全开关。 |
+| --inline | CLI flag | 否 | 强制完整打印，同时保存完整响应。 |
+| --no-cache | CLI flag | 否 | 禁用响应缓存读取和写入，强制重新请求；默认启用 24 小时缓存。 |
+
+- CLI：`python scripts/amazon_search.py '<JSON 参数>' [--inline] [--no-cache]`。
+- 密钥优先读取 `LINKFOX_AGENT_API_KEY`，兼容 `LINKFOXAGENT_API_KEY`；可通过 `LINKFOX_TOOL_GATEWAY` 自定义网关（去除末尾 `/`）。请求携带 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME` 环境头，HTTP 超时为 150 秒。
+- 响应缓存由公共调用器统一管理，只有一层。位置为 `<cwd>/linkfox/.cache/linkfox-amazon-search/linkfox-amazon-search-<hash>.json`；hash 为请求 JSON 按键排序、保留中文后计算 SHA-256 的前 16 位，缓存有效期为文件修改时间起 24 小时。缓存命中时添加 `_cache.hit=true`，并提示缓存路径。缓存结果可能不是当前实时结果，需要刷新时显式使用 `--no-cache`。
+- 缓存按请求参数区分，不额外按密钥或网关区分；默认也缓存接口返回的错误或空结果，不自动重试。`--no-cache` 不覆盖已有缓存。
+- 完整响应及会话元数据保存在当前工作目录的 `linkfox/` 中。业务入口在请求前检查当前目录可写，并固定该输出根目录，禁止临时目录回退；不使用公共调用器的家目录或临时目录兜底。响应不超过 8000 字节时全量打印，超过时输出最大列表长度及前 3 条样本；`--inline` 始终全量打印。输出保存使用 UTF-8。
+- 完整响应文件以微秒整数时间戳命名并独占创建；同秒多次查询或多个 CLI 进程遇到重名时递增文件名中的时间戳，不覆盖先前响应。每份文件登记在会话元数据中。
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| errcode | integer / string / null | 业务状态码，正常响应判断遵循公共规则。 |
+| errmsg | string | 业务消息或错误原因。 |
 | total | integer | 总行数 |
 | keyword | string | 搜索关键词 |
 | type | string | 渲染的样式 |
@@ -117,7 +160,7 @@ POST Body（JSON）：
 | sellerSpriteEnriched | boolean | 本次请求是否启用了卖家精灵竞品数据补全 |
 | products | array | 搜索结果列表（详见下方） |
 
-### products 商品对象字段
+#### products 商品对象字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -154,72 +197,48 @@ POST Body（JSON）：
 | sourceTool | string | 来源工具 |
 | keyword | string | 关键词 |
 
-## 错误码
+#### 本地缓存附加字段
 
-正常情况下，接口的 HTTP 状态码均为 200，业务的成功与否通过响应体中的 `errcode` 字段区分（`errcode = 200` 表示成功，其他值表示业务错误）。当遇到未授权等情况时，HTTP 状态码为 401，且对应的 `errcode` 也是 401。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| _cache | object | 仅脚本复用本地缓存时附加的标记，不是远端业务字段。 |
+| _cache.hit | boolean | 为 `true` 时表示本次结果来自本地缓存。 |
 
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析业务字段 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 402 | 算力不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
+### 响应码规则
 
-错误响应示例：
+#### 基础规则
 
-```json
-{
-    "errcode": 401,
-    "errmsg": "authorized error"
-}
-```
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-## curl 示例
+#### 业务规则
 
-```bash
-curl -X POST https://tool-gateway.linkfox.com/amazon/search \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"keyword": "wireless earbuds", "amazonDomain": "amazon.com", "page": 1, "includeSellerSpriteData": false}'
-```
+- 原始动态消耗：`原始 costToken = 20000 + Σ(每个成功卖家精灵补全批次返回的 costToken)`。关闭补全只产生 Amazon 搜索基础消耗；开启后按搜索结果分批补全，成功批次消耗逐批累加，失败且未返回 `costToken` 的批次不追加。读取响应顶层 `costToken` 了解本次消耗，实际扣费以网关结算为准。
+- 结算换算：`结算 costToken = 网关倍率 × 原始 costToken`；算力为 `ceil(结算 costToken / 2000)`，金额按算力 / 100 折算为人民币元。按当前默认倍率 1.5，关闭补全时 20000 原始 costToken 结算为 30000 costToken，即 15 算力（￥0.15）；开启补全后费用增加。最终倍率和扣费以网关实际结算为准，每页分别计费。
+- 空结果时保留完整响应并提示核对查询条件，后续请求遵守上方成本限制；不能以商品列表为空替代正常响应判断。
+- 脚本保留 JSON 错误响应的字段，并在实际收到非正常 HTTP 状态时附加 `transportHttpStatus` 和 `error`，避免将失败响应中的空列表当作正常空结果；这两个附加项属于脚本诊断信息，不是网关响应字段。非 JSON 的 HTTP 错误保留原始 `details`，连接错误输出 `error`，不主动重试。应依据实际响应消息解释，不另造成功判断。
 
-## 动态算力规则
-
-```text
-costToken = 20000 + Σ(每个成功卖家精灵补全批次返回的 costToken)
-```
-
-Skill 调用必须显式传入 `includeSellerSpriteData`；传 `false` 时仅产生 20000 基础 `costToken`。服务端为兼容旧调用，在参数缺省时仍按 `false` 处理。传 `true` 后最终费用随成功补全批次数动态变化，应以响应顶层 `costToken` 为准。
-
-高级查询示例：
+### curl 示例
 
 ```bash
-curl -X POST https://tool-gateway.linkfox.com/amazon/search \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/amazon/search" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{"keyword":"neck massager","amazonDomain":"amazon.com","includeSellerSpriteData":true}'
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{"keyword":"wireless earbuds","amazonDomain":"amazon.com","page":1,"includeSellerSpriteData":false}'
 ```
 
----
+## Feedback
 
-## Feedback API
-
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "skillName": "linkfox-xxx-xxx",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "skillName": "linkfox-amazon-search",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter
-- `sentiment`: Choose ONE — `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE — `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

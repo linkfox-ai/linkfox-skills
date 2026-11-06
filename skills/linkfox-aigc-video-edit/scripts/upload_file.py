@@ -8,6 +8,7 @@ import sys
 from urllib.error import URLError
 from urllib.parse import unquote, urlsplit
 from urllib.request import Request, urlopen
+from _video_runtime import check_output_directory
 
 MAX_BYTES = 35 * 1024 * 1024
 EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov"}
@@ -75,6 +76,7 @@ def main():
         raise SystemExit("Invalid JSON parameters")
     if not isinstance(params, dict):
         raise SystemExit("Parameters must be a JSON object")
+    check_output_directory()  # 下载素材前验证输出位置，不依赖公共模板的目录回退。
     entry = Path(__file__).resolve().with_name("upload_by_base64.py")
     spec = importlib.util.spec_from_file_location("aigc_media_upload", entry)
     module = importlib.util.module_from_spec(spec)
@@ -84,10 +86,14 @@ def main():
     payload = {"fileName": name, "base64": base64.b64encode(content).decode("ascii")}
     inline = "--inline" in sys.argv[2:]
     # File bytes stay in this process, outside the OS command line and request files.
-    sys.argv = [str(entry), json.dumps(payload, ensure_ascii=False), "--no-cache"]
-    if inline:
-        sys.argv.append("--inline")
-    module.main()
+    original_argv = sys.argv
+    try:
+        sys.argv = [str(entry), json.dumps(payload, ensure_ascii=False), "--no-cache"]
+        if inline:
+            sys.argv.append("--inline")
+        module.main()
+    finally:
+        sys.argv = original_argv
 
 
 if __name__ == "__main__":

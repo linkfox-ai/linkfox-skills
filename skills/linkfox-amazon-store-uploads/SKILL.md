@@ -1,120 +1,111 @@
 ---
 name: linkfox-amazon-store-uploads
-description: 亚马逊 SP-API 通用文件上传。用于为 A+ Content、Messaging 等业务创建 upload destination，计算 contentMD5，并将图片或附件上传到返回的预签名地址。用户提到亚马逊文件上传、A+ 图片上传、Messaging 附件、createUploadDestinationForResource、upload destination、contentMD5、预签名上传、Uploads API、SP-API 上传文件时触发。即使未明确说“Uploads API”，只要其他亚马逊 SP-API 操作需要先获得可引用的上传资源地址，也应触发此技能；Feed 文档上传使用 linkfox-amazon-store-feeds 的专用流程。
+description: 为亚马逊卖家 A+ 内容、Messaging 等业务准备图片、视频或附件，申请上传目的地、计算文件摘要并完成 PUT 或 multipart POST 预签名上传，取得后续业务可引用的上传资源标识。适用于亚马逊通用文件上传、A+ 图片与视频上传及 Messaging 附件准备；不适用于订单查询或批量 Feed 文档上传。
 ---
 
-# Amazon 店铺 Uploads（文件上传）
+# Amazon 店铺文件上传
 
-本 skill 专用于 **向 Amazon 申请上传目的地并上传文件**，与 **`linkfox-amazon-store-auth`** 同系列：依赖 **`linkfox-amazon-store-auth`** 选店（`sellerId`+`region`）；直接 **`POST /spApi/developerProxy`** 传入 `sellerId`+`region` 调用 **createUploadDestinationForResource**，最后用 **`upload_to_destination.py`** 对返回的 URL 执行 **PUT**（不经网关）。
+## 适用范围
 
-> 这是 **Uploads API**，不是 Orders 订单接口。订单见 **`linkfox-amazon-store-orders`**；批量 Feed 文件见 **`linkfox-amazon-store-feeds`**。
+### 适用
 
-## 调用方式
+为已授权亚马逊卖家的 A+ 内容、Messaging 等业务上传图片、视频或附件。用户希望获得可供后续业务引用的上传资源时使用，无需明确提及 Uploads API。
 
-- **API 端点**：`POST /spApi/developerProxy`（不同操作通过请求体区分；完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文脚本一览）
-- **成本约束**：本工具会消耗算力；失败/空结果不得自动换关键词、翻页或连续试探；需要继续检索时先向用户说明会产生额外消耗。
+**场景速查**
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-uploads-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+| 用户表达 | 使用场景 |
+|---|---|
+| 为 A+ 内容上传一张图片 | 申请上传目的地并上传素材。 |
+| 为 Messaging 准备附件 | 按下游业务要求完成附件上传。 |
+| 已有 upload destination，帮我上传文件 | 使用返回地址和请求头上传原始文件。 |
+| 根据本地文件生成 contentMD5 | 计算文件摘要并准备上传申请。 |
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 边界
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+订单查询使用 `linkfox-amazon-store-orders`；批量 Feed 文档上传使用 `linkfox-amazon-store-feeds` 的专用流程。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 接口清单
 
-## 官方参考
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 创建上传目的地（`createUploadDestinationForResource`） | POST `/spApi/developerProxy` -> path：`uploads/2020-11-01/uploadDestinations/{resource}`，上游方法 POST | `scripts/create_upload_destination_for_resource.py` | 获得上传地址、请求头和资源标识。 |
+| 上传文件（非 LinkFox 接口，不计入业务接口数） | PUT 或 multipart POST `uploadDestination.url` | `scripts/upload_to_destination.py` | 直接上传到 Amazon 返回的预签名地址。 |
 
-[createUploadDestinationForResource](https://developer-docs.amazon.com/sp-api/reference/createuploaddestinationforresource) · [Create an upload destination](https://developer-docs.amazon.com/sp-api/docs/create-an-upload-destination)
+## 前置条件
 
----
+**先完成店铺授权并确定操作目标**：依赖 `linkfox-amazon-store-auth` 选店与完成授权。运行 `python scripts/check_auth_dependency.py` 检查依赖；缺失时先安装依赖。准备用户的文件及对应下游业务，具体参数与运行约定见 `references/api.md`。
 
-## Prerequisites
+## 上传流程
 
-1. 依赖 **`linkfox-amazon-store-auth`**。
-2. **`resource`** 须与下游 API 文档一致（例如 A+：`aplus/2020-11-01/contentDocuments`；Messaging 为对应 messages 资源路径）。
-3. **`contentMD5`** 为待上传文件内容的 **Base64 MD5 摘要**；传 **`filePath`** / **`content`** 时脚本可自动计算。
+1. 确认目标店铺、站点及下游业务，准备待上传素材。
+2. 运行 `scripts/create_upload_destination_for_resource.py` 申请上传目的地，按需由脚本计算文件摘要。
+3. 检查创建结果，再将取得的目的地交给 `scripts/upload_to_destination.py` 上传同一份文件；独立入口默认 PUT，A+ 表单目的地传 `method: "POST"`。也可在创建时传 `uploadFile: true`，同一进程申请并上传，A+ 默认 POST，其他资源默认 PUT。
+4. 确认上传结果后，在 A+ 或 Messaging 等后续业务中引用 `uploadDestinationId`。上传完成与下游业务提交是两个阶段。
 
----
+## 执行方式
 
-## 工作流
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：同一会话、同一参数组合默认只调用一次；创建目的地和文件上传均不读取或保存响应缓存。失败或空结果时，先检查响应、素材及目标资源，不自动修改参数连续试探；结果不确定时先核验状态，避免重复写入。
 
-```text
-create_upload_destination_for_resource  →  uploadDestination { uploadDestinationId, url, headers }
-upload_to_destination (PUT url + headers)  →  在 A+/Messaging 等 API 中引用 uploadDestinationId
-```
+### 输出策略
 
----
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-uploads-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Scripts
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| 脚本 | 说明 |
-|------|------|
-| `create_upload_destination_for_resource.py` | POST `uploads/2020-11-01/uploadDestinations/{resource}` |
-| `upload_to_destination.py` | PUT 到返回的 `url`（带 `headers`） |
-| `_spapi_uploads_common.py` | 内部公共模块 |
+## 执行规则
 
----
+### 算力消耗预估
 
-## 示例
+不消耗算力 （限时）。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解上传资源**：目的地包含后续引用标识、上传地址与请求头；文件摘要用于校验上传内容。字段和编码规则见 `references/api.md`。
+- **先展示创建结果，再展示上传结果**：先检查 `developerProxy`，再展示 `uploadDestination`；注明店铺、站点、上传阶段、资源标识和实际结果，不把创建目的地当作文件已上传。
+- **查看运行约定**：本技能的缓存例外、CLI 和认证兼容说明见 `references/api.md`。
+- **处理错误与保护状态**：保留已取得的资源标识，按接口参考解释原因与店铺保护要求；结果不确定时不直接重复写入。
+
+## 使用示例
+
+### 从本地文件准备 A+ 图片
 
 ```bash
-export LINKFOXAGENT_API_KEY="<your-key>"
-
-# 1) 创建上传目的地（自动根据 filePath 计算 contentMD5）
-python scripts/create_upload_destination_for_resource.py '{
-  "sellerId":"A1...",
-  "region":"NA",
-  "resource":"aplus/2020-11-01/contentDocuments",
-  "marketplaceId":"ATVPDKIKX0DER",
-  "filePath":"/path/to/banner.jpg",
-  "contentType":"image/jpeg"
-}'
-
-# 2) 上传文件（将上一步 stdout 中的 uploadDestination 传入）
-python scripts/upload_to_destination.py '{
-  "uploadDestination": { "url": "...", "headers": { } },
-  "filePath": "/path/to/banner.jpg"
-}'
+python scripts/create_upload_destination_for_resource.py '{"sellerId":"A1...","region":"NA","resource":"aplus/2020-11-01/contentDocuments","marketplaceId":"ATVPDKIKX0DER","filePath":"/path/to/banner.jpg","contentType":"image/jpeg","uploadFile":true}'
 ```
 
----
+### 上传到已返回的目的地
 
-## Display Rules
+将创建结果中的完整 `uploadDestination` 对象（含 `payload` 包装时也可直接使用）或 `resolvedUploadDestination` 传给上传脚本，使用同一份文件。原始输出可能含有临时签名凭据，不要对外分享：
 
-1. 成功创建目的地常为 **HTTP 201**；先看 **`developerProxy`**，再看 **`uploadDestination`**。
-2. **`resource`** 传未编码的下游资源路径；可带或不带前导 `/`，生成 path 时保留内部 `/`（greedy path），不得预编码成 `%2F`。
-3. 网关需放行 **`uploads/2020-11-01/`** 前缀。
+```bash
+python scripts/upload_to_destination.py '{"uploadDestination":{"url":"https://example.invalid/presigned","headers":{}},"filePath":"/path/to/banner.jpg"}' --inline
+```
 
-## Amazon SP-API 接口保护与重试指引
+A+ 表单上传使用完整返回 URL，显式指定 POST：
 
-同一店铺连续收到 Amazon SP-API 的 400、403、404 或 429 时，网关会返回 450、453、454 或 459 并短暂冷却。这些自定义状态码不是 Amazon 原生状态，也不表示封号；目的是避免持续异常或高频调用扩大店铺风险。
+```bash
+python scripts/upload_to_destination.py '{"method":"POST","uploadDestination":{"url":"https://example.invalid/presigned?key=YOUR_KEY&policy=YOUR_POLICY","headers":{}},"filePath":"/path/to/banner.jpg","contentType":"image/jpeg"}' --inline
+```
 
-| 状态与 message | 范围 | 触发与冷却 | 处理 |
-|---|---|---|---|
-| `450`：`400，请求异常，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：20 分钟 | 停止原参数重试，检查必填字段、marketplace、ID、日期和请求体 |
-| `453`：`403，店铺未授权，请先授权` | 店铺全部接口 | 60 秒内超过 2 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 停止该店铺调用，检查授权、权限、店铺归属和区域 |
-| `454`：`404，资源不存在，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 确认资源 ID、所属店铺/站点、资源状态和接口路径 |
-| `459`：`429限流中，请降低频率` | 店铺+接口 | 首次：15 秒；2 分钟内超过 2 次：30 秒；3 分钟内超过 4 次：2 分钟 | 降低并发、分页和轮询频率并逐级退避 |
+## 使用反馈
 
-- 立即停止自动或并发重试，不得通过换脚本或重复创建任务绕过保护；优先遵循 `retryAfter`、`blockedUntil`，没有时按表中时长说明。
-- 450/453/454 必须先修正参数、授权或资源标识，冷却后最多谨慎重试一次；再次触发则停止调用。453 期间停止该店铺全部 SP-API。
-- 保留已有 `reportId`、`feedId` 等任务 ID；写操作结果不确定时先查询状态，不直接重放。
-- 向用户先说明店铺保护，再给原因、处理和等待时间。可回复：“为保护您的亚马逊店铺安全，检测到 Amazon SP-API 连续返回{原因}，当前已进入短暂保护。请先{处理动作}，预计{等待时间}后再试；这不代表封号，也不是套餐或算力限制。”不要只说“LinkFox 限流”或“服务器繁忙”。
-
-## 算力消耗规则
-
-不消耗算力。
-
-**Feedback：** `skillName`：`linkfox-amazon-store-uploads`。
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*更多跨境 skill：[LinkFox Skills](https://skill.linkfox.com/)*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,173 +1,116 @@
 ---
 name: linkfox-geekbi-temu-shop
-description: 使用 GeekBI 查询和筛选 Temu 公开市场店铺。用户显式提到 GeekBI、linkfox-geekbi-temu-shop，或需要平均客单价、动销、粉丝数、商品数、销量或销售额的日/周/月变化与增长等 GeekBI 差异指标时触发。普通 Temu 店铺搜索或排行使用 linkfox-temu-store-query；除非用户明确要求跨数据源对比，不要同时调用两条付费店铺数据 skill。
+description: 使用 GeekBI 查询和筛选 Temu 公开市场店铺，比较平均客单价、动销、粉丝数、商品数、销量和销售额的日周月变化及增长。适用于显式指定 GeekBI、本技能或需要上述 GeekBI 差异指标的店铺发现与对标；普通 Temu 店铺搜索和排行、仅查询站点或品类元数据不自动触发，也不适用于卖家账号操作、商品级研究或其他平台研究。
 ---
 
-# Temu Shop Discovery & Benchmarking
+# GeekBI Temu 店铺发现与对标
 
-This skill searches public Temu marketplace shops for competitor discovery and store-level benchmarking. Use only the endpoints needed for the user's request, and read `references/api.md` for the complete request and response contract.
+## 适用范围
 
-The site-list and category-list endpoints are helper capabilities for shop search. A request solely for site or category metadata must not auto-select this skill. If the user explicitly invokes this skill, or the skill is already active, either helper may be called independently.
+### 适用
 
-## Endpoints
+查询 Temu 公开市场店铺，按 GeekBI 店铺指标发现竞品、比较店铺表现。用户明确提到 GeekBI、本技能，或希望查看平均客单价、动销及粉丝、商品数、销量、销售额的日周月变化与增长时使用。
 
-### `/geekbi/temu/mallSearch`
+**场景速查**
 
-| Intent | Endpoint | Script |
-|---|---|---|
-| Discover and benchmark shops | `/geekbi/temu/mallSearch` | `geekbi_temu_mall_search.py` |
-
-#### Request
-
-- `regionId` selects the marketplace. Resolve it from a non-null positive `sites[].regionId`; never substitute `siteId`.
-- `catIds` is an integer array of shop category IDs. Populate it only from valid `categories[].catId` values.
-- Shop search returns paginated `items[]`. The default marketplace is `regionId: 211` (United States), with `page: 1` and `size: 20`.
-- `regionId`, `page`, and `size` select the marketplace and page. `size` is 1–200 and `page * size` must not exceed 10,000.
-- `keyword` matches the shop name. `catIds` is an integer array, not a comma-separated string.
-- Range filters use paired `*Min` / `*Max` fields for `mallSold`, `mallSales`, `mallStar`, `reviewNum`, `goodsNum`, `followerNum`, and `avgPrice`. Never make a minimum greater than its maximum.
-- `mallStarMin/Max` must remain within 0–5. `hostingMode` is `1` (full-managed) or `2` (semi-managed).
-- `mallOpenTimeMin/Max` use ISO-8601 date-time strings. If both are supplied, both must parse and the minimum must not exceed the maximum.
-- `order` is `asc` or `desc`. Use a `sort` field only after the API or an established workflow confirms it.
-
-#### Response
-
-| Path | Meaning |
+| 用户表达 | 查询场景 |
 |---|---|
-| `items[].mallId` / `items[].mallName` | Shop identity |
-| `items[].mallSold` / `items[].mallSales` | Historical cumulative unit sales and revenue |
-| `items[].mallStar` / `items[].reviewNum` | Shop rating and historical review count |
-| `items[].goodsNum` / `items[].followerNum` | Active product count and follower count |
-| `items[].avgPrice` | Average order value in the selected site's currency |
-| `items[].catIds` / `items[].catItems` | Main category IDs and category paths |
-| `items[].day*` / `week*` / `month*` | Returned period metrics and growth rates |
+| 用 GeekBI 查 Temu 店铺 | 店铺发现：按站点与店铺条件筛选。 |
+| 比较 Temu 店铺平均客单价和动销 | 店铺对标：展示可用核心表现。 |
+| 看粉丝、商品数、销量和销售额的日周月增长 | 周期表现：区分累计指标、周期指标和增长率。 |
+| 用 linkfox-geekbi-temu-shop 查支持的站点或类目 | 明确调用本技能时，可独立使用辅助能力。 |
 
-### `/geekbi/temu/siteList`
+### 边界
 
-| Intent | Endpoint | Script |
-|---|---|---|
-| Resolve Temu marketplaces | `/geekbi/temu/siteList` | `geekbi_temu_site_list.py` |
+普通 Temu 店铺搜索或排行使用 `linkfox-temu-store-query`；除非用户明确要求跨数据源对比，不同时调用两条付费店铺数据技能。
+站点和品类查询是本技能的辅助能力。仅枚举站点、地区编号、品类或品类编号不自动触发本技能；用户明确调用本技能，或本技能已处于活跃流程时，可独立查询辅助数据，不附带店铺搜索。
+本技能不访问或操作卖家账号，不用于订单、库存变更、刊登发布、履约、账号授权、广告操作、商品级研究或其他平台研究。
 
-#### Request
+## 接口清单
 
-- Site list takes `{}`. Reuse only a non-null positive `sites[].regionId`, never `siteId`.
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 店铺搜索（mallSearch） | POST `/geekbi/temu/mallSearch` | `scripts/geekbi_temu_mall_search.py` | 筛选公开市场店铺并比较表现。 |
+| 站点列表（siteList） | POST `/geekbi/temu/siteList` | `scripts/geekbi_temu_site_list.py` | 解析可用于搜索的站点。 |
+| 品类列表（categoryList） | POST `/geekbi/temu/categoryList` | `scripts/geekbi_temu_category_list.py` | 逐级浏览店铺品类。 |
 
-#### Response
+## 前置条件
 
-| Path | Meaning |
-|---|---|
-| `sites[].regionId` | Marketplace ID accepted by shop search |
-| `sites[].siteId` | Upstream internal ID; do not use as the marketplace selector |
+确认用户需要的市场、店铺筛选方向和对比指标。三个接口的完整契约及辅助数据衔接规则见 `references/api.md`。
 
-### `/geekbi/temu/categoryList`
+## 店铺发现与对标流程
 
-| Intent | Endpoint | Script |
-|---|---|---|
-| Browse the category tree | `/geekbi/temu/categoryList` | `geekbi_temu_category_list.py` |
+1. 确认用户要发现或比较的店铺、站点和指标；只选择本次任务需要的能力。
+2. 用户已提供有效编号时直接复用；缺少站点或品类编号时才按需查询辅助数据，按接口参考核验后衔接搜索。辅助结果没有有效编号时停止并说明，不猜测编号或继续不匹配的店铺搜索。
+3. 按 `references/api.md` 准备搜索，先查看当前页结果；只请求辅助数据时，不启动付费店铺搜索。
+4. 按接口参考判断结果，先读摘要，再从已保存文件提取所需指标并展示。后续检索及付费搜索、辅助查询的重试边界遵守接口参考。
 
-#### Request
+## 执行方式
 
-- `parentCatId` drills into the category tree. Omit it for top-level categories, then reuse a returned `catId` to fetch children.
-- Category list takes `{}` for top-level categories or `{"parentCatId": <catId>}` for children. Reuse only a non-null valid `catId`.
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：店铺搜索每次消耗 15 算力，站点列表和品类列表不消耗算力 （限时）。同一会话、同一端点和参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页、改站点或筛选条件连续试探；需要继续付费检索时，先向用户说明额外消耗。
 
-#### Response
+### 输出策略
 
-| Path | Meaning |
-|---|---|
-| `categories[].catId` | Category ID accepted in `catIds` or as the next `parentCatId` |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-geekbi-temu-shop-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错，不回退到用户目录或系统临时目录。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见业务计数和分页字段（如 `total`、`page`、`size`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Shared Workflow Rules
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-- Use site/category helpers only when the user has not already supplied a valid ID. Do not run a paid search merely to answer a helper-only request.
-- Stop and explain when no valid helper ID is returned; do not guess an ID or launch the shop search with a mismatched site/category.
+## 执行规则
 
-| Path | Meaning |
-|---|---|
-| `errcode` / `errmsg` | Gateway business status; verified success is `200` / `ok` |
+### 算力消耗预估
 
-Business fields may be absent or `null`. Preserve the runtime JSON type and do not replace missing values with zero.
+店铺搜索：15 算力 / 次。站点列表和品类列表不消耗算力 （限时）。
 
-## 调用方式
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- **API 端点**：`POST /geekbi/temu/mallSearch`、`POST /geekbi/temu/siteList` 或 `POST /geekbi/temu/categoryList`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/geekbi_temu_mall_search.py '<JSON 参数>' [--inline]`、`python scripts/geekbi_temu_site_list.py '{}' [--inline]` 或 `python scripts/geekbi_temu_category_list.py '<JSON 参数>' [--inline]`
-- **成本约束**：店铺搜索消耗 15 算力/次，站点/品类列表不消耗算力；同一端点同一参数组合使用 24h 本地缓存，同一会话默认只调用一次。`--inline` 不绕过缓存；`--no-cache` 会跳过缓存读写并强制真实请求，付费端点可能再次扣算力，免费辅助端点仅强制刷新。失败、空结果或瞬时错误不得自动重试，也不得自动换关键词、翻页、改站点或筛选条件连续试探；需要继续付费检索时先向用户说明会产生额外消耗。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-geekbi-temu-shop-<timestamp>.json`；`<cwd>` 为脚本执行时的当前工作目录，`<session>` 取自环境变量 `SESSION_ID`，未设置时自动生成。当前目录不可写时直接报错，不回退到用户目录或系统临时目录。
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层状态字段、常见业务计数、忽略 `columns` 后最大业务列表的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 解决认证和算力问题
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## 解决认证和算力问题
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+### 约束与建议
 
-### 异常情况
+- **清晰展示数据**：注明所选市场、站点名称、币种、筛选条件、当前页码和每页条数；用表格展示可用店铺名称、标识、评分、历史销量与销售额、平均客单价、粉丝数、在售商品数、托管模式、品类和开店时间。保留店铺和品类标识，便于后续研究。
+- **区分累计与周期**：历史累计销量和销售额与日周月表现分开展示；平均客单价不改称商品均价，动销不改称销量。增长率按接口定义解释，不擅自转换单位。
+- **标明币种**：金额使用所选站点币种，不因默认市场是美国就假定 USD；币种未知时说明未知。
+- **保留原始数据**：业务字段可缺失或为空，保留实际 JSON 类型及扩展字段，不用零填补或编造值。完整定义见 `references/api.md`。
+- **解释快照**：店铺行是上游当前快照，不从单页推断因果或未来表现。
+- **按需读取**：大响应摘要忽略渲染列元数据，优先提取业务列表；需要更多数据时先检查已保存响应，避免重复消耗。
 
-- **未配置 API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY` 或兼容键 `LINKFOXAGENT_API_KEY`。
-- **响应 401 或 402 状态码**。
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”或类似含义。
+## 使用示例
 
-## Usage Examples
+### 发现指定市场的 GeekBI 店铺
 
-```bash
-# Resolve regionId (use sites[].regionId, not siteId)
-python scripts/geekbi_temu_site_list.py '{}'
+用户：用 GeekBI 查美国市场评分较高的 Temu 店铺。
 
-# Browse top-level categories, then fetch one node's children
-python scripts/geekbi_temu_category_list.py '{}'
-python scripts/geekbi_temu_category_list.py '{"parentCatId":1}'
+确认市场与筛选条件，已有有效站点编号时直接复用；查询当前页并展示店铺表现和币种，不自动继续翻页。
 
-# Verified non-empty US shop search
-python scripts/geekbi_temu_mall_search.py '{"regionId":211,"page":1,"size":3,"mallStarMin":4}'
-```
+### 比较店铺的周期变化
 
-## Display Rules
+用户：比较这些店铺的平均客单价、动销和粉丝增长。
 
-1. State the selected marketplace (`regionId`, site name, and currency when available), filters, current page, and page size.
-2. Present shop name, `mallId`, rating, historical sales and revenue, average order value, followers, active products, hosting mode, categories, and opening time when returned.
-3. Label monetary values with the selected site's currency. Do not assume USD merely because the default marketplace is the United States.
-4. Keep category IDs and shop IDs available for follow-up work, but do not expose `siteId` as a marketplace selector.
-5. Treat rate fields as percentages only where the response contract identifies them as rates; do not silently convert units.
-6. Preserve `null`, missing fields, and `extraFields` rather than inventing values.
+按用户范围查询并展示已返回指标，将累计表现、周期表现和增长率分列；缺失数据如实说明。
 
-## Important Limitations
+### 独立查询辅助数据
 
-- This skill researches public Temu market data; it does not access or operate a seller account.
-- Search can access only the first 10,000 matching records, with `size` from 1 to 200.
-- The API does not publish an exhaustive sort-field enum. Do not improvise unsupported sort names.
-- Category-name resolution may require multiple category-list calls from the top level down.
-- A shop row is a current upstream snapshot; do not infer causality or future performance from one page alone.
-- Do not automatically call helper endpoints when the user already supplied valid IDs.
-- Do not retry a paid endpoint with changed filters after an empty result without user confirmation.
+用户：用 linkfox-geekbi-temu-shop 查看支持的站点或某个类目的下级。
 
-## User Expression & Scenario Quick Reference
+独立查询所需辅助数据并展示，不附带付费店铺搜索。
 
-**Applicable**: “用 GeekBI 查 Temu 店铺”, “比较 Temu 店铺平均客单价和动销”, “看粉丝/商品数/销量/销售额的日周月增长”, “linkfox-geekbi-temu-shop”.
+## 使用反馈
 
-**Adjacent**: Within an active shop-search workflow, resolve an unknown marketplace or category through the helper endpoints. If the user explicitly invokes this skill, either helper may also be called independently without launching a shop search.
-
-**Not an automatic trigger**: A request solely to enumerate Temu sites, `regionId` values, categories, or `catId` values, unless the user explicitly invokes this skill or the skill is already active.
-
-**Not applicable**: Generic Temu shop search/ranking without GeekBI-specific metrics (use `linkfox-temu-store-query`); Temu seller-center orders, inventory changes, listing publication, fulfillment, account authorization, advertising operations, product-level research, or research on another marketplace. Unless the user explicitly requests cross-source comparison, do not call both paid shop-data skills.
-
-## 算力消耗规则
-
-店铺搜索每次消耗 15 算力；站点列表和品类列表不消耗算力。
-
-> 用户会为店铺搜索支付算力。高频调用、翻页或改条件重搜前，必须让用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

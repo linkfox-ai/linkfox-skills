@@ -1,4 +1,4 @@
-# Sponsored Brands (SB) Report Types
+# Sponsored Brands (SB) 报告类型
 
 `adProduct = SPONSORED_BRANDS`
 

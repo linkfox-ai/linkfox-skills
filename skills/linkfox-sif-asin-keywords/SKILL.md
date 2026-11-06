@@ -1,252 +1,141 @@
 ---
 name: linkfox-sif-asin-keywords
-description: 使用SIF数据反查任意亚马逊ASIN的流量关键词，包括自然排名、广告排名、搜索量、流量占比、自然/付费得分、ABA TOP3点击集中度、点击转化率、搜索量同比涨跌及周/月时间窗。当用户提到ASIN关键词分析、ASIN反查、流量关键词研究、自然排名查询、广告排名查询、关键词位置追踪、SIF关键词数据、竞品关键词窥探、查看哪些关键词为产品带来流量、分析特定ASIN的关键词表现、按周/月/最近N天的关键词时间窗、ASIN reverse keyword lookup, traffic keywords, organic ranking, ad ranking, search volume, SIF keywords, competitor keyword reverse lookup, click concentration, click-to-purchase conversion, week-over-week search volume时触发此技能。即使用户未明确提及"SIF"，只要其需求涉及查找与特定亚马逊商品（ASIN）关联的关键词，也应触发此技能。
+description: 使用 SIF 数据反查亚马逊 ASIN 的流量关键词，查看自然与广告排名、搜索量、流量占比、曝光得分、ABA TOP3 点击集中度和点击到购买转化率，支持按周、月或最近时间窗分析及多商品对比。适用于竞品关键词反查、主要流量来源、广告词、精准长尾词、出单词、新进词及搜索量同比变化研究，无需明确提及 SIF。不适用于脱离 ASIN 的泛关键词研究、类目趋势、评论、Listing 文案、销量营收估算或广告活动管理。
 ---
 
-# SIF ASIN Keyword Analysis
+# SIF ASIN 流量关键词分析
 
-This skill guides you on how to query and analyze traffic keywords for a specific Amazon ASIN, helping Amazon sellers understand which keywords drive traffic to a product and how that product ranks for each keyword.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-SIF ASIN Keyword data reveals the keywords that bring traffic to a specific Amazon product (ASIN). For each keyword, you can see the product's organic search rank, SP ad rank, search volume, traffic share, display position types, and various performance markers. This is the go-to tool for reverse ASIN keyword lookup.
+围绕指定亚马逊商品反查带来流量的关键词，查看商品在各词下的自然与 SP 广告排名、搜索需求、流量结构和转化表现。用户希望对比多个商品时，分别查询并合并展示。
 
-**Single-ASIN limitation**: This tool queries one ASIN at a time. If the user wants to compare multiple ASINs, you must make separate queries for each.
+**场景速查**
 
-**Ranking logic**: A smaller rank value means a better (higher) position. Rank 1 means the product appears first in search results. When a user says "ranking improved", the numeric value decreased; "ranking dropped" means the value increased.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个 ASIN 靠哪些词获取流量、自然排名如何 | 反查流量关键词与自然排名。 |
+| 竞品在哪些词上投放广告、哪些词有 Amazon's Choice | 广告词及 AC 推荐词查询。 |
+| 找精准长尾词、出单词或转化流失词 | 结合流量特征和转化标记筛选。 |
+| 看上个月新进的 SP 流量词 | 周期内新增关键词研究。 |
+| 搜索量同比上涨的词有哪些 | 关键词搜索需求变化筛选。 |
+| 这个词的 TOP3 点击集中度与转化率是多少 | 区分头部点击集中程度和点击到购买转化。 |
+| 对比这些 ASIN 在某周或某月的关键词表现 | 统一站点和时间范围后逐个查询。 |
 
-## Data Fields
+## 前置条件
 
-### Per-keyword record (each element of `data`)
+确定待查 ASIN、目标站点与分析时间范围。筛选、排序、站点覆盖和时间窗约定见 `references/api.md`。
+脱离指定 ASIN 的关键词研究、商品评论与文案、销量营收估算和广告活动管理不属于本技能范围。
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| Keyword | keyword | The search keyword driving traffic | wireless charger |
-| Keyword Translation | translateKeyword | Localized keyword translation for the marketplace | 无线充电器 |
-| ASIN | asin | The product ASIN being queried | B0XXXXXXXX |
-| Organic Rank | productNaturalRank | Product's position in organic search results | 5 |
-| Organic Rank (Display) | naturalRankDisplay | Organic rank as display text | 5 |
-| Ad Rank | productAdRank | Product's position in SP ad results | 3 |
-| Ad Rank (Display) | adRankDisplay | Ad rank as display text | 3 |
-| Weekly Search Volume | weeklySearchVolume | Estimated weekly searches for this keyword | 125000 |
-| Keyword Popularity Rank | keywordPopularityRank | Keyword's search volume rank among all keywords (lower = more popular) | 203 |
-| Total Search Result Products | totalSearchResultProductCount | Total products shown under this keyword (organic + ads + recommendations) | 1280 |
-| Traffic Share | trafficShare | Share of traffic this keyword contributes to the ASIN (1 = 100%) | 0.05 |
-| Natural Traffic Share | naturalTrafficShare | Organic exposure score / total score | 0.62 |
-| Paid Traffic Share | paidTrafficShare | Paid-ad exposure score / total score (SP + SB + SBV + recAd) | 0.31 |
-| Natural Traffic Score | naturalTrafficScore | Organic search exposure score for this ASIN on this keyword (0 = none) | 4.2 |
-| SP Ads Score | sponsoredProductsScore | Sponsored Products regular-slot score (excludes SP recommendation slots) | 2.1 |
-| Brand Ad (SB) Score | brandAdScore | Sponsored Brands total score (standard + video) | 0.8 |
-| Video Ad (SBV) Score | videoAdScore | Sponsored Brands Video score | 0.3 |
-| SP Recommendation Score | sponsoredRecommendationScore | Combined score across SP recommendation slots (Trending now, Seen on social media, Customers frequently viewed, 4 stars and above, etc.) | 1.4 |
-| SP Recommendation Breakdown | sponsoredRecommendationBreakdown | Array of `{title, score, scoreRatio}` per SP recommendation slot | [{"title":"Trending now","score":0.8,"scoreRatio":0.57}] |
-| ABA TOP3 Click Concentration | clickConcentrationShare | Whether clicks under this keyword concentrate on the top ASINs (NOT a conversion rate) | 0.42 |
-| Click-to-Purchase Conversion | clickToPurchaseConversionRate | `purchaseQty / clickQty` at the keyword level | 0.037 |
-| Display Position Types | displayPositionTypes | Where the product appears: natural, ac, sp, top, bottom, er, vedio, tr, trfob | ["natural", "sp"] |
-| Traffic Characteristic Markers | trafficCharacteristicMarkers | Traffic feature tags: isMainKw, isAccurateKw, isAccurateAboveKw, isAccurateTailKw | ["isMainKw"] |
-| Conversion Performance Markers | conversionPerformanceMarkers | Conversion tags: isPurchaseKw, isQualityKw, isStableKw, isLossKw, isInvalidKw | ["isPurchaseKw"] |
-| Last Organic Rank Time | lastNaturalRankTime | When the product last had a valid organic rank for this keyword | 2026-04-20 |
-| Last Ad Rank Time | lastAdRankTime | When the product last had a valid SP ad rank for this keyword | 2026-04-20 |
-| Period End Date | periodEndDate | End date of the current (weekly) period = start-week + 7 days | 2026-04-27 |
-| Update Time | updateTime | When the keyword data was last updated | 2026-04-21 |
+## 查询流程
 
-### Top-level response fields (alongside `data`)
+1. 确认商品、站点和统计范围；未指定站点或时间时采用接口默认值，构造请求时明确目标站点。按 `references/api.md` 核对时间与筛选约定。
+2. 根据问题选择关键词筛选、自然或广告流量条件、转化标记和排序。关键词尽量使用目标站点语言；查看最佳排名时使用升序，查看高搜索量时使用降序。
+3. 查询前说明算力消耗，优先复用同一参数的已有结果。多个 ASIN 分别请求，保持对比口径一致。
+4. 按接口参考先判断公共响应状态，再判断 SIF 业务状态。失败或空结果时解释返回原因，后续查询遵守成本约束。
+5. 用表格展示结果、站点、时间范围和本次返回数量。需要更多页时先说明额外消耗，再按用户需求继续；不得自行连续翻页试探。
 
-| Field | API Name | Description |
-|-------|----------|-------------|
-| Is Parent ASIN | isParentAsin | Whether the queried ASIN is a parent (variation hub) |
-| Has Variants | hasVaiants | Whether the ASIN has variants |
-| Latest ABA Week | abaCreateDateWeek | Latest ABA weekly data reference date |
+## 执行方式
 
-## Supported Marketplaces
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sif_asin_keywords.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口请求消耗 9 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-13 marketplaces: US (United States), UK (United Kingdom), DE (Germany), CA (Canada), JP (Japan), FR (France), ES (Spain), IT (Italy), MX (Mexico), AU (Australia), AE (United Arab Emirates), BR (Brazil), SA (Saudi Arabia).
+### 输出策略
 
-Default marketplace is **US**. Use US when the user does not specify a marketplace. Codes outside this list will be rejected by the API pattern.
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sif-asin-keywords-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 调用方式
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-- **API 端点**：`POST /sif/asinKeywords`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sif_asin_keywords.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 执行规则
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sif-asin-keywords-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 算力消耗预估
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+9 算力 / 次
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## Parameter Guide
+### 解决认证和算力问题
 
-### Required Parameter
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-- **asin** (string, required): The Amazon ASIN to look up. Only one ASIN per request.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-### Optional Parameters
+### 约束与建议
 
-- **country** (string, default `US`): Marketplace code. See Supported Marketplaces above.
-- **keyword** (string): Filter results to keywords containing this text. Translate the keyword into the language of the target marketplace when possible.
-- **timePieceType** (string, default `latelyDay`): Time window type — `latelyDay` (most recent N days), `month` (specific month), `week` (specific week).
-- **timePieceValue** (string, default `7`): Value paired with `timePieceType`.
-  - When `timePieceType=latelyDay` → only `7` or `30` are supported
-  - When `timePieceType=month` → `YYYY-MM` (e.g. `2026-04`)
-  - When `timePieceType=week` → the week's start date `YYYY-MM-DD` (e.g. `2026-04-13`)
-- **conditions** (string): Comma-separated condition filters. Flag-style filters:
-  - `nfPosition` -- organic traffic keywords
-  - `isSpAd` -- SP ad keywords
-  - `isBrandAd` -- brand ad keywords
-  - `isVedioAd` -- video ad keywords
-  - `isAC` -- Amazon's Choice keywords
-  - `isAccurateKw` -- precise traffic keywords
-  - `isAccurateTailKw` -- precise long-tail keywords
-  - `isPurchaseKw` -- purchase-converting keywords
-  - `isQualityKw` -- high-quality conversion keywords
-  - `isStableKw` -- stable conversion keywords
-  - `isLossKw` -- conversion-loss keywords
-  - `isInvalidKw` -- invalid-exposure keywords
-  - `isMultiVariantKw` -- keywords ranking organically across multiple variants
-  - `isSearchVolUpKw` -- keywords whose search volume increased year-over-year
-  - `isSearchVolDownKw` -- keywords whose search volume decreased year-over-year
+- **理解流量数据**：本技能说明哪些关键词为指定商品带来流量，及其自然排名、SP 排名、曝光得分和流量来源。用清晰表格展示真实数据，不附加主观经营建议。
+- **排名方向**：数值越小，位置越靠前；排名 1 为首位。“排名提升”对应数值减小，“排名下降”对应数值增大。搜索热度排名也以数值越小表示越热门。
+- **百分比展示**：`trafficShare`、`naturalTrafficShare`、`paidTrafficShare`、`clickConcentrationShare` 乘以 100 后展示为百分比，例如 0.05 展示为 5%。前者是关键词对该 ASIN 的流量贡献，自然与付费占比是曝光得分占比，不混为同一指标。
+- **区分集中度与转化率**：`clickConcentrationShare` 是 ABA TOP3 点击集中度，衡量点击是否集中于头部 ASIN；`clickToPurchaseConversionRate` 才是关键词层面的点击到购买转化率。两者分列标注。
+- **区分曝光得分**：自然、SP 常规、SB 品牌、SBV 视频和 SP 推荐位得分及明细分别展示，不把得分当作实际流量次数，也不重复叠加品牌广告与视频广告。
+- **明确统计周期**：展示周期计数或比较数据时注明范围；按响应中的 `periodEndDate`、`abaCreateDateWeek` 核对周数据，不能把周搜索量、月热度排名和月搜索量排序口径混用。
+- **翻译标记与位置**：将流量特征、转化标记和展示位置数组转换为易读中文标签，保留必要的原值以便核对；对应关系见 `references/api.md` 的字段表。例如 `isMainKw`、`isAccurateKw` 展示为“主要流量词、精准流量词”，`natural`、`sp` 展示为“自然搜索位、SP 广告位”。
+- **说明返回范围**：展示本次实际返回数量；`total` 不是已确认的全量结果数。响应确有更多页信息时说明可继续获取，不凭本页数量编造剩余页数或全量总数。
+- **解释失败与空结果**：根据 `msg` 或 `errmsg` 解释原因并给出核对站点、时间或筛选条件的建议，不自动改参重试。
+- **按需提取数据**：默认摘要不足时，从落盘文件抽取所需字段；需要完整标准输出时使用 `--inline`。CLI 选项、缓存与落盘约定见 `references/api.md`。
 
-  Period-count filters (all / new-in):
-  - `totalPeriod.in` -- newly-entered traffic keywords this period
-  - `nfKeywordCnt.total` / `nfKeywordCnt.in` -- keywords with (new) organic exposure
-  - `adKeywordCnt.total` / `adKeywordCnt.in` -- keywords with (new) ad exposure
-  - `allSpKeywordCnt.total` / `allSpKeywordCnt.in` -- (new) SP-ad keywords (regular + recommendation)
-  - `spKeywordCnt.total` / `spKeywordCnt.in` -- (new) SP regular keywords
-  - `recSpKeywordCnt.total` / `recSpKeywordCnt.in` -- (new) SP recommendation keywords
-  - `allSbKeywordCnt.total` / `allSbKeywordCnt.in` -- (new) SB-ad keywords
-  - `sbKeywordCnt.total` / `sbKeywordCnt.in` -- (new) SB regular keywords
-  - `sbvKeywordCnt.total` / `sbvKeywordCnt.in` -- (new) SBV keywords
-- **sortBy** (string): Sort field. Options: `lastRank` (organic rank), `adLastRank` (ad rank), `updateTime` (update time), `searchesRank` (search popularity rank), `estSearchesNum` (monthly search volume).
-- **desc** (boolean, default `true`): Sort in descending order. Set to `false` for ascending.
-- **pageNum** (integer, default `1`): Page number for pagination.
-- **pageSize** (integer, default `100`, range 10-100): Number of results per page.
+## 使用示例
 
-### Building Effective Queries
+### 查看美国站商品的全部流量关键词
 
-1. **Always specify the marketplace**: Set `country` to one of the 13 supported codes.
-2. **Pick the right time window**: The default is the latest 7 days. Pass `timePieceType=month` + `timePieceValue=YYYY-MM` for a specific month, or `timePieceType=week` + `timePieceValue=YYYY-MM-DD` for a specific ABA week.
-3. **Use keyword filtering**: When the user is interested in specific keywords, pass the `keyword` parameter to narrow results.
-4. **Apply condition filters**: Use `conditions` to focus on specific keyword types (e.g., only organic keywords, only purchase-converting keywords, or newly-entered SP keywords via `spKeywordCnt.in`).
-5. **Choose appropriate sorting**: Sort by `estSearchesNum` for highest search volume keywords, or by `lastRank` for best-ranking keywords.
-6. **Handle pagination**: The API returns at most 100 results per page. Use `pageNum` to retrieve additional pages if the total exceeds 100.
-
-## Usage Examples
-
-**1. Find all traffic keywords for an ASIN on the US marketplace**
-```
-asin: "B0XXXXXXXX", country: "US"
+```json
+{"asin":"B0XXXXXXXX","country":"US"}
 ```
 
-**2. Find organic traffic keywords only**
-```
-asin: "B0XXXXXXXX", country: "US", conditions: "nfPosition"
-```
+### 仅查看自然流量词
 
-**3. Find keywords containing "charger" sorted by search volume (ascending)**
-```
-asin: "B0XXXXXXXX", country: "US", keyword: "charger", sortBy: "estSearchesNum", desc: false
+```json
+{"asin":"B0XXXXXXXX","country":"US","conditions":"nfPosition"}
 ```
 
-**4. Find high-converting keywords**
-```
-asin: "B0XXXXXXXX", country: "US", conditions: "isPurchaseKw,isQualityKw"
-```
+### 筛选包含 charger 的词，按搜索量升序排列
 
-**5. Find SP ad keywords on the Japan marketplace**
-```
-asin: "B0XXXXXXXX", country: "JP", conditions: "isSpAd", sortBy: "adLastRank", desc: false
+```json
+{"asin":"B0XXXXXXXX","country":"US","keyword":"charger","sortBy":"estSearchesNum","desc":false}
 ```
 
-**6. Find precise long-tail keywords with stable conversion**
-```
-asin: "B0XXXXXXXX", country: "US", conditions: "isAccurateTailKw,isStableKw"
-```
+### 查看出单词及转化优质词
 
-**7. Find newly-entered SP traffic keywords in April 2026**
-```
-asin: "B0XXXXXXXX", country: "US", timePieceType: "month", timePieceValue: "2026-04", conditions: "spKeywordCnt.in"
+```json
+{"asin":"B0XXXXXXXX","country":"US","conditions":"isPurchaseKw,isQualityKw"}
 ```
 
-**8. Find keywords whose search volume is trending up**
+### 查看日本站 SP 广告词，按广告排名升序排列
+
+```json
+{"asin":"B0XXXXXXXX","country":"JP","conditions":"isSpAd","sortBy":"adLastRank","desc":false}
 ```
-asin: "B0XXXXXXXX", country: "US", conditions: "isSearchVolUpKw", sortBy: "estSearchesNum", desc: true
+
+### 查看转化平稳的精准长尾词
+
+```json
+{"asin":"B0XXXXXXXX","country":"US","conditions":"isAccurateTailKw,isStableKw"}
 ```
 
-## Display Rules
+### 查看 2026 年 4 月新进的 SP 常规流量词
 
-1. **Present data only**: Show query results in clear tables without subjective business advice.
-2. **Ranking clarification**: When showing ranking data, remind users that lower numeric values mean better (higher) positions.
-3. **Share formatting**: Display `trafficShare`, `naturalTrafficShare`, `paidTrafficShare`, and `clickConcentrationShare` as percentages (multiply by 100). For example, 0.05 should be shown as 5%.
-4. **Click concentration wording**: `clickConcentrationShare` measures how concentrated clicks are on top ASINs under the keyword — it is NOT a conversion rate. Label it clearly so users don't confuse it with `clickToPurchaseConversionRate`.
-5. **Period disclosure**: When showing counts sourced from `*.in`/`*.total` filters or comparing numbers, annotate the period range — default is last 7 days; if `timePieceType=month` or `week` is set, surface the resolved period (`periodEndDate` / `abaCreateDateWeek`).
-6. **Marker translation**: Translate marker arrays into human-readable labels. For example, `["isMainKw", "isAccurateKw"]` should display as "Main Traffic, Precise Traffic".
-7. **Display position translation**: Translate position type arrays into readable labels: natural = Organic, ac = Amazon's Choice, sp = SP Ad, top = Top Brand Ad, bottom = Bottom Brand Ad, er = Editorial Recommendation, vedio = Video Ad, tr = Top Rated, trfob = Top Rated Frequently Bought.
-8. **Pagination notice**: When results have more pages, inform the user of the total count and suggest fetching additional pages.
-9. **Error handling**: When a query fails, explain the reason based on the `msg` field and suggest adjusting query parameters.
-10. **Multi-ASIN requests**: If the user asks about multiple ASINs, make separate API calls for each and present the results together.
-## Important Limitations
+```json
+{"asin":"B0XXXXXXXX","country":"US","timePieceType":"month","timePieceValue":"2026-04","conditions":"spKeywordCnt.in"}
+```
 
-- **Single ASIN per request**: Only one ASIN can be queried at a time.
-- **Page size cap**: Maximum 100 results per page.
-- **Time window granularity**: `timePieceType=latelyDay` only supports `timePieceValue=7` or `30`; arbitrary N-day windows are not supported.
-- **Marketplace coverage**: 13 marketplaces only — IN / NL / SE / PL / TR / SG are no longer available.
-- **Keyword language**: The `keyword` filter should ideally be in the language of the target marketplace.
+### 查看搜索量同比增长的词，按搜索量降序排列
 
-## User Expression & Scenario Quick Reference
+```json
+{"asin":"B0XXXXXXXX","country":"US","conditions":"isSearchVolUpKw","sortBy":"estSearchesNum","desc":true}
+```
 
-**Applicable** -- Keyword analysis for specific Amazon products:
+## 使用反馈
 
-| User Says | Scenario |
-|-----------|----------|
-| "What keywords does this ASIN rank for" | Reverse ASIN keyword lookup |
-| "Show me the traffic keywords for B0XXX" | Traffic keyword analysis |
-| "What's the organic rank for this product" | Organic ranking check |
-| "Which keywords is this product advertising on" | Ad keyword analysis |
-| "Find high-converting keywords for this ASIN" | Conversion keyword mining |
-| "What are the main traffic sources for this product" | Main traffic keyword identification |
-| "Show me keywords with lost conversions" | Conversion loss diagnosis |
-| "Which keywords have Amazon's Choice badge" | AC keyword discovery |
-| "Compare keyword rankings for my ASIN" | Keyword position analysis |
-| "Which new SP keywords did this ASIN get last month" | New-in period keyword discovery (`spKeywordCnt.in` + month window) |
-| "Keywords whose search volume is trending up YoY" | Search-volume trend filter (`isSearchVolUpKw`) |
-| "Is click concentration high on this keyword" | ABA TOP3 click concentration read |
-| "Keyword click-to-purchase conversion" | Per-keyword conversion check |
-
-**Not applicable** -- Needs beyond single-ASIN keyword lookup:
-- Broad keyword research not tied to a specific ASIN (use ABA data tools instead)
-- Product reviews, listing copywriting
-- Sales estimation, revenue analysis
-- Advertising campaign management (bids, budgets)
-- Category-wide keyword trends without a specific ASIN
-
-## 算力消耗规则
-
-消耗 9 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

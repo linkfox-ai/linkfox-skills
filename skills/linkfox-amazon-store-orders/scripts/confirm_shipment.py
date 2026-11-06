@@ -13,17 +13,10 @@ POST `orders/v0/orders/{orderId}/shipmentConfirmation`，提交发货确认信�
 
 from __future__ import annotations
 
-import json
 import sys
-from typing import Dict
 from urllib.parse import quote
 
-from _spapi_orders_common import (
-    developer_proxy_call,
-    emit_result,
-    ensure_auth_skill_available,
-        lf_inline_flag,
-)
+from _spapi_orders_common import run_proxy, ensure_auth_skill_available, load_cli_params, require_fields
 
 
 def _path(order_id: str) -> str:
@@ -39,19 +32,12 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-    try:
-        params = json.loads(sys.argv[1])
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON: {e}", file=sys.stderr)
-        sys.exit(1)
+    params = load_cli_params()
 
     if not params.get("skipDepCheck"):
         ensure_auth_skill_available("confirm_shipment.py")
 
-    for f in ("sellerId", "region", "orderId", "requestBody"):
-        if f not in params:
-            print(f"Missing required field: {f}", file=sys.stderr)
-            sys.exit(1)
+    require_fields(params, ("sellerId", "region", "orderId", "requestBody"))
 
     rb = params["requestBody"]
     if not isinstance(rb, dict):
@@ -59,18 +45,9 @@ def main() -> None:
         sys.exit(1)
 
     path = _path(params["orderId"])
-    body_str = json.dumps(rb, ensure_ascii=False)
 
-    proxy = developer_proxy_call(
-        str(params["region"]),
-        path,
-        "POST",
-        seller_id,
-        body=body_str,
-    )
-    out: dict = {"developerProxy": proxy, "resolvedPath": path, "requestBody": rb}
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy("confirmShipment", str(params["region"]), path, "POST", str(params["sellerId"]),
+              body_obj=rb)
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ python scripts/check_linkfox_token.py
 3. **服务市场** → **授权管理**
 4. **获取授权** → 选择 **「Cyber-ERP酷鸟助手」**
 5. 全选授权 → 确认 → 复制 token
-6. 调用 API：`site=global` / `global` / `eu`，`managementType=semi-managed`
+6. 调用 API：`site=us` / `global` / `eu`，`managementType=semi-managed`
 
 ## 3. 全托管店铺
 
@@ -60,9 +60,9 @@ python scripts/check_linkfox_token.py
 |------|------|-----------|
 | cn | 中国站 | openapi.kuajingmaihuo.com |
 | partner | Partner 网关 | openapi-b-partner.temu.com |
-| us | 全球站 | openapi-b-global.temu.com |
+| us | 美国区 | openapi-b-global.temu.com |
 | global | 全球区 | openapi-b-global.temu.com |
-| eu | 全球站 | openapi-b-global.temu.com |
+| eu | 欧洲区 | openapi-b-global.temu.com |
 
 ## 本地保存 Token（推荐）
 
@@ -112,3 +112,7 @@ python scripts/temu_proxy.py '{
 | `save_temu_access_token.py` | 保存 accessToken 到本地 |
 | `list_temu_access_tokens.py` | 列出已保存 token（默认脱敏）|
 | `get_temu_access_token.py` | 读取指定 store 的 token |
+
+## 与本技能默认值的对应
+
+以上为多站点通用授权流程；Global 商品包装默认 site=global、semi-managed、product-inventory。商品库存授权通常从 cn/partner 后台取得，但不能据此自动改写 API 的目标区域或跨区域借用本地 Token。先核对实际授权范围，并以本次调用的完整站点、管理模式和用途组合保存；不确定时先核对授权，不自动更换站点重试。

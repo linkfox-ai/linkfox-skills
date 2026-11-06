@@ -1,148 +1,112 @@
 ---
 name: linkfox-echotik-batch-product-detail
-description: 批量查询TikTok商品详情数据，包括多周期销量与GMV（1天/7天/15天/30天/60天/90天/累计）、直播销量与直播GMV、带货视频与达人数据、播放量、价格、评分、评论数、佣金比例及上下架/全托管状态，支持通过商品ID或TikTok Shop商品URL批量获取。当用户提到TikTok商品详情、批量查询TikTok商品、TikTok商品销量分析、TikTok商品GMV、TikTok直播销量、TikTok带货数据、TikTok商品价格评分、批量获取TikTok商品信息、EchoTik商品详情、TikTok product detail, batch product lookup, TikTok sales analysis, TikTok GMV, TikTok live sales, TikTok influencer data时触发此技能。即使用户未明确提及"EchoTik"，只要其需求涉及根据商品ID或商品URL批量获取TikTok商品的详细销售与营销数据，也应触发此技能。
+description: 根据已知商品 ID 或 TikTok Shop 商品链接批量查询 EchoTik 商品详情，支持多周期销量与 GMV、直播、视频、达人、播放量、价格、评分、评论、佣金和上下架及全托管状态分析。适用于 TikTok 商品对比、销售趋势和带货表现研究，无需明确提及 EchoTik。不适用于关键词找品、新品榜单、商品带货视频列表、视频下载、达人档案或其他平台商品研究。
 ---
 
-# EchoTik TikTok Batch Product Detail
+# EchoTik TikTok 商品批量详情
 
-This skill guides you on how to fetch detailed performance metrics for a batch of TikTok Shop products, helping sellers and operators compare candidate products side-by-side using sales, GMV, live-stream, video, and influencer data.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool retrieves full detail metrics for up to **1000** TikTok Shop products in a single call. You identify products by ID and/or by TikTok Shop product URL; the backend extracts the `productId` from each URL and merges it with any IDs you supplied, then returns per-product analytics.
+根据已知商品 ID 或商品链接获取销售与营销详情，帮助卖家并排比较候选商品。
 
-**Input options** (at least one is needed; both can be combined):
-- `productIds` — array of TikTok product IDs
-- `productUrls` — array of TikTok Shop product URLs (e.g. `https://shop.tiktok.com/us/pdp/<slug>/<productId>?...`); the trailing `productId` is extracted from each URL
+**场景速查**
 
-**Multi-period metrics**: Sales, GMV, live count, video count, influencer count, and views are each reported across `1d / 7d / 15d / 30d / 60d / 90d` windows plus a cumulative total, so you can read both recent momentum and long-run totals.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查询这批 TikTok 商品的详情 | 按商品 ID 批量查询。 |
+| 拉取这些 TikTok 链接的销售数据 | 按商品链接批量查询。 |
+| 对比这些商品的 GMV | 展示销售额及相关统计周期。 |
+| 哪些商品正在增长 | 展示趋势及近期、累计指标。 |
+| 有没有已下架或全托管商品 | 展示商品状态，区分对比对象。 |
+| 看这些商品的直播带货表现 | 展示直播数量、直播销量和直播销售额。 |
 
-**Prices are in USD**: `minPrice`, `maxPrice`, and `spuAvgPrice` are USD values.
+### 边界
 
-**Status flags** (integers): `salesTrendFlag` — `0`=stable, `1`=rising, `2`=falling; `isSShop` — fully-managed (全托管) shop; `offMark` — delisted; `freeShipping` — free shipping.
+“分析这些 TikTok 商品”需先判断用户是否已有明确商品 ID 或商品链接；“TikTok 卖什么”“找热门产品”等发现需求不属于详情查询。
+关键词找品使用 `linkfox-echotik-product-search`，新品榜单使用 `linkfox-echotik-new-product-rank`，商品带货视频列表使用 `linkfox-echotik-product-video`，视频下载链接使用 `linkfox-echotik-get-video-download-url`。达人档案及其他平台商品研究不在本技能范围。
 
-**vs. search**: This is detail **lookup for known products** (you already have IDs/URLs). To *discover* products by keyword, use `linkfox-echotik-product-search`; for new-product rankings use `linkfox-echotik-new-product-rank`.
+## 前置条件
 
-## Parameter Guide
+**先确定待查询商品**：取得用户提供的商品 ID 或 TikTok Shop 商品链接，明确希望比较的指标和统计周期。输入格式与批量限制见 `references/api.md`。
 
-| Parameter | Type | Required | Description | Default |
-|-----------|------|----------|-------------|---------|
-| productIds | array&lt;string&gt; | No* | TikTok product IDs (up to 1000 items) | - |
-| productUrls | array&lt;string&gt; | No* | TikTok Shop product URLs; the `productId` is extracted from each and merged with `productIds` (up to 1000 items) | - |
+## 查询流程
 
-\* At least one of `productIds` / `productUrls` must be provided; both can be passed together.
+1. 核对商品列表与研究目标，按 `references/api.md` 组织商品 ID、商品链接或混合输入。
+2. 检查同一会话、同一参数是否已有结果，优先复用已有数据和本地缓存。
+3. 执行批量详情查询，先读取摘要，再按需从完整响应提取指标。
+4. 按用户目标展示对比表、统计周期和状态；逐项列出未返回数据的商品 ID 或链接，便于核对。
+5. 查询失败时依据 `errmsg` 或 `error` 解释原因，建议核对商品 ID 或链接；后续查询遵守成本约束。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /echotik/batchProductDetail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_batch_product_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_batch_product_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 5 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-batch-product-detail-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-batch-product-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-**1. Batch lookup by product IDs**
+5 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **清晰展示数据**：每个商品一行，默认展示名称、价格、累计销量、近 30 天销量、累计 GMV、评分、评论数、佣金比例及带货达人数；直播研究补充直播销量与直播 GMV。
+- **说明统计周期**：销量、GMV、直播、视频、达人和观看指标提供多周期信息，比较增长时同时展示用户关心的近期窗口与累计值；具体字段见 `references/api.md`，不补造缺失的周期或累计数据。
+- **标明币种与数据性质**：价格标注 USD；销量、GMV 和归因数据属于分析估算，不能表述为平台精确值。
+- **展示佣金与趋势**：佣金比例显示为百分比，例如 `0.05` 显示为 `5%`；销售趋势显示为“稳定”“上升”“下降”，编码见接口定义。
+- **展示状态徽章**：按返回值标注全托管、已下架和免运费，避免将已下架商品当作正常在售商品比较。
+- **控制展示长度**：存在 `imageUrl` 或 `productImageUrls` 时告知有图片可查看；`descDetail` 可能包含较长 HTML 或文本，应概括或说明可用，不整段输出。
+- **解释缺失数据**：请求商品未返回记录时逐项列出原商品 ID 或链接，不把无数据等同于销量为零。
+- **按需读取保存文件**：`scripts/response_io.py read` 可从完整响应文件提取字段；选项、依赖与缓存约定见 `references/api.md`。
+
+## 使用示例
+
+### 按商品 ID 批量查询
+
 ```json
-{
-  "productIds": ["1729382310407603945", "1729382310407603946"]
-}
+{"productIds": ["1729382310407603945", "1729382310407603946"]}
 ```
 
-**2. Batch lookup by product URLs**
+### 按商品链接批量查询
+
 ```json
-{
-  "productUrls": [
-    "https://shop.tiktok.com/us/pdp/phone-case/1729382310407603945",
-    "https://shop.tiktok.com/us/pdp/case-for-phone/1729382310407603946"
-  ]
-}
+{"productUrls": ["https://shop.tiktok.com/us/pdp/phone-case/1729382310407603945", "https://shop.tiktok.com/us/pdp/case-for-phone/1729382310407603946"]}
 ```
 
-**3. Mixed IDs and URLs (merged server-side)**
+### 混合商品 ID 与链接
+
 ```json
-{
-  "productIds": ["1729382310407603945"],
-  "productUrls": ["https://shop.tiktok.com/us/pdp/phone-case/1729382310407603946"]
-}
+{"productIds": ["1729382310407603945"], "productUrls": ["https://shop.tiktok.com/us/pdp/phone-case/1729382310407603946"]}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present a comparison table**: Show one row per product with key columns — name, price (USD), total sales, 30-day sales, total GMV, rating, review count, commission rate, and number of promoting influencers
-2. **Multi-period context**: When comparing momentum, surface the relevant window (e.g. 7d/30d) alongside the cumulative total rather than only the total
-3. **Currency**: Prices are in USD; label them as USD
-4. **Commission formatting**: Display `productCommissionRate` as a percentage (e.g. `0.05` → "5%")
-5. **Trend flag**: Render `salesTrendFlag` as stable/rising/falling for quick scanning
-6. **Status badges**: Mark `isSShop` (全托管), `offMark` (delisted), and `freeShipping` where relevant so users don't compare a delisted product unknowingly
-7. **Image reference**: If `imageUrl` / `productImageUrls` is present, mention that images are available
-8. **Long descriptions**: `descDetail` can be long HTML/text — summarize or note its availability instead of dumping it
-9. **Missing product handling**: If a requested product returns no record, list which IDs/URLs had no data so the user can verify them
-10. **Error handling**: When a query fails, explain the reason from the `errmsg`/`error` field and suggest checking the IDs/URLs
-
-## Important Limitations
-
-- **Batch cap**: Up to 1000 products per request
-- **Pricing currency**: All price fields are in USD
-- **Estimated data**: Sales, GMV, and attribution figures are analytics estimates, not exact platform figures
-- **Lookup only**: This tool does not search by keyword or category — it resolves specific IDs/URLs you already have
-
-## User Expression & Scenario Quick Reference
-
-### Applicable Scenarios
-
-| User Says | Scenario |
-|-----------|----------|
-| "Look up the details for these TikTok products" | Batch detail by product IDs |
-| "Pull sales data for these TikTok links" | Batch detail by product URLs |
-| "Compare the GMV of these TikTok products" | Batch lookup, surface GMV columns |
-| "Which of these TikTok products are trending up" | Batch lookup, read `salesTrendFlag` |
-| "Are any of these TikTok products delisted / 全托管" | Batch lookup, read `offMark` / `isSShop` |
-| "Get live-stream sales for these TikTok products" | Batch lookup, surface live sales/GMV |
-
-### Not Applicable Scenarios
-
-- Discovering products by keyword (use `linkfox-echotik-product-search`)
-- New / trending product rankings (use `linkfox-echotik-new-product-rank`)
-- Promotional videos linked to a product (use `linkfox-echotik-product-video`)
-- Resolving a TikTok video download link (use `linkfox-echotik-get-video-download-url`)
-- TikTok creator/influencer profile analytics
-- Non-TikTok platform product data
-
-### Boundary Judgment
-
-When users say "analyze these TikTok products", check whether they already have specific product IDs or TikTok Shop URLs (this skill) or want to *find* products by keyword/category (the search skill). If they paste a list of IDs/URLs and want sales/GMV/livestream details, this skill applies. If they ask "what should I sell on TikTok" or "find trending products", it does not.
-
-## 算力消耗规则
-
-消耗 5 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

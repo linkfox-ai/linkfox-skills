@@ -1,147 +1,114 @@
 ---
 name: linkfox-zhihuiya-pdf-data
-description: 通过专利ID或公开号从智慧芽专利数据库下载专利PDF全文文档。当用户提到专利PDF下载、专利全文、专利文件获取、公开号查询、专利家族PDF替代、批量专利PDF导出、patent PDF download, patent full-text document, patent file download, PatSnap, patent PDF时触发此技能。即使用户未明确提及"智慧芽"，只要其需求涉及下载或查看专利PDF文档，也应触发此技能。
+description: 根据专利 ID 或公开公告号获取智慧芽（PatSnap）专利 PDF 全文下载链接，支持批量获取及原文不可用时的同族专利替代。适用于下载、查看或批量导出已知专利的全文文档，无需明确提及智慧芽；不适用于按关键词或申请人发现专利、引证与法律状态分析、权利要求解读翻译或专利组合及技术布局分析。
 ---
 
-# Zhihuiya Patent PDF Downloader
+# 智慧芽专利 PDF 全文获取
 
-This skill guides you on how to retrieve patent PDF full-text download links from the Zhihuiya patent database, supporting lookup by patent ID or publication number.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-The Zhihuiya Patent PDF service provides direct download links to the full-text PDF documents of patents worldwide. You can query by **patent ID** or **publication number** (also called public announcement number), and retrieve up to **100 patents** in a single request.
+用户已知专利标识，希望获取单件或多件专利的 PDF 全文下载链接，或在原文不可用时获取同族专利文档。
 
-**Lookup priority**: When both `patentId` and `patentNumber` are supplied, the service uses `patentId` first. This is important to remember when both identifiers are available.
+**场景速查**
 
-**Family substitution**: If a patent's own PDF is unavailable, the service can optionally return the PDF of a related family patent instead.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 下载这个专利的 PDF | 根据已知标识获取单件专利全文。 |
+| 获取这些专利的全文文档 | 批量获取专利 PDF 链接。 |
+| 我有公开号，想查看全文 | 根据公开公告号获取文档。 |
+| 原文没有 PDF，能否找同族文档 | 按用户意图使用同族专利替代。 |
+| 批量导出这些专利 PDF | 汇总已知专利的文档链接与可用情况。 |
 
-## Parameter Guide
+## 前置条件
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| patentId | string | Conditionally | Patent ID(s). At least one of `patentId` or `patentNumber` must be provided. Separate multiple values with commas. Max 100 entries. |
-| patentNumber | string | Conditionally | Publication/announcement number(s). At least one of `patentId` or `patentNumber` must be provided. Separate multiple values with commas. Max 100 entries. |
-| replaceByRelated | string | No | Whether to substitute with a family patent PDF when the original is unavailable. `1` = yes, `0` = no. Defaults to no substitution. |
+**先确定专利标识与替代意图**：取得用户提供的智慧芽专利 ID 或公开公告号；是否接受同族文档应以用户要求为准。具体参数约束见 `references/api.md`。
 
-### How to Choose the Right Identifier
+## 获取专利全文流程
 
-- **Patent ID** (`patentId`): An internal numeric identifier within the Zhihuiya system. Use this when the user provides Zhihuiya-specific IDs.
-- **Publication Number** (`patentNumber`): The public-facing patent number (e.g., `US20230012345A1`, `CN115000000A`). Use this when the user provides standard patent numbers.
+1. 整理用户提供的专利标识，区分智慧芽 ID 和公开公告号；按 `references/api.md` 准备请求，并核对是否允许同族替代。
+2. 根据所需请求次数预估算力消耗；超过单次 100 件上限时按批次计费。已有明确授权时按授权范围执行。
+3. 优先复用相同参数的已有结果，按需获取 PDF 链接。失败或空结果时先解释原因，建议核对标识或考虑同族替代，后续请求遵守成本约束。
+4. 展示每件专利的文档链接及来源，说明原文不可用、缺失结果和同族替代情况。
 
-## Response Fields
+## 执行方式
 
-| Field | Description |
-|-------|-------------|
-| total | Number of records returned |
-| data | Array of patent objects, each containing download information |
-| data[].patentId | The patent ID |
-| data[].pn | The publication/announcement number |
-| data[].pdfPath | The PDF full-text download URL |
-| data[].pnRelated | Publication number of the substitute family patent (only present when family substitution is used) |
-| costToken | Tokens consumed by the request |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_pdf_data.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 调用方式
+### 输出策略
 
-- **API 端点**：`POST /zhihuiya/pdfData`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_pdf_data.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-pdf-data-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 序列化响应不超过 8000 个 UTF-8 字节：保存后，将完整 JSON 打印到标准输出。
+- 序列化响应超过 8000 个 UTF-8 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-pdf-data-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行规则
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 算力消耗预估
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+3 算力/次。按需请求次数预估，单次请求内不按返回的 `data` 条数倍增；拆分批次或重新请求会分别计费，本地缓存命中不发起请求。
 
-## Usage Examples
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**1. Single Patent by Publication Number**
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分标识概念**：专利 ID 是智慧芽内部数字标识；公开公告号是公开使用的专利编号，例如 `US20230012345A1`、`CN115000000A`。标识选择与批量限制见 `references/api.md`。
+- **理解同族替代**：同族专利的 PDF 可帮助获取相关文档，不能把它标成所查询专利自身的原文；并非所有专利都有可用 PDF。
+- **清晰展示链接**：单件结果可用列表；批量结果用表格，列出公开号、专利 ID、可点击的 PDF 链接及替代说明。
+- **标明文档来源**：使用同族替代时明确写明替代来源的公开号，让用户区分原专利与同族文档。相关字段见 `references/api.md`。
+- **解释不可用结果**：未返回文档链接时，说明 PDF 暂不可用；失败或空结果按实际错误解释，建议核对专利 ID 或公开号。尚未使用同族替代时，可建议用户考虑该选项，不自动追加请求。
+
+## 使用示例
+
+### 按公开公告号获取单件专利
+
+```json
+{"patentNumber": "US20230012345A1"}
 ```
-Retrieve the PDF for patent publication number US20230012345A1.
+
+### 按公开公告号批量获取
+
+```json
+{"patentNumber": "CN115000000A,CN115000001A,CN115000002A"}
 ```
-Parameters: `{"patentNumber": "US20230012345A1"}`
 
-**2. Multiple Patents by Publication Number**
+### 按智慧芽专利 ID 获取
+
+```json
+{"patentId": "12345678"}
 ```
-Download PDFs for CN115000000A, CN115000001A, and CN115000002A.
+
+### 原文不可用时使用同族文档
+
+```json
+{"patentNumber": "EP4000000A1", "replaceByRelated": "1"}
 ```
-Parameters: `{"patentNumber": "CN115000000A,CN115000001A,CN115000002A"}`
 
-**3. Single Patent by Patent ID**
+### 按专利 ID 批量获取
+
+```json
+{"patentId": "11111111,22222222,33333333"}
 ```
-Get the full-text PDF for patent ID 12345678.
-```
-Parameters: `{"patentId": "12345678"}`
 
-**4. With Family Substitution Enabled**
-```
-Download the PDF for EP4000000A1. If it is unavailable, use a family patent PDF instead.
-```
-Parameters: `{"patentNumber": "EP4000000A1", "replaceByRelated": "1"}`
+## 使用反馈
 
-**5. Batch Download by Patent IDs**
-```
-Retrieve PDFs for patent IDs 11111111, 22222222, 33333333.
-```
-Parameters: `{"patentId": "11111111,22222222,33333333"}`
-
-## Display Rules
-
-1. **Present download links clearly**: For each patent, show the publication number and its PDF download link in a clean table or list format.
-2. **Highlight substitutions**: If a PDF was provided via family patent substitution, explicitly note this and show the `pnRelated` value so the user knows which family patent was used.
-3. **Batch results**: When multiple patents are returned, present them in a table with columns: Publication Number, Patent ID, PDF Link, and Substitution Note (if applicable).
-4. **Error handling**: When a query fails or returns no results, explain the reason and suggest the user verify the patent ID or publication number. If `replaceByRelated` was not enabled, suggest enabling it as an alternative.
-5. **No PDF available**: If a patent entry is returned without a `pdfPath`, inform the user that the PDF is not available and suggest enabling family substitution.
-## Important Limitations
-
-- **Batch limit**: A maximum of 100 patents per request.
-- **Identifier requirement**: At least one of `patentId` or `patentNumber` must be provided; the request will fail if both are empty.
-- **Priority rule**: When both identifiers are provided, `patentId` takes precedence over `patentNumber`.
-- **PDF availability**: Not all patents have PDFs available. Use the `replaceByRelated` option to fall back to family patents.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Patent PDF document retrieval tasks:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Download the PDF for patent XX" | Single patent PDF retrieval |
-| "Get full-text documents for these patents" | Batch patent PDF download |
-| "I need the PDF for publication number XX" | Lookup by publication number |
-| "Can I get the patent document even if it's not directly available" | Family substitution scenario |
-| "Batch export patent PDFs" | Multi-patent batch download |
-
-**Not applicable** -- Needs beyond patent PDF retrieval:
-- Patent search or discovery (finding patents by keyword, assignee, etc.)
-- Patent citation or legal status analysis
-- Patent claim interpretation or translation
-- Patent portfolio analytics or landscape mapping
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利 PDF 结果
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

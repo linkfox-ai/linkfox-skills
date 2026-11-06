@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict
+from typing import Literal, TypedDict
 
 
 class OrderEndpoint(TypedDict, total=False):
@@ -201,13 +201,6 @@ ORDER_STATUS_VALUES = frozenset({
     "UNPAID", "READY_TO_SHIP", "PROCESSED", "SHIPPED", "COMPLETED",
     "IN_CANCEL", "CANCELLED", "INVOICE_PENDING",
 })
-
-
-def official_doc_url(api_name: str) -> str:
-    """Shopee Open Platform Order module doc URL (module=94)."""
-    return (
-        f"https://open.shopee.com/documents/v2/v2.order.{api_name}?module=94&type=1"
-    )
 
 
 def list_api_names() -> list[str]:

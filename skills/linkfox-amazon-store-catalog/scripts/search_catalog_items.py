@@ -12,7 +12,6 @@ GET `catalog/{version}/items`。默认 **2022-04-01**；可设 `catalogItemsVers
 
 from __future__ import annotations
 
-import json
 import sys
 from urllib.parse import quote
 
@@ -20,12 +19,9 @@ from _spapi_catalog_common import (
     CATALOG_ITEMS_V2020,
     CATALOG_ITEMS_V2022,
     catalog_items_path,
-    developer_proxy_get,
-    emit_result,
+    run_proxy,
     ensure_auth_skill_available,
-        lf_inline_flag,
     load_cli_params,
-    merge_success_json,
     norm_marketplace_ids,
     require_seller_region,
     resolve_catalog_items_version,
@@ -45,7 +41,7 @@ def _build_query(params: dict) -> str:
 
     keywords = str_list(params.get("keywords"), "keywords")
     identifiers = str_list(params.get("identifiers"), "identifiers")
-    id_type = params.get("identifiersType")
+    id_type = str(params.get("identifiersType") or "").strip().upper()
 
     if keywords and identifiers:
         print("keywords and identifiers cannot be used together.", file=sys.stderr)
@@ -92,13 +88,22 @@ def _build_query(params: dict) -> str:
         add("keywordsLocale", str(params["keywordsLocale"]).strip())
     if params.get("sellerIdForCatalog"):
         add("sellerId", str(params["sellerIdForCatalog"]).strip())
-    elif params.get("identifiersType") == "SKU" or str(params.get("identifiersType", "")).upper() == "SKU":
+    elif id_type == "SKU":
         sid = params.get("sellerId")
         if sid:
             add("sellerId", str(sid).strip())
 
     if params.get("pageSize") is not None:
-        ps = int(params["pageSize"])
+        try:
+            raw_page_size = params["pageSize"]
+            ps = int(raw_page_size)
+            if isinstance(raw_page_size, bool) or (
+                isinstance(raw_page_size, float) and raw_page_size != ps
+            ):
+                raise ValueError("pageSize 不能是布尔值或小数。")
+        except (TypeError, ValueError, OverflowError):
+            print("pageSize 必须为 1～20 的整数。", file=sys.stderr)
+            raise SystemExit(1)
         if ps < 1 or ps > 20:
             print("pageSize must be between 1 and 20", file=sys.stderr)
             sys.exit(1)
@@ -129,16 +134,10 @@ def main() -> None:
     path = catalog_items_path(version)
     qs = _build_query(params)
 
-    proxy = developer_proxy_get(region, path, seller_id, query_string=qs)
-    out: dict = {
-        "developerProxy": proxy,
-        "resolvedPath": path,
-        "queryString": qs,
-        "catalogItemsVersion": version,
-    }
-    merge_success_json(out, proxy, "catalogItems")
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy(
+        "searchCatalogItems", region, path, seller_id, qs,
+        result_key="catalogItems", version=version,
+    )
 
 
 if __name__ == "__main__":

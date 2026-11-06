@@ -1,221 +1,120 @@
 ---
 name: linkfox-ruiguan-detection-patent-design
-description: 基于睿观的外观专利侵权检测，支持25+国家/地区的图片专利检索。当用户提到外观专利检测、专利侵权检查、专利风险分析、TRO案件查询、外观设计专利搜索、设计专利相似度、产品专利排查、design patent detection, patent infringement, design patent, TRO cases, patent risk, patent search, Ruiguan时触发此技能。即使用户未明确提及"外观专利"，只要其需求涉及检查产品图片是否可能侵犯已有的外观设计专利，或提到侵权、专利、TRO、外观专利等关键词，也应触发此技能。
+description: 基于产品图片检索睿观外观设计专利，支持多国家和地区的相似专利、TRO 维权历史及 AI 雷达风险分析，并支持本地产品图片准备。适用于上架前外观专利排查、设计相似度比较、按市场或产品类别检索专利及 TRO 风险核对；不适用于实用新型或发明专利检索、商标和版权检测、专利申请、诉讼策略、法律代理或商品刊登优化。
+---
+# 睿观外观专利检测
+
+## 适用范围
+
+### 适用
+
+根据产品实物图、线稿或产品背景资料寻找相似外观设计专利，帮助电商卖家和知识产权从业者识别上架前的潜在风险。用户未明确说“外观专利”，但关注产品外观与已有设计专利的相似性时，也使用本技能。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 检查这张产品图是否可能侵犯外观专利 | 图片专利检测。 |
+| 这个产品有没有 TRO 风险 | 查找相关专利的 TRO 维权记录。 |
+| 查美国和欧盟的外观设计专利 | 按销售市场排查相似专利。 |
+| 帮我查这款家具的外观专利 | 结合产品类别缩小检索范围。 |
+| 这张设计草图有没有相似专利 | 线稿检索和附图对比。 |
+| 上架前做一次专利风险分析 | 综合展示相似度、雷达结果和维权信息。 |
+
+## 接口清单
+
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 外观专利检测 | POST `/ruiguan/detectionPatentDesign` | `scripts/ruiguan_detection_patent_design.py` | 检索相似外观设计专利，返回雷达分析和 TRO 历史。 |
+| 图片上传预签名 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 取得本地图片的 OSS PUT 地址，再上传并返回公开图片链接。 |
+
+## 前置条件
+
+准备待检索的产品图片和目标销售市场。图片为本地文件时，先运行 `python scripts/upload_image.py <本地图片路径>`，使用返回的公开链接进行检测。接口字段、图片格式与链接有效期见 `references/api.md`。
+
+## 检测流程
+
+1. 明确用户关注的是产品外观设计，准备图片及销售市场；本地图片先上传，已有公开图片链接可直接使用。
+2. 根据图片类型选择实物图、线稿或混合检索，结合产品标题、描述及类别准备请求；参数选择和默认值见 `references/api.md`。
+3. 调用检测脚本，优先复用同参数缓存。需要继续查询时，遵守接口参考中的使用限制和费用确认要求。
+4. 先查看摘要，再按需读取完整响应；核对全部相似专利，完整展示重点匹配的资料、附图、雷达分析和 TRO 信息。
+5. 解释检索结果及错误原因，附上知识产权律师提醒。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/ruiguan_detection_patent_design.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：雷达检测开启每次消耗 106 算力，未开启每次消耗 71 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-detection-patent-design-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+雷达检测开启消耗 106 算力 / 次，未开启消耗 71 算力 / 次。图片上传预签名的算力消耗以实际扣除为准，不推定免费。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **解释相似度**：相似度越高，产品与专利附图的视觉相似程度越高，应越重视潜在侵权风险；该指标不直接构成法律结论。响应中的相似度为字符串，比较时按数值理解。
+- **完整展示重点专利**：对每一项 `similarity >= 0.7` 或 `troCase = true` 的结果，完整展示申请号、中文专利标题、发明人、TRO 维权历史、最相似附图、全部专利附图、专利摘要、说明书全文、LOC 分类及一级和二级信息、雷达分析和判定说明。不得因摘要或条目较多而省略；返回缺失字段时如实标注，不补造内容。
+- **解释雷达分析**：AI 雷达在视觉相似度以外提供疑似侵权判断；`radarResult.same` 为 true 时，醒目标记“疑似侵权匹配”并展示 `radarResult.exp` 的完整说明。
+- **突出 TRO 风险**：TRO（Temporary Restraining Order，临时限制令）信息用于提示维权历史。`troCase` 或 `troHolder` 为 true 时醒目警示，说明该专利或权利人存在积极维权记录。
+- **展示全部附图**：同时展示 `patentImageUrl` 和 `images` 全部图片，供用户逐图比较。
+- **解释 LOC**：Locarno Classification（洛迦诺分类）用于外观设计分类，可按产品类别收窄检索；具体编码和自动预测规则见接口参考。
+- **忠实呈现**：保留服务返回的原始结论，不添加超出工具分析的主观法律判断。
+- **处理失败**：解释接口消息，并建议核查图片链接可访问性或市场代码；后续检索仍遵守成本约束，不自动连续试探。
+- **结尾提醒**：每次展示检测结果后附上：“本检测结果由 LinkfoxAgent 生成，建议咨询专业知识产权律师以获取法律意见。”
+
+## 使用示例
+
+### 基础外观检测
+
+用户：检查这张产品图在美国是否有外观专利风险。
+
+准备图片并按目标市场检索，展示重点匹配专利及全部附图，解释相似度、雷达与 TRO 信息。
+
+### 多市场与产品类别检索
+
+用户：查一下这款家具在美国和德国的外观专利。
+
+结合家具类别和目标市场准备参数，按需补充标题和描述，分类编码及多地区写法见接口参考。
+
+### 线稿与专利状态排查
+
+用户：用这张草图查相似专利，也把失效专利列出来。
+
+选择线稿检索并覆盖用户要求的专利状态，在结果中如实展示有效性及相关日期。
+
+### 本地图片
+
+用户：帮我检测这个本地产品图片。
+
+运行图片上传脚本取得公开链接，再用该链接进行检测。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Ruiguan Design Patent Detection
-
-This skill guides you on how to perform design patent infringement detection using the Ruiguan engine, helping e-commerce sellers and IP professionals identify potential design patent risks before listing products.
-
-## Core Concepts
-
-Design patent detection compares a product image against a global design patent database using visual similarity algorithms. The system returns patents ranked by similarity score, along with TRO (Temporary Restraining Order) litigation history, helping users assess infringement risk.
-
-**Similarity score**: A value between 0 and 1. Higher values indicate greater visual resemblance to the patent drawing. Patents with `similarity >= 0.7` or those flagged with TRO enforcement history deserve special attention and should be reviewed carefully.
-
-**Radar analysis**: When radar is enabled, each patent result includes a `radarResult` with a `same` flag (suspected infringement: true/false) and an `exp` field (explanation). This provides an AI-powered judgment beyond raw similarity.
-
-**LOC classification**: The Locarno Classification (LOC) is an international system for categorizing industrial designs. You can optionally specify LOC codes to narrow the search scope, or leave it unset to let the model predict the appropriate categories automatically.
-
-## Parameters Guide
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| imageUrl | Yes | - | Product image URL to check against the patent database |
-| queryMode | Yes | hybrid | Search mode: `physical` (real product photo), `line` (line drawing), `hybrid` (combined) |
-| topNumber | Yes | 100 | Number of patent results to return (max 100) |
-| regions | No | US | Country/region codes, comma-separated for multiple (e.g., `US,EU,CN`) |
-| productTitle | No | - | Product title for supplementary context |
-| productDescription | No | - | Product description for supplementary context |
-| patentStatus | No | 1 | Patent validity: `1` (active), `0` (expired), `1,0` (both) |
-| enableRadar | No | true | Enable AI radar analysis for suspected infringement judgment |
-| topLoc | No | - | LOC level-1 codes to restrict search scope (e.g., `06,07`). Omit to use auto-prediction |
-| sourceLanguage | No | - | Source language code for translation (e.g., `zh-CN`). Leave empty if text is already in English |
-
-### Supported Regions
-
-US (United States), EU (European Union), CN (China), JP (Japan), KR (South Korea), DE (Germany), GB (United Kingdom), FR (France), IT (Italy), AU (Australia), CA (Canada), BR (Brazil), MX (Mexico), IN (India), TH (Thailand), SE (Sweden), CH (Switzerland), IE (Ireland), IL (Israel), DK (Denmark), NZ (New Zealand), AT (Austria), BX (Bolivia), FI (Finland), WO (WIPO)
-
-Default region is **US**. Use US when the user does not specify a region.
-
-### LOC Level-1 Categories
-
-| Code | Category |
-|------|----------|
-| 01 | Food |
-| 02 | Clothing, haberdashery and sewing accessories |
-| 03 | Travel goods, cases, parasols and personal items n.e.c. |
-| 04 | Brushes |
-| 05 | Textiles, artificial and natural sheet material |
-| 06 | Furniture and household goods |
-| 07 | Household items n.e.c. |
-| 08 | Tools and hardware |
-| 09 | Packages and containers for transport or handling of goods |
-| 10 | Clocks, watches, measuring/checking/signaling instruments |
-| 11 | Ornamental articles |
-| 12 | Means of transport or hoisting |
-| 13 | Equipment for production, distribution or transformation of electricity |
-| 14 | Recording, telecommunication or data processing equipment |
-| 15 | Machines n.e.c. |
-| 16 | Photographic, cinematographic and optical apparatus |
-| 17 | Musical instruments |
-| 18 | Printing and office machinery |
-| 19 | Stationery, office equipment, art materials, teaching materials |
-| 20 | Sales and advertising equipment, signs |
-| 21 | Games, toys, tents and sports goods |
-| 22 | Arms, pyrotechnic articles, hunting/fishing/pest-killing articles |
-| 23 | Fluid distribution, sanitary, heating, ventilation, air-conditioning equipment, solid fuel |
-| 24 | Medical and laboratory equipment |
-| 25 | Building units and construction elements |
-| 26 | Lighting apparatus |
-| 27 | Tobacco and smoking supplies |
-| 28 | Pharmaceutical/cosmetic products, toilet articles and apparatus |
-| 29 | Devices and equipment against fire, for accident prevention and rescue |
-| 30 | Articles for care and handling of animals |
-| 31 | Machines and apparatus for preparing food or drink n.e.c. |
-| 32 | Graphic symbols, logos, surface patterns, ornamentation, interior/exterior arrangements |
-| ALL | All categories |
-
-## 调用方式
-
-- **API 端点**：`POST /ruiguan/detectionPatentDesign`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/ruiguan_detection_patent_design.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-detection-patent-design-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Local Image Upload
-
-This tool requires a **publicly accessible image URL**. If the user provides a local image file path (e.g., `C:\Users\...\photo.png`, `/home/.../image.jpg`), you must upload it first to obtain a public URL.
-
-Run the upload script:
-```bash
-python scripts/upload_image.py /path/to/local/image.png
-```
-
-The script will return a public URL (valid for 24 hours) that can be used as the image URL parameter.
-
-## Usage Examples
-
-**1. Basic patent check for a product image (US market)**
-```json
-{
-  "imageUrl": "https://example.com/product.jpg",
-  "queryMode": "hybrid",
-  "topNumber": 50,
-  "regions": "US"
-}
-```
-
-**2. Multi-region check with product context**
-```json
-{
-  "imageUrl": "https://example.com/product.jpg",
-  "queryMode": "physical",
-  "topNumber": 100,
-  "regions": "US,EU,CN",
-  "productTitle": "Portable Wireless Charger Stand",
-  "productDescription": "A foldable wireless charging stand for smartphones",
-  "enableRadar": true
-}
-```
-
-**3. Narrowed search using LOC classification (furniture)**
-```json
-{
-  "imageUrl": "https://example.com/chair.jpg",
-  "queryMode": "hybrid",
-  "topNumber": 80,
-  "regions": "US,DE",
-  "topLoc": "06",
-  "patentStatus": "1"
-}
-```
-
-**4. Line drawing mode for sketch-based search**
-```json
-{
-  "imageUrl": "https://example.com/sketch.png",
-  "queryMode": "line",
-  "topNumber": 50,
-  "regions": "CN,JP,KR"
-}
-```
-
-**5. Check both active and expired patents**
-```json
-{
-  "imageUrl": "https://example.com/product.jpg",
-  "queryMode": "hybrid",
-  "topNumber": 100,
-  "regions": "US",
-  "patentStatus": "1,0"
-}
-```
-
-## Display Rules
-
-1. **High-risk patent highlighting**: When generating summaries or reports, display ALL patents with `similarity >= 0.7` or `troCase = true` in full detail. For each such patent, include: application number, patent title (Chinese), inventors, TRO enforcement history, the most-similar patent drawing, every image in the patent image list, patent abstract, patent specification, LOC info, radar analysis result, and specification text. This detailed presentation is critically important -- do NOT abbreviate or omit these fields.
-2. **Disclaimer**: Always append a friendly reminder at the end: "This detection result is generated by LinkfoxAgent. It is recommended to consult a professional IP attorney for legal advice."
-3. **Similarity interpretation**: Clearly explain that higher similarity scores indicate greater visual resemblance and higher infringement risk.
-4. **Radar result display**: When `radarResult.same` is true, prominently flag the patent as a suspected infringement match and display the `exp` explanation.
-5. **TRO warning**: Patents with `troCase = true` or `troHolder = true` should be highlighted with a warning, as they indicate the patent holder has a history of active enforcement via Temporary Restraining Orders.
-6. **Image display**: Show both `patentImageUrl` (the most similar patent drawing) and the full `images` list so users can visually compare their product against all patent drawings.
-7. **Error handling**: When a request fails, explain the issue and suggest corrective actions (e.g., check image URL accessibility, verify region codes).
-8. **Present data faithfully**: Show query results as-is without adding subjective legal conclusions beyond the tool's own analysis.
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Design patent risk assessment:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Check if this product infringes any design patents" | Basic patent detection |
-| "Patent risk check for this image" | Image-based patent search |
-| "Does this product have TRO risk" | TRO enforcement history lookup |
-| "Design patent search for US and EU" | Multi-region patent detection |
-| "Check appearance patent for this furniture" | Category-specific patent search |
-| "Is this product design safe to sell" | Pre-listing patent clearance |
-| "Find similar design patents" | Similarity-based patent discovery |
-| "Patent infringement analysis" | Comprehensive patent risk report |
-
-**Not applicable** -- Needs beyond design patent detection:
-- Utility patent or invention patent searches
-- Trademark infringement checks
-- Copyright/DMCA issues
-- Legal case management or litigation strategy
-- Patent application or filing assistance
-- Product listing optimization or pricing
-
-**Boundary judgment**: When users mention "patent check" or "IP risk", if the concern is about product appearance/design similarity to existing patents, this skill applies. If they are asking about utility patents, trademarks, copyrights, or need actual legal counsel, this skill does not apply.
-
-## 算力消耗规则
-
-雷达检测开启消耗 106 算力，未开启消耗 71 算力。
-
-> **重要**：本技能消耗大量算力，如果调用次数超过5次，必须用`AskUserQuestion` 和用户进行二次确认，要明确告知用户已消耗算力和继续调用的话预计消耗的算力，让用户自行决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
----
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

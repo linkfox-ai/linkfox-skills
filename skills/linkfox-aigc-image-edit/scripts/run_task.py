@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Upload source media, create once, poll the shared task query, and save media."""
+"""上传源素材、创建一次任务、轮询统一查询接口并保存成品。"""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -19,11 +20,21 @@ def main():
     parser.add_argument("--params-file", type=Path)
     parser.add_argument("--task-id", help="Resume querying an accepted task; never upload or create again")
     parser.add_argument("--member-id")
-    parser.add_argument("--timeout", type=float, default=1200 if VIDEO else 600)
+    parser.add_argument("--task-type", choices=("image", "video"),
+                        help="恢复已有任务时指定媒体类型；默认 image")
+    parser.add_argument("--timeout", type=float, default=None)
     parser.add_argument("--poll-interval", type=float, default=10)
     parser.add_argument("--initial-delay", type=float, default=None)
     args = parser.parse_args()
-    if args.timeout <= 0 or args.poll_interval < 0 or args.initial_delay is not None and args.initial_delay < 0:
+    if args.task_type and not args.task_id:
+        parser.error("--task-type 仅用于 --task-id 恢复已有任务")
+    is_video = args.task_type == "video" or VIDEO
+    if args.timeout is None:
+        args.timeout = 1200 if is_video else 600
+    timing = [args.timeout, args.poll_interval]
+    if args.initial_delay is not None:
+        timing.append(args.initial_delay)
+    if not all(math.isfinite(value) for value in timing) or args.timeout <= 0 or args.poll_interval < 0 or args.initial_delay is not None and args.initial_delay < 0:
         parser.error("Timeout must be positive; delays cannot be negative")
     if args.parameters and args.params_file:
         parser.error("Choose JSON parameters or --params-file")
@@ -64,7 +75,7 @@ def main():
     if member_id:
         query["memberId"] = member_id
     deadline = time.monotonic() + args.timeout
-    initial = args.initial_delay if args.initial_delay is not None else (0 if args.task_id else 120 if VIDEO else 10)
+    initial = args.initial_delay if args.initial_delay is not None else (120 if is_video else 0 if args.task_id else 10)
     time.sleep(min(initial, args.timeout))
     interval = args.poll_interval
     while time.monotonic() < deadline:
@@ -90,7 +101,7 @@ def main():
             raise RuntimeError("Unknown task status; stop polling without creating a new task")
         print("Task processing: taskId=" + task_id, file=sys.stderr)
         time.sleep(min(interval, max(0, deadline - time.monotonic())))
-        if not VIDEO and args.poll_interval >= 5:
+        if not is_video and args.poll_interval >= 5:
             interval = max(5, interval - 1)
     if artifact:
         print("Saved full response: " + str(artifact))

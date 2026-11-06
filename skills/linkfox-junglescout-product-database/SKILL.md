@@ -1,231 +1,128 @@
 ---
 name: linkfox-junglescout-product-database
-description: Jungle Scout产品数据库多条件筛选，支持按品类、价格、销量、收入、评论、评分、重量、BSR排名、LQS、卖家类型等维度筛选亚马逊商品，覆盖10个站点。当用户提到亚马逊选品、产品数据库筛选、BSR排名筛选、品类选品、高评分低竞争选品、FBA选品、亚马逊商品搜索、产品筛选、Amazon product database, product research, product filtering, BSR rank filter, category product search, niche product finder, FBA product search, Amazon product discovery, low competition products, Jungle Scout product database时触发此技能。即使用户未明确提及"Jungle Scout"或"产品数据库"，只要其需求涉及按多条件筛选亚马逊商品或发现潜力产品，也应触发此技能。
+description: 使用 Jungle Scout 产品数据库按品类、关键词、价格、月销量、月收入、评论、评分、重量、BSR、LQS、卖家类型及尺寸层级等条件筛选亚马逊商品，覆盖美国、英国、德国、印度、加拿大、法国、意大利、西班牙、墨西哥和日本站。适用于品类选品、低竞争机会发现、FBA 商品筛选及 Listing 优化机会研究；不适用于关键词搜索量与趋势、ABA 排名、商品详情页内容分析、广告投放或非亚马逊平台数据查询。
 ---
 
-# Jungle Scout — 产品数据库查询
+# Jungle Scout 产品数据库查询
 
-This skill queries the Jungle Scout Product Database via the LinkFox tool gateway, enabling multi-condition filtering of Amazon products across 10 marketplaces. Sellers can discover products by category, price range, sales volume, revenue, reviews, rating, BSR rank, Listing Quality Score (LQS), seller type, and more.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Jungle Scout 产品数据库是亚马逊商品级别的多维筛选工具，帮助卖家从海量商品中快速锁定目标产品：
+按多条件筛选亚马逊商品并发现潜力产品。用户提出“选品”“找产品”“市场调研”时，若目标是从商品库按价格、销量、品类、评论等条件筛选，使用本技能，无需明确提及 Jungle Scout。
 
-- **品类选品**：按亚马逊主分类筛选特定品类下的商品
-- **销量/收入筛选**：通过月销量和月收入范围圈定市场规模合适的产品
-- **竞争度评估**：通过评论数、评分、卖家数量判断竞争激烈程度
-- **Listing 质量评估**：LQS（Listing Quality Score，1-10分）帮助发现优化空间大的产品
-- **产品类型过滤**：区分 FBA/FBM/AMZ 卖家类型、标准尺寸/超大尺寸
-- **新品发现**：通过上架日期筛选近期上架的新品
+**场景速查**
 
-**Internal paging**: The API handles pagination automatically; you specify `needCount` to control how many results you want, and the backend fetches them across pages internally.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 帮我找月销量 500 以上的瑜伽垫 | 关键词与销量筛选。 |
+| 美国站厨房品类 30 美元以下有什么好产品 | 品类与价格筛选。 |
+| 评论少但评分高的蓝海产品 | 评论、评分与销量组合筛选。 |
+| 找 FBA 标准尺寸的手机支架 | 卖家类型与尺寸层级筛选。 |
+| 排除大品牌的运动品类机会 | 排除头部品牌并比较竞争。 |
+| 最近新上架的电子产品有哪些卖得好 | 检索候选，结合返回的首次上架日期核对新品。 |
+| BSR 排名 1 万以内的家居产品 | BSR 与品类组合筛选。 |
+| LQS 低于 5 分的高销量产品 | 发现 Listing 优化空间。 |
 
-## Data Fields
+## 前置条件
 
-### Key Output Fields
+先明确目标站点与筛选意图；用户未指定站点时按美国站处理。参数约定、站点映射和接口限制见 `references/api.md`。
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| 商品标题 | title | 产品标题 | Yoga Mat Non Slip... |
-| 品牌 | brand | 品牌名称 | Liforme |
-| 主分类 | category | 亚马逊主分类 | Sports & Outdoors |
-| 分类路径 | breadcrumbPath | 完整分类层级 | Sports & Outdoors > Exercise & Fitness |
-| 价格 | price | 当前售价 (USD) | 29.99 |
-| 月销量 | approximate30DayUnitsSold | 近30天预估销量 | 1200 |
-| 月收入 | approximate30DayRevenue | 近30天预估收入 (USD) | 35988.00 |
-| BSR排名 | productRank | Best Sellers Rank | 3456 |
-| 评论数 | reviews | 累计评论数 | 850 |
-| 评分 | rating | 平均评分 (1.0-5.0) | 4.5 |
-| LQS | listingQualityScore | Listing质量评分 (1-10) | 8 |
-| 卖家数量 | numberOfSellers | 在售卖家数 | 3 |
-| 卖家类型 | sellerType | 卖家类型 (amz/fba/fbm) | fba |
-| 首次上架日期 | dateFirstAvailable | 产品首次上架日期 | 2024-06-15 |
-| 重量 | weightValue / weightUnit | 产品重量 | 2.5 lbs |
-| 尺寸 | lengthValue / widthValue / heightValue / dimensionsUnit | 产品尺寸 | 24×8×8 inches |
-| 父ASIN | parentAsin | 父体ASIN | B0XXXXXXXX |
-| Buy Box持有者 | buyBoxOwner | Buy Box 当前持有卖家 | BrandName |
-| 费用明细 | feeBreakdown | FBA费用、推荐费、总费用等 | {fbaFee: 5.40, ...} |
-| 子分类排名 | subcategoryRanks | 子分类BSR排名列表 | [{subcategory: "Yoga Mats", rank: 12}] |
-| 消耗Token | costToken | 本次调用消耗的 token 数 | 5 |
+## 查询流程
 
-## Supported Marketplaces
+1. 将用户目标整理为站点、商品范围、市场规模和竞争偏好，确定关键词或品类检索方向。
+2. 按 `references/api.md` 组合筛选与排序，核对分类名称、范围和返回规模，不将用户未提出的偏好设为硬条件。
+3. 先说明动态计费及预估依据，提醒可能一次性产生大量算力消耗，由用户决定是否继续。
+4. 执行一次查询，先读落盘响应摘要；需要细分字段时从保存文件提取。失败或空结果按接口参考解释，后续检索遵守成本约束。
+5. 展示结果数量、排序和核心指标，标记潜在机会；用户研究利润时补充费用明细，研究新品时核对首次上架日期。
 
-us (United States), uk (United Kingdom), de (Germany), in (India), ca (Canada), fr (France), it (Italy), es (Spain), mx (Mexico), jp (Japan)
+## 执行方式
 
-Default marketplace is **us**. Use us when the user doesn't specify a marketplace.
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/junglescout_product_database.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 调用方式
+### 输出策略
 
-- **API 端点**：`POST /tool-jungle-scout/product-database/query`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/junglescout_product_database.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-product-database-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-product-database-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行规则
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 算力消耗预估
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+消耗算力 = 实际查询页数 × 63.75。返回条数不能直接等同于查询页数；页数未知时说明无法精确预估，不虚构固定单次价格。
 
-## How to Build Queries
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-Only `marketplace` is **required**. All other parameters are optional filters — combine them to narrow results.
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-### Principles for Building API Calls
+### 解决认证和算力问题
 
-1. **站点映射**：用户说"美国站"→ `us`，"日本站"→ `jp`，"德国站"→ `de`；未指定时默认 `us`
-2. **关键词**：`includeKeywords` 支持逗号分隔多个词（标题或ASIN），如 `yoga mat,fitness`；`excludeKeywords` 排除含特定词的商品
-3. **品类匹配**：`categories` 必须使用对应站点的英文标准分类名，如美国站 `Sports & Outdoors`、`Home & Kitchen` 等；多个品类逗号分隔
-4. **数值范围**：min/max 成对使用，可只传一端；如只设 `minSales=300` 表示月销量≥300
-5. **排序**：`sort` 字段名前加 `-` 表示降序，如 `-sales` 按销量从高到低；默认按 `name` 升序
-6. **结果数量**：`needCount` 控制返回结果总数，不设则返回默认数量
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### Common Query Scenarios
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**1. 关键词搜索 + 按销量筛选**
+### 约束与建议
+
+- **理解商品级指标**：通过主分类定位品类，通过月销量与月收入判断市场规模，通过评论数、评分和在售卖家数比较竞争；LQS 表示 Listing 质量，可用于发现优化空间。
+- **区分产品类型**：结合 FBA、FBM、亚马逊自营与标准尺寸、超大尺寸理解候选差异；重量、尺寸、父子变体与 Buy Box 信息用于单品核对。
+- **清晰展示数据**：用表格展示标题、品牌、价格、月销量、月收入、BSR、评论数、评分和 LQS，并说明站点、排序与实际返回数量；字段定义及单位见接口参考。
+- **标记潜在机会**：突出低评论但高销量的候选和高 LQS 商品；低 LQS 且高销量可视为内容优化线索，不将这些指标直接当成开发成功保证。
+- **补充费用和图片**：用户询问利润时展示费用明细中的 FBA 费用、推荐费、可变结算费及总费用；展示单品详情时附商品主图链接。
+- **核对新品日期**：通过首次上架日期判断新品，注意其是否为估算值；数据更新日期与首次上架日期不同，日期筛选的含义见接口参考。
+- **解释结果**：只依据真实响应说明候选和异常，不补造缺失值；查询失败时解释响应给出的原因并建议调整方向，实际重查仍受成本约束。
+
+## 使用示例
+
+### 关键词搜索与月销量筛选
+
 ```json
-{
-  "marketplace": "us",
-  "includeKeywords": "yoga mat",
-  "minSales": 300,
-  "maxSales": 5000,
-  "sort": "-sales",
-  "needCount": 50
-}
+{"marketplace":"us","includeKeywords":"yoga mat","minSales":300,"maxSales":5000,"sort":"-sales","needCount":50}
 ```
 
-**2. 品类 + 价格区间筛选**
+### 家居品类与价格区间
+
 ```json
-{
-  "marketplace": "us",
-  "categories": "Home & Kitchen",
-  "minPrice": 15,
-  "maxPrice": 50,
-  "minSales": 100,
-  "sort": "-revenue",
-  "needCount": 50
-}
+{"marketplace":"us","categories":"Home & Kitchen","minPrice":15,"maxPrice":50,"minSales":100,"sort":"-revenue","needCount":50}
 ```
 
-**3. 高评分低竞争选品（评论少但评分高）**
+### 高评分、低评论候选
+
 ```json
-{
-  "marketplace": "us",
-  "categories": "Beauty & Personal Care",
-  "minRating": 4.0,
-  "maxReviews": 200,
-  "minSales": 100,
-  "sort": "-sales",
-  "needCount": 50
-}
+{"marketplace":"us","categories":"Beauty & Personal Care","minRating":4.0,"maxReviews":200,"minSales":100,"sort":"-sales","needCount":50}
 ```
 
-**4. 仅 FBA 产品筛选**
+### FBA 标准尺寸商品
+
 ```json
-{
-  "marketplace": "us",
-  "includeKeywords": "phone stand",
-  "sellerTypes": "fba",
-  "productTiers": "standard",
-  "minSales": 200,
-  "sort": "-sales",
-  "needCount": 50
-}
+{"marketplace":"us","includeKeywords":"phone stand","sellerTypes":"fba","productTiers":"standard","minSales":200,"sort":"-sales","needCount":50}
 ```
 
-**5. 排除头部品牌 + 发现蓝海机会**
+### 排除头部品牌
+
 ```json
-{
-  "marketplace": "us",
-  "categories": "Sports & Outdoors",
-  "excludeTopBrands": true,
-  "minSales": 300,
-  "maxReviews": 500,
-  "minRating": 4.0,
-  "sort": "-sales",
-  "needCount": 50
-}
+{"marketplace":"us","categories":"Sports & Outdoors","excludeTopBrands":true,"minSales":300,"maxReviews":500,"minRating":4.0,"sort":"-sales","needCount":50}
 ```
 
-**6. 按上架日期发现新品**
+### 按更新日期取候选后核对新品
+
 ```json
-{
-  "marketplace": "us",
-  "categories": "Electronics",
-  "minUpdatedAt": "2026-01-01",
-  "minSales": 50,
-  "sort": "-sales",
-  "needCount": 50
-}
+{"marketplace":"us","categories":"Electronics","minUpdatedAt":"2026-01-01","minSales":50,"sort":"-sales","needCount":50}
 ```
 
-## Display Rules
+从返回的首次上架日期核对哪些商品属于新品。
 
-1. **Table format**: Present results in a structured table with key columns: title, brand, price, monthly sales, monthly revenue, BSR rank, reviews, rating, LQS
-2. **Sorting note**: Remind the user what sorting was applied and how many results were returned
-3. **Highlight insights**: Mark products with notably low reviews but high sales (potential opportunity), or high LQS scores
-4. **Fee breakdown**: When users ask about profitability, include feeBreakdown details (FBA fee, referral fee, total fees)
-5. **Image links**: Include `imageUrl` when displaying individual product details
-6. **Error handling**: When a query fails, explain the reason based on the error response and suggest adjusting parameters
+## 使用反馈
 
-## Important Limitations
-
-- **marketplace 必填**：每次查询必须指定站点
-- **品类名需匹配**：`categories` 值必须与对应站点的标准主分类名完全一致
-- **关键词限制**：`includeKeywords` / `excludeKeywords` 最多各100项，每项最长50字符
-- **数据时效**：数据来源于 Jungle Scout 定期更新，非实时数据
-- **评分范围**：`minRating` / `maxRating` 取值 1.0-5.0
-- **重量单位**：`minWeight` / `maxWeight` 以磅（pounds）为单位
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** - Amazon product multi-condition filtering and discovery:
-
-| User Says | Scenario |
-|-----------|----------|
-| "帮我找月销量500以上的瑜伽垫" | 关键词 + 销量筛选 |
-| "美国站厨房品类30美金以下有什么好产品" | 品类 + 价格筛选 |
-| "评论少但评分高的蓝海产品" | 高评分低竞争选品 |
-| "找FBA标准尺寸的手机支架" | 卖家类型 + 产品尺寸筛选 |
-| "排除大品牌的运动品类机会" | 排除头部品牌 |
-| "最近新上架的电子产品有哪些卖得好" | 新品发现 |
-| "BSR排名1万以内的家居产品" | BSR排名筛选 |
-| "LQS低于5分的高销量产品" | Listing优化机会 |
-
-**Not applicable** - Beyond product database filtering:
-- 关键词搜索量/趋势分析（需要关键词历史搜索量工具）
-- ABA搜索词排名（需要ABA工具）
-- 商品详情页/Listing内容分析
-- 广告/PPC投放策略
-- 非亚马逊平台商品数据
-
-**Boundary judgment**: When users say "选品", "找产品", or "市场调研", if their need is to filter products by specific criteria (price, sales, category, reviews, etc.) from Amazon's product catalog, this skill applies. If they need keyword-level search volume data, advertising insights, or non-Amazon platform data, it does not apply.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 实际查询页数 × 63.75。
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

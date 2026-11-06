@@ -46,6 +46,20 @@ def main():
         )
         sys.exit(1)
 
+    status = result.get("transportHttpStatus")
+    errcode = result.get("errcode")
+    normal_errcode = errcode is None or isinstance(errcode, str) and not errcode.strip()
+    if not normal_errcode:
+        if isinstance(errcode, str):
+            stripped = errcode.strip()
+            normal_errcode = len(stripped) == 3 and stripped.isascii() and stripped.isdigit() and 200 <= int(stripped) < 300
+        elif type(errcode) in (int, float):
+            normal_errcode = 200 <= errcode < 300 and errcode % 1 == 0
+    if status is None or not 200 <= status < 300 or result.get("error") or not normal_errcode:
+        print(json.dumps({"ok": False, "reason": "gateway_request_failed", "message": result},
+                         indent=2, ensure_ascii=False))
+        sys.exit(1)
+
     print(
         json.dumps(
             {

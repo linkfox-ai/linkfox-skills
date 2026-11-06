@@ -22,10 +22,8 @@ import json
 import sys
 
 from _spapi_pricing_common import (
-    developer_proxy_post_json,
-    emit_result,
+    run_proxy,
     ensure_auth_skill_available,
-        lf_inline_flag,
 )
 
 PATH_BATCH = "batches/products/pricing/2022-05-01/offer/featuredOfferExpectedPrice"
@@ -91,20 +89,8 @@ def main() -> None:
     seller_id = str(params["sellerId"])
     region = str(params["region"])
 
-    proxy = developer_proxy_post_json(region, PATH_BATCH, seller_id, body_obj)
-    out: dict = {
-        "developerProxy": proxy,
-        "resolvedPath": PATH_BATCH,
-        "requestBody": body_obj,
-    }
-    if proxy.get("errcode") == 200 and proxy.get("httpStatus") == 200:
-        br = proxy.get("body") or "{}"
-        try:
-            out["featuredOfferExpectedPriceBatch"] = json.loads(br)
-        except json.JSONDecodeError:
-            out["featuredOfferExpectedPriceBatch"] = None
-            out["featuredOfferExpectedPriceBatchRaw"] = br
-    emit_result(out, lf_inline_flag())
+    run_proxy("getFeaturedOfferExpectedPriceBatch", "POST", region, PATH_BATCH, seller_id,
+              result_field="featuredOfferExpectedPriceBatch", body_obj=body_obj)
 
 
 if __name__ == "__main__":

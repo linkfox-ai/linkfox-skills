@@ -1,70 +1,65 @@
-# linkfox-shopee-store-shop-category — 参数与字段参考
+# Shopee 店铺分类管理 接口说明
 
-> 单接口入参/响应说明已拆到 **`apis/`**（按 API 一份）；本文件保留模块总览与 Feedback。
-Shopee **Shop Category 模块**全部 7 个 API，经 **`POST /shopee/developerProxy`** 转发。
+7 个 Shop Category 操作经统一端点转发；另提供授权状态查询辅助接口。
 
-授权见 **`linkfox-shopee-store-auth`**。官方索引：[v2.shop_category.add_shop_category](https://open.shopee.com/documents/v2/v2.shop_category.add_shop_category?module=101&type=1)
+| 接口 | 文档 |
+|---|---|
+| `add_shop_category` | [apis/add-shop-category.md](apis/add-shop-category.md) |
+| `get_shop_category_list` | [apis/get-shop-category-list.md](apis/get-shop-category-list.md) |
+| `delete_shop_category` | [apis/delete-shop-category.md](apis/delete-shop-category.md) |
+| `update_shop_category` | [apis/update-shop-category.md](apis/update-shop-category.md) |
+| `add_item_list` | [apis/add-item-list.md](apis/add-item-list.md) |
+| `get_item_list` | [apis/get-item-list.md](apis/get-item-list.md) |
+| `delete_item_list` | [apis/delete-item-list.md](apis/delete-item-list.md) |
+| `storeTokens`（辅助兼容） | [apis/store-tokens.md](apis/store-tokens.md) |
 
-## 通用约定
+## 公共规则
 
-- **path**：须 `api/v2/shop_category/...`
-- **标识**：通常传 **`shopId`**
-- **官方文档 URL 规则**：`https://open.shopee.com/documents/v2/v2.shop_category.{api}?module=101&type=1`
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Shop Category 模块总览
+### 响应码基本规则
 
-| # | API | Method | path | 脚本 | 官方文档 |
-|---|-----|--------|------|------|----------|
-| 1 | add_item_list | POST | `api/v2/shop_category/add_item_list` | `add_item_list.py` | [apis/add-item-list.md](./apis/add-item-list.md) |
-| 2 | add_shop_category | POST | `api/v2/shop_category/add_shop_category` | `add_shop_category.py` | [apis/add-shop-category.md](./apis/add-shop-category.md) |
-| 3 | delete_item_list | POST | `api/v2/shop_category/delete_item_list` | `delete_item_list.py` | [apis/delete-item-list.md](./apis/delete-item-list.md) |
-| 4 | delete_shop_category | POST | `api/v2/shop_category/delete_shop_category` | `delete_shop_category.py` | [apis/delete-shop-category.md](./apis/delete-shop-category.md) |
-| 5 | get_item_list | GET | `api/v2/shop_category/get_item_list` | `get_item_list.py` | [apis/get-item-list.md](./apis/get-item-list.md) |
-| 6 | get_shop_category_list | GET | `api/v2/shop_category/get_shop_category_list` | `get_shop_category_list.py` | [apis/get-shop-category-list.md](./apis/get-shop-category-list.md) |
-| 7 | update_shop_category | POST | `api/v2/shop_category/update_shop_category` | `update_shop_category.py` | [apis/update-shop-category.md](./apis/update-shop-category.md) |
-通用入口：`shop_category_api.py`（JSON 含 `"api": "<上表 API 名>"`）。
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
----
+## 脚本运行约定
 
-## 常用接口说明
+| 参数 / 约定 | 类型 | 说明 |
+|---|---|---|
+| `api` | string | 仅通用入口需要，取接口清单中 7 个分类操作名之一；固定操作脚本无需此字段。 |
+| `skipDepCheck` | boolean | 默认 false；只跳过本地安装检测，不绕过店铺授权。 |
+| `--inline` | CLI flag | 强制全量打印，仍保存完整响应。 |
+| `--no-cache` | CLI flag | 业务脚本无响应缓存；封装调用 `call_api.run` 始终携带此选项，不读取或保存响应缓存；公共调用器可能创建空缓存目录。 |
+| 认证变量 | string | 优先 `LINKFOX_AGENT_API_KEY`，其次 `LINKFOXAGENT_API_KEY`。 |
+| 网关变量 | string | 优先 `LINKFOX_TOOL_GATEWAY`，其次兼容 `SHOPEE_API_BASE_URL`，默认 `https://tool-gateway.linkfox.com`。 |
+| 依赖检查 | exit code | 返回 0 表示找到认证技能；42 与 stderr 的 `DEPENDENCY_MISSING:` 表示缺失，应先安装 `linkfox-shopee-store-auth`。 |
+| 数据保存 | path | 当前工作目录下 `linkfox/<日期>/<session>/data/`；文件名含技能名和操作标识，微秒时间戳避免同秒覆盖；请求前检查最终会话 data 目录是否可写；不可写时报错，不回退到家目录或临时目录。 |
+| 输出大小 | integer | 按 UTF-8 字节数，≤ 8000 全量输出，超过时仅摘要及最大列表前 3 条；`--inline` 覆盖此展示限制。 |
 
-| API | 要点 |
-|-----|------|
-| `add_shop_category` | 创建店铺分类；POST `body` — [apis/add-shop-category.md](./apis/add-shop-category.md) |
-| `get_shop_category_list` | 分类列表 — [apis/get-shop-category-list.md](./apis/get-shop-category-list.md) |
-| `update_shop_category` | 更新分类 — [apis/update-shop-category.md](./apis/update-shop-category.md) |
-| `delete_shop_category` | 删除分类 — [apis/delete-shop-category.md](./apis/delete-shop-category.md) |
-| `add_item_list` | 向分类添加商品 — [apis/add-item-list.md](./apis/add-item-list.md) |
-| `get_item_list` | 分类内商品列表 — [apis/get-item-list.md](./apis/get-item-list.md) |
-| `delete_item_list` | 从分类移除商品 — [apis/delete-item-list.md](./apis/delete-item-list.md) |
+分类脚本格式：`python scripts/<操作名>.py '<JSON 参数>' [--inline] [--no-cache]`；通用入口为 `python scripts/shop_category_api.py '<含 api 的 JSON 参数>' [--inline] [--no-cache]`。
+脚本保留完整网关响应，业务加工后由公共调用器保存一次，不引入第二层响应缓存。依赖检查支持各平台安装目录和环境变量搜索。
 
----
+## Feedback
 
-## curl 示例
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
-请求地址从环境变量 `${LINKFOX_TOOL_GATEWAY}` 读取（默认 `https://tool-gateway.linkfox.com`）。认证从 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 任一环境变量读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）。
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
-```bash
-curl -X POST ${LINKFOX_TOOL_GATEWAY}/shopee/developerProxy \
-  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "path": "api/v2/shop_category/get_shop_category_list",
-    "method": "GET",
-    "accessToken": "xxx",
-    "shopId": "67890"
-  }'
-```
-
----
-
-## Feedback API
-
-```bash
-curl -X POST https://skill-api.linkfox.com/api/v1/public/feedback \
-  -H "Content-Type: application/json" \
-  -d '{"skillName":"linkfox-shopee-store-shop-category","sentiment":"POSITIVE",
-       "category":"OTHER","content":"店铺分类查询正常"}'
+```json
+{
+  "skillName": "linkfox-shopee-store-shop-category",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

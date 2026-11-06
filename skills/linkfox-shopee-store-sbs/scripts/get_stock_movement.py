@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import sys
 
-from _sbs_api_runner import emit_result, lf_inline_flag, run_sbs_api
+from _sbs_api_runner import run_sbs_api
 
 
 def main() -> None:
@@ -20,8 +20,7 @@ def main() -> None:
         print("Usage: get_stock_movement.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    inline = lf_inline_flag()
-    emit_result(run_sbs_api("get_stock_movement", params, "get_stock_movement.py"), inline)
+    run_sbs_api("get_stock_movement", params, "get_stock_movement.py")
 
 
 if __name__ == "__main__":

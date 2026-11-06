@@ -1,21 +1,21 @@
 # `GET_COUPON_PERFORMANCE_REPORT`
 
-> **分类**：11. Performance Reports  
-> **说明**：Coupon performance  
-> **可用范围**：Both
+> **分类**：11. 绩效报告  
+> **说明**：优惠券表现  
+> **可用范围**：卖家与 Vendor
 
 > **说明**：Seller 与 Vendor 共用同一 `reportType` 字符串时，请按账号类型阅读 **Seller** 或 **Vendor** 专页。
 
 ## 官方索引（Report type values）
 
 - **Schema 专页（请求体、`reportOptions`、结果 JSON）**：[`sellerCouponReport.md`](../sellerCouponReport.md)、[`vendorCouponReport.md`](../vendorCouponReport.md)
-- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[Performance Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-performance#coupons-performance-report)（章节：**Coupons Performance Report**）
+- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[绩效报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-performance#coupons-performance-report)（章节：**Coupons Performance Report**）
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
-- **Availability**：Sellers and Vendors
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：JSON
+- **角色**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
+- **可用范围**：卖家 and Vendors
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：JSON
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-performance#coupons-performance-report>
 

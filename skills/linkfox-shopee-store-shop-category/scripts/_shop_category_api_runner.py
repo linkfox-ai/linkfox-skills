@@ -89,6 +89,20 @@ def _build_post_body(params: dict, spec: dict) -> str:
     return json.dumps(body_obj, ensure_ascii=False, separators=(",", ":"))
 
 
+def _gateway_ok(status, payload) -> bool:
+    if not isinstance(status, int) or not 200 <= status < 300 or not isinstance(payload, dict):
+        return False
+    code = payload.get('errcode')
+    if code is None or isinstance(code, str) and not code.strip():
+        return True
+    if isinstance(code, str):
+        code = code.strip()
+        if len(code) != 3 or not code.isascii() or not code.isdigit():
+            return False
+        code = int(code)
+    return type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
+
+
 def run_shop_category_api(api_name: str, params: dict, caller: Optional[str] = None) -> dict:
     if api_name not in SHOP_CATEGORY_ENDPOINTS:
         print(f"Unknown api: {api_name}. Valid: {', '.join(sorted(SHOP_CATEGORY_ENDPOINTS))}", file=sys.stderr)
@@ -122,7 +136,30 @@ def run_shop_category_api(api_name: str, params: dict, caller: Optional[str] = N
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    def assemble(status, proxy):
+        out: dict = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = json.loads(body) if body else None
+        # 外层网关失败不能因上游 httpStatus=200 被展示为操作成功。
+        if _gateway_ok(status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    # 提前校验 JSON，避免写入成功后才因本地解析失败中断结果展示。
+    if body is not None:
+        try:
+            json.loads(body)
+        except json.JSONDecodeError as exc:
+            print(f"Invalid JSON body: {exc}", file=sys.stderr)
+            sys.exit(1)
+    return developer_proxy_call(
         path,
         method,
         shop_id=shop_id,
@@ -130,17 +167,5 @@ def run_shop_category_api(api_name: str, params: dict, caller: Optional[str] = N
         query_string=query_string or None,
         body=body,
         content_type=content_type,
+        transform=assemble,
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

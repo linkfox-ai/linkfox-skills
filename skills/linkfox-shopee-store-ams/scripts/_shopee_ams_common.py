@@ -1,4 +1,4 @@
-"""Shared helpers for linkfox-shopee-store-ams (storeTokens + developerProxy)."""
+"""Shopee AMS 选店、兼容调用、响应解析与统一输出。"""
 
 from __future__ import annotations
 
@@ -6,14 +6,12 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
-import secrets
-import time
 from pathlib import Path
 from typing import Any, Optional
-from urllib.error import HTTPError, URLError
 from urllib.parse import quote
-from urllib.request import Request, urlopen
+
+from _ams_transport import invoke
+import call_api as public_api
 
 API_BASE_URL = os.environ.get("LINKFOX_TOOL_GATEWAY") or os.environ.get("SHOPEE_API_BASE_URL") or "https://tool-gateway.linkfox.com"
 STORE_TOKENS_ENDPOINT = f"{API_BASE_URL.rstrip('/')}/shopee/storeTokens"
@@ -52,46 +50,10 @@ def ensure_auth_skill_available(caller: str = "ams script") -> None:
         sys.exit(DEPENDENCY_EXIT_CODE)
 
 
-def get_api_key() -> str:
-    """
-    获取配置在环境变量的API Key。
-    如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-    """
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
-
-
 def call_api(endpoint: str, params: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    req = Request(
-        endpoint,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+    # 先验证 cwd 可写，阻止公共调用器回退到用户目录或临时目录。
+    root = _lf_root()
+    return invoke(endpoint, params, API_BASE_URL, root)
 
 
 def resolve_store_tokens(params: dict) -> dict:
@@ -142,14 +104,35 @@ def developer_proxy_call(
     return call_api(DEVELOPER_PROXY_ENDPOINT, proxy)
 
 
-
-
 def qs_add(parts: list[str], key: str, value: str) -> None:
     parts.append(f"{key}={quote(str(value), safe='')}")
 
 
+def gateway_success(proxy: dict) -> bool:
+    status = getattr(proxy, "transport_http_status", 200)
+    if type(status) not in (int, float) or not 200 <= status < 300:
+        return False
+    code = proxy.get("errcode")
+    if code is None:
+        return True
+    if isinstance(code, str):
+        code = code.strip()
+        if not code:
+            return True
+        if len(code) != 3 or not code.isascii() or not code.isdigit():
+            return False
+        code = int(code)
+    return type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
+
+
 def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
-    if int(proxy.get("httpStatus") or 0) != 200:
+    if not gateway_success(proxy):
+        return
+    try:
+        upstream_ok = int(proxy.get("httpStatus") or 0) == 200
+    except (ValueError, TypeError):
+        upstream_ok = False
+    if not upstream_ok:
         return
     body_raw = proxy.get("body")
     if not body_raw or not str(body_raw).strip():
@@ -157,56 +140,35 @@ def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
         return
     try:
         parsed = json.loads(body_raw)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError):
         out[key] = None
         return
     out[key] = parsed
     if isinstance(parsed, dict) and parsed.get("response") is not None:
         out[f"{key}Response"] = parsed["response"]
 
-# ===== LinkFox 统一输出层（落盘 + 摘要，无缓存）=====
-# 本块追加到共享模块（_xxx_common.py）末尾，供各入口脚本调用 emit_result()。
-# 依赖：json, os, sys, time, secrets, tempfile（共享模块通常已 import json/os/sys；
-#       若缺 time/secrets/tempfile，请在文件顶部补 import）。
 
+# 完整加工结果落盘与摘要，无响应缓存。
 import time as _lf_time
 import secrets as _lf_secrets
-import tempfile as _lf_tempfile
 
 LF_SMALL_THRESHOLD = 8000
-_LF_SESSION_CACHE: dict = {}
 
 SLUG = "linkfox-shopee-store-ams"
 
 
 def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
+    # 每次预检当前目录，不沿用其他 cwd 或 ACPX 目录的缓存。
+    root = Path.cwd() / "linkfox"
+    root.mkdir(parents=True, exist_ok=True)
+    probe = root / (".write_probe-" + _lf_secrets.token_hex(4))
+    try:
+        with probe.open("x", encoding="utf-8"):
+            pass
+    finally:
+        if probe.exists():
+            probe.unlink()
+    return str(root.resolve())
 
 
 def _lf_iso(ts: float) -> str:
@@ -214,14 +176,8 @@ def _lf_iso(ts: float) -> str:
 
 
 def _lf_session_id(ts: float) -> str:
-    env = os.environ.get("SESSION_ID")
-    if env:
-        return env.strip()
-    if "_auto" not in _LF_SESSION_CACHE:
-        _LF_SESSION_CACHE["_auto"] = (
-            _lf_time.strftime("%H%M%S", _lf_time.localtime(ts)) + "-" + _lf_secrets.token_hex(3)
-        )
-    return _LF_SESSION_CACHE["_auto"]
+    # 与公共调用器共享自动会话号，原始响应和加工结果进入同一会话。
+    return public_api._session_id(ts)
 
 
 def _lf_find_main_list(obj):
@@ -327,9 +283,9 @@ def emit_result(result, slug=SLUG, inline=False):
     try:
         with open(out, "w", encoding="utf-8") as f:
             f.write(serialized)
-        print(f"Saved full response: {out} ({len(serialized)} bytes)")
+        print(f"Saved full response: {out} ({len(serialized.encode('utf-8'))} bytes)")
     except OSError as e:
-        print(f"Failed to save to {out}: {e}", file=sys.stderr)
+        raise OSError(f"Failed to save to {out}: {e}") from e
     _lf_update_meta(session_dir, skill=slug, file_rel=os.path.relpath(out, session_dir), ts=ts)
     if inline or len(serialized.encode("utf-8")) <= LF_SMALL_THRESHOLD:
         print(serialized)
@@ -337,6 +293,3 @@ def emit_result(result, slug=SLUG, inline=False):
         _lf_summarize(result)
 
 
-def lf_inline_flag() -> bool:
-    """入口脚本用：从 sys.argv 判断是否 --inline。"""
-    return "--inline" in sys.argv

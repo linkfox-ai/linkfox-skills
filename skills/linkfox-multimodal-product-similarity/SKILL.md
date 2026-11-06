@@ -1,178 +1,119 @@
 ---
 name: linkfox-multimodal-product-similarity
-description: 多模态产品图片相似度分析与分组。当用户提到产品图片相似度、视觉分组、查找外观相似的商品、基于图片去重、竞品同款检测、同款商品聚类、按外观分组、image similarity, product image comparison, visual clustering, same-style recognition, appearance deduplication, image grouping时触发此技能。即使用户未明确说"图片相似度"，只要其意图涉及商品主图对比、视觉聚类、识别视觉上相同或相似的商品，或根据外观、颜色、构图等视觉特征对商品列表进行后处理，也应触发此技能。
+description: 对已有商品列表的主图进行多模态视觉相似度分析与分组，按外观、颜色、构图和材质识别相似商品，支持图片去重、同款聚类、竞品外观对比及跨品牌相似商品识别。适用于产品图片相似度、商品主图对比、按外观分组和视觉聚类；不适用于从零搜索商品、纯文本对比、仅按价格或销量分组、评论分析、Listing 优化或广告策略。
 ---
 
-# Multimodal Product Image Similarity Analysis
+# 商品主图相似度分析与分组
 
-This skill guides you on how to analyze and group products by the visual similarity of their main images. It helps Amazon sellers identify same-style products, detect competitor lookalikes, and organize product lists into visually coherent clusters.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Product Image Similarity Analysis uses multimodal AI to compare the main images of products and automatically group them based on visual features such as appearance, color, composition, and material. It is a **post-processing** tool -- it operates on product data that has already been retrieved by a preceding step (e.g., product search, product recommendations).
+对前序搜索或推荐已取得的商品列表做视觉后处理。用户希望识别外观相同或相近的商品、检查主图重复、按颜色或风格分组，或比较不同品牌的相似商品时，使用本技能。
 
-**Similarity threshold**: The `similarityThreshold` parameter controls how visually close two products must be to land in the same group. It is an integer from 0 to 100 representing a percentage. A higher value means stricter matching (only near-identical images group together); a lower value means more lenient matching (broader visual clusters). The default is **60**.
+**场景速查**
 
-**Single-brand group filtering**: The `includeSingleBrandGroups` flag (default `true`) controls whether groups containing products from only one brand are included in the results. Setting it to `false` filters out single-brand groups, which is useful when the user wants to focus on cross-brand visual overlaps (e.g., competitor lookalike analysis).
+| 用户表达 | 分析场景 |
+|----------|----------|
+| 把这些商品按长相分组 | 视觉聚类：按主图的外观特征分组。 |
+| 哪些商品长得一样，图片有没有重复 | 同款识别与基于图片的去重检查。 |
+| 找出外观相似的商品 | 视觉相似度分析。 |
+| 看看不同品牌里有哪些相似款或竞品同款 | 跨品牌外观对比。 |
+| 按外观、颜色或风格粗分一下 | 较宽松的视觉分类。 |
 
-## Input Data Requirement
+## 前置条件
 
-This tool requires a `products` list from a preceding step. It cannot fetch product data on its own. The typical workflow is:
+**先取得商品列表**：使用用户已有数据或前序商品搜索、推荐结果。本技能不负责获取商品；准备输入时读取 `references/api.md`，按其中约定传入已有结果。
 
-1. Run a product search or recommendation tool to obtain a product list.
-2. Pass that product list into this tool via `refResultData` for visual similarity grouping.
+## 分析流程
 
-The input data must be a JSON object containing a `products` array.
+1. 确认已有待分析商品列表；尚无列表时，先完成用户所需的商品搜索或推荐。
+2. 根据用户希望的严格程度和是否关注跨品牌相似款，按 `references/api.md` 准备输入；执行前说明下方动态算力消耗，由用户决定是否继续。
+3. 对已有商品执行主图相似度分组；相同参数优先复用本地缓存，后续调用遵守成本约束。
+4. 分析完成后，直接将返回结果交给总结阶段，不再执行额外的中间数据计算。读取已保存响应中的必要字段用于展示，不做数据库二次分析。
 
-## Parameters
+## 执行方式
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| similarityThreshold | integer | No | Similarity threshold (0-100), default `60`. Higher = stricter matching. |
-| includeSingleBrandGroups | boolean | No | Whether to include groups with only one brand, default `true`. Set to `false` to focus on cross-brand similarity. |
-| refResultData | string | No | JSON string of the preceding tool's result data containing the product list. |
-| userInput | string | No | The original user query or instruction text. |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/multimodal_analyze_product_similarity.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## Response Fields
+### 输出策略
 
-| Field | Type | Description |
-|-------|------|-------------|
-| groups | array | List of similarity groups. Each group contains `groupNumber`, `reason`, `brandCount`, and an `asins` array of product details. |
-| analysisInfo | object | Summary: `totalProductsAnalyzed`, `totalGroupsFound`, `similarityThreshold`, `analysisTimestamp`. |
-| tables | array | Tabular result data, each element with `data`, `columns`, and `name`. |
-| total | integer | Total number of result items. |
-| title | string | Result title. |
-| type | string | Rendering style hint. |
-| costToken | integer | Total LLM tokens consumed (input + output). |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-multimodal-product-similarity-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Group Item (asins array element)
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| Field | Type | Description |
-|-------|------|-------------|
-| asin | string | Product ASIN |
-| productId | string | Product ID |
-| brand | string | Brand name |
-| price | number | Price |
-| rating | number | Rating score |
-| ratings | integer | Number of ratings |
-| monthlySalesUnits | integer | Monthly sales units |
-| monthlySalesRevenue | number | Monthly sales revenue |
-| monthlySalesUnitsGrowthRate | number | Monthly sales growth rate |
-| imageUrl | string | Main image URL |
-| productImageUrls | array | All product image URLs |
-| imagePrompt | string | AI-generated image description |
-| asinUrl | string | Product detail page URL |
-| availableDate | string | Listing date |
-| color | string | Color |
-| material | string | Material |
+## 执行规则
 
-## 调用方式
-
-- **API 端点**：`POST /multimodal/analyzeProductSimilarity`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/multimodal_analyze_product_similarity.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-multimodal-product-similarity-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Usage Examples
-
-**1. Group search results by visual similarity (default threshold)**
-After obtaining a product list from a search tool, pass the results to this tool to cluster visually similar items:
-```
-User: "Group these products by how similar they look."
-Action: Call the API with refResultData set to the preceding product list JSON, using the default similarityThreshold of 60.
-```
-
-**2. Find near-identical products (strict matching)**
-```
-User: "Which of these products have almost the same main image?"
-Action: Call the API with similarityThreshold set to 85 or higher for strict visual matching.
-```
-
-**3. Cross-brand competitor lookalike detection**
-```
-User: "Show me groups where different brands have similar-looking products."
-Action: Call the API with includeSingleBrandGroups set to false to filter out single-brand clusters.
-```
-
-**4. Broad visual clustering (lenient threshold)**
-```
-User: "Roughly categorize these products by appearance."
-Action: Call the API with similarityThreshold set to 40 for broad grouping.
-```
-
-**5. Combined: strict similarity across brands**
-```
-User: "Find products from different brands that look nearly identical."
-Action: Call the API with similarityThreshold set to 80 and includeSingleBrandGroups set to false.
-```
-
-## Display Rules
-
-1. **Present grouping results clearly**: Show each similarity group with its group number, the reason for grouping, brand count, and a table of products within the group.
-2. **Show product images when possible**: If image URLs are available, include them to help users visually verify the grouping.
-3. **Highlight cross-brand groups**: When the user cares about competitor analysis, emphasize groups containing multiple brands.
-4. **Analysis summary**: Always present the analysis summary (total products analyzed, total groups found, similarity threshold used, timestamp).
-5. **No subjective advice**: Present the grouping data objectively. Do not inject business recommendations unless the user asks.
-6. **Large result sets**: When there are many groups, show the most significant ones first (e.g., groups with the most products or the most brands) and inform the user about additional groups.
-7. **Error handling**: When a request fails, explain the reason based on the response message and suggest adjustments (e.g., check that the input product data is valid, adjust the threshold).
-## Important Limitations
-
-- **Post-processing only**: This tool cannot fetch product data on its own. It must receive product data from a preceding step.
-- **No database storage**: Results are not stored in a database. Do not use database query tools for secondary analysis on the output.
-- **Input format**: The input must be a JSON object containing a `products` array.
-- **Direct to summary**: After this tool completes, pass the results directly to the summary stage. Do not perform additional intermediate data computations.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Visual similarity analysis on product lists:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Group these by how they look" | Visual clustering |
-| "Find similar-looking products", "find lookalikes" | Similarity detection |
-| "Which products look the same" | Image deduplication |
-| "Show me competitor copycats" | Cross-brand lookalike analysis |
-| "Cluster by appearance / color / style" | Visual categorization |
-| "Are there duplicates in this list" | Image-based dedup |
-| "Same-style products from different brands" | Cross-brand similarity |
-
-**Not applicable** -- Needs beyond image similarity:
-
-- Text-based product comparison (titles, descriptions, keywords)
-- Price or sales-based grouping without visual component
-- Product search or discovery (this tool only post-processes existing lists)
-- Review analysis, listing optimization, advertising strategy
-
-## 算力消耗规则
+### 算力消耗预估
 
 按动态规则计费：消耗算力 = sum(每个商品主图提示词生成调用的(输入消耗的算力 + 输出结果消耗的算力))。
 
 > **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
 
-**Feedback:**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解视觉分组**：多模态 AI 根据主图中的外观、颜色、构图和材质形成分组。相似度要求越高，匹配越严格；较低的要求适合粗粒度视觉归类。单品牌组过滤用于聚焦不同品牌之间的外观重叠，具体参数约定见 `references/api.md`。
+- **清晰展示分组**：逐组展示组号、分组理由、品牌数量和组内商品表格；图片链接可用时展示主图，便于用户核对。
+- **突出跨品牌结果**：用户关注竞品时，优先说明含多个品牌的分组及品牌之间的外观重叠。
+- **始终展示分析摘要**：展示分析商品总数、分组总数、实际使用的相似度阈值和分析时间；请求与摘要的阈值单位不同，解释口径见 `references/api.md`。
+- **客观呈现**：只根据返回数据解释分组；除非用户要求，不添加主观经营建议。
+- **处理大量分组**：优先展示返回结果中商品较多或品牌较多的显著分组，并告知仍有其他分组。仅调整展示次序，不额外聚合或重新计算结果。
+- **结果不入库**：服务结果不存储在数据库中，不使用数据库查询工具进行二次分析；脚本保存的 JSON 是本地响应副本。
+- **解释失败原因**：根据响应消息说明原因，建议检查输入商品数据或调整分析要求；不自动修改参数连续重试，后续请求仍遵守成本约束和认证引导。
+
+## 使用示例
+
+### 按外观对已有商品分组
+
+用户：把刚才找到的商品按长相分组。
+
+准备前序商品结果，采用默认的分组要求；说明动态消耗并由用户决定继续后执行，直接展示分组与分析摘要。
+
+### 查找主图几乎相同的商品
+
+用户：这些商品里，哪些主图几乎一样？
+
+采用更严格的视觉匹配要求，例如 `similarityThreshold` 为 85 或更高；使用已有列表分析，不重新搜索商品。
+
+### 只看不同品牌之间的相似款
+
+用户：只看不同品牌之间长得像的商品。
+
+将 `includeSingleBrandGroups` 设为 `false`，聚焦跨品牌的视觉重叠，展示各组的品牌数量和商品图片。
+
+### 粗略按外观分类
+
+用户：按外观把这些商品粗分一下。
+
+采用较宽松的匹配要求，例如 `similarityThreshold` 为 40，直接总结返回的视觉分组。
+
+### 严格匹配不同品牌的同款外观
+
+用户：找出不同品牌里外观几乎相同的商品。
+
+例如使用 `similarityThreshold` 为 80，并将 `includeSingleBrandGroups` 设为 `false`；说明分组依据，避免额外的中间计算。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

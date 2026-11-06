@@ -10,7 +10,6 @@ GET `catalog/{version}/items/{asin}`。默认 **2022-04-01**。
 
 from __future__ import annotations
 
-import json
 import sys
 from urllib.parse import quote
 
@@ -18,13 +17,10 @@ from _spapi_catalog_common import (
     CATALOG_ITEMS_V2020,
     CATALOG_ITEMS_V2022,
     catalog_items_path,
-    developer_proxy_get,
-    emit_result,
+    run_proxy,
     encode_path_segment,
     ensure_auth_skill_available,
-        lf_inline_flag,
     load_cli_params,
-    merge_success_json,
     norm_marketplace_ids,
     require_seller_region,
     resolve_catalog_items_version,
@@ -70,16 +66,10 @@ def main() -> None:
     path = f"{catalog_items_path(version)}/{asin}"
     qs = _build_query(params)
 
-    proxy = developer_proxy_get(region, path, seller_id, query_string=qs)
-    out: dict = {
-        "developerProxy": proxy,
-        "resolvedPath": path,
-        "queryString": qs,
-        "catalogItemsVersion": version,
-    }
-    merge_success_json(out, proxy, "catalogItem")
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy(
+        "getCatalogItem", region, path, seller_id, qs,
+        result_key="catalogItem", version=version,
+    )
 
 
 if __name__ == "__main__":

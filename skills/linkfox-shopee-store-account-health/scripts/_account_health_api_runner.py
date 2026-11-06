@@ -1,4 +1,4 @@
-"""Run any Shopee Account Health module API via developerProxy."""
+"""账户健康操作的参数映射、结果加工与命令行入口。"""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def _build_post_body(params: dict, spec: dict) -> str:
     return json.dumps(body_obj, ensure_ascii=False, separators=(",", ":"))
 
 
-def run_account_health_api(api_name: str, params: dict, caller: Optional[str] = None) -> dict:
+def run_account_health_api(api_name: str, params: dict, caller: Optional[str] = None, *, emit: bool = False, inline: bool = False) -> dict:
     if api_name not in ACCOUNT_HEALTH_ENDPOINTS:
         print(f"Unknown api: {api_name}. Valid: {', '.join(sorted(ACCOUNT_HEALTH_ENDPOINTS))}", file=sys.stderr)
         sys.exit(1)
@@ -114,25 +114,46 @@ def run_account_health_api(api_name: str, params: dict, caller: Optional[str] = 
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
-        path,
-        method,
-        shop_id=shop_id,
-        merchant_id=merchant_id,
-        query_string=query_string or None,
-        body=body,
-        content_type=content_type,
+    def transform(status, proxy):
+        out = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = json.loads(body) if body else None
+        merge_shopee_body(out, proxy, response_key, status)
+        return out
+
+    return developer_proxy_call(
+        path, method, shop_id=shop_id, merchant_id=merchant_id,
+        query_string=query_string or None, body=body, content_type=content_type,
+        transform=transform, emit=emit, inline=inline,
     )
 
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
 
-    merge_shopee_body(out, proxy, response_key)
-    return out
+def account_health_cli(api_name=None) -> None:
+    """保留 JSON 位置参数，所有入口一致支持 --inline 与 --no-cache。"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="查询 Shopee 店铺账户健康，完整参数见 references/apis/。")
+    parser.add_argument("params", help="JSON 对象；通用入口必须包含 api 字段")
+    parser.add_argument("--inline", action="store_true", help="全量打印，同时保存完整响应")
+    parser.add_argument("--no-cache", action="store_true", help="兼容选项；本技能始终不使用响应缓存")
+    if len(sys.argv) < 2:
+        parser.print_help(sys.stderr)
+        raise SystemExit(1)
+    args = parser.parse_args()
+    try:
+        params = json.loads(args.params)
+    except json.JSONDecodeError as exc:
+        parser.error(f"JSON 参数无效: {exc}")
+    if not isinstance(params, dict):
+        parser.error("JSON 参数必须为对象")
+    operation = api_name or params.get("api")
+    if not operation:
+        parser.error("缺少必填字段: api")
+    run_account_health_api(str(operation), params, caller=parser.prog, emit=True, inline=args.inline)

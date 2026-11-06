@@ -1,92 +1,156 @@
-# 发票 PDF 下载 — `temu.pay.tax.invoice.pdf.download`
+# 发票 PDF 下载 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/eu_tax_invoice_pdf_download.py` |
-| **Partner 文档** | https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896&sub_menu_code=2b8a5a8a75604779b2e0017ee79b462a |
-| **网关** | `POST /temu/proxy`，`type`=`temu.pay.tax.invoice.pdf.download`，业务载荷放在 Body 的 `params` |
+[接口总览](../api.md)；业务脚本：`scripts/eu_tax_invoice_pdf_download.py`（相对技能根目录）。
 
-**Description:** Get signed URL to download invoice PDF.
+## 公共规则
 
-> **网关鉴权字段**由本 skill 处理；业务参数见下方 **`request`**。默认 **`site=eu`**、**`tokenPurpose=product-inventory`**。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Request 结构（官方业务参数）
+### 响应码基本规则
 
-```text
-params
-└── request (OBJECT)
-    └── parentOrderSn (STRING **必填**)
-    └── invoiceNumber (STRING **必填**)
-```
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-### `request` 内字段
+## 接口：发票 PDF 下载（temu.pay.tax.invoice.pdf.download）
+
+> 官方：[Partner EU 文档](https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896&sub_menu_code=2b8a5a8a75604779b2e0017ee79b462a)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| parentOrderSn | STRING | **是** | Parent order number |
-| invoiceNumber | STRING | **是** | Invoice number |
+| site | string | 是 | EU 封装默认 `eu`；通用兼容脚本支持 `cn` / `partner` / `us` / `global` / `eu`，须小写。 |
+| managementType | string | 是 | EU 封装默认 `semi-managed`；通用兼容脚本支持 `full-managed` / `semi-managed`，须小写。 |
+| accessToken | string | 是 | Temu 店铺令牌；脚本也可通过下方 `storeKey` 解析后填入。与 LinkFox 用户密钥不同。 |
+| type | string | 是 | `temu.pay.tax.invoice.pdf.download`；写在 Body 中，不作为 URL 路径。 |
+| params | object | 否 | Temu 业务参数；本接口业务对象为 `params.request`。 |
 
-### 网关 `params` 写法
+#### 脚本 JSON 参数与选项
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox 密钥兼容字段，按此顺序优先于 `LINKFOX_AGENT_API_KEY`、`LINKFOXAGENT_API_KEY`；不会转发到业务参数。 |
+| accessToken | string | 与 storeKey 二选一 | 直接传入时优先使用。 |
+| storeKey | string | 与 accessToken 二选一 | 本地店铺键；按 site + managementType + tokenPurpose 精确查找，不借用其他店铺或用途的令牌。 |
+| site | string | 否 | EU 业务封装默认 `eu`；自动去首尾空白并转小写。 |
+| managementType | string | 否 | EU 业务封装默认 `semi-managed`；自动去首尾空白并转小写。 |
+| tokenPurpose | string | 否 | EU 封装默认 `product-inventory`，以 Partner 对目标税务接口的要求为准。仅供本地令牌选择，不转发。 |
+| params | object | 否 | 若为对象则整体作为业务参数，优先于顶层业务字段。 |
+| request | OBJECT | 视业务 | 可直接放在脚本 JSON 顶层，或放在 `params.request`；转发后均为网关 `params.request`。 |
+| --inline | CLI flag | 否 | 强制完整打印，仍保存完整响应。 |
+| --no-cache | CLI flag | 否 | 兼容通用调用器选项；本技能封装始终添加此选项，不读取也不写入响应缓存。 |
+
+上述鉴权、店铺选择及 `type` 等保留字段不作为顶层业务字段转发。令牌存储位置和通用 CLI 行为见 [运行与认证约定](../api.md#运行与认证约定)。
+
+#### Temu 业务参数
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| params.request | OBJECT | 视业务 | Temu 业务请求对象；容器必填性未单独定义，按本接口子字段要求组织。 |
+| params.request.parentOrderSn | STRING | **是** | 父订单号。 |
+| params.request.invoiceNumber | STRING | **是** | 发票号码。 |
+
+### 响应结构
+
+#### 网关与脚本输出
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 网关业务状态；按公共响应码基本规则判断，不与下方 Temu errorCode 混淆。 |
+| errmsg | string | 网关消息；保留实际返回。 |
+| code | integer | 网关错误码：1002 为参数或 Token 问题，1003 为转发失败。 |
+| body | string | Temu 原始 JSON 字符串，原样保留。 |
+| temuBody | object / array / scalar / null | 脚本在 body 为有效 JSON 字符串时追加解析结果；解析失败不添加，不丢弃原始 body。下表是其业务对象结构。 |
+
+#### 脚本本地附加字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| _linkfoxHttpStatus | integer / null | 实际 HTTP 状态；连接失败为 null。仅由脚本记录，不是网关字段；按此状态执行 401 / 402 等处理。 |
+| _rawGatewayResponse | array / scalar / null | 仅当网关响应不是 JSON 对象时，由脚本保存原始 JSON 值；此时不能按下方 Temu 业务结构解释为成功。 |
+
+#### Temu 顶层字段（body 解析后）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| success | BOOLEAN | Temu API 调用是否成功。 |
+| errorCode | INTEGER | Temu 业务错误码。 |
+| errorMsg | STRING | Temu 业务错误信息。 |
+| result | OBJECT | 业务结果，完整嵌套字段如下。 |
+
+#### result 嵌套字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| result.signUrl | STRING | 发票 PDF 的加签下载 URL。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 先按公共规则判断网关，再检查网关 code（1002 / 1003）；其后解析 body，结合 Temu success / errorCode / errorMsg / result 判断业务结果。成功解析 JSON 本身不代表业务成功。
+
+| errorCode | errorMsg（原值） | 处理说明 |
+|-----------|-------------------|----------|
+| 200020001 | Non-compliant query, please use the information correctly. | 查询不合规，请正确使用信息。 Error SOP：未定义。 |
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '
+{
+  "site": "eu",
+  "managementType": "semi-managed",
+  "accessToken": "TOKEN",
+  "type": "temu.pay.tax.invoice.pdf.download",
+  "params": {
+    "request": {
+      "parentOrderSn": "PO-123456789",
+      "invoiceNumber": "INV-001"
+    }
+  }
+}'
+```
+
+---
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "accessToken": "TOKEN",
-  "tokenPurpose": "product-inventory",
-  "site": "eu",
-  "request": {}
+  "skillName": "linkfox-temu-tax-eu",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
-```
-
----
-
-## Response（Temu `body` 解析后）
-
-Partner **Response** 嵌套子行在导出 HTML 中多为折叠状态；下列层级按 **Response 表 + Response Example** 全部展开。
-
-```text
-response
-├── success (BOOLEAN)
-├── errorCode (INTEGER)
-├── errorMsg (STRING)
-└── result (OBJECT)
-    ├── signUrl (STRING)
-```
-
-### 顶层字段
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | success |
-| errorCode | INTEGER | error code |
-| errorMsg | STRING | error message |
-| result | OBJECT | Business result |
-
-### `result`
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| signUrl | STRING | signUrl（STRING） |
-
----
-
-## Error Code（Partner 表）
-
-| errorCode | errorMsg | Error SOP |
-|-----------|----------|----------|
-| 200020001 | Non-compliant query, please use the information correctly. | — |
-
----
-
-## 脚本
-
-```bash
-export LINKFOXAGENT_API_KEY="<key>"
-python scripts/eu_tax_invoice_pdf_download.py '{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "product-inventory",
-  "site": "eu",
-  "request": {}
-}'
 ```

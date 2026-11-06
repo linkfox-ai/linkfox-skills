@@ -128,11 +128,15 @@ def run_voucher_api(api_name: str, params: dict, caller: Optional[str] = None) -
         "api": api_name,
         "developerProxy": proxy,
         "resolvedPath": path,
+        "transportHttpStatus": proxy.get("transportHttpStatus"),
     }
     if query_string:
         out["queryString"] = query_string
     if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
+        try:
+            out["requestBody"] = json.loads(body) if body else None
+        except (TypeError, json.JSONDecodeError):
+            out["requestBody"] = body
 
     merge_shopee_body(out, proxy, response_key)
     return out

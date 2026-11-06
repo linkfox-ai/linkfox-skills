@@ -14,27 +14,27 @@ dateRange:
   dataRetentionDays: 65
 ---
 
-# SP Search Term
+# SP 搜索词
 
-Search term reports contain search term performance metrics broken down by targeting expressions and keywords. Note that search term reports only include impressions that resulted in at least one ad click. Use the keywordType filter to include either targeting expressions or keywords in your report.
+搜索词报告按定向表达式和关键词拆分搜索词效果。只包含产生至少一次广告点击的展示；可用 `keywordType` 筛选定向表达式或关键词。
 
-> **Note**
-> If a placement does not have a search keyword associated with it on a product detail page, the search term in the report will be an asterisk `*`.
+> **说明**
+> 商品详情页广告位没有关联搜索关键词时，报告中的搜索词为星号 `*`。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | spSearchTerm |
-| Maximum date range | 31 days |
-| Data retention | 65 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 65 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | searchTerm |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | impressions |
 | addToList |
@@ -97,76 +97,101 @@ Search term reports contain search term performance metrics broken down by targe
 | targeting |
 | adKeywordStatus |
 
-## Group by searchTerm
+## 分组：searchTerm
 
-**Additional metrics**: adKeywordStatus
+附加指标：
 
-**Filters**:
-- keywordType (values: BROAD, PHRASE, EXACT, TARGETING_EXPRESSION, TARGETING_EXPRESSION_PREDEFINED)
+| 字段 |
+|---|
+| adKeywordStatus |
 
-## Sample calls
+**筛选**：
 
-### Targeting expressions only
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| keywordType | array[string] | BROAD, PHRASE, EXACT, TARGETING_EXPRESSION, TARGETING_EXPRESSION_PREDEFINED |
 
-```bash
-curl --location --request POST 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxx' \
---data-raw '{
-    "name":"SP search term report 7/5-7/10",
-    "startDate":"2022-07-05",
-    "endDate":"2022-07-10",
-    "configuration":{
-        "adProduct":"SPONSORED_PRODUCTS",
-        "groupBy":["searchTerm"],
-        "columns":["impressions","clicks","cost","campaignId","adGroupId","date","targeting","searchTerm","keywordType","keywordId"],
-        "filters": [
-            {
-                "field": "keywordType",
-                "values": [
-                    "TARGETING_EXPRESSION",
-                    "TARGETING_EXPRESSION_PREDEFINED"
-                ]
-            }
-        ],
-        "reportTypeId":"spSearchTerm",
-        "timeUnit":"DAILY",
-        "format":"GZIP_JSON"
-    }
-}'
+## 配置示例
+
+### 仅定向表达式
+
+```json
+{
+  "name": "SP search term report 7/5-7/10",
+  "startDate": "2022-07-05",
+  "endDate": "2022-07-10",
+  "configuration": {
+    "adProduct": "SPONSORED_PRODUCTS",
+    "groupBy": [
+      "searchTerm"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "adGroupId",
+      "date",
+      "targeting",
+      "searchTerm",
+      "keywordType",
+      "keywordId"
+    ],
+    "filters": [
+      {
+        "field": "keywordType",
+        "values": [
+          "TARGETING_EXPRESSION",
+          "TARGETING_EXPRESSION_PREDEFINED"
+        ]
+      }
+    ],
+    "reportTypeId": "spSearchTerm",
+    "timeUnit": "DAILY",
+    "format": "GZIP_JSON"
+  }
+}
 ```
 
-### Keywords only
+### 仅关键词
 
-```bash
-curl --location --request POST 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxx' \
---data-raw '{
-    "name":"SB search terms report 7/5-7/10",
-    "startDate":"2022-07-05",
-    "endDate":"2022-07-10",
-    "configuration":{
-        "adProduct":"SPONSORED_PRODUCTS",
-        "groupBy":["searchTerm"],
-        "columns":["impressions","clicks","cost","campaignId","adGroupId","startDate","endDate","keywordType","keyword","matchType","keywordId","searchTerm"],
-        "filters": [
-            {
-                "field": "keywordType",
-                "values": [
-                    "BROAD",
-                    "PHRASE",
-                    "EXACT"
-                ]
-            }
-        ],
-        "reportTypeId":"spSearchTerm",
-        "timeUnit":"SUMMARY",
-        "format":"GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SB search terms report 7/5-7/10",
+  "startDate": "2022-07-05",
+  "endDate": "2022-07-10",
+  "configuration": {
+    "adProduct": "SPONSORED_PRODUCTS",
+    "groupBy": [
+      "searchTerm"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "adGroupId",
+      "startDate",
+      "endDate",
+      "keywordType",
+      "keyword",
+      "matchType",
+      "keywordId",
+      "searchTerm"
+    ],
+    "filters": [
+      {
+        "field": "keywordType",
+        "values": [
+          "BROAD",
+          "PHRASE",
+          "EXACT"
+        ]
+      }
+    ],
+    "reportTypeId": "spSearchTerm",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

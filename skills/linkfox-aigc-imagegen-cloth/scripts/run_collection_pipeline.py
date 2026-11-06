@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""服饰套图 pipeline 薄入口：plan / dispatch。"""
+"""服饰套图 pipeline 薄入口：plan / dispatch / summary。"""
 
 import os
 import sys

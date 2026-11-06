@@ -1,6 +1,6 @@
-# Amazon Ads Report Types
+# Amazon 广告 报告类型
 
-按 `adProduct` 分类。每个 `.md` 文件名即 `reportTypeId`，内容为官方原文 + YAML frontmatter 结构化字段，用于构造 `POST /reporting/reports` 请求体。
+按 `adProduct` 分类。每个 `.md` 文件名即 `reportTypeId`，内容为官方规格的中文说明与 YAML frontmatter 结构化字段，用于构造 `POST /reporting/reports` 请求体。
 
 ## 目录
 

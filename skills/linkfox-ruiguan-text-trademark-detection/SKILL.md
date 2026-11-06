@@ -1,174 +1,109 @@
 ---
 name: linkfox-ruiguan-text-trademark-detection
-description: 面向电商产品Listing的文字商标检测与侵权风险分析。当用户提到商标检测、商标风险检查、品牌侵权筛查、产品标题商标扫描、文字商标查询、Listing合规检查、知识产权风险评估、text trademark detection, trademark infringement, brand infringement screening, listing compliance, intellectual property risk, Ruiguan时触发此技能。即使用户未明确说"商标"，只要其需求涉及检查产品文本（标题、描述、五点描述）中是否包含可能侵权的商标，也应触发此技能。
+description: 检测电商商品标题、描述、五点描述及关键词中的文字商标风险，返回匹配商标、风险评分、注册信息、权利人和黑白名单。适用于上架前 Listing 商标筛查、品牌词风险检查、多地区文字商标查询和知识产权风险初筛，无需明确提及睿观或 Ruiguan。不适用于图片或 Logo 商标识别、专利或版权检测、法律意见、诉讼策略及商标注册申请。
 ---
 
-# Ruiguan Text Trademark Detection
+# 睿观文本商标检测
 
-This skill guides you on how to perform text-based trademark detection against product titles and other product text, helping e-commerce sellers identify potential trademark infringement risks before publishing listings.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Text Trademark Detection scans product text (titles, descriptions, bullet points) against registered trademark databases across 15 countries/regions. It returns matched trademarks along with risk scores, registration details, and holder information so sellers can avoid intellectual property violations.
+检查商品文本中是否包含可能侵权的商标，帮助卖家在发布 Listing 前识别风险。
+支持对产品标题、描述、五点描述和后台关键词做文字筛查，并按目标销售地区展示匹配证据。
 
-**Risk score logic**: The `highestModeScore` field ranges from 0 to 5 -- a higher value indicates greater infringement risk. The `textTrademarkRadar` field classifies overall product risk into three levels: 0 (low risk), 1 (needs manual review), 2 (high risk).
+**场景速查**
 
-**Blacklist and whitelist**: The response may include `blacklistTrademarks` (known dangerous trademarks to always avoid) and `whitelistTrademarks` (safe trademarks that can be ignored). Always surface blacklist matches prominently to the user.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 检查这个标题有没有商标问题 | 标题商标扫描。 |
+| 这个产品名称可以安全使用吗 | 产品命名风险初筛。 |
+| 帮我扫描 Listing 有没有品牌侵权 | 标题与附加文本联合检查。 |
+| 检查美国和欧盟的商标风险 | 多地区文字商标筛查。 |
+| 这个词是否为注册商标 | 查询该词的商标匹配记录及注册信息。 |
+| 我的 Listing 会不会因知识产权被下架 | 提供文字商标风险证据与待核查项。 |
+| 这个关键词有没有侵犯品牌 | 关键词商标安全性初筛。 |
 
-## Parameters
+## 前置条件
 
-| Parameter | Type | Required | Description | Example |
-|-----------|------|----------|-------------|---------|
-| productTitle | string | Yes | Product title to scan (max 1000 chars) | Wireless Bluetooth Headphones Noise Cancelling |
-| regions | string | No | Country/region codes, comma-separated. Supported: US, EM, GB, DE, FR, IT, ES, AU, CA, MX, JP, CN, WO, TR, BX | US,EM,GB |
-| limit | integer | Yes | Max number of results to return (default 100, max 500) | 100 |
-| productText | string | No | Additional product text such as bullet points, description (max 1000 chars) | Ergonomic design with premium sound quality |
+取得用户要检测的完整商品标题，并确认目标销售市场；用户已有描述、五点描述或后台关键词时，一并准备。请求默认值、地区代码、输入长度和返回限制见 `references/api.md`。
 
-### Supported Regions
+## 检测流程
 
-| Code | Region |
-|------|--------|
-| US | United States |
-| EM | European Union |
-| GB | United Kingdom |
-| DE | Germany |
-| FR | France |
-| IT | Italy |
-| ES | Spain |
-| AU | Australia |
-| CA | Canada |
-| MX | Mexico |
-| JP | Japan |
-| CN | China |
-| WO | WIPO (World Intellectual Property Organization) |
-| TR | Turkey |
-| BX | Bolivia |
+1. 保留用户提供的完整标题，避免仅取片段导致漏检；收集已有的附加商品文本，不编造缺失内容。
+2. 按商品计划销售的市场确定检测地区，依照 `references/api.md` 准备请求并检查参数限制。
+3. 按潜在匹配数量选用适当的返回数量，优先复用同一参数已取得的结果；调用前遵守成本约束。
+4. 根据响应中的整体风险、黑白名单、命中商标、权利人与注册信息组织结果，按下方展示规则解释风险和待核查项。
+5. 遇到失败或空结果，按接口参考解释原因，建议核对标题或地区；后续调用遵守成本约束，不自动扩大检测范围。
 
-When the user does not specify a region, default to **US**.
+## 执行方式
 
-## 调用方式
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/ruiguan_text_trademark_detection.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **API 端点**：`POST /ruiguan/textTrademarkDetection`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/ruiguan_text_trademark_detection.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 输出策略
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-text-trademark-detection-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 完整响应保存到 `<root>/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-text-trademark-detection-<timestamp>.json`。`<root>` 通常为脚本工作目录下的 `linkfox/`；设置 `ACPX_WORKSPACES` 时优先使用其首个目录下的 `linkfox/`。`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。调用前检查工作目录和输出位置可写；不可写时停止并报错，禁止写入 `/tmp`。脚本的目录选择顺序及保存失败行为见 `references/api.md`，以实际保存提示核对输出文件。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 执行规则
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 算力消耗预估
 
-## How to Build Requests
+36 算力 / 次
 
-### Principles
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-1. **Include the full product title**: Always pass the complete product title in `productTitle` -- partial text may miss trademark matches.
-2. **Choose target regions**: Select regions matching the marketplaces where the product will be sold. Use comma-separated codes for multi-region checks.
-3. **Provide additional text when available**: If the user has bullet points, descriptions, or backend keywords, include them in `productText` for a more thorough scan.
-4. **Set an appropriate limit**: Use the default of 100 for standard checks. Increase up to 500 when scanning titles with many potential matches.
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-### Usage Examples
+费用复核要求：调用次数将超过 5 次时，必须先通过 `AskUserQuestion` 与用户二次确认，明确告知累计已消耗算力和继续调用预计消耗的算力，由用户决定是否继续。若没有该工具，用当前会话提问完成同等确认；已有明确覆盖该次数及费用范围的用户授权时沿用授权，不重复询问。缓存命中不计为新的付费调用；累计费用优先依据实际返回，尚不明确时标注估算。
 
-**1. Basic US Trademark Check for a Product Title**
-```
-productTitle: "Wireless Bluetooth Headphones Noise Cancelling Over Ear"
-regions: "US"
-limit: 100
-```
+### 解决认证和算力问题
 
-**2. Multi-Region Check (US + EU + UK)**
-```
-productTitle: "Portable USB-C Charger Fast Charging Power Bank"
-regions: "US,EM,GB"
-limit: 100
-```
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**3. Full Listing Scan with Additional Text**
-```
-productTitle: "Stainless Steel Vacuum Insulated Water Bottle"
-productText: "BPA-free, double-wall insulation, keeps drinks cold 24 hours, fits standard cup holders"
-regions: "US,JP"
-limit: 200
-```
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**4. Broad Global Check**
-```
-productTitle: "LED Ring Light with Tripod Stand for Streaming"
-regions: "US,EM,GB,DE,FR,IT,ES,AU,CA,MX,JP,CN"
-limit: 500
-```
+### 约束与建议
 
-**5. China Domestic Market Check**
-```
-productTitle: "智能蓝牙耳机降噪头戴式"
-regions: "CN"
-limit: 100
-```
+- **风险优先展示**：结果开头展示 `textTrademarkRadar` 对应的“低风险”“待人工核查”或“高风险”；缺失或未知值应如实说明，不自行补全。
+- **解释风险分数**：`highestModeScore` 为 0–5，分数越高风险越大；0 表示最低风险，5 表示最高风险。整体风险与单条分数分别展示，字段定义见接口参考。
+- **突出黑名单**：`blacklistTrademarks` 非空时优先展示并明确警示，提示避用命中的黑名单商标。
+- **说明白名单**：`whitelistTrademarks` 中的商标按检测结果标注为安全或豁免项，说明在本次筛查中可忽略；不能据此保证所有地区、所有用途均无风险。
+- **使用表格**：命中表至少展示商标名称、地区、风险分数、状态、权利人、申请号、是否著名商标、是否亚马逊热搜品牌及是否活跃维权人。保留注册号、尼斯分类、触发原词、匹配地区状态、兼容性和常用词等返回证据，供进一步核查。
+- **区分证据与结论**：命中记录、无命中和风险分数均为筛查线索，不能保证是否构成侵权或是否会被平台下架。始终提示结果仅供参考，不构成法律意见；需要最终商标清查结论时咨询知识产权律师。
+- **遵守检测范围**：仅做文本商标检测，不检测图片、Logo、图形商标、专利或版权，也不提供诉讼策略及商标注册申请服务。数据库覆盖和使用限制见接口参考。
+- **解释错误**：依据 `references/api.md` 的基础规则和业务规则处理；认证与算力问题按上方引导解决，其他错误给出核对输入的建议。
 
-## Display Rules
+## 使用示例
 
-1. **Risk-first presentation**: Always highlight the overall risk level (`textTrademarkRadar`) at the top of results. Use clear language: "Low Risk", "Needs Manual Review", or "High Risk".
-2. **Blacklist prominence**: If `blacklistTrademarks` is non-empty, display them first with a clear warning.
-3. **Table format**: Present trademark matches in a table with columns: Trademark Name, Region, Risk Score, Status, Holder, Application Number, Famous, Amazon Brand, Active Holder.
-4. **Score explanation**: Remind users that `highestModeScore` ranges from 0 (safe) to 5 (highest risk).
-5. **Whitelist reassurance**: If `whitelistTrademarks` contains entries, note them as safe/exempted trademarks.
-6. **Error handling**: When a request fails, explain the issue and suggest the user check their product title or adjust regions.
-7. **No legal advice**: Always remind users that results are for reference only and do not constitute legal advice. Recommend consulting an IP attorney for definitive trademark clearance.
-## Important Limitations
+### 美国站标题筛查
 
-- **Text-only detection**: This tool detects trademarks in text. It does not analyze logos, images, or design marks.
-- **Result cap**: Maximum 500 results per request.
-- **Character limit**: Both `productTitle` and `productText` are limited to 1000 characters each.
-- **Database coverage**: Covers 15 countries/regions. Trademarks registered in other jurisdictions may not be detected.
+用户：帮我检查这个无线耳机标题的商标风险。
 
-## User Expression & Scenario Quick Reference
+使用完整标题，按接口参考的默认地区与返回数量准备检测，优先展示整体风险和黑名单，再展示命中证据。
 
-**Applicable** -- Trademark risk analysis for product text:
+### 多地区商品文本检查
 
-| User Says | Scenario |
-|-----------|----------|
-| "Check my title for trademark issues" | Basic trademark scan |
-| "Is this product name safe to use" | Infringement risk check |
-| "Scan my listing for brand violations" | Full listing scan |
-| "Any trademark risks in this title" | Risk assessment |
-| "Check trademarks in US and EU" | Multi-region check |
-| "Is XX a registered trademark" | Specific term lookup |
-| "Will my listing get taken down for IP" | Compliance screening |
-| "Check if this keyword infringes any brand" | Keyword safety check |
+用户：这个充电宝要在美国、欧盟和英国销售，标题和描述都帮我检查。
 
-**Not applicable** -- Needs beyond text trademark detection:
+合并用户已有文本，按目标市场准备多地区请求，分别展示地区、权利人、注册信息与风险。
 
-- Logo or image-based trademark analysis
-- Patent infringement checks
-- Copyright detection
-- Legal opinions or litigation strategy
-- Trademark registration or filing assistance
+### 完整 Listing、广泛地区及中国市场检查
 
-## 算力消耗规则
+用户可要求检查水杯的标题和五点描述、直播灯的多个销售地区，或中文耳机标题的中国市场风险。按实际商品资料与市场选择范围；对应 JSON 示例和参数上限见 `references/api.md`。
 
-消耗 36 算力。
+## 使用反馈
 
-> **重要**：本技能消耗大量算力，如果调用次数超过5次，必须用`AskUserQuestion` 和用户进行二次确认，要明确告知用户已消耗算力和继续调用的话预计消耗的算力，让用户自行决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

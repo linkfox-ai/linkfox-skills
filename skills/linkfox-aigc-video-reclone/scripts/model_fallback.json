@@ -1,0 +1,74 @@
+[
+  {
+    "name": "minimax-h3-lite",
+    "requestValue": "minimax-h3-lite",
+    "documentedCapabilities": [
+      "768P",
+      "5/10/15",
+      "9"
+    ]
+  },
+  {
+    "name": "minimax-h3",
+    "requestValue": "minimax-h3",
+    "documentedCapabilities": [
+      "768P / 2K",
+      "5/10/15",
+      "9"
+    ]
+  },
+  {
+    "name": "wan3",
+    "requestValue": "wan3",
+    "documentedCapabilities": [
+      "480P / 720P / 1080P",
+      "5/10/15/20/25/30",
+      "10"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-5",
+    "requestValue": "doubao-seedance-2-5",
+    "documentedCapabilities": [
+      "480P / 720P / 1080P",
+      "5/10/15/20/25/30",
+      "30"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-0",
+    "requestValue": "doubao-seedance-2-0",
+    "documentedCapabilities": [
+      "480P / 720P / 1080P",
+      "5/10/15",
+      "6"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-0-fast",
+    "requestValue": "doubao-seedance-2-0-fast",
+    "documentedCapabilities": [
+      "480P / 720P",
+      "5/10/15",
+      "6"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-0-mini",
+    "requestValue": "doubao-seedance-2-0-mini",
+    "documentedCapabilities": [
+      "480P / 720P",
+      "5/10/15",
+      "6"
+    ]
+  },
+  {
+    "name": "happyhorse-v2",
+    "requestValue": "happyhorse-v2",
+    "documentedCapabilities": [
+      "720P / 1080P",
+      "5/10/15",
+      "9"
+    ]
+  }
+]

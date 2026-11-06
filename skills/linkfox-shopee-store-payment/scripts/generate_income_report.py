@@ -10,17 +10,12 @@ Shopee Store — generate_income_report
 from __future__ import annotations
 
 import json
-import sys
 
-from _payment_api_runner import run_payment_api
+from _payment_api_runner import main_for_api
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: generate_income_report.py '<JSON>'", file=sys.stderr)
-        sys.exit(1)
-    params = json.loads(sys.argv[1])
-    print(json.dumps(run_payment_api("generate_income_report", params, "generate_income_report.py"), indent=2, ensure_ascii=False))
+    main_for_api("generate_income_report")
 
 
 if __name__ == "__main__":

@@ -1,20 +1,20 @@
 # `GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT`
 
-> **分类**：2. Analytics Reports  
-> **说明**：Products frequently purchased together  
-> **可用范围**：Both
+> **分类**：2. 分析报告  
+> **说明**：经常组合购买的商品  
+> **可用范围**：卖家与 Vendor
 
 ## 官方索引（Report type values）
 
 - **Schema 专页（请求体、`reportOptions`、结果 JSON）**：[`sellingPartnerMarketBasketAnalysisReport.md`](../sellingPartnerMarketBasketAnalysisReport.md)
-- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[Analytics Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#market-basket-analysis-report)（章节：**Market Basket Analysis Report**）
+- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[分析报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#market-basket-analysis-report)（章节：**Market Basket Analysis Report**）
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
-- **Availability**：Sellers and vendors who have the Brand Analytics Selling Partner API role and are registered in [Amazon Brand Registry](https://brandservices.amazon.com).
-- **Marketplace availability**：NA (all marketplaces), EU (Spain, United Kingdom, France, Netherlands, Germany, Italy, Sweden, Turkey, Saudi Arabia, United Arab Emirates, India), FE (all marketplaces).
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：JSON
+- **角色**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
+- **可用范围**：具备 Brand Analytics Selling Partner API 角色且已注册品牌备案的卖家与 Vendor： [Amazon Brand Registry](https://brandservices.amazon.com).
+- **站点范围**：NA (all marketplaces), EU (Spain, United Kingdom, France, Netherlands, Germany, Italy, Sweden, Turkey, Saudi Arabia, United Arab Emirates, India), FE (all marketplaces).
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：JSON
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#market-basket-analysis-report>
 

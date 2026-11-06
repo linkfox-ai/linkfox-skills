@@ -1,135 +1,102 @@
 ---
 name: linkfox-wallysmarter-product-detail
-description: 通过WallySmarter查询Walmart商品详情，包含价格历史和销量趋势。当用户提到Walmart商品详情、沃尔玛产品数据、WallySmarter、沃尔玛价格走势、沃尔玛销量趋势、Walmart product detail, Walmart price history, Walmart sales trend, WallySmarter product时触发此技能。即使用户未明确提及"WallySmarter"，只要其需求涉及查看沃尔玛单个商品的详细信息、历史价格变化或销量走势，也应触发此技能。
+description: 通过 WallySmarter 查询 Walmart 单个商品的详情、历史价格与销量趋势，提供价格、品牌、评分评论、销量和收入估算、卖家、配送方式及刊登质量信息。适用于已有沃尔玛商品编号或链接的单品深查、降价核对和趋势研究，无需明确提及 WallySmarter；不适用于关键词找品、类目市场研究、同时批量比较商品、卖家账号或广告指标、实时库存及送达预估。
 ---
 
-# WallySmarter Product Detail
+# WallySmarter Walmart 商品详情
 
-This skill retrieves detailed product information from Walmart via WallySmarter, including pricing history and sales volume trends.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-WallySmarter Product Detail looks up a single Walmart product by its ItemId and returns comprehensive product attributes along with historical pricing and sales data. This is a product-level deep-dive tool, complementing the broader `linkfox-walmart-search` skill that operates at the search/listing level.
+查看指定 Walmart 商品的详细属性、历史价格与销量趋势。
+用户已有商品编号或商品链接，希望了解单品表现、核对降价或配送情况时，使用本技能。
 
-**Data scope**: Returns current product attributes (title, price, brand, ratings, fulfillment type, etc.) plus historical stats when `includeStats` is enabled (default).
+**场景速查**
 
-**Non-structured output**: The tool returns mixed structured and non-structured data. It does NOT support secondary analysis via `@智能数据查询`.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查一下这个 Walmart 商品的详情 | 单品深查：展示商品属性和当前价格。 |
+| 这个沃尔玛产品最近价格走势如何，有没有降价 | 价格趋势：根据可用历史数据总结变化。 |
+| WallySmarter 查 Walmart 商品 5177343351 | 指定商品：按编号查询详情。 |
+| 这个沃尔玛产品销量怎么样 | 销量研究：展示估算值及可用历史趋势。 |
+| 只看当前详情，不需要历史 | 当前属性：省略历史数据。 |
 
-## Parameter Guide
+### 边界
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| productId | integer | Yes | — | Walmart Item ID. Found in product URLs: `https://www.walmart.com/ip/<productId>` |
-| includeStats | boolean | No | true | Whether to include historical price and sales data |
+关键词搜索或浏览商品使用 `linkfox-walmart-search`；本技能补充搜索列表层面的单品深查。类目市场分析、卖家账号或广告指标、实时库存及送达预估不在本技能范围内。
 
-## Product Data Fields
+## 前置条件
 
-| Field | Description |
-|-------|-------------|
-| title | Product title |
-| description | Product description |
-| price | Current selling price (USD) |
-| wasPrice | Strikethrough price (USD) |
-| minPrice | Lowest price (USD) |
-| brand | Brand name |
-| rating | Average rating (0.0–5.0) |
-| reviews | Total review count |
-| salesEstimate | Estimated sales volume (units) |
-| revenue | Estimated revenue (USD) |
-| sellerName | Seller name |
-| fulfillmentType | Fulfillment: MARKETPLACE or WFS |
-| productPageUrl | Product page URL |
-| imageUrl | Product image URL |
-| departmentName | Department category name |
-| departmentId | Department ID |
-| listingScore | Listing quality score |
-| contentScore | Content quality score |
-| outOfStock | Stock status: 0=in stock, 1=out of stock |
-| sponsored | Ad flag: 0=organic, 1=sponsored |
-| isBranded | Brand flag: 0=no, 1=yes |
-| multipleOptionsAvailable | Variant flag: 0=no, 1=yes |
-| usItemId | Internal US Item ID |
-| createdAt | Product creation timestamp |
-| updatedAt | Last update timestamp |
-| stats | Historical price and sales trend data object |
+**先确定商品**：从用户提供的 Walmart 商品编号、商品链接或上游搜索结果确定目标；缺失时先补充目标信息。请求字段和使用限制见 `references/api.md`。
 
-## Usage Examples
+## 查询流程
 
-**1. Basic product lookup (with history)**
-Get full details for a Walmart product including price and sales trends:
-```json
-{"productId": 5177343351}
-```
+1. 确认用户要查询的商品，以及需要当前详情还是同时查看历史趋势，按 `references/api.md` 准备请求。
+2. 先说明本次预计算力消耗；本技能采用倍数动态计费，可能一次消耗较多算力，必须提醒用户，由用户决定是否继续。
+3. 执行查询并保存完整响应，按摘要和任务需要提取商品及历史数据；响应判断和错误处理见 `references/api.md`。
+4. 展示商品信息和可用趋势，注明数据更新时间、统计范围与缺失数据；后续查询遵守成本约束。
 
-**2. Product detail only (no history)**
-Get product attributes without historical data for faster response:
-```json
-{"productId": 5169493923, "includeStats": false}
-```
+## 执行方式
 
-## Display Rules
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/wallysmarter_product_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-1. **Present data clearly**: Show product details in a structured format. Do not add subjective business recommendations unless asked.
-2. **Price formatting**: Display current price alongside wasPrice when available to highlight discounts. Always show USD symbol.
-3. **Trend summary**: When stats data is available, summarize price and sales trends (e.g., "Price dropped 15% over the last 30 days").
-4. **Score context**: Explain listingScore and contentScore in context (higher = better quality listing).
-5. **Stock and fulfillment**: Clearly flag out-of-stock items and fulfillment type (WFS vs Marketplace).
-6. **Single product**: This tool queries one product at a time. If the user needs multiple products, call the tool separately for each ItemId.
+### 输出策略
 
-## Important Limitations
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-wallysmarter-product-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-- Only supports lookup by Walmart ItemId (the numeric ID in the product URL)
-- Returns non-structured data — NOT compatible with `@智能数据查询` for secondary analysis
-- Single ItemId per call; batch queries require multiple invocations
-- Historical data availability depends on WallySmarter's tracking coverage
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## User Expression & Scenario Quick Reference
+## 执行规则
 
-**Applicable** — Walmart single-product deep-dive:
+### 算力消耗预估
 
-| User Says | Scenario |
-|-----------|----------|
-| "查一下这个Walmart商品的详情" | Basic product lookup |
-| "这个沃尔玛产品最近价格走势如何" | Price trend analysis |
-| "WallySmarter查Walmart商品5177343351" | Direct ID lookup |
-| "沃尔玛这个产品销量怎么样" | Sales estimate check |
-| "Walmart product detail for item XX" | English variant |
-| "这个Walmart产品最近有没有降价" | Price change detection |
+按动态规则计费：消耗算力 = tokens × 10.5。只查商品详情、不带历史统计时 tokens = 1，预估 10.5 算力；顺带查近 90 天历史统计时，每个商品详情 tokens = 2，预估 21 算力。
 
-**Not applicable** — Needs beyond single product detail:
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- Walmart product search by keyword (use `linkfox-walmart-search`)
-- Bulk product comparison across multiple items simultaneously
-- Walmart seller account or advertising metrics
-- Real-time inventory or delivery estimates
-- Category-level market analysis
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**Boundary judgment**: If the user has a specific Walmart product ID or URL and wants detailed attributes, pricing history, or sales trends, this skill applies. If they want to search/browse products by keyword or category, use `linkfox-walmart-search` instead.
+### 解决认证和算力问题
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## 算力消耗规则
+### 约束与建议
 
-按动态规则计费：消耗算力 = tokens × 10.5。只查商品详情、不带历史统计时 tokens = 1；顺带查近 90 天历史统计时每个商品详情 tokens = 2。
+- **明确数据性质**：返回当前商品属性及可用历史数据，包含结构化和非结构化内容，不支持通过 `@智能数据查询` 进行二次分析。历史数据覆盖限制见 `references/api.md`。
+- **清晰展示数据**：用表格展示商品详情，用户未要求时不附加主观经营建议。销量和收入按估算值表述，不将其当作实时店铺实绩。
+- **价格展示**：价格使用美元符号（USD / $）；有 `wasPrice` 时与当前价格并列，说明折扣，缺失时不补造划线价。
+- **总结趋势**：有历史数据时，总结价格和销量变化，并注明实际起止日期；涨跌幅依据返回数值计算，不将缺失日期当作零销量。
+- **解释质量分**：结合 `listingScore` 和 `contentScore` 说明刊登及内容质量，分数越高代表质量越好。
+- **库存与配送**：醒目标注缺货信息，并区分 WFS 与 Marketplace；这不构成实时库存或送达承诺。
 
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+## 使用示例
 
-**Feedback:**
+### 商品详情及历史趋势
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户：查一下 Walmart 商品 5177343351 的详情和价格、销量走势。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+确认商品及历史需求，说明消耗并由用户决定是否继续；取得数据后展示当前详情和实际覆盖期间的历史趋势。
 
+### 仅查看当前商品属性
+
+用户：查看 https://www.walmart.com/ip/5169493923 的商品信息，不需要历史。
+
+从链接确认商品，按 `references/api.md` 选择明确关闭历史统计的请求方式，说明消耗后查询，展示当前属性和更新时间。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

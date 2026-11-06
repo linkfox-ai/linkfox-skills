@@ -1,19 +1,19 @@
 # `GET_FBA_OVERAGE_FEE_CHARGES_DATA`
 
-> **分类**：6.3 FBA Fees & Charges  
-> **说明**：FBA overage fee charges  
-> **可用范围**：Seller only
+> **分类**：6.3 FBA 费用  
+> **说明**：FBA 超量仓储收费  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-inventory-storage-overage-fees-report)（章节：**FBA Inventory Storage Overage Fees Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **Availability**：FBA sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **要点**：Estimated inventory storage overage fees for each storage type of your inventory in Amazon fulfillment centers that exceeds your storage limits.
+- **角色**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **可用范围**：FBA 卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：按存储类型估算亚马逊仓库中超出仓储额度的库存超量费用。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-inventory-storage-overage-fees-report>
 

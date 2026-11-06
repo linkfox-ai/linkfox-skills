@@ -11,24 +11,24 @@ dateRange:
   dataRetentionDays: 65
 ---
 
-# SD Purchased Product
+# SD 购买商品
 
-Sponsored Display purchased product reports contain performance data for products that were purchased as part of brand-halo activity associated with your campaigns (purchased ASINs that differ from the promoted ASIN).
+SD 购买商品报告提供活动带来的品牌光环购买效果，即被购买 ASIN 与推广 ASIN 不同的商品。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sdPurchasedProduct |
-| Maximum date range | 31 days |
-| Data retention | 65 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 65 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | asin |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | adGroupId |
 | adGroupName |
@@ -63,42 +63,37 @@ Sponsored Display purchased product reports contain performance data for product
 | unitsSoldBrandHalo |
 | unitsSoldBrandHaloClicks |
 
-## Group by asin
+## 分组：asin
 
-**Additional metrics**: N/A
+无附加指标。
 
-**Filters**: N/A
+**筛选**： 无
 
-## Sample calls
+## 配置示例
 
-### Purchased product summary report
-
-```bash
-curl --location --request POST 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxx' \
---data-raw '{
-    "name": "SD purchased product report",
-    "startDate": "2025-03-05",
-    "endDate": "2025-03-10",
-    "configuration": {
-        "adProduct": "SPONSORED_DISPLAY",
-        "groupBy": ["asin"],
-        "columns": [
-            "promotedAsin",
-            "asinBrandHalo",
-            "adGroupName",
-            "campaignName",
-            "salesBrandHalo",
-            "conversionsBrandHalo",
-            "campaignId",
-            "adGroupId"
-        ],
-        "reportTypeId": "sdPurchasedProduct",
-        "timeUnit": "SUMMARY",
-        "format": "GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SD purchased product report",
+  "startDate": "2025-03-05",
+  "endDate": "2025-03-10",
+  "configuration": {
+    "adProduct": "SPONSORED_DISPLAY",
+    "groupBy": [
+      "asin"
+    ],
+    "columns": [
+      "promotedAsin",
+      "asinBrandHalo",
+      "adGroupName",
+      "campaignName",
+      "salesBrandHalo",
+      "conversionsBrandHalo",
+      "campaignId",
+      "adGroupId"
+    ],
+    "reportTypeId": "sdPurchasedProduct",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

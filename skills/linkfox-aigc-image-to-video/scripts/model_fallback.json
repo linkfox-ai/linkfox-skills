@@ -1,0 +1,131 @@
+[
+  {
+    "name": "wan3",
+    "requestValue": "wan3",
+    "documentedCapabilities": [
+      "480P / 720P / 1080P",
+      "5 / 10 / 15 / 20 / 25 / 30",
+      "10",
+      "不支持",
+      "支持",
+      "16:9 / 4:3 / 1:1 / 3:4 / 9:16"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-5",
+    "requestValue": "doubao-seedance-2-5",
+    "documentedCapabilities": [
+      "480P / 720P / 1080P",
+      "5 / 10 / 15 / 20 / 25 / 30",
+      "30",
+      "支持",
+      "支持",
+      "9:16 / 16:9 / 1:1 / 4:3 / 3:4 / 21:9"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-0-fast",
+    "requestValue": "doubao-seedance-2-0-fast",
+    "documentedCapabilities": [
+      "480P / 720P",
+      "5 / 10 / 15",
+      "9",
+      "支持",
+      "支持",
+      "9:16 / 16:9 / 1:1 / 4:3 / 3:4 / 21:9"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-0-mini",
+    "requestValue": "doubao-seedance-2-0-mini",
+    "documentedCapabilities": [
+      "480P / 720P",
+      "5 / 10 / 15",
+      "9",
+      "支持",
+      "支持",
+      "9:16 / 16:9 / 1:1 / 4:3 / 3:4 / 21:9"
+    ]
+  },
+  {
+    "name": "happyhorse-v2",
+    "requestValue": "happyhorse-v2",
+    "documentedCapabilities": [
+      "720P / 1080P",
+      "5 / 10 / 15",
+      "9",
+      "不支持",
+      "不支持",
+      "9:16 / 16:9 / 1:1 / 4:3 / 3:4 / 21:9"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-0",
+    "requestValue": "doubao-seedance-2-0",
+    "documentedCapabilities": [
+      "480P / 720P / 1080P",
+      "5 / 10 / 15",
+      "9",
+      "支持",
+      "支持",
+      "9:16 / 16:9 / 1:1 / 4:3 / 3:4 / 21:9"
+    ]
+  },
+  {
+    "name": "gemini-omni-flash",
+    "requestValue": "gemini-omni-flash",
+    "documentedCapabilities": [
+      "720P / 1080P / 4K",
+      "5 / 10",
+      "10",
+      "不支持",
+      "不支持",
+      "16:9 / 9:16"
+    ]
+  },
+  {
+    "name": "kling-v2-6",
+    "requestValue": "kling-v2-6",
+    "documentedCapabilities": [
+      "720P / 1080P",
+      "5 / 10",
+      "2",
+      "支持· 仅 1080P",
+      "支持· 仅 1080P · 无声",
+      "自适应"
+    ]
+  },
+  {
+    "name": "minimax-h3",
+    "requestValue": "minimax-h3",
+    "documentedCapabilities": [
+      "768P / 2K",
+      "5 / 10 / 15",
+      "9",
+      "不支持",
+      "支持",
+      "16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 21:9"
+    ]
+  },
+  {
+    "name": "kling-v3-omni",
+    "requestValue": "kling-v3-omni",
+    "documentedCapabilities": [
+      "720P / 1080P",
+      "5 / 10 / 15",
+      "7",
+      "不支持",
+      "支持· 仅 1080P · 无声",
+      "1:1 / 9:16 / 16:9"
+    ]
+  },
+  {
+    "name": "WAN3",
+    "requestValue": "WAN3",
+    "documentedCapabilities": [
+      "1～15 秒",
+      "最大 100 MB",
+      "单边 240～4096 像素；宽高比 1:8～8:1；参考视频时长与输出时长之和不超过 30 秒"
+    ]
+  }
+]

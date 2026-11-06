@@ -10,17 +10,12 @@ Shopee Store — set_shop_installment_status
 from __future__ import annotations
 
 import json
-import sys
 
-from _payment_api_runner import run_payment_api
+from _payment_api_runner import main_for_api
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: set_shop_installment_status.py '<JSON>'", file=sys.stderr)
-        sys.exit(1)
-    params = json.loads(sys.argv[1])
-    print(json.dumps(run_payment_api("set_shop_installment_status", params, "set_shop_installment_status.py"), indent=2, ensure_ascii=False))
+    main_for_api("set_shop_installment_status")
 
 
 if __name__ == "__main__":

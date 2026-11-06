@@ -15,7 +15,7 @@ from .config import APLUS_TYPES, DEFAULT_RATIOS, SP_APLUS_TYPES, SP_LAYOUTS, SIZ
 TEXTGEN_TIMEOUT = 360
 TRANSIENT_RE = re.compile(
     r"(Connection failed|Connection reset|timed?\s?out|timeout|Temporary failure|"
-    r"HTTP 5\d\d|URLError|Polling timeout|Max retries|Read timed out)",
+    r"URLError|Read timed out)",
     re.I,
 )
 JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.I)
@@ -299,7 +299,7 @@ def resolve_skills_root(*, skill_root: str | None = None) -> str:
     （…/skills/<skill>）会误指到 …/.ce/ 而非 …/skills/。
     """
     shared_dir = os.path.dirname(shared_root())  # 本地 scripts/
-    skills_root = os.path.dirname(shared_dir)
+    skills_root = os.path.dirname(os.path.dirname(shared_dir))
     if skill_root:
         alt = os.path.dirname(os.path.abspath(skill_root))
         for candidate in (skills_root, alt):
@@ -355,6 +355,27 @@ def run_subprocess(cmd: list[str], *, input_text: str | None = None, timeout: in
     return subprocess.run(cmd, input=input_text, text=True, capture_output=True, timeout=timeout)
 
 
+def task_recovery_hint(stderr: str | bytes | None) -> str | None:
+    """从官方脚本留档或创建日志保留已有任务，避免把查询失败变成重复创建。"""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", errors="replace")
+    text = stderr or ""
+    for match in re.finditer(r"^Saved full response:\s*(.+)$", text, re.M):
+        path = re.sub(r"\s+\([^()]*\)\s*$", "", match.group(1).strip())
+        try:
+            with open(path, encoding="utf-8") as f:
+                detail = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if isinstance(detail, dict) and (detail.get("taskId") or detail.get("canQuery") or detail.get("pollTimedOut")):
+            message = "；".join(str(detail[k]) for k in ("errorCode", "errcode", "errmsg", "error") if detail.get(k) is not None)
+            return f"{message}；taskId={detail.get('taskId')}；保留原任务恢复查询，不重新提交；错误详情见: {path}"
+    created = re.search(r"(?:Task created:|任务已创建：)\s*taskId=([^,\s]+)", text)
+    if created:
+        return f"下游任务已创建，taskId={created.group(1)}；保留原任务恢复查询，不重新提交"
+    return None
+
+
 def run_textgen(textgen_script: str, params: dict, *, content_only: bool = False) -> str:
     cmd = [sys.executable, textgen_script, "--stdin"]
     if content_only:
@@ -363,7 +384,14 @@ def run_textgen(textgen_script: str, params: dict, *, content_only: bool = False
     for attempt in range(2):
         if attempt:
             time.sleep(2.0)
-        proc = run_subprocess(cmd, input_text=json.dumps(params, ensure_ascii=False), timeout=TEXTGEN_TIMEOUT)
+        try:
+            proc = run_subprocess(cmd, input_text=json.dumps(params, ensure_ascii=False), timeout=TEXTGEN_TIMEOUT)
+        except subprocess.TimeoutExpired as exc:
+            recovery = task_recovery_hint(exc.stderr)
+            if recovery:
+                raise RuntimeError(recovery) from exc
+            last_err = "textgen timeout"
+            continue
         if proc.returncode == 0:
             body = (proc.stdout or "").strip()
             if content_only:
@@ -378,6 +406,9 @@ def run_textgen(textgen_script: str, params: dict, *, content_only: bool = False
             if not content:
                 raise RuntimeError("textgen 响应无 content")
             return content
+        recovery = task_recovery_hint(proc.stderr)
+        if recovery:
+            raise RuntimeError(recovery)
         last_err = (proc.stderr or proc.stdout or "").strip()
         if not is_transient(last_err):
             break
@@ -441,7 +472,7 @@ def expand_type_slots(types_spec: list[dict] | None, default_plan: list[tuple[st
     slots = []
     for item in types_spec:
         ttype = item.get("type")
-        count = int(item.get("count") or 1)
+        count = int(item.get("count", 1))
         if not ttype or count < 1:
             raise ValueError(f"非法 types 条目: {item!r}")
         slots.extend([ttype] * count)
@@ -458,7 +489,13 @@ def assign_layouts(slots: list[str]) -> list[str]:
     sp_i = 0
     size_i = 0
     layouts: list[str] = []
+    aplus_indices: dict[str, int] = {}
     for ttype in slots:
+        if ttype in APLUS_TYPES and slots.count(ttype) == 5:
+            idx = aplus_indices.get(ttype, 0)
+            layouts.append(["概览", "功能", "品质", "场景", "场景"][idx])
+            aplus_indices[ttype] = idx + 1
+            continue
         if ttype in SP_APLUS_TYPES:
             layouts.append(SP_LAYOUTS[sp_i % len(SP_LAYOUTS)])
             sp_i += 1
@@ -549,9 +586,6 @@ def plan_summary(plan: list[dict], type_labels: dict[str, str]) -> list[dict]:
     return out
 
 
-SAVED_FULL_RESPONSE_PREFIX = "Saved full response: "
-
-
 def _sanitize_table_cell(val: Any) -> str:
     """表格单元格：禁止 | / 换行，空值统一为 —。"""
     if val is None or val == "":
@@ -599,33 +633,13 @@ def write_plan_summary_md(datadir: str, summary: list[dict]) -> str:
     return os.path.abspath(path)
 
 
-def format_saved_response_line(payload: Any) -> str:
-    """构造单行 acpx-bridge 行级协议字符串。
-
-    - payload 为 list → ``Saved full response: ["a.png", ...]``（成功图）
-    - payload 为 str → ``Saved full response: /abs/path.json``（失败 JSON 或 md 路径）
-    """
-    if isinstance(payload, list):
-        body = json.dumps(payload, ensure_ascii=False)
-    else:
-        body = str(payload)
-    return f"{SAVED_FULL_RESPONSE_PREFIX}{body}"
-
-
-def emit_saved_response(payload: Any) -> None:
-    """流式 print 一行 Saved full response（格式见 ``format_saved_response_line``）。"""
-    print(format_saved_response_line(payload), flush=True)
-
-
 def print_plan_phase_result(result: dict, *, datadir: str | None = None) -> None:
     """plan phase stdout 顺序：先 markdown 表格正文（agent 原样转发到对话回复），
     后跟一行 status JSON（agent 内部解析，不展示给用户）。
 
-    历史版本曾试图通过 ``Saved full response: <md 路径>`` 让 bridge 自动把
-    plan-summary md 文件渲染到对话气泡，但 bridge 对包在 Bash 工具调用里的
-    ``Saved full response`` 不会做 md 内容内联渲染，导致用户看不到规划表格。
-    现改为：md 文件仍写盘留档，markdown 表格内容**直接打印到 stdout**，
-    与 dispatch summary 阶段「原样转发末尾 markdown」的机制对齐。
+    bridge 不会将 ``Saved full response: <md 路径>`` 指向的内容内联渲染。
+    md 文件写盘留档，markdown 表格内容直接打印到 stdout，由 agent 原样转发，
+    与 summary 阶段的 markdown 明细使用相同的展示方式。
 
     - awaiting_confirm 且有 summary → 写 md 文件、stdout 打 markdown 表格、再打 status JSON
     - ready_to_dispatch / error → 仅打 status JSON（无需用户确认或无表格内容）
@@ -700,22 +714,6 @@ def merge_assets_from_results(results: list[dict]) -> list[dict]:
             if isinstance(asset, dict):
                 merged.append(asset)
     return merged
-
-
-def collect_success_image_paths(results: list[Any] | None) -> list[str]:
-    """按 results 顺序，扁平收集成功任务的 media 绝对路径。"""
-    paths: list[str] = []
-    if not isinstance(results, list):
-        return paths
-    for row in results:
-        if not isinstance(row, dict):
-            continue
-        if row.get("status") not in ("success", "dry-run"):
-            continue
-        for img in row.get("images") or []:
-            if isinstance(img, str) and img:
-                paths.append(img)
-    return paths
 
 
 def _task_label(task: dict, type_labels: dict[str, str] | None = None) -> str:

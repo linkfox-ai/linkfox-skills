@@ -1,115 +1,173 @@
-# 退货面单准备信息 — `temu.aftersales.returnlabel.prepare.get`
+# 退货面单准备信息 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/global_returns_refunds_aftersales_returnlabel_prepare_get.py` |
-| **Partner 文档** | https://partner-global.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896（按 `type` 在 Partner Global 后台打开） ||
-| **网关** | `POST /temu/proxy`，`type`=`temu.aftersales.returnlabel.prepare.get`，业务载荷放在 Body 的 `params` |
+返回 [接口总览](../api.md)；Partner 来源及文档菜单见 [目录](../partner-global-catalog.md)。
 
-**Description:** Get return label preparation information (pick-up times and warehouses).
+## 公共规则
 
-> **`parentAfterSalesSn`** 与 **`parentOrderSn`** 均为必填。
-> 上传面单前通常先调本接口获取 **`availableReturnWarehouseList`** 与上门揽收时间窗。
+### 调用规范
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 **`request`**。建议使用 **`tokenPurpose=order-shipping`**，**`managementType=semi-managed`**。
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
----
+### 响应码基本规则
 
-## Request 结构（官方顶层）
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-```text
-params
-└── request (OBJECT, 选填)
-    ├── parentAfterSalesSn (STRING, 必填)
-    └── parentOrderSn (STRING, 必填)
-```
 
-### `request` 内字段
+## 接口：退货面单准备信息（temu.aftersales.returnlabel.prepare.get）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
+
+| 参数 | 类型 | 必填 | 默认值 / 说明 |
+|---|---|---|---|
+| site | string | 是 | Global 专用脚本默认 `global`；通用脚本显式提供。兼容值 `cn` / `partner` / `us` / `global` / `eu`，小写。 |
+| managementType | string | 是 | Global 专用脚本默认 `semi-managed`；兼容 `full-managed` / `semi-managed`，小写。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；直接请求网关时必填，`storeKey` 由脚本本地解析为此字段。 |
+| storeKey | string | 与 accessToken 二选一 | 仅脚本参数，本地 Token 存储中的店铺键，不发给网关。 |
+| tokenPurpose | string | 否 | 仅脚本选 Token 用途；Global 默认 `order-shipping`，不发给网关。用途必须与店铺授权一致。 |
+| type | string | 是 | 本接口固定为 `temu.aftersales.returnlabel.prepare.get`；专用脚本自动设置，通用代理要求显式提供。 |
+| params | object | 否 | 业务参数，建议按下表放在 `params.request`。 |
+
+#### 脚本鉴权与选项
+
+| 参数 / 选项 | 类型 | 必填 | 默认值 / 说明 |
+|---|---|---|---|
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox 密钥兼容别名，按该顺序优先于环境变量；不发入业务 Body。 |
+| --inline | CLI flag | 否 | 强制完整打印；仍保存响应。 |
+| --no-cache | CLI flag | 否 | 业务脚本不启用响应缓存；封装调用 `call_api.run` 时始终追加，不读写响应缓存。 |
+
+补充运行约定见 [接口总览](../api.md#脚本运行约定)。Global 专用脚本支持顶层业务字段或 `params` 对象，存在对象 `params` 时优先使用；显式 `request` 按原层级转发。多站点 `temu_proxy.py` 仅使用对象 `params`，不把顶层业务字段自动并入。官方将 `request` 标为选填，内部必填项仍须提供；Partner 示例顶层字段经网关调用时建议放入 `params.request`。
+
+#### `params`
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| request | OBJECT | 否 | 业务请求对象；位于网关 params 下，内部必填项仍须提供。 |
+
+#### `params.request`
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| parentAfterSalesSn | STRING | **是** | Parent after-sales order number. |
-| parentOrderSn | STRING | **是** | Parent order number. |
+| parentAfterSalesSn | STRING | **是** | 父售后单号。 |
+| parentOrderSn | STRING | **是** | 父订单号。 |
 
-> 官方 Request 表将顶层 **`request`** 标为选填（False）；标 **必填** 的字段须在 **`params.request`** 中提供。Partner **Request Example** CURL 将业务字段写在 JSON 顶层；经 LinkFox 网关时建议放在 **`params.request`**。
+### 响应结构
 
-### 网关 `params` 写法
+#### LinkFox 网关与脚本字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| errcode | integer / string / null | 若返回，按公共响应码基本规则判断。 |
+| errmsg | string | 若返回，为网关消息。 |
+| body | string | Temu 原始 JSON 字符串；代理脚本解析后增加 `temuBody`，同时保留原始 `body` 字符串。 |
+| code | integer | 网关兼容错误码：`1002` 参数或 Token 无效，`1003` 转发失败。 |
+| temuBody | object / array / scalar / null | 仅代理脚本在 `body` 可解析为 JSON 时增加；解析失败保留原始 `body`。 |
+| transportHttpStatus | integer / null | 脚本记录的 LinkFox 外层 HTTP 状态；连接失败为 null。 |
+
+Temu 业务数据可能位于解析后根级或 `response` 内；下表保留 Partner 字段层级。不能把 HTTP 请求完成等同于售后业务成功。
+
+#### Temu 响应包装
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| response | OBJECT | Partner 文档的业务响应包装；实返也可能直接使用根对象。下列字段位于此对象内或解析后根级。 |
+
+#### Temu 顶层字段（`response` 内或解析后根级）
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| success | BOOLEAN | 当前请求是否成功 |
+| errorCode | INTEGER | 错误码 |
+| errorMsg | STRING | 错误信息 |
+| result | OBJECT | 业务结果对象（见下表） |
+
+#### `result`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| userPickUpTimezone | STRING | 用户上门揽收时区 |
+| userSelectedPickUpTimeList | OBJECT[] | 可选揽收时间段 |
+| availableReturnWarehouseList | OBJECT[] | 可选退货仓列表 |
+| merchantLatestPickUpTime | LONG | 商家最晚揽收时间，毫秒时间戳 |
+
+#### `result.userSelectedPickUpTimeList[]`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| startTimestamp | LONG | 揽收时间段起始时间戳，单位为毫秒。 |
+| endTimestamp | LONG | 揽收时间段结束时间戳，单位为毫秒。 |
+
+#### `result.availableReturnWarehouseList[]`
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| warehouseId | STRING | 退货仓 ID |
+| warehouseName | STRING | 退货仓名称 |
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关兼容字段 `code=1002` 表示参数或 LinkFox Token 无效，`1003` 表示转发失败；先排查 Token、用途和 IP 白名单。
+- 在网关正常响应基础上解析 `body`，再根据 Temu `success`、`errorCode` 和 `errorMsg` 判断业务结果；`success=false` 不能认定为业务成功。
+
+| errorCode | errorMsg（接口原值） | 处理建议 |
+|-----------|----------|----------------------|
+| 130010001 | The parameter is illegal. Please check if the input parameter meets the regulations. | 结合原始消息核对入参、售后状态或开通条件；按用户范围修正后再调用，不自动重试 |
+| 130010005 | operate forbid | 结合原始消息核对入参、售后状态或开通条件；按用户范围修正后再调用，不自动重试 |
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "global",
+  "managementType": "semi-managed",
+  "accessToken": "TOKEN",
+  "type": "temu.aftersales.returnlabel.prepare.get",
+  "params": {
+    "request": {
+      "parentOrderSn": "PO-001",
+      "parentAfterSalesSn": "PAS-001"
+    }
+  }
+}'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "parentOrderSn": "PO-001",
-    "parentAfterSalesSn": "PAS-001"
-  }
+  "skillName": "linkfox-temu-returns-refunds-global",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
----
-
-## Response（Temu `body` 解析后）
-
-Partner **Response** 表顶层为 **`response`** 对象；嵌套子行在导出 HTML 中多为折叠状态，下列层级按 **Response 表 + Response Example** 全部展开。
-
-```text
-response
-├── success / errorCode / errorMsg
-└── result
-    ├── userPickUpTimezone (STRING)
-    ├── userSelectedPickUpTimeList[] → startTimestamp, endTimestamp
-    ├── availableReturnWarehouseList[] → warehouseId, warehouseName
-    └── merchantLatestPickUpTime (LONG)
-```
-
-### 顶层字段（`response` 内，或根级）
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | success（当前请求是否成功） |
-| errorCode | INTEGER | error code（错误码） |
-| errorMsg | STRING | error message（错误信息） |
-| result | OBJECT | 业务结果对象（见下表） |
-
-### `result`
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| userPickUpTimezone | STRING | User pick-up timezone（用户上门揽收时区） |
-| userSelectedPickUpTimeList | OBJECT[] | User-selected pick-up time intervals（可选揽收时间段） |
-| availableReturnWarehouseList | OBJECT[] | Available return warehouses（可选退货仓列表） |
-| merchantLatestPickUpTime | LONG | Merchant latest pick-up time（商家最晚揽收时间，毫秒时间戳） |
-
-#### `userSelectedPickUpTimeList[]`
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| startTimestamp | LONG | Interval start（毫秒） |
-| endTimestamp | LONG | Interval end（毫秒） |
-
-#### `availableReturnWarehouseList[]`
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| warehouseId | STRING | Warehouse ID |
-| warehouseName | STRING | Warehouse name |
-
----
-
-## Error Code（Partner 表）
-
-| errorCode | errorMsg | Error SOP / 处理建议 |
-|-----------|----------|----------------------|
-| 130010001 | The parameter is illegal. Please check if the input parameter meets the regulations. | 见 Partner 文档；修正入参或售后状态后重试 |
-| 130010005 | operate forbid | 见 Partner 文档；修正入参或售后状态后重试 |
-
----
-
-## 脚本
-
-```bash
-export LINKFOXAGENT_API_KEY="<key>"
-python scripts/global_returns_refunds_aftersales_returnlabel_prepare_get.py '{"accessToken": "TOKEN", "tokenPurpose": "order-shipping", "request": {"parentOrderSn": "PO-001", "parentAfterSalesSn": "PAS-001"}}'
-```
-
-**典型流程：** → [temu-aftersales-carrier-get](./temu-aftersales-carrier-get.md) 取承运商 → [temu-aftersales-upload-returnlabel](./temu-aftersales-upload-returnlabel.md) 上传面单。

@@ -21,4 +21,3 @@
 - 已付款可选调 `python scripts/onboarding.py query <order_id>`，不主动轮询
 
 排除 `errcode=403`（无权限，不归入这两类）。所有子命令输出 stdout JSON，`error` 字段已含阶段前缀，透传给用户即可。完整用法：`python scripts/onboarding.py --help`。
-

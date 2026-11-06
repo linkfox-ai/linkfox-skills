@@ -52,7 +52,7 @@ agent → Bash[2]: run_collection_pipeline.py --phase dispatch --state <state_fi
 
 agent → Bash[3]: run_collection_pipeline.py --phase summary --state <state_file>
         ↓ stdout: 末尾 markdown 明细（**含每张成功图的 ![label](abs_path) 内联引用**）
-                  + 1 行 status JSON（不再 emit Saved full response 图片行）
+                  + 1 行 status JSON（不 emit Saved full response 图片行）
         ↓ (product variant) 写 <datadir>/collection-asset-manifest.json
         ↓ agent 把 markdown 明细原样转发到对话回复，前端 markdown 渲染器据此渲染整组图
 
@@ -64,12 +64,12 @@ agent 在对话回复末尾追加 A+ 推荐 / 跨 agent 卡片 / suggestion-ask
 `run_collection_pipeline.py --phase plan --job <job.json>` stdout 形如：
 
 ```markdown
-### 套图规划方案
+# 套图规划方案
 
-| 序号 | 类型 | 简述 | 画面内容 | 比例 |
+| 序号 | 类型 | 简述 | 卖点 | 画面内容 | 比例 |
 |------|------|------|------|----------|------|
-| 1 | 种草图 | … | … | 1:1 |
-| 2 | 卖点图 | … | … | 1:1 |
+| 1 | 种草图 | … | … | … | 1:1 |
+| 2 | 卖点图 | … | … | … | 1:1 |
 …
 
 {"status":"awaiting_confirm","plan_file":"…","state_file":"…","run_one_task_script":"…","total":6,"specs":[…],"summary":[…]}
@@ -104,7 +104,7 @@ dispatch 自身的 stdout 协议：
 
 调用方 agent 职责：
 
-1. dispatch 是**单个 Bash**，**禁止**自己拆成多个 Bash 跑 `run_one_task.py`（这是旧协议；新协议下 skill 层已经并发，agent 端再并发只会重复出图）。
+1. dispatch 是**单个 Bash**，**禁止**自己拆成多个 Bash 跑 `run_one_task.py`（skill 层已经并发，agent 端额外并发调用会重复出图）。
 2. dispatch 阶段**本身没有图片渲染**——别因为这条 Bash 没冒出图就以为失败；图在下一条 summary Bash 转发的 markdown 里出现。
 3. 子任务相互隔离：单任务失败只标该任务，其余继续；agent 不重试、不切换 skill。
 4. dispatch 结束后立即进入 summary，不在中间插额外文案。
@@ -131,7 +131,7 @@ dispatch 自身的 stdout 协议：
 
 - 每张成功图的下一行就是 `  ![label](abs_path)`（缩进 2 空格作为列表项内子段落）——这是整组图被前端渲染出来的**唯一**路径；前端 markdown 渲染器会把 `abs_path` 内联渲染为图片。
 - 部分失败 / 全部失败时 markdown 末尾追加 `**失败项：**` 列表（失败行不带 `![]()`，因为没图）。
-- **不再** emit `Saved full response` 图片行——整组图通过 markdown 内联渲染，不依赖 Bash 工具块的资源链接通道（避免与 dispatch 折叠块出现双重渲染 / 折叠丢图）。
+- **不** emit `Saved full response` 图片行——整组图通过 markdown 内联渲染，不依赖 Bash 工具块的资源链接通道（避免与 dispatch 折叠块出现双重渲染 / 折叠丢图）。
 
 summary 按 variant 决定是否写 `<datadir>/collection-asset-manifest.json`：
 
@@ -150,7 +150,7 @@ summary 按 variant 决定是否写 `<datadir>/collection-asset-manifest.json`�
 ### 2.4 失败与异常
 
 - **业务失败**（单张被拒、参数非法等）：子任务落失败 task-result 片段（图不计入 summary 成功明细），summary 在「失败项」列出。agent 转发即可，**不换 skill 重试**。
-- **网络/瞬时错误**：run_one_task 内部已自动重试 1 次仍失败才标失败；agent 端**不再**重试。
+- **网络/瞬时错误**：未取得下游已创建任务的证据时，run_one_task 内部最多自动重试 1 次；已返回任务编号或创建日志时，保留原任务和错误文件，后续只查询该任务，不再次调用创建入口。agent 端**不再**重复生成。
 - **task-result 片段缺失**（子任务异常崩溃 / 跳过了 dispatch）：summary 视为失败任务，错误信息为「task-result 片段缺失」。
 - **plan 阶段失败**（缺字段、imageUrls 非法等）：stdout 输出 `{"status":"error","error":"…"}`；agent 如实告知，不进入 dispatch。
 
@@ -225,7 +225,7 @@ skill 输出（markdown 明细 + status JSON / 单张 `Saved full response`）�
 调用方 agent 按自身规则继续后续动作：
 - 在对话回复**末尾**追加 `<linkfox-suggestion-ask>` 3 条（必填）
 - 条件触发时追加 A+ 推荐 1 句话 + `<linkfox-suggestion-agent>` 跨 agent 卡片
-- 上下文有 `skuId` 时执行 Listing 图片落库（image-agent 见 `references/sku-listing-flow.md` Step 4.5）
+- 上下文有 `skuId` 时执行 Listing 图片落库（见调用方 image-agent 自身的 `references/sku-listing-flow.md` Step 4.5；这是调用方外部资源，不是本技能内置文件）
 
 本协议**不规定** agent 侧业务流程的具体话术——那是 agent 自己 CLAUDE.md / references 的事。
 
@@ -237,7 +237,7 @@ skill 输出（markdown 明细 + status JSON / 单张 `Saved full response`）�
 |------|------|
 | skill stdout 直接输出 `<linkfox-suggestion-ask>` / `<linkfox-suggestion-agent>` / A+ 推荐 | 违反「skill 只输出业务结果」边界 |
 | 把 plan / dispatch / summary 的 status JSON 内容贴给用户 | 噪音；用户只需看图与 markdown |
-| 用户确认后 agent 自己并发 N 个 Bash 跑 `run_one_task.py` | 旧协议；新协议由 skill 层 dispatch 单 Bash 完成并发，自己并发只会重复出图 |
+| 用户确认后 agent 自己并发 N 个 Bash 跑 `run_one_task.py` | skill 层 dispatch 单 Bash 完成并发，额外拆分调用会重复出图 |
 | dispatch Bash 没图就以为失败、又自己再发一遍 | dispatch 本就不渲染图，图在 summary markdown 里；多发一遍会重复出图 |
 | 转发 summary markdown 时手动剥掉 `![label](abs_path)` 行 | 整组图就是靠这些 `![]()` 行渲染的，剥掉用户就看不到图 |
 | 在 summary markdown 之外另外贴 `Saved full response: [...]` 让 bridge 再渲染 | 与 markdown `![]()` 双重渲染 |

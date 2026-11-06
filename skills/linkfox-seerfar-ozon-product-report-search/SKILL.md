@@ -1,174 +1,124 @@
 ---
 name: linkfox-seerfar-ozon-product-report-search
-description: Seerfar Ozon 商品报表搜索：按销量、销售额、销量/销售额增长率、购物车转化率、下单转化率、价格、评分、评论数、QA数、变体数、浏览量、毛利率、退货取消率、广告费用份额、重量/体积、上架时间、品牌、卖家、配送方式、标签等多维指标筛选 Ozon 商品，返回每个商品的 SKU、标题、价格（卢布）、销量、销售额、损失销售额、转化率、评分、评论、品牌、卖家、配送方式、上架天数/月数等完整商品报表字段，用于 Ozon 选品、竞品商品分析、热销商品挖掘、价格带/转化带筛选。当用户提到 Ozon 商品报表、Ozon 选品、Ozon 商品筛选、Ozon 商品分析、Ozon 热销商品、Ozon 竞品商品分析、Ozon product report, Ozon product screener, filter Ozon products by sales, Ozon best-seller mining, Seerfar Ozon 商品报表时触发此技能。即使用户未明确提到"Seerfar"，只要其意图是按多指标筛选 Ozon 商品并查看商品级报表，也应触发此技能。
+description: 按销量、销售额、增长率、价格、转化率、评分、评论数、品牌、卖家、配送方式、上架时间及利润物流指标筛选 Ozon 商品，返回商品级完整报表。适用于 Ozon 选品、竞品商品分析、热销和上升商品挖掘、价格带及转化带筛选，也可查询指定 SKU 的报表，无需明确提及 Seerfar。不适用于关键词市场数据、关键词挖掘、单店完整目录、类目汇总或其他平台研究。
 ---
 
-# Seerfar Ozon Product Report Search
+# Seerfar Ozon 商品报表搜索
 
-This skill searches the Seerfar Ozon product database and filters products by rich performance metrics — monthly sales, revenue, growth, cart/order conversion, price, rating, reviews, brand, seller, fulfillment model, listing age, gross margin, and more. Each returned row is a full product-report record, making this the starting point for Ozon product selection (选品), competitor product analysis, best-seller mining, and price/conversion-band screening.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Unit of data is the product, not the keyword**: this endpoint returns product-level rows (one per SKU), each enriched with full report metrics. You discover *which products* match your criteria — unlike the market-keyword endpoint, which returns search terms.
+按多维指标筛选 Ozon 商品并查看商品级报表。每条记录对应一个 SKU，涵盖销量、销售额、损失销售额、转化率、评价、品牌、卖家、配送与上架时间等指标。
 
-**This is a product screener / 商品报表**: filter the Ozon product database by metric ranges (`{min, max}`), not only by keyword/brand/seller. Stack a high `monthlySales` floor with a low `price` ceiling to surface affordable high-volume products, or qualify conversion quality with a high `convToCartPdp` floor and a low `returnCancellationRate` ceiling; sort by `sales` DESC to mine best-sellers.
+**场景速查**
 
-**Unified vs raw duplicate fields**: the response carries six alias pairs that hold the same value under two keys — `sku`/`productId`, `sales`/`monthlySalesUnits`, `revenue`/`monthlySalesRevenue`, `reviewRating`/`rating`, `brandName`/`brand`, `productUrl`/`productPageUrl`. Read either; do not expect them to differ.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| Ozon 选品，按销量和销售额筛选商品 | 商品筛选：组合指标范围并排序。 |
+| 找 Ozon 热销商品或畅销品 | 畅销挖掘：结合畅销标签与销量排序。 |
+| 找 Ozon 上升商品或新品爆款 | 新品研究：结合上架时间与增长排序。 |
+| 找高转化、低退货商品 | 转化质量：结合购物车转化率与退货取消率。 |
+| 看某品牌或卖家的商品表现 | 品牌或卖家筛选：比较商品报表。 |
+| 查这几个 SKU 的报表 | 指定商品：查看命中商品的指标。 |
 
-**Date semantics**: `searchDate` selects the data month. Pass `2026-04-01` for March 2026 data; omit it for the last 30 days. Sales/revenue figures are relative to the selected period.
+### 边界
 
-**`data` and `products` are identical**: both top-level arrays carry the same product rows. `total` is the total matching count (e.g. ~27.8M with no filter, 1 when filtering to a single SKU).
+- 关键词及搜索量市场数据转交 Seerfar Ozon 市场关键词搜索技能；种子词扩展转交关键词挖掘技能。
+- 单店完整目录转交店铺搜索技能；类目商品及类目汇总转交类目搜索技能。
+- 商品反查流量词转交关键词反查技能；其他平台数据不在本技能范围内。
 
-**Ozon only**: `sourceType` is fixed to `ozon`. `fulfillment` values are `OZON`, `FBO`, `FBS`, `RFBS`, `FBP`.
+## 前置条件
 
-## Parameters
+先明确筛选目的与统计区间；使用类目筛选时，从上游类目搜索数据取得编号。请求准备与使用限制见 `references/api.md`。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| page | object | yes | Pagination + sort: `{page, pageSize, orders[]}`. `page` from 1 (default 1), `pageSize` default 20. `orders[]` = `{field, direction}` with `direction` `DESC`/`ASC`. |
-| skus | array<int> | no | SKU list to restrict to (max 10). |
-| keywords | array<string> | no | Keyword list to filter product titles. |
-| categoryIds | array<string> | no | Seerfar category ID list. |
-| sellerName | array<string> | no | Seller name list. |
-| brand | object | no | `{brandName: array<string>, type: int}`. `type`: `0` include, `1` exclude, `2` no brand. |
-| fulfillment | array<string> | no | Fulfillment filter: `OZON`/`FBO`/`FBS`/`RFBS`/`FBP`. |
-| labels | array<int> | no | Badge filter: `0` new, `1` authentic, `2` best-seller. |
-| creationDate | integer | no | Listing-age filter (months): `1`/`3`/`6`/`12`/`24`. |
-| variationsMerge | integer | no | Merge variants: `0` no, `1` yes. |
-| searchDate | string | no | Data date `yyyy-MM-dd`; default last 30 days. `2026-04-01` → March 2026. |
-| tag | string | no | Tag word. |
-| monthlySales | {min,max} | no | Monthly sales range. |
-| monthlySalesRate | {min,max} | no | Sales growth-rate range (filters `salesRate`). |
-| monthlyRevenue | {min,max} | no | Monthly revenue range. |
-| price | {min,max} | no | Price range (RUB). |
-| convToCartPdp | {min,max} | no | Cart conversion rate range. |
-| reviewRating | {min,max} | no | Rating range. |
-| reviewCount | {min,max} | no | Review count range. |
-| questionsAndAnswers | {min,max} | no | Q&A count range. |
-| variants | {min,max} | no | Variant count range. |
-| drr | {min,max} | no | Ad-cost share range. |
-| grossMargin | {min,max} | no | Gross margin range. |
-| returnCancellationRate | {min,max} | no | Return/cancellation rate range. |
-| weight | {min,max} | no | Weight range (g). |
-| volume | {min,max} | no | Volume range (L). |
-| uId / memberId | string | no | User / member ID (data attribution). |
+## 查询流程
 
-All range filters are `{min, max}` objects; supply either or both bounds. Only `page` is required.
+1. 明确要查畅销、上升、价格带、转化质量，还是指定品牌、卖家或商品，按 `references/api.md` 准备请求。
+2. 先选择核心排序指标：畅销看销量、上升看增长率、低价带看价格、高评分看评价；结合类目、品牌或卖家收窄范围，避免在数千万商品中无序翻页。
+3. 按目的叠加范围筛选，例如销量下限与价格上限，或购物车转化率下限与退货取消率上限；研究新品需求时，结合上架时间与畅销标签。
+4. 选择当前统计期或历史月份，执行一次查询；先看摘要，再按需读取已保存数据。失败、空结果和后续分页均遵守成本约束。
+5. 用商品表格展示命中结果、统计区间及返回范围；错误时按接口文档解释原因，不自动连续改参试探。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /seerfar/ozon/productReportSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/seerfar_ozon_product_report_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/seerfar_ozon_product_report_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口请求消耗 12 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-product-report-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-product-report-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-**1. Top sellers right now (sort by sales)**
+12 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **商品级数据**：本技能返回商品报表，不能将商品行解释为关键词或类目整体数据。
+- **只展示数据**：用清晰表格呈现指标，不附加主观开发建议。优先展示标题、SKU、价格、销量、销售额、评分、评论数，再展示品牌、卖家和配送方式。
+- **标明币种**：价格、销售额和损失销售额以俄罗斯卢布（₽）展示，避免误读量级。
+- **避免重复展示**：优先使用统一字段；原始字段与统一字段的六组对应关系见接口文档，不将别名当作独立指标。
+- **说明返回范围**：展示本次商品行和匹配总数。结果较多时先展示前列商品，完整数据已保存，后续分页应说明额外消耗。
+- **说明数据口径**：销量和销售额对应所选统计期；日期约定、匹配总数及重复数组的含义见接口文档。
+- **解释异常**：按接口文档的公共响应规则判断结果，根据 `msg` / `errmsg` 解释原因；限流后等待再处理，不自行连续重试。
+
+## 使用示例
+
+### 当前畅销商品：按销量降序
+
 ```json
 {"page": {"page": 1, "pageSize": 10, "orders": [{"field": "sales", "direction": "DESC"}]}}
 ```
 
-**2. Blue-ocean products — high sales, low price band**
+### 高销量、低价格商品
+
 ```json
 {"page": {"page": 1, "pageSize": 20, "orders": [{"field": "sales", "direction": "DESC"}]}, "monthlySales": {"min": 5000}, "price": {"max": 500}}
 ```
 
-**3. Best-sellers in a category, FBO fulfillment**
+### 类目中的 FBO 畅销商品
+
 ```json
 {"page": {"page": 1, "pageSize": 20, "orders": [{"field": "revenue", "direction": "DESC"}]}, "categoryIds": ["15621031_200000933_93182"], "fulfillment": ["FBO"], "labels": [2]}
 ```
 
-**4. New listings from the last 30 days, sorted by growth**
+### 近 30 天上架的商品：按增长率降序
+
 ```json
 {"page": {"page": 1, "pageSize": 20, "orders": [{"field": "salesRate", "direction": "DESC"}]}, "creationDate": 1}
 ```
 
-**5. Look up specific SKUs**
+### 查询指定 SKU
+
 ```json
 {"page": {"page": 1, "pageSize": 10}, "skus": [2107989735]}
 ```
 
-## How to Build Queries
+## 使用反馈
 
-1. **Lead with `page.orders`**: the dataset is huge (tens of millions of products) — always sort by the metric you care about (`sales` DESC for best-sellers, `salesRate` DESC for rising products, `price` ASC for cheap volume, `reviewRating` DESC for well-reviewed).
-2. **Stack range filters to find opportunities**: combine a `monthlySales` floor with a `price` ceiling, or a `convToCartPdp` floor with a low `returnCancellationRate`, to qualify demand-vs-risk.
-3. **Scope with `categoryIds` / `brand` / `sellerName`**: narrow to a niche before sorting, so the top rows are relevant.
-4. **Use `creationDate` + `labels` for fresh demand**: `creationDate: 1` (new listings) paired with `labels: [2]` (best-seller badge) finds breakout products.
-5. **Pick the right `searchDate`**: omit for current trends (last 30 days); pass an explicit date for month-over-month comparison.
-
-## Display Rules
-
-1. **Present data only**: show product metrics in a clear table without subjective advice.
-2. **Lead with product columns**: `title`, `sku`, `price` (₽), `sales`, `revenue`, `rating`, `reviewCount`, then `brand` / `sellerName` / `fulfillment`.
-3. **Currency**: `price`/`revenue`/`missedRevenue` are in Russian rubles (₽); show the currency so scale is not misread.
-4. **Unified/raw aliases**: prefer the unified fields (`productId`, `monthlySalesUnits`, `monthlySalesRevenue`, `rating`, `brand`, `productPageUrl`) or note they equal the raw ones — do not present both as if independent.
-5. **Large result sets**: when `total` is large, show the top rows and remind the user they can persist the full response via the large-response pattern below, or page further with `page.page`.
-6. **Error handling**: when `code` is not `200` (or `errcode` is not `200`), explain the reason from `msg` / `errmsg` and suggest adjusting filters or retrying (rate-limit `1003`).
-
-## Important Limitations
-
-- **`page` is required**: a payload without `page` is rejected.
-- **`skus` cap**: at most 10 SKUs per request.
-- **Category IDs are opaque**: `categoryIds` requires Seerfar category IDs (from a category search), not human-readable names.
-- **Duplicate alias pairs**: six fields are duplicated under raw + unified keys (see Core Concepts) — same value, two keys.
-- **`total` is the full match count**: with no filter it can reach tens of millions; always sort and page rather than iterating blindly.
-- **Rate limiting**: `errcode 1003` ("请求过于频繁，请稍后再试") means throttle — wait and retry rather than lowering `pageSize`.
-- **Sort fields**: valid `orders[].field` values are the response metric fields (e.g. `sales`, `revenue`, `price`, `reviewRating`, `reviewCount`, `salesRate`); the `columns` array marks which are sortable.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Ozon product-level screening:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Ozon 选品 / 按销量销售额筛选商品" | Product screener (range filters + sort) |
-| "Ozon 热销商品 / 畅销品" | Best-seller mining (`labels:[2]` or sort `sales` DESC) |
-| "Ozon 上升商品 / 新品爆款" | Rising/new products (`creationDate:1`, sort `salesRate` DESC) |
-| "Ozon 高转化低退货商品" | Conversion-quality screen (`convToCartPdp` min, `returnCancellationRate` max) |
-| "Ozon 某品牌/卖家商品表现" | Brand/seller filter + sort |
-| "查这几个 SKU 的报表" | `skus` lookup |
-
-**Not applicable** — Needs beyond product-level reports:
-- Keyword market data (search terms, search volume) → market-keyword-search.
-- Keyword expansion around a seed term → keyword-mining.
-- A specific shop's full catalog → shop-search.
-- A category's products with category-level aggregates → category-search.
-- Reverse keyword lookup for a product → keyword-back-search.
-- Non-Ozon marketplaces → not covered here.
-
-**Boundary judgment**: if the user wants to **screen Ozon products by metrics and read product-level report rows**, start here. If they want keyword-level market data, a single shop's catalog, or a category aggregate, route to the corresponding Seerfar Ozon data source.
-
-## 算力消耗规则
-
-消耗 15 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

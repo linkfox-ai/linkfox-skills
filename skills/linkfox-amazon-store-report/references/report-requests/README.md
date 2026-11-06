@@ -11,7 +11,7 @@
 
 | 文档 | 上游 Schema | 涉及 `reportType` |
 |------|-------------|-------------------|
-| [accountHealthReport-2020-11-18.md](./accountHealthReport-2020-11-18.md) | [`accountHealthReport-2020-11-18.json`](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/accountHealthReport-2020-11-18.json) | 见专页（账户状况结果 JSON；`reportType` 以官方 Report Type Values 为准） |
+| [accountHealthReport-2020-11-18.md](./accountHealthReport-2020-11-18.md) | [`accountHealthReport-2020-11-18.json`](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/accountHealthReport-2020-11-18.json) | 见专页（账户状况结果 JSON；`reportType` 以官方 报告类型 Values 为准） |
 | [b2bProductOpportunitiesNotYetOnAmazonReport-2020-11-19.md](./b2bProductOpportunitiesNotYetOnAmazonReport-2020-11-19.md) | [`b2bProductOpportunitiesNotYetOnAmazonReport-2020-11-19.json`](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/b2bProductOpportunitiesNotYetOnAmazonReport-2020-11-19.json) | `GET_B2B_PRODUCT_OPPORTUNITIES_NOT_YET_ON_AMAZON` |
 | [b2bProductOpportunitiesRecommendedForYouReport-2020-11-19.md](./b2bProductOpportunitiesRecommendedForYouReport-2020-11-19.md) | [`b2bProductOpportunitiesRecommendedForYouReport-2020-11-19.json`](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/b2bProductOpportunitiesRecommendedForYouReport-2020-11-19.json) | `GET_B2B_PRODUCT_OPPORTUNITIES_RECOMMENDED_FOR_YOU` |
 | [endUserDataReport.md](./endUserDataReport.md) | [`endUserDataReport.json`](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/endUserDataReport.json) | `END_USER_DATA_REPORT` |

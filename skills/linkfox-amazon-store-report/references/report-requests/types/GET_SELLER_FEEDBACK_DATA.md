@@ -1,19 +1,19 @@
 # `GET_SELLER_FEEDBACK_DATA`
 
-> **分类**：11. Performance Reports  
-> **说明**：Customer feedback  
-> **可用范围**：Seller only
+> **分类**：11. 绩效报告  
+> **说明**：客户反馈  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Performance Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-performance#flat-file-feedback-report)（章节：**Flat File Feedback Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [绩效报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-performance#flat-file-feedback-report)（章节：**Flat File Feedback Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Selling Partner Insights](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#selling-partner-insights), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **Availability**：Sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **要点**：Contains negative and neutral feedback (one to three stars) from buyers who rated the seller's performance.
+- **角色**：[Selling Partner Insights](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#selling-partner-insights), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **可用范围**：卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：包含买家对卖家绩效给出的一至三星负面或中性评价。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-performance#flat-file-feedback-report>
 

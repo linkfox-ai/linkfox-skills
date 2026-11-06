@@ -10,7 +10,6 @@ Official docs: https://open.shopee.com/documents/v2/v2.add_on_deal.<api>?module=
 """
 
 from __future__ import annotations
-from _shopee_add_on_deal_common import emit_result, lf_inline_flag
 
 import json
 import sys
@@ -27,8 +26,7 @@ def main() -> None:
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
-    inline = lf_inline_flag()
-    emit_result(run_add_on_deal_api(str(params["api"]), params, "add_on_deal_api.py"), inline)
+    run_add_on_deal_api(str(params["api"]), params, "add_on_deal_api.py")
 
 
 if __name__ == "__main__":

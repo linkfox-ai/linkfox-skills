@@ -19,16 +19,26 @@ from _shop_endpoints import list_api_names
 
 
 def main() -> None:
+    if "--help" in sys.argv[1:] or "-h" in sys.argv[1:]:
+        print(__doc__)
+        print("选项：--inline 完整打印；--no-cache（本技能始终禁用响应缓存）")
+        return
     if len(sys.argv) < 2:
         print(f"Usage: shop_api.py '<JSON with api field>'\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
         sys.exit(1)
-    params = json.loads(sys.argv[1])
+    try:
+        params = json.loads(sys.argv[1])
+        if not isinstance(params, dict):
+            raise ValueError("JSON 参数必须为对象")
+    except (ValueError, json.JSONDecodeError) as exc:
+        print(f"参数错误：{exc}", file=sys.stderr)
+        sys.exit(1)
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
     result = run_shop_api(str(params["api"]), params, "shop_api.py")
     inline = lf_inline_flag()
-    emit_result(result, inline)
+    emit_result(result, inline=inline)
 
 
 if __name__ == "__main__":

@@ -23,12 +23,6 @@ import time as _lf_time
 import tempfile as _lf_tempfile
 
 _LF_SESSION_CACHE = {}
-NL_PLACEHOLDER = "⏎"
-
-
-def get_api_base():
-    """网关基础地址：env LINKFOX_TOOL_GATEWAY 优先，缺省回退正式地址。"""
-    return (_lf_os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
 
 
 def _lf_format_iso(ts):
@@ -157,103 +151,6 @@ def session_root(ts=None):
     return session_dir
 
 
-def download_media(url, slug, ts=None, ext=None, timeout=300):
-    """下载 URL 到 <session>/media/<slug>-<ts>.<ext>，返回本地路径；失败返回 None。"""
-    import sys as _lf_sys
-    from urllib.request import urlopen as _lf_urlopen, Request as _lf_Request
-    import posixpath as _lf_posixpath
-
-    if not url or not isinstance(url, str):
-        return None
-
-    if not url.startswith("http://") and not url.startswith("https://"):
-        print(f"[download_media] Unsupported URL scheme: {url[:80]}", file=_lf_sys.stderr)
-        return None
-
-    if ts is None:
-        ts = _lf_time.time()
-
-    guessed_ext = ext
-    if not guessed_ext:
-        path_part = url.split("?")[0]
-        candidate = _lf_posixpath.splitext(path_part)[1].lstrip(".")
-        if candidate and len(candidate) <= 5 and candidate.isalnum():
-            guessed_ext = candidate
-        else:
-            guessed_ext = "bin"
-
-    _, session_dir = _lf_ensure_session(ts)
-    media_dir = _lf_os.path.join(session_dir, "media")
-    _lf_os.makedirs(media_dir, exist_ok=True)
-    tmp_filename = f".tmp-{slug}-{int(ts * 1_000_000)}.download"
-    tmp_path = _lf_os.path.join(media_dir, tmp_filename)
-
-    req = _lf_Request(url, headers={"User-Agent": "LinkFox-Skill/2.0"})
-    try:
-        with _lf_urlopen(req, timeout=timeout) as resp:
-            if guessed_ext == "bin":
-                ct = resp.headers.get("Content-Type", "")
-                if "mp4" in ct:
-                    guessed_ext = "mp4"
-                elif "webm" in ct:
-                    guessed_ext = "webm"
-                elif "png" in ct:
-                    guessed_ext = "png"
-                elif "jpeg" in ct or "jpg" in ct:
-                    guessed_ext = "jpg"
-                elif "webp" in ct:
-                    guessed_ext = "webp"
-                elif "gif" in ct:
-                    guessed_ext = "gif"
-            with open(tmp_path, "wb") as f:
-                while True:
-                    chunk = resp.read(65536)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-
-        ts_us = int(ts * 1_000_000)
-        final_path = _lf_os.path.join(media_dir, f"{slug}-{ts_us}.{guessed_ext}")
-        _lf_os.replace(tmp_path, final_path)
-        _lf_update_meta(session_dir, skill=slug, kind="media", file_rel=_lf_os.path.relpath(final_path, session_dir), ts=ts)
-        return final_path
-    except Exception as e:
-        print(f"[download_media] Failed to download {url}: {e}", file=_lf_sys.stderr)
-        try:
-            if _lf_os.path.exists(tmp_path):
-                _lf_os.remove(tmp_path)
-        except OSError:
-            pass
-        return None
-
-
-def encode_nl(text):
-    if not isinstance(text, str):
-        return text
-    text = text.replace("\\r\\n", NL_PLACEHOLDER)
-    text = text.replace("\\n", NL_PLACEHOLDER)
-    text = text.replace("\\r", NL_PLACEHOLDER)
-    text = text.replace("\r\n", NL_PLACEHOLDER)
-    text = text.replace("\r", NL_PLACEHOLDER)
-    text = text.replace("\n", NL_PLACEHOLDER)
-    return text
-
-
-def decode_nl(text):
-    if not isinstance(text, str):
-        return text
-    return text.replace(NL_PLACEHOLDER, "\n")
-
-
-def decode_nl_in_obj(obj):
-    if isinstance(obj, str):
-        return decode_nl(obj)
-    if isinstance(obj, list):
-        return [decode_nl_in_obj(item) for item in obj]
-    if isinstance(obj, dict):
-        return {k: decode_nl_in_obj(v) for k, v in obj.items()}
-    return obj
-
 # ===== /linkfox_paths 内联块 =====
 
 
@@ -274,7 +171,9 @@ def main() -> int:
 
     if args.datadir:
         session = session_root(ts)
-        print(os.path.abspath(os.path.join(session, "data")))
+        data_dir = os.path.abspath(os.path.join(session, "data"))
+        os.makedirs(data_dir, exist_ok=True)
+        print(data_dir)
         return 0
 
     if args.input:

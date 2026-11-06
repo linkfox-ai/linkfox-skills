@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sys
+
+import call_api as api
 from typing import Any, List, Optional
 
 from _add_on_deal_endpoints import LIST_QUERY_FIELDS, ADD_ON_DEAL_ENDPOINTS, RESERVED_PARAM_KEYS
@@ -114,7 +116,25 @@ def run_add_on_deal_api(api_name: str, params: dict, caller: Optional[str] = Non
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    # 请求体在网络前解析，避免已提交写入后才因非法 JSON 报错。
+    request_body = json.loads(body) if body else None
+
+    def build_result(status, proxy):
+        out = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = request_body
+        if api._is_cacheable(200, proxy) and type(status) is int and 200 <= status < 300:
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
         path,
         method,
         shop_id=shop_id,
@@ -122,17 +142,6 @@ def run_add_on_deal_api(api_name: str, params: dict, caller: Optional[str] = Non
         query_string=query_string or None,
         body=body,
         content_type=content_type,
+        transform=build_result,
+        slug=f"linkfox-shopee-store-add-on-deal-{api_name}",
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

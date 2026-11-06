@@ -1,21 +1,25 @@
 # `GET_FLAT_FILE_ACTIONABLE_ORDER_DATA_SHIPPING`
 
-> **分类**：9. Order Reports  
-> **说明**：Actionable orders for shipping  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：待处理发货订单  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#unshipped-orders-report)（章节：**Unshipped Orders Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#unshipped-orders-report)（章节：**Unshipped Orders Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
+- **角色**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
 - **Order Fulfillment Channel**：MFN
-- **Requested/scheduled**：Requested or scheduled
-- **Report output type**：Tab-delimited flat file
-- **要点**：Contains only orders that are not confirmed as shipped. This report covers a 38-day lookback period. This report accepts the following reportOptions values:
-- **reportOptions（摘录）**：
-  - ShowSalesChannel: A Boolean value that indicates whether an additional column is added to the report that shows the sales channel. Default: false. Example: "reportOptions":{"ShowSalesChannel":"true"}
+- **按需/计划**：Requested or scheduled
+- **输出格式**：制表符分隔的平面文件
+- **要点**：仅包含尚未确认发货的订单，回溯 38 天；接受下列 reportOptions。
+
+#### reportOptions 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| ShowSalesChannel | boolean / string | 布尔值，控制是否增加销售渠道列。默认 false；示例："reportOptions":{"ShowSalesChannel":"true"}。 |
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#unshipped-orders-report>
 

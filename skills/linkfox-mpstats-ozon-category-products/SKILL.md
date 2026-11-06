@@ -1,180 +1,125 @@
 ---
 name: linkfox-mpstats-ozon-category-products
-description: MPSTATS Ozon 俄罗斯站按俄语类目路径下钻该类目全部商品。返回每个 SKU 的销量、销售额、价格、评分、库存、周转、损失销售额等完整指标，支持多维数值筛选、排序、货币换算。用于类目爆款挖掘、蓝海洞察、类目排名分析、品牌格局观察。当用户提到 Ozon 类目下钻、Ozon 类目商品、Ozon 蓝海挖掘、Ozon 品类爆款、Ozon 类目排名、Ozon 子类目结构、Ozon 赛道 SKU、MPSTATS category, Ozon category drill-down, Russian marketplace niche, Ozon niche mining, Ozon subcategory bestseller 时触发此技能。即使用户未明确说"MPSTATS"，只要意图是按 Ozon 类目路径查看该类目下所有商品的销量/价格/排名表现，也应触发此技能。
+description: 按俄语类目路径查询 MPSTATS Ozon 俄罗斯站类目下的商品，展示 SKU 销量、销售额、价格、评分、库存、周转、损失销售额和排名，支持多维数值筛选、排序及货币换算。适用于类目爆款挖掘、蓝海候选扫描、品类排名及品牌格局观察；用户希望按 Ozon 类目查看商品表现时使用，无需明确提及 MPSTATS。不适用于类目树浏览、品牌或卖家维度查询、单品时间趋势以及 Wildberries 等其他平台。
 ---
 
-# MPSTATS Ozon Category Products
+# MPSTATS Ozon 类目商品
 
-This skill drills into all Ozon (Russia) products under a given Russian category path, returning each SKU's sales, revenue, price, rating, stock, turnover, lost profit, and more. Designed for category bestseller mining, blue-ocean niche discovery, and brand-landscape scanning within a specific category.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Russian full-path requirement**: `categoryPath` must be the **full Russian category path** as used on the Ozon platform, with levels separated by `/` — for example, `Одежда/Женская одежда/Футболки и топы женские`. A partial path, English translation, or root-only value will generally return empty results.
+按类目维度查看 Ozon 俄罗斯站商品的汇总表现。用户已有类目路径，或可以从上游数据源取得路径，希望筛选、排序或比较类目内 SKU 时，使用本技能。
 
-**Where to find the path**: Typical workflows resolve the path via an upstream Ozon category-search step (if available in your toolchain) or by pulling a known SKU's `category` field from `mpstats-ozon-product-detail` / `mpstats-ozon-product-search`.
+**场景速查**
 
-**Filters are AND-combined**: `filters` carries multi-field numeric conditions, each `{field, op, value, value2?}`. See the Filter Reference.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 看这个 Ozon 类目最畅销的商品 | 类目爆款：按销量排序。 |
+| 找这个赛道可能的蓝海 SKU | 候选扫描：结合销量与评分筛选，仅呈现数据。 |
+| 找中等价格、周转快的商品 | 多条件筛选：结合价格带和周转指标。 |
+| 这个类目有哪些主要品牌 | 品牌格局：取得商品后在本地按品牌分组。 |
+| 哪些商品的损失销售额很高 | 缺货线索：筛选并排序损失销售额。 |
 
-**Currency**: Default `RUB`. Override with `currency` (USD, EUR, CNY, ...) and optionally `currencyRate`.
+### 边界
 
-**FBO / FBS**: `includeFbs: true` folds FBS into stock / sales numbers; `false` keeps FBO-only.
+- 路径未知时，先通过上游 Ozon 类目搜索（工具链提供时），或 MPSTATS Ozon 商品搜索、商品详情中的类目数据确认路径。
+- 按品牌、卖家查看商品，或查看单 SKU 时间趋势，分别使用 MPSTATS Ozon 品牌商品、卖家商品、商品趋势技能。
+- Wildberries 和其他俄罗斯电商平台不在本技能范围。
 
-## Parameters
+## 前置条件
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| categoryPath | string | yes | Full Russian category path separated by `/` |
-| startDate | string | no | Stats window start, `YYYY-MM-DD`; latest = yesterday |
-| endDate | string | no | Stats window end, `YYYY-MM-DD`; latest = yesterday |
-| page | integer | no | Page number, starts at 1 |
-| pageSize | integer | no | Rows per page, 1-100, default 100 |
-| sortField | string | no | snake_case column: `sales`, `revenue`, `final_price`, `balance`, `rating`, ... |
-| sortDirection | string | no | `asc` / `desc` |
-| currency | string | no | Currency code, default `RUB` |
-| currencyRate | integer | no | Custom rate when non-default currency is used |
-| includeFbs | boolean | no | Include FBS data |
-| filters | array | no | Numeric filter list (see below) |
+**先确定目标类目**：从用户或上游数据源取得准确路径，不凭类目中文名猜测。请求格式、日期与分页限制见 `references/api.md`。
 
-## Filter Reference
+## 查询流程
 
-Each `filters` entry: `{"field": "<snake_case>", "op": "<OP>", "value": <num>, "value2": <num?>}`.
+1. 确定用户要研究的类目；路径不明确时，先利用上游商品搜索或已知 SKU 的商品详情确认 `category`，再准备本次查询。
+2. 根据任务选择畅销、价格、周转、损失销售额或品牌观察角度，确定统计区间、筛选、排序及展示币种；具体参数约定见 `references/api.md`。
+3. 说明算力消耗后执行查询，先看摘要和已保存数据。跨类目比较需要分别查询并在本地合并结果，每次调用均遵守成本约束。
+4. 展示类目背景、统计口径、命中总数及商品表；品牌观察在本地分组。失败或空结果时解释原因，核对路径与查询条件，不连续试探请求。
 
-**Common fields**: `sales` (monthly units), `final_price` (price RUB), `rating` (0-5), `comments` (reviews), `balance` (stock), `revenue` (amount RUB), `days_in_stock`, `turnover_days`, `lost_profit`, `category_position`.
+## 执行方式
 
-**Operators**: `GTE`, `LTE`, `GT`, `LT`, `EQ`, `NOT_EQ`, `BETWEEN` (requires `value2`).
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/mpstats_ozon_category_products.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按下方“算力消耗预估”计费。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 调用方式
+### 输出策略
 
-- **API 端点**：`POST /mpstats/ozon/categoryProducts`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/mpstats_ozon_category_products.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-category-products-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-category-products-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行规则
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 算力消耗预估
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+按动态规则计费：每次查询消耗 12 算力；列表为空时消耗 0 算力 （限时）。
 
-## Usage Examples
+**重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，并由用户决定是否继续。
 
-**1. Women's T-shirts — top by sales**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分类目与赛道**：本技能以类目路径为查询维度，返回类目内各 SKU 的汇总指标；商品的赛道信息用于补充理解归属，不将其当作独立查询维度。
+- **仅呈现数据**：展示指标与筛选结果，不附加主观经营建议，不把“蓝海”或高损失销售额直接表述为可开发结论。
+- **紧凑展示商品表**：主要列为 `productId`、`title`、`brand`、`sellerName`、`price`、`monthlySalesUnits`、`monthlySalesRevenue`、`rating`、`balance`、`position`、`revenueSharePercent`；按需补充周转与损失销售额。
+- **解释占比与排名**：销售额占比基于当前类目查询，不能当作全站份额；展示 `categoryPosition` 时说明排名越小越靠前。
+- **保留原文**：俄语商品名和品牌保持原文，用户要求时再翻译。
+- **标明口径**：注明币种、统计区间及配送口径；发生换算时注明“已按 USD 换算”等实际币种说明。
+- **说明分页**：展示命中总数 `total` 和本次实际返回范围。大类目优先建议收紧筛选，避免逐页遍历；分页限制见 `references/api.md`。
+- **解释空结果和错误**：结合响应消息与接口文档核对路径和日期；保留已取得的数据，后续查询遵守成本约束。
+
+## 使用示例
+
+### 女式 T 恤：按销量排序
+
 ```json
-{
-  "categoryPath": "Одежда/Женская одежда/Футболки и топы женские",
-  "sortField": "sales",
-  "sortDirection": "desc",
-  "pageSize": 100
-}
+{"categoryPath":"Одежда/Женская одежда/Футболки и топы женские","sortField":"sales","sortDirection":"desc","pageSize":100}
 ```
 
-**2. Blue-ocean hunt (sales ≥ 50, rating ≥ 4.5)**
+### 蓝海候选扫描：结合销量与评分
+
 ```json
-{
-  "categoryPath": "Одежда/Женская одежда/Футболки и топы женские",
-  "filters": [
-    {"field": "sales", "op": "GTE", "value": 50},
-    {"field": "rating", "op": "GTE", "value": 4.5}
-  ],
-  "sortField": "revenue",
-  "sortDirection": "desc"
-}
+{"categoryPath":"Одежда/Женская одежда/Футболки и топы женские","filters":[{"field":"sales","op":"GTE","value":50},{"field":"rating","op":"GTE","value":4.5}],"sortField":"revenue","sortDirection":"desc"}
 ```
 
-**3. Mid-price + strong turnover**
+### 中等价格且周转快的耳机
+
 ```json
-{
-  "categoryPath": "Электроника/Наушники",
-  "filters": [
-    {"field": "final_price", "op": "BETWEEN", "value": 1500, "value2": 5000},
-    {"field": "turnover_days", "op": "LTE", "value": 30}
-  ]
-}
+{"categoryPath":"Электроника/Наушники","filters":[{"field":"final_price","op":"BETWEEN","value":1500,"value2":5000},{"field":"turnover_days","op":"LTE","value":30}]}
 ```
 
-**4. USD-converted ranking for cross-market comparison**
+### 将智能手机销售额换算为美元
+
 ```json
-{
-  "categoryPath": "Электроника/Смартфоны",
-  "currency": "USD",
-  "sortField": "revenue",
-  "sortDirection": "desc"
-}
+{"categoryPath":"Электроника/Смартфоны","currency":"USD","sortField":"revenue","sortDirection":"desc"}
 ```
 
-**5. High lost-profit category scan**
+### 扫描高损失销售额商品
+
 ```json
-{
-  "categoryPath": "Одежда/Мужская одежда/Куртки мужские",
-  "filters": [{"field": "lost_profit", "op": "GTE", "value": 500000}],
-  "sortField": "lost_profit",
-  "sortDirection": "desc"
-}
+{"categoryPath":"Одежда/Мужская одежда/Куртки мужские","filters":[{"field":"lost_profit","op":"GTE","value":500000}],"sortField":"lost_profit","sortDirection":"desc"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Compact category table** — key columns: `productId`, `title`, `brand`, `sellerName`, `price`, `monthlySalesUnits`, `monthlySalesRevenue`, `rating`, `balance`, `position`, `revenueSharePercent`.
-2. **Revenue share = within this category query** — 0-100%; clarify the basis when presenting.
-3. **Russian titles / brands** — preserve original; translate on demand.
-4. **Currency labeling** — state the currency; if converted, note `"已按 USD 换算"`.
-5. **Pagination** — report `total`; for large categories (tens of thousands of SKUs) suggest tightening filters rather than naively paging through.
-6. **Category position** — lower is better; mention this when showing `categoryPosition`.
-
-## Important Limitations
-
-- **Russian full path only** — partial or translated paths return empty.
-- **Path discovery is upstream** — this endpoint does not browse the category tree; resolve the path via product detail / search first.
-- **Page cap** — max 100 rows per page.
-- **T-1 data** — `endDate` cannot be today or a future date.
-- **No business advice** — data-only view.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Category-scoped Ozon product metrics:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Bestsellers in category X on Ozon" | Category bestseller mining |
-| "Find blue-ocean SKUs in niche Y" | Blue-ocean niche scan |
-| "Show mid-price, fast-turnover items in this category" | Multi-criteria niche filter |
-| "Which brands dominate this Ozon category" | Brand-landscape pre-cut (then group by brand client-side) |
-| "Huge lost-profit opportunities in category X" | Out-of-stock pain hunting |
-
-**Not applicable** — Needs beyond category drill-down:
-
-- Unknown category path → use `mpstats-ozon-product-search` or product detail to discover the exact Russian path
-- Brand-scoped drill → `mpstats-ozon-brand-products`
-- Seller-scoped drill → `mpstats-ozon-seller-products`
-- Single-SKU time-series → `mpstats-ozon-product-trend`
-- Wildberries / other Russian marketplaces → not covered
-
-**Boundary judgment**: Use this skill when the **dimension is a category path** and you want the per-SKU roll-up under it. For cross-category comparisons you must run multiple calls and fuse results at the Agent layer.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 12。列表为空返回 0
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

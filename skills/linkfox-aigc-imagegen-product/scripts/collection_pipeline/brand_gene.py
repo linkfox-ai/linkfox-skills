@@ -70,6 +70,9 @@ def extract_brand_gene(
         raise RuntimeError(f"save_brand_gene 失败: {(proc.stderr or proc.stdout or '').strip()}")
     for line in (proc.stdout or "").splitlines():
         if "Saved full response:" in line:
-            path = line.split("Saved full response:", 1)[1].strip().split(" ", 1)[0]
+            path = line.split("Saved full response:", 1)[1].strip()
+            # 官方保存脚本可能追加大小/数量说明，路径本身允许空格。
+            import re
+            path = re.sub(r"\s+\([^()]*\)\s*$", "", path)
             return os.path.abspath(path)
     raise RuntimeError("save_brand_gene 未返回 Saved full response 路径")

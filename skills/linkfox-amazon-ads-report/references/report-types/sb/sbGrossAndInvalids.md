@@ -14,26 +14,26 @@ dateRange:
   dataRetentionDays: 365
 ---
 
-# SB Gross and Invalid Traffic
+# SB 流量总量与无效流量
 
-Gross and invalid traffic report provides Sponsored Products, Sponsored Brands and Sponsored Display advertisers transparency into the nature of traffic on their campaigns. This report include all campaigns of the requested ad type and provides transparency on gross and invalid traffic metrics at campaign level for the requested days. For example, a Sponsored Products gross and invalid traffic report returns gross and invalid traffic metrics for all Sponsored Products campaigns that received impressions on the chosen dates.
+流量总量与无效流量报告用于 SP / SB / SD 广告活动流量核查，按活动提供请求日期内的总量和无效流量指标，覆盖指定类型的全部活动。例如，SP 报告包含所选日期收到展示的全部 SP 活动。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sbGrossAndInvalids |
-| Maximum date range | 365 days |
-| Data retention | 365 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 365 天 |
+| 数据保留期 | 365 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | campaign |
-| format | GZIP_JSON or CSV |
+| format | GZIP_JSON / CSV |
 
-> Sponsored Products, Sponsored Brands, and Sponosred Display all support the same columns and configurations for the gross and invalid traffic report.
+> SP / SB / SD 的流量总量与无效流量报告支持相同的列与配置。
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | campaignName |
 | campaignStatus |
@@ -49,9 +49,12 @@ Gross and invalid traffic report provides Sponsored Products, Sponsored Brands a
 | invalidImpressions |
 | startDate |
 
-## Group by campaign
+## 分组：campaign
 
-**Additional metrics**: N/A
+无附加指标。
 
-**Filters**:
-- campaignStatus (values: ENABLED, PAUSED, ARCHIVED)
+**筛选**：
+
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| campaignStatus | array[string] | ENABLED, PAUSED, ARCHIVED |

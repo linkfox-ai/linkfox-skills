@@ -11,24 +11,24 @@ dateRange:
   dataRetentionDays: 65
 ---
 
-# SD Ad Group
+# SD 广告组
 
-Ad group reports contain performance data broken down at the ad group level. Ad group reports include all campaigns of the requested sponsored ad type that have performance activity for the requested days. For Sponsored Display, ad group reports can also be grouped by `matchedTarget` for more granular data.
+广告组报告按广告组展示效果，覆盖指定类型在请求日期内有投放活动的全部活动。SD 广告组报告还可按 `matchedTarget` 获取更细粒度数据。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sdAdGroup |
-| Maximum date range | 31 days |
-| Data retention | 65 days |
-| timeUnit | SUMMARY or DAILY |
-| groupBy | adGroup or matchedTarget |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 65 天 |
+| timeUnit | SUMMARY / DAILY |
+| groupBy | adGroup / matchedTarget |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | addToCart |
 | addToCartClicks |
@@ -93,48 +93,57 @@ Ad group reports contain performance data broken down at the ad group level. Ad 
 | viewabilityRate |
 | viewClickThroughRate |
 
-## Group by adGroup
+## 分组：adGroup
 
-**Additional metrics**: cumulativeReach, impressionsFrequencyAverage, newToBrandDetailPageViewClicks, newToBrandDetailPageViewRate, newToBrandDetailPageViews, newToBrandDetailPageViewViews, newToBrandECPDetailPageView
+附加指标：
 
-**Filters**: N/A
+| 字段 |
+|---|
+| cumulativeReach |
+| impressionsFrequencyAverage |
+| newToBrandDetailPageViewClicks |
+| newToBrandDetailPageViewRate |
+| newToBrandDetailPageViews |
+| newToBrandDetailPageViewViews |
+| newToBrandECPDetailPageView |
 
-## Group by matchedTarget
+**筛选**： 无
 
-**Additional metrics**: matchedTargetAsin
+## 分组：matchedTarget
 
-**Filters**: N/A
+附加指标：
 
-## Sample calls
+| 字段 |
+|---|
+| matchedTargetAsin |
 
-### Ad group summary report grouped by ad group
+**筛选**： 无
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxxx' \
---data '{
-    "name": "SD ad group report",
-    "startDate": "2025-03-05",
-    "endDate": "2025-03-10",
-    "configuration": {
-        "adProduct": "SPONSORED_DISPLAY",
-        "groupBy": ["adGroup"],
-        "columns": [
-            "impressions",
-            "clicks",
-            "cost",
-            "campaignId",
-            "adGroupId",
-            "adGroupName",
-            "startDate",
-            "endDate"
-        ],
-        "reportTypeId": "sdAdGroup",
-        "timeUnit": "SUMMARY",
-        "format": "GZIP_JSON"
-    }
-}'
+## 配置示例
+
+```json
+{
+  "name": "SD ad group report",
+  "startDate": "2025-03-05",
+  "endDate": "2025-03-10",
+  "configuration": {
+    "adProduct": "SPONSORED_DISPLAY",
+    "groupBy": [
+      "adGroup"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "adGroupId",
+      "adGroupName",
+      "startDate",
+      "endDate"
+    ],
+    "reportTypeId": "sdAdGroup",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

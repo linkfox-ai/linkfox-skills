@@ -1,4 +1,4 @@
-"""Run any Shopee Top Picks module API via developerProxy."""
+"""精选集合注册操作编排、查询编码和业务结果加工。"""
 
 from __future__ import annotations
 
@@ -7,14 +7,7 @@ import sys
 from typing import Any, List, Optional
 
 from _top_picks_endpoints import LIST_QUERY_FIELDS, TOP_PICKS_ENDPOINTS, RESERVED_PARAM_KEYS
-from _shopee_top_picks_common import (
-    developer_proxy_call,
-    emit_result,
-    ensure_auth_skill_available,
-    lf_inline_flag,
-    merge_shopee_body,
-    qs_add,
-)
+from _shopee_top_picks_common import developer_proxy_call, ensure_auth_skill_available, merge_shopee_body, qs_add
 
 
 def _comma_join_list(val: object, field: str, max_items: int) -> str:
@@ -116,7 +109,29 @@ def run_top_picks_api(api_name: str, params: dict, caller: Optional[str] = None)
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    def build_result(proxy, http_status):
+        out: dict = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": http_status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            try:
+                out["requestBody"] = json.loads(body) if body else None
+            except json.JSONDecodeError:
+                out["requestBody"] = body
+        from call_api import _is_cacheable
+        # 仅复用公共状态判断，绝不启用缓存；_is_cacheable 严格只接收 HTTP 200，
+        # 用 200 校验 errcode，外层状态单独接受完整 2xx 范围。
+        if (http_status is not None and 200 <= http_status < 300
+                and isinstance(proxy, dict) and _is_cacheable(200, proxy)):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
         path,
         method,
         shop_id=shop_id,
@@ -124,17 +139,6 @@ def run_top_picks_api(api_name: str, params: dict, caller: Optional[str] = None)
         query_string=query_string or None,
         body=body,
         content_type=content_type,
+        result_builder=build_result,
     )
 
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

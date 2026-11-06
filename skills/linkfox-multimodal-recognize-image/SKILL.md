@@ -1,131 +1,126 @@
 ---
 name: linkfox-multimodal-recognize-image
-description: 基于多模态AI的图片识别与分析。当用户想分析、描述、从图片URL中提取信息、image recognition, image analysis, image description, image content understanding, OCR text recognition, visual Q&A时触发此技能。当用户提到图片识别、图片分析、图片描述、识别图片内容、分析产品图、从图片中读取文字、描述图片、提取视觉内容或理解照片内容时触发。当用户提供图片URL并就其视觉内容提问时，即使未明确说"图片识别"，也应触发此技能。
+description: 使用多模态 AI 描述图片、识别物体、分析商品图和 A+ 内容、提取可见文字并回答视觉问题。适用于图片内容理解、截图解读、商品卖点和产品与包装细节分析；支持公开图片及本地图片上传后识别。不适用于图片生成或编辑、视频分析、以图搜图或反向图片检索。
 ---
+# 图片识别与分析
 
-# Image Recognition
+## 适用范围
 
-This skill guides you on how to use the multimodal image recognition API to analyze images from URLs and extract meaningful information based on user intent.
+### 适用
 
-## Core Concepts
+根据图片及用户意图返回文本描述或分析。用户提供图片并询问视觉内容时使用，无需明确提到图片识别。
 
-The Image Recognition tool accepts an image URL and an optional natural-language requirement describing what the user wants to know about the image. The backend uses a multimodal AI model to interpret the visual content and return a textual description or analysis.
+**场景速查**
 
-**Supported formats**: JPG, JPEG, PNG, GIF, WebP, BMP.
+| 用户表达 | 查询场景 |
+|---|---|
+| 这张图片里有什么 | 通用图片描述。 |
+| 分析这张商品主图展示的卖点 | 商品视觉分析。 |
+| 读出截图中的文字 | OCR / 可见文字提取。 |
+| 描述这张 A+ 页面图片传达的内容 | 电商内容与品牌表达分析。 |
+| 这张截图显示了什么 | 截图解读。 |
+| 列出照片中的物体和颜色 | 物体识别与特征描述。 |
+| 产品与包装有哪些不同 | 同一图片内的细节比较。 |
 
-**How it works**: You provide a publicly accessible image URL and a requirement (what you want to learn from the image). The service downloads the image, runs multimodal analysis, and returns a text-based result.
+## 接口清单
 
-## Parameter Guide
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 图片识别 | POST `/multimodal/recognizeImage` | `scripts/multimodal_recognize_image.py` | 根据图片与用户意图返回文本分析。 |
+| 获取上传预签名地址 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 取得预签名地址后，将本地文件上传到 OSS 并输出公开地址。 |
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| imageUrl | Yes | A publicly accessible URL pointing to the image. Must be JPG, JPEG, PNG, GIF, WebP, or BMP. Maximum 1000 characters. |
-| requirement | No | A natural-language description of what to identify or analyze in the image. Defaults to "Describe the content of this image" when omitted. Maximum 1000 characters. |
+## 前置条件
 
-### Tips for Writing the requirement Parameter
+准备图片及要解决的问题。本地文件先通过上传脚本取得公开地址，再执行识别；已有公开图片可直接识别。格式、可访问性、上传有效期及 CLI 差异见 `references/api.md`。
 
-1. **Be specific**: Instead of "analyze this image", say "List all products visible on the shelf and estimate their category."
-2. **State the goal**: If you need text extraction, say "Extract all visible text from the image." If you need object identification, say "Identify the main objects and their colors."
-3. **Provide context when helpful**: For product images, mention "This is an e-commerce product listing image" so the model can tailor its analysis.
+## 图片分析流程
 
-## Local Image Upload
+1. 确认图片来源及用户希望了解的内容，区分通用描述、商品特征、文字提取、A+ 内容或细节比较。
+2. 本地文件先运行 `scripts/upload_image.py` 完成预签名与上传，再使用返回的公开地址；不能把本地路径直接交给识别服务。具体命令见 `references/api.md`。
+3. 按用户目标组织识别要求并调用识别脚本；通用描述可使用服务默认要求。先查看摘要，按需读取已保存的结果。
+4. 用易读的段落或列表展示实际返回的文本；发生错误时按接口参考解释原因并给出修正方向，后续调用遵守成本约束。
 
-This tool requires a **publicly accessible image URL**. If the user provides a local image file path (e.g., `C:\Users\...\photo.png`, `/home/.../image.jpg`), you must upload it first to obtain a public URL.
+## 执行方式
 
-Run the upload script:
-```bash
-python scripts/upload_image.py /path/to/local/image.png
-```
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具按输入与输出用量动态消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-The script will return a public URL (valid for 24 hours) that can be used as the image URL parameter.
+### 输出策略
 
-## Usage Examples
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-multimodal-recognize-image<接口后缀>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体序列化后不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应体序列化后超过 8000 字节：保存后，标准输出仅展示摘要，包括顶层字段、响应中的常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**1. General Image Description**
-- User says: "What is in this picture?"
-- Set `imageUrl` to the provided URL, leave `requirement` as default.
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**2. Product Image Analysis**
-- User says: "Analyze this Amazon product image and list the key selling points shown."
-- Set `requirement` to: "This is an Amazon product listing image. Identify the product, key features, and selling points visible in the image."
+## 执行规则
 
-**3. Text Extraction from an Image**
-- User says: "Read the text in this screenshot."
-- Set `requirement` to: "Extract all visible text from this image, preserving layout where possible."
-
-**4. A+ Page Image Review**
-- User says: "Describe what this A+ content image communicates."
-- Set `requirement` to: "This is an Amazon A+ product description image. Describe the visual content, key messaging, and branding elements."
-
-**5. Comparison / Detail Inspection**
-- User says: "What differences can you spot between the product and its packaging?"
-- Set `requirement` to: "Identify and describe any differences between the product and its packaging shown in the image."
-
-## 调用方式
-
-- **API 端点**：`POST /multimodal/recognizeImage`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/multimodal_recognize_image.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-multimodal-recognize-image-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Display Rules
-
-1. **Show the analysis result clearly**: Present the returned text analysis in a readable format. Use bullet points or paragraphs as appropriate for the content.
-2. **No fabrication**: Only relay information that the API actually returned. Do not add visual details that were not in the response.
-3. **Format support**: If the image URL is invalid or the format is unsupported, explain the limitation and list the supported formats (JPG, JPEG, PNG, GIF, WebP, BMP).
-4. **Error handling**: When the API returns an error status, explain the issue based on the response and suggest corrective actions (e.g., check that the URL is publicly accessible, verify the image format).
-5. **Token usage**: If the user asks about cost, you may mention the `costToken` value from the response.
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Image analysis tasks:
-
-| User Says | Scenario |
-|-----------|----------|
-| "What's in this image/picture/photo" | General image description |
-| "Analyze this product image" | Product visual analysis |
-| "Read the text in this image" | OCR / text extraction |
-| "Describe the A+ page images" | E-commerce content review |
-| "What does this screenshot show" | Screenshot interpretation |
-| "Identify objects in this photo" | Object detection / listing |
-
-**Not applicable** -- Needs beyond image recognition:
-``
-- Generating or editing images
-- Video analysis
-- Analyzing images from local file paths (only URLs are supported)
-- Image search or reverse image lookup
-
-## 算力消耗规则
+### 算力消耗预估
 
 按动态规则计费：消耗算力 = 输入消耗的算力 + 输出结果消耗的算力。
 
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须在调用前提醒用户，由用户决定是否继续。
 
-**Feedback:**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 解决认证和算力问题
 
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解结果来源**：服务下载图片后由多模态 AI 理解视觉内容，返回文本描述或分析。
+- **明确分析目标**：与其笼统地说“分析图片”，可要求“列出货架上可见商品并判断类别”；读取文字时强调提取可见文字，识别物体时说明需列出物体及颜色。
+- **提供必要背景**：商品图可注明电商展示用途，A+ 图可要求关注信息传达和品牌元素，帮助结果贴合用户问题。
+- **不编造视觉细节**：只展示接口实际返回的信息，不增加未返回的物体、卖点、文字或其他视觉细节。
+- **处理错误与格式问题**：根据响应说明原因，建议核对图片公开可访问性及支持格式；具体格式和限制见 `references/api.md`。
+- **说明用量**：用户询问成本时可展示响应中的 `costToken`，不把它当作固定收费承诺。
+- **区分上传与识别**：上传脚本输出公开地址 JSON，识别脚本使用 24 小时本地缓存并按约定保存结果文件；公共调用器不叠加第二层缓存。具体运行约定见 `references/api.md`。
+
+## 使用示例
+
+### 通用图片描述
+
+用户：这张图片里有什么？
+
+使用图片地址和服务默认要求进行描述。
+
+### 商品图分析
+
+用户：分析这张亚马逊商品图展示的卖点。
+
+说明图片为商品展示图，要求识别产品、可见特征和图中表达的卖点。
+
+### 提取截图文字
+
+用户：读出这张截图里的文字。
+
+要求提取全部可见文字，尽可能保留布局。
+
+### A+ 页面内容分析
+
+用户：描述这张 A+ 图片传达的信息。
+
+要求描述视觉内容、关键信息及品牌元素。
+
+### 产品与包装比较
+
+用户：图中的产品和包装有哪些不同？
+
+要求识别并描述同一图片中产品与包装的可见差异。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

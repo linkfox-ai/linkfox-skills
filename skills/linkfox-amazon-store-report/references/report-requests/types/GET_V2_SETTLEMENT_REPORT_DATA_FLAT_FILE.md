@@ -1,18 +1,18 @@
 # `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE`
 
-> **分类**：14. Settlement/Payments Reports  
-> **说明**：Settlement report v2 (flat file)  
-> **可用范围**：Seller only
+> **分类**：14. 结算与支付报告  
+> **说明**：结算报告 v2（平面文件）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Settlement Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-settlement#flat-file-settlement-report)（章节：**Flat File Settlement Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **Availability**：Sellers
-- **Report output type**：Tab-delimited flat file
-- **要点**：This report is deprecated.
+- **角色**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **可用范围**：卖家
+- **输出格式**：制表符分隔的平面文件
+- **要点**：此报告已弃用。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-settlement#flat-file-settlement-report>
 

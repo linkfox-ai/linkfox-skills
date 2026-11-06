@@ -11,7 +11,10 @@ Usage:
 import json
 import sys
 
-from _temu_common import PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error, load_json_arg
+from _temu_common import (
+    PROXY_URL, call_temu_api, get_linkfox_token, is_empty_or_2xx,
+    is_linkfox_auth_error, load_json_arg,
+)
 
 def main():
     params = load_json_arg(sys.argv) if len(sys.argv) >= 2 else {}
@@ -44,6 +47,25 @@ def main():
                 ensure_ascii=False,
             )
         )
+        sys.exit(1)
+
+    status = result.get("transportHttpStatus")
+    parameter_code = result.get("code", result.get("errcode"))
+    errcode = result.get("errcode")
+    # 预期的参数错误可用于判断密钥是否被接受，但不能掩盖另一层认证/用量错误。
+    if (
+        type(status) is not int or not 200 <= status < 300
+        or parameter_code not in (1002, "1002")
+        or not (is_empty_or_2xx(errcode) or errcode in (1002, "1002"))
+        or result.get("error")
+    ):
+        print(json.dumps({
+            "ok": False,
+            "reason": "linkfox_token_probe_inconclusive",
+            "gatewayReachable": result.get("transportHttpStatus") is not None,
+            "response": result,
+            "hint": "Probe did not return the expected parameter response; inspect authentication or network errors.",
+        }, indent=2, ensure_ascii=False))
         sys.exit(1)
 
     print(

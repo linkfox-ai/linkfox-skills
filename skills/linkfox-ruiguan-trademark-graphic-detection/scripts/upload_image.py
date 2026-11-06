@@ -1,94 +1,76 @@
 #!/usr/bin/env python3
-"""
-Upload Local Image - LinkFox Skill
-Uploads a local image file to LinkFox OSS and returns a publicly accessible URL.
+"""上传本地图片，返回有效期 24 小时的公开 URL。
 
-Steps:
-  1. Request a presigned PUT URL from the LinkFox OSS gateway
-  2. Upload the local file to the presigned URL
-  3. Return the public URL (valid for 24 hours)
-
-Usage:
-  python upload_image.py /path/to/local/image.png
+用法：python upload_image.py <local_image_path>
+先通过 LinkFox 获取预签名地址，再向对象存储 PUT；stdout 只输出公开 URL JSON。
 """
 
+from contextlib import redirect_stdout
 import json
 import os
 import sys
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
-_API_BASE = (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
-PRESIGN_URL = f"{_API_BASE}/oss/file/presignedPut"
+import call_api as api
+from call_api import run
+from _runtime import output_in_cwd, response_with_status
 
+API_PATH = '/oss/file/presignedPut'
+SLUG = 'linkfox-ruiguan-trademark-graphic-detection-upload-image'
 CONTENT_TYPE_MAP = {
-    "jpg": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "png": "image/png",
-    "gif": "image/gif",
-    "webp": "image/webp",
-    "heic": "image/heic",
+    'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+    'gif': 'image/gif', 'webp': 'image/webp', 'heic': 'image/heic',
 }
 
 
-def get_api_key():
-    """
-    获取配置在环境变量的API Key。
-    如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-    """
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
+def _normal_response(status, result):
+    if status is None or not 200 <= status < 300 or not isinstance(result, dict):
+        return False
+    value = result.get('errcode')
+    if value is None or isinstance(value, str) and not value.strip():
+        return True
+    if isinstance(value, str):
+        value = value.strip()
+        if len(value) != 3 or not value.isascii() or not value.isdigit():
+            return False
+        value = int(value)
+    return type(value) in (int, float) and 200 <= value < 300 and value % 1 == 0
 
 
 def get_presigned_url(content_type: str, file_extension: str) -> str:
-    """Request a presigned PUT URL from the OSS gateway."""
-    api_key = get_api_key()
-    data = json.dumps({
-        "contentType": content_type,
-        "fileExtension": file_extension,
-    }).encode("utf-8")
+    """通过公共 run 获取地址；不缓存，保存响应，日志写入 stderr。"""
+    captured = {}
+    transport = api.call_api
 
-    req = Request(
-        PRESIGN_URL,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
+    def capture(path, params):
+        status, payload = transport(path, params)
+        captured.update(status=status, payload=payload)
+        # 公共 CLI 预期 JSON 对象；异常数组或标量完整保留在 response 中。
+        return status, response_with_status(status, payload)
 
+    api.call_api = capture
     try:
-        with urlopen(req, timeout=150) as response:
-            result = json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        print(f"Failed to get presigned URL: HTTP {e.code}: {e.reason}\n{body}", file=sys.stderr)
-        sys.exit(1)
-    except URLError as e:
-        print(f"Connection failed: {e.reason}", file=sys.stderr)
-        sys.exit(1)
+        with output_in_cwd(), redirect_stdout(sys.stderr):
+            run(API_PATH, SLUG, argv=[json.dumps({
+                'contentType': content_type, 'fileExtension': file_extension,
+            }), '--no-cache', '--inline'])
+    finally:
+        api.call_api = transport
 
-    if result.get("errcode") != 200:
-        print(f"API error: {result.get('errmsg', 'unknown error')}", file=sys.stderr)
-        sys.exit(1)
-
-    return result["url"]
+    result = captured['payload']
+    if not _normal_response(captured['status'], result):
+        print(f"获取预签名地址失败：HTTP {captured['status']}，{json.dumps(result, ensure_ascii=False)}", file=sys.stderr)
+        raise SystemExit(1)
+    url = result.get('url')
+    if not isinstance(url, str) or not url.strip():
+        print('获取预签名地址失败：响应缺少有效 url', file=sys.stderr)
+        raise SystemExit(1)
+    return url
 
 
 def upload_file(presigned_url: str, file_path: str, content_type: str):
-    """Upload the local file to the presigned OSS URL via HTTP PUT."""
+    """向对象存储 PUT 图片；该请求不携带 LinkFox API 密钥。"""
     with open(file_path, "rb") as f:
         file_data = f.read()
 
@@ -117,7 +99,7 @@ def upload_file(presigned_url: str, file_path: str, content_type: str):
 
 
 def extract_public_url(presigned_url: str) -> str:
-    """Extract the base public URL by stripping query parameters."""
+    """仅去除查询参数，保留公开 URL 路径和编码。"""
     return presigned_url.split("?")[0]
 
 
@@ -129,6 +111,10 @@ def main():
             file=sys.stderr,
         )
         sys.exit(1)
+
+    if sys.argv[1] in ('--help', '-h'):
+        print(__doc__)
+        return
 
     file_path = sys.argv[1]
 
@@ -146,13 +132,13 @@ def main():
         )
         sys.exit(1)
 
-    # Step 1: Get presigned URL
+    # 获取预签名上传地址
     presigned_url = get_presigned_url(content_type, extension)
 
-    # Step 2: Upload file
+    # 上传到对象存储
     upload_file(presigned_url, file_path, content_type)
 
-    # Step 3: Output public URL
+    # 标准输出为单个公开 URL JSON
     public_url = extract_public_url(presigned_url)
     print(json.dumps({"url": public_url}, indent=2, ensure_ascii=False))
 

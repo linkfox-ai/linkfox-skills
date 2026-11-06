@@ -53,8 +53,8 @@ Partner Platform for **Global（全球区，非 US/EU）** 菜单：**Order / �
 | 欧洲站订单 | `linkfox-temu-order-eu` |
 | 商品管理 | `linkfox-temu-manage-product-global` |
 | 价格/供货价 | `linkfox-temu-price-global` |
-| 取消订单 | `linkfox-temu-cancel-order-us` / `linkfox-temu-cancel-order-eu`（`site=global`） |
-| 履约/发货 | `linkfox-temu-fulfillment-us` / `linkfox-temu-fulfillment-eu`（`site=global`） |
+| 取消订单 | `linkfox-temu-cancel-order-global` |
+| 履约/发货 | `linkfox-temu-fulfillment-global` |
 | 网关、Token | 本 skill `scripts/` |
 
 ## Token 说明

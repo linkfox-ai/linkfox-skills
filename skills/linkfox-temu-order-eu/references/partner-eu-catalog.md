@@ -49,13 +49,13 @@ Partner Platform for EU 菜单：**Order**（`menu_code=dbd3d395963a408984b8ae7d
 | `temu_eu_proxy.py` | 任意 `type` + `params` |
 | `temu_eu_file_download.py` | 加签文件下载 |
 
-| 全球站（非 US/EU）订单 | `linkfox-temu-order-global` |
+全球站（非 US/EU）订单使用 `linkfox-temu-order-global`。
 
 ## 与其他 Temu skill 的关系
 
 | 能力 | skill |
 |------|--------|
-| 订单查询、发货、物流 | `linkfox-temu-order-eu` |
+| 订单查询与发货准备 | `linkfox-temu-order-eu` |
 | 取消订单 | `linkfox-temu-cancel-order-eu` |
 | 退货与退款 | `linkfox-temu-returns-refunds-eu` |
 | 履约/发货（购标、合作仓、自发货、跟踪） | `linkfox-temu-fulfillment-eu` |
@@ -66,3 +66,5 @@ Partner Platform for EU 菜单：**Order**（`menu_code=dbd3d395963a408984b8ae7d
 ## Token 说明
 
 订单类接口建议使用 **`tokenPurpose=order-shipping`**。详见 [access-token.md](./access-token.md)。
+
+通用转发和加签文件下载的完整定义见 [接口参考](api.md)。10 个具名操作之外，加签文件下载另计一项，总计 11 项；通用代理是复用入口，不重复计数。

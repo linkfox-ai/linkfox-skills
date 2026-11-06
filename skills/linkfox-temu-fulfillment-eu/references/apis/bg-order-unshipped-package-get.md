@@ -1,30 +1,63 @@
-# 查询未发货包裹 — `bg.order.unshipped.package.get`
+# Temu 欧洲站 查询未发货包裹 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/eu_buy_shipping_order_unshipped_package_get.py` |
-| **Partner 文档** | https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896（按 `type` 在 Partner EU 后台打开） ||
-| **网关** | `POST /temu/proxy`，`type`=`bg.order.unshipped.package.get`，业务载荷放在 Body 的 `params` |
+[接口导航](../api.md)；[授权与脚本兼容约定](../api.md#运行约定)。
 
-**Description:** The `bg.order.unshipped.package.get` interface is for sellers to query information about packages that have been fulfilled successfully by Temu-integrated channel.（卖家查询经 **Temu 集成物流** 已成功履约、但尚未完成发货确认的**未发货包裹**信息，含运单、承运商及包裹内可发/已取消订单行。）
+## 公共规则
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 **`request`**。建议使用 **`tokenPurpose=order-shipping`**。  
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：查询未发货包裹（bg.order.unshipped.package.get）
+
+> 官方：[Partner EU 文档](https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是 | 本技能默认 `eu`；必须匹配店铺令牌所属站点。 |
+| managementType | string | 是 | 本技能默认 `semi-managed`；合作仓仅支持半托管。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；与 LinkFox API Key 不同。脚本调用网关前解析本地选店并填入此字段。 |
+| storeKey | string | 与 accessToken 二选一 | 本地令牌库中的店铺键，指向 `~/.linkfox/temu-access-tokens.json`；当前脚本在本地读取并转换为 `accessToken`，不发送此字段。 |
+| tokenPurpose | string | 否 | 建议 `order-shipping`；脚本用于本地令牌选择，不发送至网关。 |
+| type | string | 是 | 当前操作的 Temu 接口标识，见本接口说明。 |
+| params | object | 否 | Temu 业务参数；通常使用下方 `request` 对象。 |
+
+本操作的 `type` 固定为 `bg.order.unshipped.package.get`。脚本：`scripts/eu_buy_shipping_order_unshipped_package_get.py`（相对技能根目录）。
+
+#### params 业务对象
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| request | OBJECT | 否（请求表标注） | 业务请求对象；其子字段、条件必填与特殊约定见下文。业务请求以各子字段要求为准。 |
+
+#### 业务前提与限制
+
+（卖家查询经 **Temu 集成物流** 已成功履约、但尚未完成发货确认的**未发货包裹**信息，含运单、承运商及包裹内可发/已取消订单行。）
+
 > **关联能力：** 购标后包裹号来自 [**`bg.logistics.shipment.create`**](./bg-logistics-shipment-create.md)；订单号来自 **`linkfox-temu-order-eu`**；确认发货见 [**`bg.logistics.shipped.package.confirm`**](./bg-logistics-shipped-package-confirm.md)。
 
----
-
-## Request 结构（官方顶层）
-
-```text
-params
-└── request (OBJECT, 选填)
-    ├── pageNumber          ← 必填
-    ├── pageSize            ← 必填
-    ├── parentOrderSnList[] ← 选填
-    └── orderSnList[]       ← 选填
-```
-
-### `request` 内字段
+#### `request` 内字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -33,73 +66,28 @@ params
 | parentOrderSnList | STRING[] | 否 | Parent order number list（父订单号列表；按父订单筛选未发货包裹） |
 | orderSnList | STRING[] | 否 | Order number list（子订单号 / 订单号列表；按子订单筛选未发货包裹） |
 
-> 官方 Request 表将顶层 **`request`** 标为选填（False），但 **`pageNumber`**、**`pageSize`** 为必填。筛选时至少可传 **`parentOrderSnList`** 和/或 **`orderSnList`** 缩小范围；均不传时按分页返回店铺下符合条件的未发货包裹（以 Partner 与账号权限为准）。  
-> Partner **Request Example** CURL 将字段写在顶层；经 LinkFox 网关时建议放在 **`params.request`**（与 Request 表一致）。
+> 官方请求表将顶层 **`request`** 标为选填（False），但 **`pageNumber`**、**`pageSize`** 为必填。筛选时至少可传 **`parentOrderSnList`** 和/或 **`orderSnList`** 缩小范围；均不传时按分页返回店铺下符合条件的未发货包裹（以 Partner 与账号权限为准）。
+> Partner **请求示例** CURL 将字段写在顶层；经 LinkFox 网关时建议放在 **`params.request`**（与 请求表一致）。
 
-### 网关 `params` 写法
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "pageNumber": 1,
-    "pageSize": 20,
-    "parentOrderSnList": ["PO-20260101001"],
-    "orderSnList": ["O-20260101001-1"]
-  }
-}
-```
+#### 网关与脚本响应
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "pageNumber": 1,
-    "pageSize": 50
-  }
-}
-```
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 若返回此字段，按公共规则判断，不将 `0` 或 `false` 视为空。 |
+| errmsg | string | 若返回此字段，为网关消息；保留原文。 |
+| body | string | Temu 原始 JSON 字符串；先判断网关状态，再解析业务内容。 |
+| code | integer | 网关错误码：`1002` 为参数或 Token 无效，`1003` 为转发失败；不可当作 Temu 错误码。 |
+| temuBody | object / array / scalar | 脚本在 `body` 可解析为 JSON 时增加的字段，完整保留原 `body`；不可解析时不增加。 |
+| _http_status | integer / null | 仅脚本附加的本次 HTTP 状态码，不是网关字段；连接失败无 HTTP 响应时为 `null`，错误原因仍保留在 `error`。大响应摘要也展示该状态。 |
 
----
+网关正常响应后，解析 `body`；若存在 `response` 包装则读取其业务对象。以下为 Temu 业务字段，不能替代外层 HTTP 与 `errcode` 判断。
 
-## Response（Temu `body` 解析后）
+Partner **响应** 表顶层为 **`response`** 对象；网关解析后通常直接见到 `success` / `errorCode` / `errorMsg` / `result`。
+**`result`** 子行在导出 HTML 中为折叠状态；下列层级按 **响应表 + 响应示例** 全部展开。
 
-Partner **Response** 表顶层为 **`response`** 对象；网关解析后通常直接见到 `success` / `errorCode` / `errorMsg` / `result`。  
-**`result`** 子行在导出 HTML 中为折叠状态；下列层级按 **Response 表 + Response Example** 全部展开。
-
-```text
-response（或解析后的根对象）
-├── success
-├── errorCode
-├── errorMsg
-└── result (OBJECT)
-    ├── totalItemNum (INTEGER)
-    └── unshippedPackage[] (OBJECT[])
-        ├── packageSn
-        ├── mainPackageSn
-        ├── subPackageSnList[] (STRING[])
-        ├── subPackageType
-        ├── trackingNumber
-        ├── carrierId
-        ├── carrierName
-        └── packageDetail (OBJECT)
-            ├── shippableOrders[] (OBJECT[])
-            │   ├── semiUniqueId
-            │   ├── quantity
-            │   ├── orderSn
-            │   ├── parentOrderSn
-            │   └── mallId
-            └── canceledOrders[] (OBJECT[])
-                ├── semiUniqueId
-                ├── quantity
-                ├── orderSn
-                ├── parentOrderSn
-                └── mallId
-```
-
-### 顶层字段（`response` 内，或根级）
+#### 顶层字段（`response` 内，或根级）
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -108,14 +96,14 @@ response（或解析后的根对象）
 | errorMsg | STRING | error message（错误信息） |
 | result | OBJECT | result（业务结果对象） |
 
-### `result` 内字段
+#### `result` 内字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | totalItemNum | INTEGER | Total item count（符合查询条件的未发货包裹总条数，用于分页） |
 | unshippedPackage | OBJECT[] | Unshipped package list（未发货包裹列表；经 Temu 集成物流已成功履约的包裹） |
 
-#### `unshippedPackage[]` 元素字段
+##### `unshippedPackage[]` 元素字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -128,7 +116,7 @@ response（或解析后的根对象）
 | carrierName | STRING | Carrier name（承运商名称，展示用） |
 | packageDetail | OBJECT | Package detail（包裹内订单行明细：可发货与已取消） |
 
-##### `packageDetail` 内字段
+###### `packageDetail` 内字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -147,59 +135,66 @@ response（或解析后的根对象）
 | parentOrderSn | STRING | Parent order number（父订单号） |
 | mallId | INTEGER / LONG | Mall ID（店铺/商城 ID） |
 
-> 调用成功时先判断 **`success === true`**，再根据 **`result.totalItemNum`** 与 **`pageNumber` / `pageSize`** 翻页；对每个 **`unshippedPackage`** 查看 **`trackingNumber`**、**`packageSn`** 及 **`packageDetail.shippableOrders`**，再调用 **`bg.logistics.shipped.package.confirm`** 等完成发货确认（待接入）。
+> 调用成功时先判断 **`success === true`**，再根据 **`result.totalItemNum`** 与 **`pageNumber` / `pageSize`** 翻页；对每个 **`unshippedPackage`** 查看 **`trackingNumber`**、**`packageSn`** 及 **`packageDetail.shippableOrders`**，再调用 **`bg.logistics.shipped.package.confirm`** 等完成发货确认。
 
----
+### 响应码规则
 
-## 常见业务错误码（Partner Error Code）
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+网关正常后，判断 Temu 的 `success`、`errorCode`、`errorMsg` 与各项业务状态；`success=true` 不代表异步履约或审核已最终完成。业务错误保留原文，不自动重试写入。
 
 | 错误码 | 错误信息（原文） | 处理建议 |
 |--------|------------------|----------|
 | 120011030 | Cooperative warehouse order fulfillment restricted. | 合作仓履约受限 |
-| 120011072 | The request area is incorrect... US / global | 欧洲站请求区域须为 US |
+| 120011072 | The request area is incorrect... US / global | 核对站点与令牌区域；本技能使用 `site=eu`，勿因 US 示例自动切换站点 |
 | 120012016 | The parentOrder or Order is invalid... | 核对 **`parentOrderSnList`** / **`orderSnList`** 与订单是否存在、父子关系是否匹配 |
 
----
-
-## 典型用法
-
-```text
-1. linkfox-temu-order-eu                         → 待发货父/子订单号
-2. bg.logistics.shipment.create                  → 购标，获得 packageSn
-3. bg.logistics.shipment.result.get              → 确认面单状态成功
-4. bg.order.unshipped.package.get（本接口）       → 列出已购标、待发货确认的包裹
-5. bg.logistics.shipped.package.confirm          → 确认发货（待接入）
-```
-
----
-
-## 示例
+### curl 示例
 
 ```bash
-export LINKFOXAGENT_API_KEY="<key>"
-
-python scripts/eu_buy_shipping_order_unshipped_package_get.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '
+{
+  "site": "eu",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "pageNumber": 1,
-    "pageSize": 20,
-    "parentOrderSnList": ["PO-20260101001"]
-  }
-}'
-```
-
-```bash
-python scripts/temu_eu_proxy.py '{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
   "type": "bg.order.unshipped.package.get",
   "params": {
     "request": {
       "pageNumber": 1,
       "pageSize": 20,
-      "orderSnList": ["O-20260101001-1", "O-20260101001-2"]
+      "parentOrderSnList": [
+        "PO-20260101001"
+      ],
+      "orderSnList": [
+        "O-20260101001-1"
+      ]
     }
   }
-}'
+}
+'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-fulfillment-eu",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

@@ -1,151 +1,129 @@
 ---
 name: linkfox-chuhaijiang-tiktok-product
-description: 使用出海匠（Chuhaijiang）研究 TikTok Shop 公开商品市场，支持搜索、详情、关联达人/直播/视频/评论、热推榜/新品榜/销量榜和图片找同款。用户点名出海匠或 Chuhaijiang 时触发；未指定数据源时，仅对关联直播、图片找同款或跨达人/直播/视频/评论的组合钻取触发。通用 TikTok 商品榜单或选品使用 linkfox-kalodata-tiktok-product，按商品 URL/19 位 ID 查询当前公开详情使用 linkfox-tiktok-shop-product-detail，卖家后台商品操作使用 linkfox-tiktok-shop-product；点名其他数据源时不触发。
+description: 使用出海匠（Chuhaijiang）研究 TikTok Shop 公开商品市场，支持商品搜索与详情、关联达人/直播/视频/评论、热推榜/新品榜/销量榜及图片找同款。用户点名出海匠或 Chuhaijiang 时使用；未指定数据源时，仅对关联直播、图片找同款或跨达人/直播/视频/评论的组合研究使用。不适用于其他指定数据源、通用商品选品、仅按商品链接或 ID 查当前详情，以及卖家后台操作。
 ---
 
-# TikTok Product Market Intelligence
+# 出海匠 TikTok 商品市场研究
 
-Use this skill to research public TikTok Shop product markets: discover products, inspect one product, trace its creators/lives/videos/reviews, browse three rankings, or find visually similar products.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- Monetary fields are usually objects such as `{ "unit": "US", "value": 31 }`, but some ranking fields can be plain numbers. Inspect the runtime type before reading and preserve `unit` when an object is returned.
-- Normal product endpoints require a lowercase marketplace code. Image search accepts an uppercase two-letter code and defaults to `US`.
-- Search and relationship endpoints return at most 10 records per page; ranking endpoints return at most 20.
-- Each endpoint call is billed independently. Do not repeat the same endpoint and parameters unless the user explicitly asks; successful responses use a 24-hour local cache keyed by endpoint, gateway, API Key fingerprint, and parameters.
+研究 TikTok Shop 公开商品市场，按用户问题发现商品、核对详情、浏览榜单、追踪关联内容或寻找视觉相似商品。
 
-## Data Fields
+**场景速查**
 
-| Field | Meaning |
+| 用户表达 | 查询场景 |
 |---|---|
-| `data.total_count` | Total matching records |
-| `data.items` | Product or relationship records |
-| `data.core.items` | Optional product core metrics when detail `include` contains `core` |
-| `data.channel.items` | Optional channel-split sales metrics when detail `include` contains `channel` |
-| `id` / `product_id` | Product or related-entity identifier |
-| `product_name` | Product title |
-| `floor_price` / `ceiling_price` | Current price range |
-| `product_sold_count*` | Total or windowed sales |
-| `product_gmv*` / `interval_gmv` | Total or windowed GMV |
-| `product_rating` / `review_count` | Rating and review volume |
-| `product_images` | Main and thumbnail images |
-| `shop_name` / `seller_id` | Store identity |
+| 用出海匠筛选美国 TikTok 美妆商品 | 商品搜索与筛选。 |
+| 用 Chuhaijiang 看这个商品详情 | 商品资料与可选核心、渠道指标。 |
+| 哪些达人、直播和视频在带这个商品 | 按需组合关联数据。 |
+| 用出海匠看这个商品的评论 | 评价、规格和媒体反馈。 |
+| 用出海匠看热推榜、新品榜或销量榜 | 指定市场与统计窗口的榜单研究。 |
+| 用这张图找 TikTok 同款 | 本地图片上传与图片搜索。 |
 
-Relationship responses use endpoint-specific prefixed fields. Read `references/api.md` for the complete request definitions, response paths, key fields, and production-validated structure. Do not assume one shared schema.
+### 边界
 
-## Endpoints
+未指定数据源的通用 TikTok 商品榜单或选品转交 `linkfox-kalodata-tiktok-product`；仅按公开商品 URL 或 19 位 ID 查询当前详情转交 `linkfox-tiktok-shop-product-detail`；卖家后台商品操作转交 `linkfox-tiktok-shop-product`。用户指定 FastMoss、EchoTik、Kalodata 等其他数据源时使用对应技能。
+本技能不处理订单、库存、刊登发布、履约、联盟邀请、广告活动、视频下载或图片生成编辑。
 
-| Intent | Endpoint | Script | Points/call |
-|---|---|---|---:|
-| Filter and discover products | `/chuhaijiang/products/search` | `chuhaijiang_product_search.py` | 18 |
-| Inspect one product | `/chuhaijiang/products/detail` | `chuhaijiang_product_detail.py` | 9 |
-| Find promoting creators | `/chuhaijiang/products/related-creators` | `chuhaijiang_product_related_creators.py` | 18 |
-| Find associated livestreams | `/chuhaijiang/products/related-lives` | `chuhaijiang_product_related_lives.py` | 18 |
-| Read product reviews | `/chuhaijiang/products/reviews` | `chuhaijiang_product_reviews.py` | 18 |
-| Find promoting videos | `/chuhaijiang/products/related-videos` | `chuhaijiang_product_related_videos.py` | 18 |
-| Browse most-promoted ranking | `/chuhaijiang/products/rankings/most-promoted` | `chuhaijiang_product_rank_most_promoted.py` | 18 |
-| Browse new-arrival ranking | `/chuhaijiang/products/rankings/new-arrivals` | `chuhaijiang_product_rank_new_arrivals.py` | 18 |
-| Browse top-selling ranking | `/chuhaijiang/products/rankings/top-selling` | `chuhaijiang_product_rank_top_selling.py` | 18 |
-| Search by an uploaded image | `/chuhaijiang/products/image-search` | `chuhaijiang_product_image_search.py` | 30 |
-| Upload helper for image search | `/chuhaijiang/upload/presigned-url` | `upload_image.py` | 0 |
+## 接口清单
 
-Call only the endpoint required by the user's current question. Ask before making additional paid drill-down calls that the user did not request.
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 商品搜索 | POST `/chuhaijiang/products/search` | `scripts/chuhaijiang_product_search.py` | 按关键词与筛选条件发现商品。 |
+| 商品详情 | POST `/chuhaijiang/products/detail` | `scripts/chuhaijiang_product_detail.py` | 查看商品资料与可选核心、渠道指标。 |
+| 关联达人 | POST `/chuhaijiang/products/related-creators` | `scripts/chuhaijiang_product_related_creators.py` | 查看推广商品的达人及表现。 |
+| 关联直播 | POST `/chuhaijiang/products/related-lives` | `scripts/chuhaijiang_product_related_lives.py` | 查看相关直播及销售表现。 |
+| 商品评论 | POST `/chuhaijiang/products/reviews` | `scripts/chuhaijiang_product_reviews.py` | 查看买家评价、规格及媒体信息。 |
+| 关联视频 | POST `/chuhaijiang/products/related-videos` | `scripts/chuhaijiang_product_related_videos.py` | 查看推广视频及内容表现。 |
+| 商品热推榜 | POST `/chuhaijiang/products/rankings/most-promoted` | `scripts/chuhaijiang_product_rank_most_promoted.py` | 查看指定窗口的热门推广商品。 |
+| 商品新品榜 | POST `/chuhaijiang/products/rankings/new-arrivals` | `scripts/chuhaijiang_product_rank_new_arrivals.py` | 发现近期上架商品。 |
+| 商品销量榜 | POST `/chuhaijiang/products/rankings/top-selling` | `scripts/chuhaijiang_product_rank_top_selling.py` | 查看指定窗口的畅销商品。 |
+| 图片搜索 | POST `/chuhaijiang/products/image-search` | `scripts/chuhaijiang_product_image_search.py` | 查找外观相似商品。 |
+| 上传预签名 | POST `/chuhaijiang/upload/presigned-url`；映射上游 POST `/open/v1/upload/presigned-url` | `scripts/upload_image.py` | 为本地图搜申请地址并完成外部上传。 |
 
-## Parameter Guide
+## 前置条件
 
-- `country`: one of `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn` for normal endpoints.
-- `id`: required for detail and relationship endpoints. Reuse a product `id` from search or ranking results.
-- `page`: starts at 1. `pageSize` is optional.
-- Search supports `keyword`, `category`, `sellerType`, price/rating/sales ranges, `freeShipping`, and `sort` (`field:asc` or `field:desc`).
-- Most-promoted and top-selling rankings require `date` (`YYYYMMDD`) and `granularity` (`daily`, `weekly`, `monthly`, `0`, `1`, or `2`).
-- New arrivals optionally supports `listedFrom`, `listedTo`, and `productStatus`.
-- Use camelCase request names shown in `references/api.md`; do not send upstream snake_case names.
+确定数据源、目标市场和查询目标；单品深查复用用户提供或搜索、榜单取得的商品标识。图片找同款需准备本地图片或已上传对象标识。具体参数、限制与脚本行为见 `references/api.md`。
 
-## 调用方式
+## 查询与图片搜索流程
 
-- **API 端点**：11 个 LinkFox 网关能力均使用 POST；完整请求地址、参数、响应和错误码见 `references/api.md`。本地图搜还会向预签名返回的 `data.url` 发送一次不携带 LinkFox API Key 的外部 HTTP PUT。
-- **Python 脚本**：`python scripts/<entry>.py '<JSON 参数>' [--inline]`
-- **成本约束**：10 个商品业务入口脚本默认只缓存成功响应 24 小时，业务成功的空结果也可缓存；缓存按当前工作目录、调用身份、网关、端点和完整请求参数隔离。相同组合命中时输出 `Cache hit`，不会发起新的付费请求。HTTP 或业务失败不缓存；`--inline` 不绕过缓存；`--no-cache` 会强制真实请求并可能再次消耗算力，仅在用户明确同意额外消耗或调试时使用。上传预签名与 PUT 不使用响应缓存。
+1. 根据当前问题选择搜索、详情、关联数据或一个榜单，只查询用户所需的内容。额外付费钻取若不在用户已明确的请求范围内，先说明费用并取得用户同意。
+2. 商品标识从搜索或榜单结果复用。按用户问题选择核心、渠道或关联信息；不同关联对象按各自结构解析，不套用统一字段。
+3. 本地图搜先运行 `python scripts/upload_image.py <本地图片路径>`，申请预签名并完成外部上传，再把安全输出中的 `osKey` 交给图片搜索脚本；已有有效 `osKey` 时跳过上传。格式、地址和上传限制见 `references/api.md`。
+4. 先读取摘要，按需从落盘文件提取指标；展示实际返回内容与统计窗口。数据不足时解释缺口，后续查询遵守成本约束。
 
-**输出策略（10 个商品业务脚本）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-product-<timestamp>.json`；`<cwd>` 为脚本执行时的当前工作目录，当前目录不可写时退出报错，不回退到用户目录或系统临时目录。
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 输出请求参数、顶层状态、`data.total_count`、各业务列表长度和首个非空业务列表的前 3 条样本
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-- `upload_image.py` 是上传辅助脚本：只输出安全元数据，不保存包含 `data.url` 或 `data.signed_url` 的预签名响应。
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：各接口的算力规则见“算力消耗预估”。同一端点与参数组合不重复调用，除非用户明确要求重查；脚本提供 24 小时本地缓存，强制重查条件见 `references/api.md`。不得因失败或空结果擅自改词、翻页或追加付费查询来补偿结果；超出用户已明确请求范围的继续检索，先说明额外消耗并取得同意。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 输出策略
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- 10 个商品业务脚本始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-product-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，不回退到用户目录或系统临时目录；当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括请求参数、顶层字段与状态、`data.total_count` 等计数、各业务列表长度和首个非空业务列表的前 3 条样本。详情分别统计 `data.core.items` 与 `data.channel.items`，不把图片数组当作主业务列表。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+- `upload_image.py` 仅输出安全元数据，不保存含预签名上传或读取 URL 的完整响应，不使用上述通用落盘策略。
 
-## Image Search Workflow
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-For a local JPG, JPEG, or PNG, upload it first:
+## 执行规则
 
-```bash
-python scripts/upload_image.py /path/to/product.jpg
-```
+### 算力消耗预估
 
-The helper calls the accelerated presign endpoint, uploads the bytes with HTTP PUT to the returned `url`, and prints only safe metadata such as `osKey`, `osBucket`, file metadata, upload status, and `requestId`. The returned `signed_url` is a temporary read URL, not an upload fallback, and must not be printed or persisted. Then call:
+上传预签名 0 算力/次 （限时）；商品详情 9 算力/次；商品搜索、关联达人、关联直播、商品评论、关联视频及三个榜单均为 18 算力/次；图片搜索 30 算力/次。各接口独立计费；高频调用或多接口钻取前说明预计调用次数及合计算力。
 
-```bash
-python scripts/chuhaijiang_product_image_search.py '{"osKey":"returned-key","country":"US"}'
-```
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-If the user already provides a valid `osKey`, skip the upload step.
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## Usage Examples
+### 解决认证和算力问题
 
-```bash
-python scripts/chuhaijiang_product_search.py '{"country":"us","keyword":"beauty","minRating":4,"freeShipping":true,"pageSize":5}'
-python scripts/chuhaijiang_product_detail.py '{"country":"us","id":"1732052189676081387"}'
-python scripts/chuhaijiang_product_rank_top_selling.py '{"country":"us","date":"20260824","granularity":"daily","pageSize":10}'
-python scripts/chuhaijiang_product_reviews.py '{"country":"us","id":"1732052189676081387","pageSize":10}'
-```
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## Display Rules
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-1. State the marketplace, total count, current page, filters, and ranking window used.
-2. For product lists, show image, title, price range, sales/GMV window, rating, store, and product ID when available.
-3. Keep response currency units; do not silently label `unit: US` as another currency.
-4. For reviews, show rating, content, publish time, SKU specification, and media availability.
-5. For creators, lives, and videos, display the relationship metrics returned by that endpoint and retain the related entity ID for optional drill-down.
-6. Never expose API keys, signed upload URLs, or raw image bytes.
+### 约束与建议
 
-## Important Limitations
+- **区分公开与私有数据**：结果为公开市场情报，不能当作用户私有店铺后台数据。
+- **展示查询背景**：注明市场、总数、当前页、过滤条件、请求日期和榜单统计窗口；搜索与榜单会随时间变化。
+- **展示商品数据**：按可用字段展示图片、标题、价格区间、销量/GMV及其周期、评分、店铺和商品标识。
+- **保留金额单位**：金额可能是对象或数值，先检查实际类型，保留原始单位；不得静默换币或把不同周期指标混为一谈。
+- **展示关联对象**：评论展示评分、内容、发布时间、SKU 规格及媒体可用性；达人、直播和视频展示各自关联指标并保留对象标识，以便用户要求后继续研究。
+- **保护敏感信息**：不展示 API Key、预签名上传或读取 URL、原始图片字节；保留原始素材。上传辅助脚本只输出安全元数据，具体行为见 `references/api.md`。
+- **反馈提交范围**：仅在用户明确要求或明确授权后提交；先概括并脱敏，不发送原始用户消息、手机号、无关任务上下文或任何凭证。
+- **保留业务脚本输出**：商品摘要优先统计业务列表和详情的核心、渠道列表，避免图片数组抢占主列表；缓存命中也保存完整响应。上传辅助脚本的安全输出例外、缓存隔离及强制重查条件见 `references/api.md`。
+- **解释错误和空结果**：按接口定义解释，不虚构过滤条件，不用反复改词、翻页或额外接口补偿结果。
 
-1. Data is real-time market intelligence and cannot be treated as the user's private TikTok Shop account data.
-2. This skill does not manage orders, inventory, listings, fulfillment, affiliate invitations, or ad campaigns.
-3. Do not invent unsupported filters or compensate by repeatedly calling other endpoints.
-4. Search and rankings can change over time; report the request date/window with results.
-5. Image search requires a valid uploaded object key; local paths cannot be passed directly to the image-search endpoint.
+## 使用示例
 
-## User Expression & Scenario Quick Reference
+### 搜索商品
 
-**Applicable**:
+用户：用出海匠筛选美国 TikTok 美妆商品，看看评分和销量。
 
-- **商品发现与详情**：“用出海匠筛选美国 TikTok 美妆商品”，“用 Chuhaijiang 看这个商品详情”。
-- **关联数据**：“用出海匠查哪些达人在带这个商品”，“找这个 TikTok 商品的关联直播”，“用出海匠看这个商品的评论”，“用出海匠查推广这个商品的视频”。
-- **商品榜单**：“用出海匠看美国 TikTok 商品热推榜”，“用 Chuhaijiang 看美妆新品榜”，“用出海匠查 TikTok 商品销量榜”。
-- **图片与组合钻取**：“用这张图找 TikTok 同款”，“同时分析这个商品的达人、直播、视频和评论”。
+确定筛选条件后查询商品搜索，展示返回范围、价格、评分、销量及统计窗口。
 
-**Adjacent**: General TikTok product ranking or selection requests without a source should use `linkfox-kalodata-tiktok-product`. A public product URL or 19-digit product ID lookup should use `linkfox-tiktok-shop-product-detail`. Seller-side product operations should use `linkfox-tiktok-shop-product`. If the user asks for FastMoss, EchoTik, Kalodata, or another named source, use that source instead.
+### 商品组合研究
 
-**Not applicable**: order handling, stock changes, listing publication, campaign creation, video downloading, or image generation/editing.
+用户：用出海匠同时分析这个商品的达人、直播、视频和评论。
 
-## 算力消耗规则
+说明所需调用次数和预计消耗，按已明确的范围分别查询，保留关联对象标识并说明指标周期。
 
-按端点分别计费：上传预签名 0 算力/次；商品详情 9 算力/次；商品搜索、关联达人、关联直播、商品评论、关联视频及商品榜单 18 算力/次；图片搜索 30 算力/次。
+### 图片找同款
 
-> 用户会因算力消耗而支付费用。高频调用或多端点钻取前，先说明预计调用次数与算力消耗。
+用户：用这张本地图片找 TikTok 同款。
 
-**Feedback:** Use the Feedback API in `references/api.md` only when the user explicitly asks to submit feedback or explicitly authorizes submission after an issue is identified. Summarize and sanitize the content; never include API keys, signed URLs, phone numbers, raw user messages, or unrelated task context.
+上传图片后使用对象标识查询相似商品；只展示安全元数据和匹配商品，不展示预签名地址。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

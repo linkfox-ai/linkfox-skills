@@ -56,14 +56,15 @@
 - **保留名不能碰**：`PATH` / `HOME` / `PYTHONPATH` / `PYTHONHOME` / `PYTHONSTARTUP` / `NODE_PATH` / `NODE_OPTIONS` / `LD_PRELOAD` / `LD_LIBRARY_PATH`——pip / npm 安装、解释器启动、动态库加载都读它们。
 - **内置运行时 key**：`{{$vars.LINKFOX_AGENT_API_KEY}}`（推荐）/ `{{$vars.LINKFOXAGENT_API_KEY}}`（旧名，同一把 key）。按当前工作流属主在运行时取，每次执行取一次，可以嵌在文本里（如 `Bearer {{$vars.LINKFOX_AGENT_API_KEY}}`）；取不到就报错，不降级成空串。
   **只在这两个字段里解析**——写进 Prompt / HTTP Body / 别的 `acceptVariable` 字段不会被替换，会原样留给用户看。这层作用域就是安全边界。
-- **绑定的值明文落在编排 JSON 里**，所以密钥一律用 `{{$vars.X}}` 引用，禁止手填；也不要让用户去页面上绑沙箱凭据。`save_workflow.py` 对「名字像密钥（含 KEY / TOKEN / SECRET / PASSWORD / AUTH / CREDENTIAL）却填了字面量」直接报 **error** 拒绝落盘；它本来就不是密钥的（如 `TOKEN_TTL=3600` 这类配置数值）换个名字即可。
+- **绑定的值明文落在编排 JSON 里**，所以密钥一律用内置运行时 key（`{{$vars.LINKFOX_AGENT_API_KEY}}`）引用，禁止手填；也不要让用户去页面上绑沙箱凭据。`save_workflow.py` 对「名字像密钥（含 KEY / TOKEN / SECRET / PASSWORD / AUTH / CREDENTIAL）却填了字面量」直接报 **error** 拒绝落盘；它本来就不是密钥的（如 `TOKEN_TTL=3600` 这类配置数值）换个名字即可。
+  **不要自己在变量表里建一个存密钥的变量再引用它**：运行时已按租户隔离（跨成员同名不冲突），但变量值是**明文存库**、组 OWNER 能从变量列表看到全组成员的变量（见 `variables-and-credentials.md`）。第三方密钥要么建**凭据**、在原生 `HTTP` 节点上绑（沙箱节点没有凭据字段），要么如实告诉用户这条路的暴露面后再由他决定。
 - 值是「只发点名的那几条」：工作区全局变量、部署环境变量都不会整包下发。
 
 ## CustomPythonFunction（自定义 Python 函数）
 
 LinkFox 分支新增的节点，**在沙箱里执行一段 Python**，没有本地回落。
 
-- `data.name`: `customPythonFunctionAgentflow`；`data.type`: `CustomPythonFunction`；`version`: `1.0`；`color`: `#4B8BBE`；`baseClasses`: `["CustomPythonFunction"]`。
+- `data.name`: `customPythonFunctionAgentflow`；`data.type`: `CustomPythonFunction`；`version`: `1.1`；`color`: `#4B8BBE`；`baseClasses`: `["CustomPythonFunction"]`。
 - **没有 credential 字段**：沙箱由部署方统一配置，不要写 `credential`，也不要在补配置指引里让用户去绑凭据。
 - `inputs`：
 

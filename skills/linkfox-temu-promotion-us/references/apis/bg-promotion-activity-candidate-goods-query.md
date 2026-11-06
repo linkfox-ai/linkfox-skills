@@ -1,139 +1,184 @@
-# 活动候选商品查询 — `bg.promotion.activity.candidate.goods.query`
+# Temu 美国站促销：活动候选商品查询 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_promotion_activity_candidate_goods_query.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=873ac072a78249c893e5f8d0e656a11f&sub_menu_code=0a11814e7d4146b595918ff3c0f3e239 |
-| **网关** | `POST /temu/proxy`，`type`=`bg.promotion.activity.candidate.goods.query`，业务载荷放在 Body 的 `params` |
+> Partner 接口文档：<https://partner-us.temu.com/documentation?menu_code=873ac072a78249c893e5f8d0e656a11f&sub_menu_code=0a11814e7d4146b595918ff3c0f3e239>；脚本：`scripts/us_promotion_activity_candidate_goods_query.py`。
 
-**Description:** Query candidate goods for a promotion activity.
+## 公共规则
 
-> **`activityId`**、**`pageNumber`**、**`pageSize`** 均为必填。
-> 返回 **`isAllowedEnroll`** 与推荐活动价/数量，用于报名前选品。
+### 调用规范
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 **`request`**。建议使用 **`tokenPurpose=product-inventory`**，**`managementType=semi-managed`**。
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
----
+### 响应码基本规则
 
-## Request 结构（官方顶层）
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-```text
-params
-└── request (OBJECT, 选填)
-    ├── activityId (LONG, 必填)
-    ├── pageNumber (INTEGER, 必填)
-    └── pageSize (INTEGER, 必填)
-```
+## 接口：活动候选商品查询（bg.promotion.activity.candidate.goods.query）
 
-### `request` 内字段
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| activityId | LONG | **是** | unique identifier for the activity |
-| pageNumber | INTEGER | **是** | page number for pagination, default is 1. |
-| pageSize | INTEGER | **是** | Page size for pagination, default is 10, max is 100. |
+| site | string | 是 | 美国站使用 us；US 脚本默认 us。通用兼容脚本支持 cn / partner / us / global / eu，须小写。 |
+| managementType | string | 是 | US 脚本默认 semi-managed；通用脚本支持 full-managed / semi-managed，须小写；具体权限以授权店铺为准。 |
+| accessToken | string | 是 | Temu 店铺令牌；脚本可用本地 storeKey 解析后填入，不能以 LinkFox API key 替代。 |
+| type | string | 是 | 本接口操作标识，见本节接口标题；它位于 Body，不是 URL path。 |
+| tokenPurpose | string | 否 | 建议使用 product-inventory；脚本仅将其用于本地令牌匹配，不发送此字段。 |
+| params | object | 否 | 本接口的业务载荷，按下方 params.request 结构提供。 |
+| params.request | OBJECT | 否（官方顶层标记） | 官方请求表将 request 标为选填（False）；下表标为必填的子字段仍须在 params.request 提供。 |
 
-> 官方 Request 表将顶层 **`request`** 标为选填（False）；标 **必填** 的字段须在 **`params.request`** 中提供。
+#### 脚本认证与业务参数约定
 
-### 网关 `params` 写法
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| accessToken / storeKey | string | 二选一 | 直接令牌优先；storeKey 仅为本地令牌索引，不发送网关。 |
+| site | string | 否 | US 脚本默认 us；通用脚本必填，支持站点见网关表。 |
+| managementType | string | 否 | US 脚本默认 semi-managed；通用脚本必填。 |
+| tokenPurpose | string | 否 | US 脚本默认 product-inventory；通用脚本默认 default。令牌按 storeKey + site + managementType + tokenPurpose 精确匹配，不跨店铺或用途回退。 |
+| token / linkfoxToken / linkfox_token | string | 否 | 兼容的 LinkFox 鉴权字段，依次取首个非空值，优先于两种 API key 环境变量；仅用于请求头，不混入业务载荷。 |
+| params | object | 否 | 显式对象优先；未提供对象时 US 脚本将顶层非保留业务字段（如 request）收集为 params；通用 temu_proxy.py 只接受显式 params 对象。 |
+| --inline | CLI flag | 否 | 强制全量打印，仍保存完整响应。 |
+| --no-cache | CLI flag | 否 | 保留兼容选项；业务封装始终向 call_api.run 添加此选项，不读取或保存响应缓存。 |
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "product-inventory",
-  "request": {
-    "activityId": 123456,
-    "pageNumber": 1,
-    "pageSize": 20
-  }
-}
-```
+保留参数集合为 token、linkfoxToken、linkfox_token、accessToken、storeKey、site、managementType、tokenPurpose、type、params。通用 temu_us_proxy.py 的 type 必填，专用促销脚本固定 type。授权步骤见 [access-token.md](../access-token.md)。
 
----
+#### `params.request` 内字段
 
-## Response（Temu `body` 解析后）
+| 参数 | 类型 | 必填 | 说明 |
+| ------ | ------ | ------ | ------ |
+| activityId | LONG | **是** | 活动的唯一标识。 |
+| pageNumber | INTEGER | **是** | 分页页码，默认 1；该字段仍为必填。 |
+| pageSize | INTEGER | **是** | 每页条数，默认 10，最大 100；该字段仍为必填。 |
 
-Partner **Response** 表嵌套子行在导出 HTML 中多为折叠状态，下列层级按 **Response 表 + Response Example** 全部展开。
+### 响应结构
 
-```text
-response
-├── success / errorCode / errorMsg
-└── result
-    ├── total (LONG)
-    ├── activityInfo (OBJECT)
-    │   └── activityId, activityName, activityType, activityStatus, …
-    └── goodsList[]
-        ├── goodsId (LONG)
-        ├── isAllowedEnroll (BOOLEAN)
-        ├── recommendActivityQuantity (INTEGER)
-        └── skuList[]
-            ├── skuId (LONG)
-            └── recommendActivitySupplierPrice (LONG)
-```
+#### LinkFox 网关与脚本输出
 
-### 顶层字段（`response` 内，或根级）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 若返回，依公共响应码基本规则判断。 |
+| errmsg | string | 网关错误消息，若返回则按实际内容解释。 |
+| body | string | Temu 原始 JSON 字符串，脚本保留原文并尝试解析。 |
+| code | integer | 网关业务错误码：1002 参数或 Token 无效；1003 转发失败。不能替代 errcode 的公共判断。 |
+| temuBody | 任意 JSON 类型 | 脚本解析字段：body 能解析为 JSON 时的业务对象；解析失败时不添加，仍保留 body。 |
+| transportHttpStatus | integer / null | 脚本记录的 LinkFox 外层 HTTP 状态；连接失败时为 null。 |
+| rawResponse | 任意 JSON 类型 | 仅网关返回非对象 JSON 时，脚本用此字段保留原值。 |
+| error / details | string | 连接错误或非 JSON 响应的说明与原文；HTTP 成功但响应非 JSON 时也保留，不自动重试。 |
+
+#### Temu 顶层字段
+
+以下字段位于解析后的 temuBody 根级或其 response 内；须按实际层级读取。
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | success（当前请求是否成功） |
-| errorCode | INTEGER | error code |
-| errorMsg | STRING | error message |
-| result | OBJECT 或 OBJECT[] | 业务结果（见下表；**goods.operation.query** 的 `result` 为数组） |
+| ------ | ------ | ------ |
+| success | BOOLEAN | 当前请求是否成功。 |
+| errorCode | INTEGER | Temu 业务错误码。 |
+| errorMsg | STRING | Temu 业务错误消息。 |
+| result | OBJECT 或 OBJECT[] | 业务结果支持 OBJECT 或 OBJECT[]；本接口按对象读取。 |
 
-### `result`
+#### `result`
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| total | LONG | Total records（总记录数） |
-| activityInfo | OBJECT | Activity information（当前活动信息） |
-| goodsList | OBJECT[] | Candidate goods list（候选商品列表） |
+| ------ | ------ | ------ |
+| total | LONG | 总记录数。 |
+| activityInfo | OBJECT | 当前活动信息。 |
+| goodsList | OBJECT[] | 候选商品列表。 |
 
 #### `activityInfo`
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| activityId | LONG | unique identifier for the activity |
-| activityName | STRING | Activity name |
-| activityType | INTEGER | Activity type |
-| activityStatus | INTEGER | Activity status（`1` Not started；`2` Ongoing；`3` Ended） |
-| activityStartTime | LONG | Start time in seconds |
-| activityEndTime | LONG | End time in seconds |
-| isJoinedActivity | BOOLEAN | Whether joined |
+| ------ | ------ | ------ |
+| activityId | LONG | 活动的唯一标识。 |
+| activityName | STRING | 活动名称。 |
+| activityType | INTEGER | 活动类型；2 秒杀，13 提前大促，27 清仓促销，100 官方大促。 |
+| activityStatus | INTEGER | 活动状态：1 未开始，2 进行中，3 已结束。 |
+| activityStartTime | LONG | 活动开始时间，秒级时间戳。 |
+| activityEndTime | LONG | 活动结束时间，秒级时间戳。 |
+| isJoinedActivity | BOOLEAN | 是否已报名活动。 |
 
 #### `goodsList[]`
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| goodsId | LONG | goods id |
-| isAllowedEnroll | BOOLEAN | Whether the goods is allowed to enroll（是否允许报名） |
-| recommendActivityQuantity | INTEGER | Recommended activity quantity（推荐活动数量） |
-| skuList | OBJECT[] | SKU list with recommended prices |
+| ------ | ------ | ------ |
+| goodsId | LONG | 商品 ID。 |
+| isAllowedEnroll | BOOLEAN | 是否允许该商品报名。 |
+| recommendActivityQuantity | INTEGER | 推荐活动数量。 |
+| skuList | OBJECT[] | 含推荐价格的 SKU 列表。 |
 
 #### `goodsList[].skuList[]`
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| skuId | LONG | sku id |
-| recommendActivitySupplierPrice | LONG | Recommended activity supplier price（推荐活动供货价） |
+| ------ | ------ | ------ |
+| skuId | LONG | SKU ID。 |
+| recommendActivitySupplierPrice | LONG | 推荐活动供货价。 |
 
----
+### 响应码规则
 
-## Error Code（Partner 表）
+#### 基础规则
 
-| errorCode | errorMsg | Error SOP / 处理建议 |
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关 code=1002 表示参数或 Token 无效，code=1003 表示转发失败。网关正常时解析 body，并按 Temu 的 success / errorCode / errorMsg 判断业务结果。
+- body 不能解析时保留原文，不将传输完成或空结果当作业务成功。
+
+| errorCode | errorMsg | 说明 / 处理建议 |
 |-----------|----------|----------------------|
-| 220010001 | parameter is illegal | 见 Partner 文档；修正入参或活动状态后重试 |
-| 220010002 | system error, please try again later | 见 Partner 文档；修正入参或活动状态后重试 |
-| 220010003 | The activity has been cancelled, please select another activity to participate | 见 Partner 文档；修正入参或活动状态后重试 |
-| 220010004 | The activity has ended, please select another activity to participate | 见 Partner 文档；修正入参或活动状态后重试 |
+| 220010001 | parameter is illegal | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
+| 220010002 | system error, please try again later | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
+| 220010003 | The activity has been cancelled, please select another activity to participate | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
+| 220010004 | The activity has ended, please select another activity to participate | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
 
----
-
-## 脚本
+### curl 示例
 
 ```bash
-export LINKFOXAGENT_API_KEY="<key>"
-python scripts/us_promotion_activity_candidate_goods_query.py '{"accessToken": "TOKEN", "tokenPurpose": "product-inventory", "request": {"activityId": 123456, "pageNumber": 1, "pageSize": 20}}'
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "us",
+  "managementType": "semi-managed",
+  "accessToken": "TOKEN",
+  "type": "bg.promotion.activity.candidate.goods.query",
+  "params": {
+    "request": {
+      "activityId": 123456,
+      "pageNumber": 1,
+      "pageSize": 20
+    }
+  }
+}'
 ```
 
-**典型流程：** 在 [activity.query](./bg-promotion-activity-query.md) 取得 **`activityId`** 后，查询可报名商品与推荐价。
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-promotion-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

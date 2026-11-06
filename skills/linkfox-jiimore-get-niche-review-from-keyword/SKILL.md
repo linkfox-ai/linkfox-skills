@@ -1,255 +1,121 @@
 ---
 name: linkfox-jiimore-get-niche-review-from-keyword
-description: 亚马逊细分市场评论分析与消费者情感洞察。当用户提到细分市场评论分析、消费者情感、用户痛点、客户反馈洞察、评论主题分析、好评差评拆解、细分市场舆情挖掘、产品评论情感分析、niche market reviews, consumer sentiment, customer pain points, review topic analysis, positive/negative reviews, opinion mining, Jiimore data时触发此技能。即使用户未明确提及"细分市场评论"，只要其需求涉及分析亚马逊细分市场中的消费者评论或理解细分市场层面的客户情感，也应触发此技能。
+description: 从关键词出发，分析亚马逊细分市场的评论主题、消费者情感、常见投诉、喜爱特征及产品改良机会，提供主题提及占比和评论样例。适用于美国、日本和德国市场的细分市场评论研究、用户痛点和需求洞察，无需明确提及 Jiimore 或极目。不适用于单个 ASIN 的评论分析、脱离评论的关键词趋势研究、Listing 文案撰写、广告管理、销量估算或收入预测。
 ---
 
-# Jiimore Niche Review from Keyword
+# 极目亚马逊细分市场评论分析
 
-This skill guides you on how to query and analyze Amazon niche market review data powered by Jiimore, helping Amazon sellers uncover consumer sentiment, pain points, and real demand signals from product reviews within niche markets.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Niche Review Analysis aggregates and categorizes customer reviews across products in an Amazon niche market. Given a keyword, the system identifies the relevant niche markets, extracts review topics, classifies them as positive or negative, and shows how frequently each topic is mentioned. This enables sellers to understand what customers love, what frustrates them, and where product improvement opportunities exist.
+从用户指定的关键词定位相关亚马逊细分市场，汇总其中多个商品的评论主题，识别正面信号、负面痛点和真实需求。用户说“市场调研”或“产品机会”时，只有重点在消费者情感、评论主题或痛点时才使用本技能。
 
-**Review types**: Each review entry is classified as either "positive" or "negative", reflecting the overall sentiment of that review topic.
+**场景速查**
 
-**Mention percentage**: The `percentOfMentions` value (0-1 scale, representing 0%-100%) indicates how frequently a particular topic appears across all reviews in the niche. A higher percentage means more customers are talking about that topic.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 买家对这类商品怎么评价 | 查看细分市场评论主题。 |
+| 这类商品有哪些用户痛点或常见投诉 | 分析负面主题及提及占比。 |
+| 买家最喜欢哪些功能，为什么受欢迎 | 挖掘正面主题及受欢迎的特征。 |
+| 分析这个细分市场的评论情感 | 对照正面与负面反馈。 |
+| 从评论中找消费者需求和改良机会 | 提炼需求信号，区分原始数据与分析建议。 |
 
-## Supported Marketplaces
+### 边界
 
-US (United States), JP (Japan), DE (Germany)
+本技能聚合细分市场层面的评论，不提供单个 ASIN 的原始评论分析。仅研究关键词搜索量或趋势时使用相应 ABA 数据工具；没有评论背景的价格、销量研究，以及 Listing 优化、广告策略和 PPC 管理不属于本技能范围。
 
-Default marketplace is **US**. Use US when the user does not specify a marketplace.
+## 前置条件
 
-## 调用方式
+**先明确研究关键词和目标市场**：结合用户需求准备筛选与排序条件。站点、关键词语言、分页、排序枚举和筛选限制统一见 [接口定义](references/api.md)。
 
-- **API 端点**：`POST /jiimore/getNicheReviewFromKeyword`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/jiimore_get_niche_review.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 评论分析流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-jiimore-get-niche-review-from-keyword-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 明确关键词、目标市场以及希望了解的正面特征、负面痛点或完整情感概况，按 [接口定义](references/api.md) 整理用户需要的筛选条件。
+2. 调用评论查询脚本，先查看摘要及保存路径；需要细节时，从完整响应中按需提取相关市场和主题。
+3. 按市场归类并区分正面、负面主题，展示提及占比和评论样例；把高频投诉提炼为改良机会，把高频好评提炼为可强调的商品特征。
+4. 说明本次覆盖范围。失败或空结果时解释原因，建议核对关键词或筛选条件；后续检索遵守成本约束，不自动更换条件连续尝试。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行方式
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/jiimore_get_niche_review.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次接口请求消耗 9 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 输出策略
 
-## Parameter Guide
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-jiimore-get-niche-review-from-keyword-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Required Parameter
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| keyword | string | The search keyword (max 1000 chars). Must be in the language of the target marketplace (English for US, German for DE, Japanese for JP) |
+## 执行规则
 
-### Marketplace & Pagination
+### 算力消耗预估
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| countryCode | string | US | Country code: US, JP, or DE |
-| page | integer | 1 | Page number (starting from 1) |
-| pageSize | integer | 50 | Results per page (10-100) |
+9 算力 / 次
 
-### Sorting
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| sortField | string | unitsSoldT7 | Field to sort by (see Sortable Fields below) |
-| sortType | string | desc | Sort direction: `desc` (descending) or `asc` (ascending) |
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**Sortable Fields**:
+### 解决认证和算力问题
 
-| Field | Description |
-|-------|-------------|
-| unitsSoldT7 | Units sold (7-day) |
-| searchVolumeT7 | Search volume (7-day) |
-| searchVolumeGrowthT7 | Search volume growth (7-day) |
-| clickConversionRateT7 | Click conversion rate (7-day) |
-| searchConversionRateT7 | Search conversion rate (7-day) |
-| clickCountT7 | Click count (7-day) |
-| demand | Demand score |
-| avgPrice | Average price |
-| maximumPrice | Maximum price |
-| minimumPrice | Minimum price |
-| productCount | Product count |
-| brandCount | Brand count |
-| top5BrandsClickShare | Top 5 brands click share |
-| top5ProductsClickShare | Top 5 products click share |
-| clickCountT90 | Click count (90-day) |
-| clickConversionRateT90 | Click conversion rate (90-day) |
-| searchConversionRateT90 | Search conversion rate (90-day) |
-| searchVolumeT90 | Search volume (90-day) |
-| unitsSoldT90 | Units sold (90-day) |
-| unitsSoldGrowthT90 | Units sold growth (90-day) |
-| searchVolumeGrowthT90 | Search volume growth (90-day) |
-| returnRateT360 | Return rate (360-day) |
-| newProductsLaunchedT180 | New products launched (180-day) |
-| successfulLaunchesT180 | Successful launches (180-day) |
-| launchRateT180 | Launch success rate (180-day) |
-| acos | ACOS |
-| profitRate50 | Profit rate at 50% organic orders |
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### Niche Filtering Parameters
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-All filter parameters follow a min/max range pattern. Values for percentage-based fields use a 0-1 scale (e.g., 0.05 = 5%).
+### 约束与建议
 
-**Product & Brand Metrics**:
+- **理解数据范围**：数据来自相关细分市场内多个商品的评论聚合和主题分类，不能当作某个 ASIN 的完整评论，也不能将评论提及频次当作销量或需求规模。
+- **理解情感和占比**：主题分为正面与负面，`reviewType` 的原始取值按接口定义解释。`percentOfMentions` 表示主题在该市场评论中的提及占比；越高表示越常被提及。
+- **清晰展示数据**：用表格列出细分市场名称、评论类型、主题、提及占比和评论样例，并分组或明确标记正面与负面。缺失数据按实际返回说明，不补造样例。
+- **百分比展示**：把原始比例转成百分数展示，例如 0.15 展示为 15%；不修改原始数据文件。
+- **形成可行动洞察**：高占比负面主题可作为产品改良线索，高占比正面主题可作为 Listing 中值得强调的特征；把建议与接口事实分开，不将其当作已验证的开发结论。
+- **控制展示量**：结果较多时先呈现最相关的市场与主题，说明存在分页选项；是否继续查询按成本约束处理。
+- **核对关键词语言**：发现用户关键词与目标站点语言不符时提醒用户调整，具体语言要求见接口定义，不自动用多个翻译轮番检索。
+- **解释异常**：依据接口定义判断响应，说明失败原因或空结果；保留已取得的数据，提示可调整的关键词或筛选条件。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| productCountMin / productCountMax | integer | Product count range |
-| brandCountMin / brandCountMax | integer | Brand count range |
-| avgPriceMin / avgPriceMax | number | Average price range |
+## 使用示例
 
-**Sales & Search Volume**:
+### 基础评论研究
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| unitsSoldT7Min / unitsSoldT7Max | integer | Units sold (7-day) range |
-| searchVolumeT7Min / searchVolumeT7Max | integer | Search volume (7-day) range |
-| clickCountT7Min / clickCountT7Max | integer | Click count (7-day) range |
+用户：分析美国站“yoga mat”相关细分市场的买家评论。
 
-**Conversion & Click Rates** (0-1 scale):
+展示对应市场的正面与负面主题、提及占比和评论样例，归纳常见需求。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| clickConversionRateT7Min / clickConversionRateT7Max | number | Click conversion rate (7-day) range |
+### 高搜索量市场中的用户反馈
 
-**Market Concentration** (0-1 scale):
+用户：看看“wireless earbuds”中周搜索量超过一万的市场，有哪些常见投诉。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| top5BrandsClickShareMin / top5BrandsClickShareMax | number | Top 5 brands click share range |
-| top5ProductsClickShareMin / top5ProductsClickShareMax | number | Top 5 products click share range |
-| sponsoredProductsPercentageMin / sponsoredProductsPercentageMax | number | SP ad percentage range |
+按用户指定的搜索量条件筛选市场，再分析其中的负面评论主题，不把搜索量当作评论数量。
 
-**Brand & Seller Age**:
+### 低集中度市场中的改良机会
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| avgBrandAgeMin / avgBrandAgeMax | number | Average brand age (current) |
-| avgBrandAgeQoqMin / avgBrandAgeQoqMax | number | Average brand age (90-day) |
-| avgBrandAgeYoyMin / avgBrandAgeYoyMax | number | Average brand age (360-day) |
-| avgSellingPartnerAgeMin / avgSellingPartnerAgeMax | number | Average seller age (current) |
-| avgSellingPartnerAgeQoqMin / avgSellingPartnerAgeQoqMax | number | Average seller age (90-day) |
-| avgSellingPartnerAgeYoyMin / avgSellingPartnerAgeYoyMax | number | Average seller age (360-day) |
+用户：找“pet bed”中前五品牌点击份额低于 30% 的市场，看看用户痛点。
 
-**New Product & Return Metrics** (0-1 scale):
+先按集中度筛选，再用高频负面主题和真实评论样例支撑改良建议。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| launchRateT180Min / launchRateT180Max | number | Launch success rate (180-day) range |
-| newProductRateT180 | number | New product percentage (180-day) min |
-| returnRateT360Min / returnRateT360Max | number | Return rate (360-day) range |
+### 日本站消费者反馈
 
-**Advertising**:
+用户：分析日本站无线耳机细分市场的评论。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| cpcMediumMin / cpcMediumMax | number | CPC (current) range |
+确认对应的日语关键词后检索，保留评论原意并用中文解释主题。
 
-## Usage Examples
+### 按需求、新品表现或退货率筛选
 
-**1. Basic niche review lookup for a keyword**
-```
-Analyze customer reviews in niche markets related to "yoga mat" on the US marketplace.
-```
-Parameters: `{"keyword": "yoga mat", "countryCode": "US"}`
+用户可要求“kitchen organizer”按需求得分排序，或只看“phone case”新品成功率高于 20% 的市场，或“water bottle”退货率低于 5% 的市场。
 
-**2. Find niche reviews with high search volume**
-```
-Show me niche market reviews for "wireless earbuds" where 7-day search volume is above 10000.
-```
-Parameters: `{"keyword": "wireless earbuds", "countryCode": "US", "searchVolumeT7Min": 10000}`
+分别按用户明确的条件检索并分析评论，不把这些示例条件组合成默认筛选。
 
-**3. Low competition niches with review insights**
-```
-Find review insights for "pet bed" niches where top 5 brands hold less than 30% click share.
-```
-Parameters: `{"keyword": "pet bed", "countryCode": "US", "top5BrandsClickShareMax": 0.3}`
+## 使用反馈
 
-**4. Japanese market niche reviews**
-```
-Analyze niche reviews for wireless earbuds on the Japan marketplace.
-```
-Parameters: `{"keyword": "wireless earbuds", "countryCode": "JP"}`
-
-**5. Sorted by demand score**
-```
-Show niche reviews for "kitchen organizer" sorted by demand score in descending order.
-```
-Parameters: `{"keyword": "kitchen organizer", "sortField": "demand", "sortType": "desc"}`
-
-**6. Filter by new product success rate**
-```
-Find niches for "phone case" where the 180-day new product launch success rate is above 20%.
-```
-Parameters: `{"keyword": "phone case", "launchRateT180Min": 0.2}`
-
-**7. Low return rate niches**
-```
-Show review topics for "water bottle" niches with return rates below 5%.
-```
-Parameters: `{"keyword": "water bottle", "returnRateT360Max": 0.05}`
-
-## Display Rules
-
-1. **Present data clearly**: Show review topics in a well-organized table. Include the niche name, review type (positive/negative), topic, mention percentage, and a review example
-2. **Percentage formatting**: Convert 0-1 scale values to percentages for display (e.g., 0.15 -> 15%)
-3. **Sentiment separation**: When presenting results, group or clearly label positive vs. negative reviews so users can quickly identify opportunities and pain points
-4. **Actionable insight framing**: While showing data objectively, highlight high-mention-percentage negative reviews as potential product improvement opportunities, and high-mention-percentage positive reviews as features to emphasize in listings
-5. **Volume notice**: When results are large, show the most relevant data first and remind users about pagination options
-6. **Error handling**: When a query fails, explain the reason and suggest adjusting the keyword or filter criteria
-7. **Language reminder**: If a user provides a keyword in the wrong language for the target marketplace, remind them to use the marketplace's native language (English for US, German for DE, Japanese for JP)
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Consumer review and sentiment analysis within Amazon niche markets:
-
-| User Says | Scenario |
-|-----------|----------|
-| "What do customers say about XX" | Niche review topic lookup |
-| "Customer pain points for XX" | Negative review analysis |
-| "What features do buyers love in XX" | Positive review analysis |
-| "Review sentiment for XX niche" | Full sentiment breakdown |
-| "Consumer demand insights for XX" | Demand signal extraction from reviews |
-| "Common complaints about XX products" | Negative topic mining |
-| "What makes XX products popular" | Positive topic mining |
-| "Niche market review analysis" | General niche review exploration |
-
-**Not applicable** -- Needs beyond niche review analysis:
-- Individual ASIN review analysis (this tool works at the niche/market level)
-- Keyword search volume trends without review context (use ABA data tools instead)
-- Product listing optimization or copywriting
-- Advertising strategy and PPC management
-- Sales estimation or revenue forecasting
-
-**Boundary judgment**: When users say "market research" or "product opportunity", if their intent focuses on understanding consumer sentiment, review topics, and pain points within a niche market, this skill applies. If they are asking about search volume trends, pricing strategy, or sales data without review context, it does not apply.
-
-## 算力消耗规则
-
-消耗 9 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

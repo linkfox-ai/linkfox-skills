@@ -8,9 +8,7 @@ import json
 import os
 import sys
 import time
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
-from http.client import HTTPException
+from _aigc_runtime import call_api as _shared_call_api, request
 
 from aigc_model_config import load_catalog, parse_model_args, print_catalog, save_catalog
 
@@ -24,7 +22,7 @@ INITIAL_DELAY = 120
 
 
 # ===== linkfox_paths 内联块（自包含，无外部依赖，无 oss2）=====
-# 粘贴到各 aigc skill 的 py 脚本模块级，替代 `from linkfox_paths import ...`。
+# 会话路径与媒体下载在本模块内实现，无外部 linkfox_paths 依赖。
 # 提供：get_api_base / resolve_data_path / session_root / download_media
 #       / encode_nl / decode_nl / decode_nl_in_obj
 
@@ -34,7 +32,8 @@ import secrets as _lf_secrets
 import time as _lf_time
 import tempfile as _lf_tempfile
 
-_LF_SESSION_CACHE = {}
+# 与接口响应共用进程内会话，未设置 SESSION_ID 时数据和媒体也落在同一目录。
+_LF_SESSION_CACHE = _shared_call_api._SESSION_CACHE
 NL_PLACEHOLDER = "⏎"
 
 
@@ -161,14 +160,6 @@ def resolve_data_path(slug, ts, ext="json"):
     return out
 
 
-def session_root(ts=None):
-    """返回当前 session 目录。"""
-    if ts is None:
-        ts = _lf_time.time()
-    _, session_dir = _lf_ensure_session(ts)
-    return session_dir
-
-
 def download_media(url, slug, ts=None, ext=None, timeout=300):
     """下载 URL 到 <session>/media/<slug>-<ts>.<ext>，返回本地路径；失败返回 None。"""
     import sys as _lf_sys
@@ -239,18 +230,6 @@ def download_media(url, slug, ts=None, ext=None, timeout=300):
         return None
 
 
-def encode_nl(text):
-    if not isinstance(text, str):
-        return text
-    text = text.replace("\\r\\n", NL_PLACEHOLDER)
-    text = text.replace("\\n", NL_PLACEHOLDER)
-    text = text.replace("\\r", NL_PLACEHOLDER)
-    text = text.replace("\r\n", NL_PLACEHOLDER)
-    text = text.replace("\r", NL_PLACEHOLDER)
-    text = text.replace("\n", NL_PLACEHOLDER)
-    return text
-
-
 def decode_nl(text):
     if not isinstance(text, str):
         return text
@@ -273,93 +252,10 @@ def get_api_base():
     return _get_base()
 
 
-def get_api_key():
-    """
-获取配置在环境变量的API Key。
-如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-"""
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print("API Key 未配置", file=sys.stderr)
-        sys.exit(1)
-    return key
-
-
-def _response_error(code, message, raw=b"", status=None, headers=None):
-    headers = headers or {}
-    result = {"error": message, "errorCode": code, "responseBytes": len(raw)}
-    if status is not None:
-        result["httpStatus"] = status
-    content_type = headers.get("Content-Type")
-    request_id = headers.get("X-Request-Id") or headers.get("X-Kong-Request-Id")
-    if content_type:
-        result["contentType"] = content_type
-    if request_id:
-        result["requestId"] = request_id
-    if raw:
-        # Kept in the failure data file, never printed as a raw body to stdout.
-        result["details"] = raw.decode("utf-8", errors="replace")
-    return result
-
-
-def _decode_response(raw, status, headers):
-    if not raw.strip():
-        return _response_error("EMPTY_RESPONSE", f"Upstream returned an empty response (HTTP {status})", raw, status, headers)
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return _response_error("INVALID_ENCODING", f"Upstream response is not UTF-8 (HTTP {status})", raw, status, headers)
-    try:
-        result = json.loads(text)
-    except json.JSONDecodeError:
-        return _response_error("INVALID_JSON_RESPONSE", f"Upstream response is not JSON (HTTP {status})", raw, status, headers)
-    if not isinstance(result, dict):
-        return _response_error("INVALID_RESPONSE", "Upstream JSON response must be an object", raw, status, headers)
-    business_code = result.get("errcode", result.get("code"))
-    business_failed = business_code is not None and str(business_code) not in ("0", "200")
-    if result.get("error") or business_failed or not 200 <= status < 300:
-        message = result.get("error") or result.get("errmsg") or result.get("msg") or result.get("message") or f"HTTP {status}: upstream request failed"
-        result["error"] = message
-        result.setdefault("errorCode", str(business_code) if business_failed else "HTTP_ERROR")
-        metadata = _response_error(result["errorCode"], message, raw, status, headers)
-        for key in ("httpStatus", "contentType", "requestId", "responseBytes"):
-            if key in metadata:
-                result.setdefault(key, metadata[key])
-    return result
-
-
 def _post(url, params, timeout=150):
-    api_key = get_api_key()
-    data = json.dumps(params, ensure_ascii=False).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": os.environ.get("SESSION_ID", ""),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(url, data=data, headers=headers, method="POST")
-    status, response_headers = None, {}
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            status = response.status
-            response_headers = response.headers
-            return _decode_response(response.read(), status, response_headers)
-    except HTTPError as error:
-        try:
-            raw = error.read() if error.fp else b""
-            return _decode_response(raw, error.code, error.headers or {})
-        except (OSError, HTTPException) as read_error:
-            return _response_error("HTTP_READ_ERROR", "Could not read upstream error response", getattr(read_error, "partial", b""), error.code, error.headers)
-    except URLError as error:
-        code = "REQUEST_TIMEOUT" if isinstance(error.reason, TimeoutError) else "CONNECTION_ERROR"
-        return {"error": "Request timed out; submission outcome may be unknown" if code == "REQUEST_TIMEOUT" else f"Connection failed: {error.reason}", "errorCode": code}
-    except TimeoutError:
-        return _response_error("REQUEST_TIMEOUT", "Request timed out; submission outcome may be unknown", status=status, headers=response_headers)
-    except (OSError, HTTPException) as error:
-        return _response_error("HTTP_READ_ERROR", "Could not read upstream response; submission outcome may be unknown", getattr(error, "partial", b""), status, response_headers)
+    path = url[len(get_api_base()):]
+    operation = "create" if path == CREATE_PATH else "query"
+    return request(path, SLUG + "-" + operation, params, timeout=timeout)
 
 
 def create_task(params):
@@ -439,20 +335,6 @@ def _download_results(result):
         return []
 
 
-def summarize(result):
-    if not isinstance(result, dict):
-        print(json.dumps(result, ensure_ascii=False)[:500])
-        return
-    print(f"Top-level keys: {list(result.keys())}")
-    for k in ("errcode", "code", "msg", "costToken", "status"):
-        if k in result:
-            print(f"  {k}: {result[k]}")
-    result_list = result.get("resultList") or []
-    if result_list:
-        print(f"\nresultList (length={len(result_list)}):")
-        print(json.dumps(result_list[:3], indent=2, ensure_ascii=False))
-
-
 def _emit_failure(result, exit_code=1):
     result = dict(result)
     result.setdefault("status", "ERROR")
@@ -473,6 +355,11 @@ def _emit_failure(result, exit_code=1):
 
 
 def main():
+    if "--help" in sys.argv[1:] or "-h" in sys.argv[1:]:
+        print("用法：aigc_videogen.py '<JSON>' [--inline] [--no-cache]")
+        print("查询目录：--list-models [--allowed-models '<JSON 字符串数组>'] [--inline]")
+        print("生成保留本地媒体交付协议；--inline 不打印临时媒体 URL。原任务续查请调用 taskQuery。")
+        return
     try:
         list_models, allowed_models, inline, argv = parse_model_args(sys.argv[1:])
     except ValueError as error:
@@ -485,6 +372,7 @@ def main():
         print_catalog(catalog, out, inline=inline)
         return
 
+    argv = [arg for arg in argv if arg != "--no-cache"]
     if not argv:
         print("Usage: aigc_videogen.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
@@ -520,6 +408,13 @@ def main():
         result.setdefault("errorCode", "TASK_FAILED")
         _emit_failure(result, 2 if result.get("errorCode") == "POLL_TIMEOUT" else 1)
 
+    # 最终响应静默存档；面向用户仍只交付本地视频路径。
+    try:
+        out_path = _resolve_output_path(time.time())
+        with open(out_path, "w", encoding="utf-8") as handle:
+            json.dump(result, handle, ensure_ascii=False, indent=2)
+    except OSError as error:
+        print(f"无法保存最终响应：{error}", file=sys.stderr)
     media_paths = _download_results(result)
 
     if media_paths:

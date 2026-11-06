@@ -1,18 +1,18 @@
 # `GST_MTR_STOCK_TRANSFER_REPORT`
 
-> **分类**：15. Tax Reports  
-> **说明**：GST stock transfer report  
-> **可用范围**：Seller only
+> **分类**：15. 税务报告  
+> **说明**：GST 库存调拨报告  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Tax Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#gst-merchant-stock-transfer-report)（章节：**GST Merchant Stock Transfer Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [税务报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#gst-merchant-stock-transfer-report)（章节：**GST Merchant Stock Transfer Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
-- **受限报告**：未在相邻 Note 中写明，但 **Role** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
-- **Role**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
-- **Report output type**：Comma-separated flat file
-- **Store availability**：IN
-- **要点**：Provides details on inventory movements from Amazon Fulfillment Centers (FC removals or FC to FC transfers). The report contains transaction level details required for accounting and GST tax filing.
+- **受限报告**：未在相邻 Note 中写明，但 **角色** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
+- **角色**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
+- **输出格式**：逗号分隔的平面文件
+- **店铺范围**：IN
+- **要点**：提供亚马逊仓库库存移动（移除或仓间调拨）的明细，包含会计和 GST 申报所需交易级数据。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#gst-merchant-stock-transfer-report>
 

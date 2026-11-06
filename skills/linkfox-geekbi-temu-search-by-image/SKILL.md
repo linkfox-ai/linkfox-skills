@@ -1,142 +1,107 @@
 ---
 name: linkfox-geekbi-temu-search-by-image
-description: 基于商品图片在 Temu 公开市场检索视觉相似或同款商品，返回商品、销量、价格、评价、库存、供货价、店铺与品类数据。当用户明确提出 Temu 以图搜图、Temu 图搜同款、reverse image search on Temu、Temu visual product search，或提供图片/图片 URL 并明确希望在 Temu 查找相似商品时触发。未指定 Temu 的泛化图片找货请求不自动触发。本 skill 不用于跨平台找 1688 货源、图片识别或编辑、商品详情历史查询、关键词商品搜索。
+description: 基于商品图片在 Temu 公开市场查找视觉相似或同款商品，返回商品、销量、价格、评价、库存、供货价、店铺与品类数据。适用于用户明确要求 Temu 以图搜图、图搜同款或视觉竞品研究的场景；未指定 Temu 的泛化图片找货请求不自动触发。不用于跨平台找 1688 货源、图片识别或编辑、关键词商品搜索及单品详情历史查询。
 ---
 
-# Temu Visual Product Search
+# Temu 以图搜同款
 
-Find visually similar or matching products in Temu's public marketplace from one product image. Use the returned product, sales, pricing, review, inventory, shop, and category fields for visual competitor discovery and product research.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- The search input is one image URL. The gateway accepts a LinkFox OSS URL, not an arbitrary external image URL.
-- Upload local images with `scripts/upload_image.py`. For an external image URL, download it locally first, then upload it through the same helper.
-- The endpoint returns a non-paginated `items` list plus rendering metadata in `columns`. Result count depends on the source image: live tests have returned both 100 rows and a successful empty result, so never assume a fixed or non-zero count.
-- Rows are live third-party marketplace data. Fields may be absent, null, duplicated by `goodsId`, garbled, or internally inconsistent; preserve the source values and disclose material quality issues.
+用户提供商品图片或图片 URL，并明确希望在 Temu 查找外观相似商品、同款或视觉竞品时，使用本技能。
 
-## Data Fields
+**场景速查**
 
-| Group | Fields |
+| 用户表达 | 查询场景 |
 |---|---|
-| Identity | `goodsId`, `mallId`, `goodsName`, `goodsNameCn`, `goodsNameEn`, `brand`, `thumbnail` |
-| Category | `catIds`, `catItems` |
-| Demand | `sold`, `mallSold`, `daySold`, `weekSold`, `monthSold`, corresponding `*SoldRate` fields |
-| Revenue | `sales`, `daySales`, `weekSales`, `monthSales`, corresponding `*SalesRate` fields |
-| Price and supply | `minPrice`, `maxPrice`, `supplyPrice`, `minSupplyPrice`, `medianSupplyPrice`, `maxSupplyPrice` |
-| Quality and stock | `goodsScore`, `reviewNum`, `quantity`, `sku` |
-| Status and timing | `hostingMode`, `status`, `isAd`, `isCustom`, `isPresale`, `similarNum`, `onSaleTime`, `mallOpenTime`, `createTime`, `updateTime` |
+| 用这张图片找 Temu 同款 | 图片同款发现。 |
+| 看看 Temu 有没有外观相似竞品 | 视觉竞品研究。 |
+| 在 Temu 不用关键词，按图片选品 | 图片驱动的商品研究。 |
+| reverse image search this on Temu | Temu 图片检索。 |
 
-## Parameter Guide
+### 边界
 
-| Parameter | Required | Description |
-|---|---:|---|
-| `imageUrl` | Yes | LinkFox OSS image URL returned by `scripts/upload_image.py`; maximum 2048 characters; an arbitrary external URL is rejected |
-| `contentType` | No | Image MIME type, maximum 100 characters; only `image/jpeg`, `image/png`, `image/gif`, `image/webp`, or `image/bmp`; when supplied, it must match both the OSS response type and the actual image bytes |
+关键词、类目、销量或价格筛选使用 `linkfox-temu-product-query`；已知商品的详情或 30 天历史使用 `linkfox-geekbi-temu-product`；图片查找 1688 货源使用 `linkfox-1688-search-by-image`。图片识别、提示词提取、生成和编辑转交对应多模态能力。
 
-Do not add pagination, sorting, filtering, region, Base64, or keyword fields: they are not part of this endpoint's verified request contract.
-The downloaded image must be JPEG, PNG, GIF, WebP, or BMP and no larger than 10 MB.
+## 接口清单
 
-## 调用方式
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 获取图片上传预签名 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 获取上传地址，脚本再将图片 PUT 到 OSS。 |
+| Temu 图搜同款 | POST `/geekbi/temu/goodsImageSearch` | `scripts/geekbi_temu_goods_image_search.py` | 检索视觉相似或同款商品。 |
 
-- **API 端点**：`POST /geekbi/temu/goodsImageSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/geekbi_temu_goods_image_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：以图搜索消耗 150 算力/次；同一端点同一参数组合使用 24h 本地缓存，同一会话默认只调用一次。`--inline` 不绕过缓存；`--no-cache` 会跳过缓存读写并强制真实请求，可能再次消耗 150 算力。失败、空结果或瞬时错误不得自动重试，也不得自动换图片连续试探；需要再次付费搜索时先向用户说明会产生额外消耗。
+## 前置条件
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-geekbi-temu-search-by-image-<timestamp>.json`；`<cwd>` 为脚本执行时的当前工作目录，`<session>` 取自环境变量 `SESSION_ID`，未设置时自动生成。当前目录不可写时直接报错，不回退到用户目录或系统临时目录。
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层状态字段、常见业务计数、忽略 `columns` 后最大业务列表的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+先确认用户要在 Temu 搜索，并准备商品图片。支持的图片输入和上传约定见 `references/api.md`。脚本仅依赖 Python 标准库。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 图片准备与搜索流程
 
-## 解决认证和算力问题
+1. 已有本技能上传所得图片地址时直接复用；本地图片使用 `python scripts/upload_image.py <本地图片路径>` 上传，外部图片 URL 先下载到本地，再使用同一脚本上传。
+2. 一次上传后保存返回的公开图片地址与 MIME 类型；搜索时配套复用，不重复上传，也不打印预签名查询参数或 API Key。
+3. 运行 `python scripts/geekbi_temu_goods_image_search.py '<JSON 参数>' [--inline] [--no-cache]`，请求内容按 `references/api.md` 准备。
+4. 先读摘要，按需从完整响应文件抽取商品字段，依下方展示规则呈现结果。失败、空结果或瞬时错误不自动重试，也不自动换图片连续试探；需要再次搜索时先说明额外消耗，由用户决定是否继续。
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+## 执行方式
 
-### 异常情况
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：Temu 图搜每次消耗 150 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动换图片连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **未配置 API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY` 或兼容键 `LINKFOXAGENT_API_KEY`。
-- **响应 401 或 402 状态码**。
-- **响应提示算力或余额不足**：消息含“算力余额不足 / 计费不足 / 余额不足 / quota exceeded / insufficient balance / 套餐到期 / 需充值 / 请充值”或类似含义。
+### 输出策略
 
-## Local Image Upload
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-geekbi-temu-search-by-image-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。完整响应必须写入当前工作目录，不回退到用户目录或系统临时目录；当前目录不可写时报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、状态与常见计数（如 `errcode`、`total`）、忽略 `columns` 后最大业务列表的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-This endpoint requires an image hosted on LinkFox OSS. When the user provides a local file or an external image URL, obtain a local image file and run:
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-```bash
-python scripts/upload_image.py /path/to/product.jpg
-```
+## 执行规则
 
-The helper requests a presigned PUT URL from `${LINKFOX_TOOL_GATEWAY}/oss/file/presignedPut`, uploads a JPG/JPEG, PNG, GIF, WebP, or BMP image to that URL, removes the private query string, and prints JSON containing `url` and `contentType`. It uses only the Python standard library. Never print the presigned query string or the API key.
+### 算力消耗预估
 
-## Usage Examples
+Temu 图搜：150 算力 / 次；图片上传预签名：不消耗算力 （限时）。
 
-```bash
-# Upload once and capture the returned LinkFox OSS URL and MIME type
-LINKFOX_UPLOAD_RESULT="$(python scripts/upload_image.py ./product.jpg)"
-LINKFOX_OSS_URL="$(printf '%s' "${LINKFOX_UPLOAD_RESULT}" | jq -r '.url')"
-LINKFOX_CONTENT_TYPE="$(printf '%s' "${LINKFOX_UPLOAD_RESULT}" | jq -r '.contentType')"
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-# Search Temu with exactly that URL and its MIME type
-python scripts/geekbi_temu_goods_image_search.py "{\"imageUrl\":\"${LINKFOX_OSS_URL}\",\"contentType\":\"${LINKFOX_CONTENT_TYPE}\"}"
-```
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-User requests include “用这张图找 Temu 同款”, “找外观相似的 Temu 竞品”, and “search Temu products by this image”.
+### 解决认证和算力问题
 
-## Display Rules
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-1. Present a compact table with image, title, product ID, price, total/monthly sales, rating, reviews, hosting mode, and update time when available.
-2. Display `thumbnail` images inline when the client supports images.
-3. Treat `minPrice` and `maxPrice` as marketplace-local currency values; do not invent a currency when the response does not identify it. Supply-price fields are CNY only when the API reference explicitly says so.
-4. Prefer `goodsNameEn` when Chinese title fields are visibly garbled. Do not invent a repaired translation.
-5. Do not silently deduplicate repeated `goodsId` rows or repair contradictory values. Explain the issue, or group rows only when the user asks and state the grouping rule.
-6. Keep `columns` as rendering metadata; do not include all column definitions unless the user asks for schema details.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## Important Limitations
+### 约束与建议
 
-1. Only a LinkFox OSS `imageUrl` is accepted. Direct Amazon, CDN, data URI, Base64, or arbitrary public URLs are rejected. The image must be JPEG, PNG, GIF, WebP, or BMP and no larger than 10 MB.
-2. The verified endpoint exposes no pagination, sorting, filtering, keyword, or marketplace-region controls.
-3. Search results are live public-market data and may contain missing, null, duplicate, stale, garbled, or inconsistent fields.
-4. `sku` may be a JSON-encoded string rather than a parsed array; parse it only when needed and handle malformed content safely.
-5. This skill does not fetch a separate product-detail/history record. Use `linkfox-geekbi-temu-product` when the user explicitly needs details or history for a returned `goodsId`.
-6. Do not automatically retry with another image after failure or an empty result; another search may incur cost.
+- **上传输出例外**：上传脚本只输出公开图片地址等结果，不保存或打印包含私密签名的预签名响应；上传步骤与图搜的输出、缓存约定见 `references/api.md`。
+- **理解返回范围**：图搜返回商品列表与渲染元数据，不另行查询商品详情或历史。结果随源图变化，不保证固定条数或有匹配项。
+- **清晰展示数据**：用紧凑表格展示可用图片、标题、商品编号、价格、累计及月销量、评分、评论数、托管模式和更新时间。客户端支持时内联展示缩略图。
+- **保留币种依据**：价格与供货价的含义见接口参考；响应未标明币种时不要自行补造币种。
+- **保留数据原貌**：第三方实时数据可能缺失、为空、重复、陈旧、乱码或互相矛盾。保留原值并说明影响；中文标题明显乱码时优先展示英文标题，不编造修复译文。不静默去重或修正同一商品的重复行；仅在用户要求时分组并说明分组规则。
+- **按需解析与展示**：需要 SKU 信息时再解析可能的 JSON 字符串，解析失败时保留原值并说明。`columns` 仅为渲染元数据，除非用户要求查看结构，不展开全部列定义。大响应摘要忽略 `columns`，优先展示业务列表。
 
-## User Expression & Scenario Quick Reference
+## 使用示例
 
-**Applicable** -- visual discovery on Temu:
+### 用本地图片找 Temu 同款
 
-| User Says | Scenario |
-|---|---|
-| “用这张图片找 Temu 同款” | Find matching products |
-| “看看 Temu 上有没有外观相似竞品” | Visual competitor discovery |
-| “不用关键词，按图片选品” | Image-led product research |
-| “reverse image search this on Temu” | Visual product search |
+用户：用这张图片找 Temu 同款，并对比价格和月销量。
 
-**Not applicable** -- route elsewhere:
+先上传一次，保存输出的公开图片地址及 MIME 类型，再按接口参考准备图搜请求。搜索一次后展示返回商品及可用指标。
 
-- Keyword, category, sales, or price-filtered Temu search without an image: use `linkfox-temu-product-query`.
-- Temu product detail or 30-day history: use `linkfox-geekbi-temu-product`.
-- Finding 1688 suppliers from an image: use `linkfox-1688-search-by-image`.
-- Image recognition, prompt extraction, generation, or editing: use the relevant multimodal skill.
+### 用外部图片 URL 查找视觉竞品
 
-**Boundary judgment:** If the user provides an image and wants visually similar products specifically on Temu, use this skill. For text filters use `linkfox-temu-product-query`; for detailed records or history of known product IDs use `linkfox-geekbi-temu-product`.
+用户：用这个图片链接看看 Temu 上有没有相似商品。
 
-## 算力消耗规则
+将图片下载到本地并通过上传脚本获得可用地址，再执行图搜。结果为空时说明未返回匹配商品，不自动更换图片重试。
 
-以图搜索每次消耗 150 算力。
+## 使用反馈
 
-> 用户会因算力消耗而支付费用。需要重复搜索其他图片时，必须先说明会产生额外消耗并由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

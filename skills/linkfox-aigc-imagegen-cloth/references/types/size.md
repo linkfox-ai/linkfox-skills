@@ -36,7 +36,7 @@
 
 ```bash
 DATADIR=$(python <brand-gene根目录>/scripts/save_brand_gene.py --datadir)
-python scripts/build_textgen_params.py \
+python <本skill根目录>/scripts/build_textgen_params.py \
   --type SIZE_PRE_ANALYSIS \
   --image-urls '<步骤1的URL JSON数组>' \
   --out "$DATADIR/textgen_size_pre.json"
@@ -48,6 +48,8 @@ python <textgen根目录>/scripts/aigc_textgen.py --stdin --content-only \
 
 > **阶段1 运行时模板唯一来源**：`scripts/templates/size-pre-analysis.txt`，运营更新直接改该 .txt。
 
+**用户提供具体数据时**：阶段 1 只接收参考图，不会自动收到对话中的尺码表。取得 `size_analysis.txt` 后，将用户给定的尺码、衣长、身体数据及其单位逐项保留，合入该文件的【服装基础档案】，再交给阶段 2 的 `--analysis-file`；不能只放在 `point` 或 `imageDesc` 中（尺码模板不消费这两个值）。保留【温馨提示】，用户数据与推断冲突时以用户数据为准；未给实测值时沿用模型分析和模板补全，并说明生成数值仅供参考。
+
 ### 阶段 2：出图（②占位符直出，末尾追加敏感词规避指令）
 
 用 `scripts/build_imagegen_prompt.py` 按 `layout` 选模板 → 填 `{brandKey}`/`{language}`/`{analysis_result}`（`analysis_result` 用 `--analysis-file` 注入）→ 脚本自动在末尾追加敏感词规避指令 → 产出最终 imagegen prompt 参数文件。**不再调 textgen 改写。**
@@ -55,7 +57,7 @@ python <textgen根目录>/scripts/aigc_textgen.py --stdin --content-only \
 ```bash
 DATADIR=$(python <brand-gene根目录>/scripts/save_brand_gene.py --datadir)
 BRAND_GENE_FILE='<S1 save_brand_gene.py 落盘的 brandGeneJson 绝对路径>'
-python scripts/build_imagegen_prompt.py \
+python <本skill根目录>/scripts/build_imagegen_prompt.py \
   --type SIZE \
   --layout '<普通|三版>' \
   --image-urls '<步骤1的URL JSON数组>' \
@@ -91,4 +93,4 @@ python scripts/build_imagegen_prompt.py \
 - `layout` 取值在套图层用语为 `普通` / `三版`，后端按 `request.getType()=="三栏"` 判定走三联画模板——`三版` 与后端 `三栏` 为同一含义，传值需对齐，否则会落到 `普通`（Common）模板。
 - 用户未提供尺码数据时由模型按行业逻辑"智能生成"尺码表，数值仅供参考、非真实测量；用户提供了具体数据时模板会直接采用、严禁编造。
 - 模特恒定为符合目标受众的自然面孔（模板内置规则），不随 `salesRegion` 变化。
-- **敏感词规避降级**：阶段 2 不经文本模型改写，已降级为「在送 imagegen 的最终 prompt 末尾追加规避指令、由出图模型自审」。代价：无确定性词库兜底，词库级违禁 / 侵权词可能漏过，合规仍需上游或人工把关。
+- **敏感词规避方式**：阶段 2 不经文本模型改写，而是在送 imagegen 的最终 prompt 末尾追加规避指令、由出图模型自审。无确定性词库兜底，词库级违禁 / 侵权词可能漏过，合规仍需上游或人工把关。

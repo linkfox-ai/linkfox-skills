@@ -1,20 +1,20 @@
 # `GET_GST_STR_ADHOC`
 
-> **分类**：15. Tax Reports  
-> **说明**：GST Adhoc report  
-> **可用范围**：Seller only
+> **分类**：15. 税务报告  
+> **说明**：GST 临时报表  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Tax Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#on-demand-stock-transfer-report)（章节：**On Demand Stock Transfer Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [税务报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#on-demand-stock-transfer-report)（章节：**On Demand Stock Transfer Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Comma-separated flat file
-- **Store availability**：IN
-- **User type**：FBA sellers who use Amazon systems to make inventory movements from Amazon Fulfillment Centers (FC removals or FC to FC transfers). Required for filing tax returns by sellers and vendors.
-- **要点**：Provides transaction level information like invoice value, invoice number, tax rate, and Goods and Services Tax Identification Numbers (GSTINs). All supplies that go through interstate movement transactions are considered taxable supplies. These supplies are liable for a Goods and Services Tax (GST) at the origin location and GST credit at the destination location.
+- **角色**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：逗号分隔的平面文件
+- **店铺范围**：IN
+- **用户类型**：使用 Amazon 系统进行仓库库存移动（移除或仓间调拨）的 FBA 卖家；卖家与 Vendor 申报税款需要此数据。
+- **要点**：提供交易级发票金额、发票号、税率和 GSTIN。跨邦移动交易均视为应税供应，在始发地承担 GST，在目的地获得 GST 抵扣。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#on-demand-stock-transfer-report>
 

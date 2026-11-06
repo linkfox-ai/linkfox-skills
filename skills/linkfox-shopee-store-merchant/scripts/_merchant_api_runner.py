@@ -1,4 +1,4 @@
-"""Run any Shopee Merchant module API via developerProxy."""
+"""保留 Shopee Merchant 参数映射、依赖检测和解析结果。"""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from _shopee_merchant_common import (
     ensure_auth_skill_available,
     merge_shopee_body,
     qs_add,
+    is_normal_response,
 )
 
 
@@ -81,7 +82,7 @@ def _build_post_body(params: dict, spec: dict) -> str:
     return json.dumps(body_obj, ensure_ascii=False, separators=(",", ":"))
 
 
-def run_merchant_api(api_name: str, params: dict, caller: Optional[str] = None) -> dict:
+def run_merchant_api(api_name: str, params: dict, caller: Optional[str] = None, *, emit_output=False, inline=False) -> dict:
     if api_name not in MERCHANT_ENDPOINTS:
         print(f"Unknown api: {api_name}. Valid: {', '.join(sorted(MERCHANT_ENDPOINTS))}", file=sys.stderr)
         sys.exit(1)
@@ -114,25 +115,50 @@ def run_merchant_api(api_name: str, params: dict, caller: Optional[str] = None) 
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
-        path,
-        method,
-        shop_id=shop_id,
-        merchant_id=merchant_id,
-        query_string=query_string or None,
-        body=body,
-        content_type=content_type,
+    def build_result(status, proxy):
+        out: dict = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = json.loads(body) if body else None
+        if is_normal_response(status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
+        path, method, shop_id=shop_id, merchant_id=merchant_id,
+        query_string=query_string or None, body=body, content_type=content_type,
+        transform=build_result, operation=api_name,
+        emit_output=emit_output, inline=inline,
     )
 
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
 
-    merge_shopee_body(out, proxy, response_key)
-    return out
+def merchant_cli(api_name=None, caller=None):
+    """支持 JSON CLI、内联输出及无缓存选项。"""
+    import argparse
+    from _merchant_endpoints import list_api_names
+
+    parser = argparse.ArgumentParser(description="Shopee 商户信息与资源查询")
+    parser.add_argument("params", help="JSON 参数；通用入口须包含 api 字段")
+    parser.add_argument("--inline", action="store_true", help="完整打印响应并保存文件")
+    parser.add_argument("--no-cache", action="store_true", help="本技能始终禁用响应缓存")
+    if len(sys.argv) < 2:
+        parser.print_usage(sys.stderr)
+        raise SystemExit(1)
+    args = parser.parse_args()
+    try:
+        params = json.loads(args.params)
+    except json.JSONDecodeError as exc:
+        parser.error(f"JSON 参数格式错误：{exc}")
+    if not isinstance(params, dict):
+        parser.error("JSON 参数必须为对象")
+    operation = api_name or params.get("api")
+    if not operation:
+        print(f"Missing required field: api. Available: {', '.join(list_api_names())}", file=sys.stderr)
+        raise SystemExit(1)
+    run_merchant_api(str(operation), params, caller, emit_output=True, inline=args.inline)

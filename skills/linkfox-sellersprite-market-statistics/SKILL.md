@@ -1,87 +1,95 @@
 ---
 name: linkfox-sellersprite-market-statistics
-description: 使用卖家精灵选市场统计能力，按类目节点输出市场统计看板，包含头部Listing平均评分、均价、BSR、销量、卖家数量与新品相关指标，适合快速判断某类目市场质量与竞争格局。当用户提到类目市场统计、选市场看板、市场基础盘评估、节点市场质量、头部商品统计、SellerSprite market statistics、category statistics时触发此技能。即使用户未明确提及"卖家精灵"，只要需求是按类目节点查看聚合统计结果，也应触发此技能。
+description: 按亚马逊类目节点获取卖家精灵市场聚合统计，查看商品、卖家和品牌规模，市场整体及头部 Listing 的销量、价格、评分、BSR 和新品指标，用于类目市场质量、竞争格局和新品机会评估。用户希望查看类目市场统计、选市场看板或节点基础盘时使用，无需明确提及卖家精灵；不适用于完整商品明细、关键词搜索或单个 ASIN 详情查询。
 ---
 
-# SellerSprite Market Statistics
+# 卖家精灵类目市场统计
 
-This skill helps fetch node-level market statistics for Amazon categories via SellerSprite.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- **节点统计**：对指定类目节点做聚合统计，不返回完整商品明细。
-- **TopN 口径**：`topN` 决定头部商品统计样本数量（默认 10）。
-- **新品定义**：`newProduct` 指定“新品”按最近 N 个月定义（默认 6）。
+查看指定亚马逊类目节点的聚合统计，判断市场质量与竞争格局。
+用户已有类目节点路径，或能够先完成类目定位，希望比较市场整体、头部 Listing 和新品表现时，使用本技能。
 
-## 调用方式
+**场景速查**
 
-- **API 端点**：`POST /sellersprite/market/statistics`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sellersprite_market_statistics.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 看看这个类目的市场基础盘 | 查看商品、卖家、品牌规模及整体销量、价格、评分。 |
+| 头部商品的销量和评论门槛如何 | 对照整体与头部 Listing 的销量、评分数和 BSR。 |
+| 新品在这个类目表现怎么样 | 查看新品数量、占比、销量及评分数分布。 |
+| 我想看某个月的类目统计 | 按指定统计时间查看市场快照。 |
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sellersprite-market-statistics-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 前置条件
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+**先确定站点和类目节点路径**：用户未提供 `nodeIdPath` 时，引导其提供节点路径或先完成类目定位，不能把类目名称直接当作节点路径。完整要求见 `references/api.md`。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 查询流程
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+1. 确认用户要研究的站点、类目与统计时间，补齐节点路径；按用户需求确定头部和新品的统计口径，参数定义见 `references/api.md`。
+2. 构造一次查询并优先复用同参数缓存，按接口文档调用市场统计。
+3. 从保存的响应提取统计数据，先展示关键总览，再展示头部、新品等扩展指标，并说明统计口径。
+4. 失败或空结果时先解释现有响应，按成本约束决定后续查询，不自动连续试探。
 
-## Parameters
+## 执行方式
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| marketplace | string | 是 | 站点编码，默认 `US` |
-| nodeIdPath | string | 是 | 节点ID路径，如 `1064954:1069242:...` |
-| month | string | 否 | `nearly` 或 `yyyyMM` |
-| topN | integer | 否 | 头部样本数，默认 10 |
-| newProduct | integer | 否 | 新品定义（月），默认 6 |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sellersprite_market_statistics.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 15 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## Usage Example
+### 输出策略
 
-```json
-{
-  "marketplace": "US",
-  "nodeIdPath": "172282:281407",
-  "month": "nearly",
-  "topN": 10,
-  "newProduct": 6
-}
-```
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sellersprite-market-statistics-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- UTF-8 序列化响应不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
+- UTF-8 序列化响应超过 8000 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Display Rules
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-1. 明确展示统计口径：`topN`、`newProduct`、时间范围。
-2. 先输出关键总览指标，再输出扩展字段。
-3. 若用户未给 `nodeIdPath`，先引导用户提供节点路径或先做类目定位。
+## 执行规则
 
-## Important Limitations
+### 算力消耗预估
 
-- 必填参数：`marketplace`、`nodeIdPath`
-- `nodeIdPath` 必须为合法节点路径
-- 月份查询受第三方历史范围限制
+15 算力 / 次
 
-## 算力消耗规则
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-消耗 15 算力。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+### 解决认证和算力问题
 
-**Feedback:**
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 约束与建议
 
+- **区分聚合与明细**：节点统计是指定类目的聚合结果，不代表完整商品明细列表。
+- **理解统计口径**：`topN` 决定头部 Listing 的统计样本数量，`newProduct` 决定新品按最近多少个月界定；`hl*` 为头部指标。默认值和取值限制见 `references/api.md`。
+- **明确展示口径**：展示本次站点、类目、时间范围、`topN` 和 `newProduct`，避免将不同样本或时间的指标直接混用。
+- **先总览后展开**：先列规模、均价、销量、评分和 BSR，再补充头部、新品、上架时间及其他可用字段。
+
+## 使用示例
+
+### 查看类目市场质量
+
+用户：分析这个美国站类目的市场质量和竞争情况。
+
+确认类目节点和统计口径后查询一次，展示商品与卖家规模、均价、销量、评分和 BSR，再对照头部 Listing 指标。
+
+### 查看新品表现
+
+用户：这个类目的新品表现如何？
+
+确认新品定义和统计时间，查询对应节点，展示新品数量、占比、均销量和评分数范围，并明确这些指标所属口径。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
+---
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

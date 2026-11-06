@@ -1,132 +1,119 @@
 ---
 name: linkfox-chuhaijiang-tiktok-ads
-description: 使用出海匠（Chuhaijiang）研究 TikTok 公开广告与创意素材，支持广告搜索、广告详情与关联商品，以及创意搜索、详情、脚本分镜分析和向量数据。用户点名出海匠或 Chuhaijiang 时触发；未指定数据源时，仅在需要广告到商品关系、创意结构拆解、AIGC/赞助/带货素材筛选时触发。通用 TikTok 带货视频榜单或详情使用 linkfox-kalodata-tiktok-video，广告账户与投放管理使用对应的 TikTok Ads 管理工具；点名其他数据源时不触发。
+description: 使用出海匠（Chuhaijiang）研究 TikTok 公开广告与创意素材，支持广告发现、广告详情与关联商品，以及创意筛选、详情、脚本分镜拆解和向量数据。用户点名出海匠或 Chuhaijiang 时适用；未指定数据源时，仅在需要广告到商品关系、创意结构拆解、AIGC、赞助或带货素材筛选时使用。不适用于广告账户与投放管理、通用带货视频榜单、素材下载或生成；点名其他数据源时不触发。
 ---
 
-# TikTok Ad & Creative Intelligence
+# 出海匠 TikTok 广告与创意情报
 
-Use this skill to discover public TikTok ads and creative assets, inspect one result, connect an ad to promoted products, or analyze a creative's content structure.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- This is public-market intelligence, not the user's private TikTok Ads account or campaign manager.
-- All five endpoints require a lowercase marketplace code: `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`.
-- Search and related-product endpoints return at most 10 records per page.
-- Use the top-level item `id` returned by ad search with ad detail/related-products, and the `id` returned by creative search with creative detail. Do not substitute `video_id`, `product_id`, or `advertiser_id`.
-- Ad detail accepts optional `include=core`. Creative detail accepts `include=analysis`, `include=embedding`, or both as a comma-separated string.
-- Monetary metrics are commonly objects such as `{ "unit": "US", "value": 31 }`. Preserve both fields and inspect runtime types before calculating.
-- Each endpoint is billed independently. Do not make an unrequested detail or relationship call after search, and do not repeat a failed/empty search with altered filters without user approval.
+研究公开市场广告、推广商品关系和创意内容结构，按用户问题选择广告或创意能力。
 
-## Data Fields
+**场景速查**
 
-| Path or field | Meaning |
+| 用户表达 | 查询场景 |
 |---|---|
-| `data.total_count` | Total records matched by the endpoint |
-| `data.items` | Primary ad, creative, or related-product records |
-| `data.core.items` | Optional ad performance metrics requested with `include=core` |
-| `data.analysis.items` | Optional creative hook/formula/angle, transcript, and storyboard analysis |
-| `data.embedding.items` | Optional extracted content, matched tags, and embedding vector |
-| `id` | Endpoint lookup ID for the matching detail/relationship calls |
-| `ad_title`, `advertiser_name`, `ad_url`, `web_url` | Ad identity and public links |
-| `video_play_count`, `video_like_count`, `video_engagement_rate` | Creative reach and engagement |
-| `total_gmv`, `video_30d_gmv`, `video_total_gmv` | Returned commerce metrics; usually unit/value objects |
-| `product_id`, `product_name` / `product_title` | Promoted product identity and title |
+| 用出海匠找美国 TikTok 美妆广告 | 广告发现：筛选并展示广告。 |
+| 看这个广告详情和它关联的商品 | 广告研究：读取广告资料和推广商品关系。 |
+| 找带货素材、AIGC 创意或赞助内容 | 创意筛选：发现符合条件的素材。 |
+| 拆这个创意的 hook、脚本和分镜 | 内容拆解：总结创意结构与分镜。 |
+| 取素材标签或 embedding 做相似度分析 | 机器处理：按明确的下游用途提取数据。 |
 
-Read `references/api.md` before calling. It contains the complete camelCase request fields and production-validated response paths for each endpoint.
+### 边界
 
-## Endpoints
+本技能只研究公开广告与素材。商品研究使用 `linkfox-chuhaijiang-tiktok-product`；不涉及广告或创意分析的公开视频搜索、详情使用 `linkfox-chuhaijiang-tiktok-video` 或 `linkfox-kalodata-tiktok-video`。私人账户报表、花费归因、受众、像素、事件配置及广告创建、编辑、投放、暂停、预算与出价管理应交给相应 TikTok Ads 管理工具。
 
-| Intent | Endpoint | Script | Points/call |
-|---|---|---|---:|
-| Filter and discover ads | `/chuhaijiang/ad-creative/ads/search` | `chuhaijiang_ad_search.py` | 18 |
-| Inspect one ad | `/chuhaijiang/ad-creative/ads/detail` | `chuhaijiang_ad_detail.py` | 9 |
-| Find products promoted by an ad | `/chuhaijiang/ad-creative/ads/related-products` | `chuhaijiang_ad_related_products.py` | 18 |
-| Filter and discover creative assets | `/chuhaijiang/ad-creative/creatives/search` | `chuhaijiang_creative_search.py` | 18 |
-| Inspect and analyze one creative | `/chuhaijiang/ad-creative/creatives/detail` | `chuhaijiang_creative_detail.py` | 9 |
+## 接口清单
 
-Call only the endpoint required by the user's current question. Search first only when the user has not already supplied a valid entity ID.
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 广告搜索 | POST `/chuhaijiang/ad-creative/ads/search` | `scripts/chuhaijiang_ad_search.py` | 筛选并发现公开广告。 |
+| 广告详情 | POST `/chuhaijiang/ad-creative/ads/detail` | `scripts/chuhaijiang_ad_detail.py` | 查看广告基础资料和可选表现指标。 |
+| 广告关联商品 | POST `/chuhaijiang/ad-creative/ads/related-products` | `scripts/chuhaijiang_ad_related_products.py` | 查看广告推广的商品与销售关系。 |
+| 创意搜索 | POST `/chuhaijiang/ad-creative/creatives/search` | `scripts/chuhaijiang_creative_search.py` | 筛选带货、赞助或 AIGC 创意素材。 |
+| 创意详情 | POST `/chuhaijiang/ad-creative/creatives/detail` | `scripts/chuhaijiang_creative_detail.py` | 查看素材并按需拆解脚本、分镜或提取向量。 |
 
-## Parameter Guide
+## 前置条件
 
-- `country`: required lowercase marketplace code.
-- `page`: optional, starts at 1. `pageSize`: optional, maximum 10 on search and related-products.
-- Ad search supports `keyword`, `category`, `adType`, `excludeSparkAds`, view/GMV/day ranges, and `sort` (`field:asc` or `field:desc`).
-- Ad detail requires `id`; request `include=core` only when performance metrics are needed.
-- Related products requires the ad `id` and supports pagination.
-- Creative search supports `keyword`, `category`, `hasProduct`, `isSponsored`, `isAigc`, and `sort`.
-- Creative detail requires the creative `id`. Use `analysis` for content-structure fields and `embedding` only when extracted content, tags, or vector data are needed.
-- Use camelCase request names shown in `references/api.md`; do not send upstream snake_case names.
+确认目标市场和当前研究对象；用户已有有效对象编号时可直接查询，不额外搜索。调用前阅读 `references/api.md` 的相应接口定义。
 
-## 调用方式
+## 查询流程
 
-- **API 端点**：5 个 LinkFox 网关能力均使用 POST；完整请求地址、参数、响应和错误码见 `references/api.md`。
-- **Python 脚本**：`python scripts/<entry>.py '<JSON 参数>' [--inline]`
-- **成本约束**：业务入口脚本默认只缓存成功响应 24 小时，业务成功的空结果也可缓存；缓存按当前工作目录、调用身份、网关、端点和完整请求参数隔离。相同组合命中时输出 `Cache hit`，不会发起新的付费请求。HTTP 或业务失败不缓存；`--inline` 不绕过缓存；`--no-cache` 会强制真实请求并可能再次消耗算力，仅在用户明确同意额外消耗或调试时使用。
+1. 根据用户问题选择广告发现、广告详情、商品关系、创意发现或创意拆解，只执行当前问题所需操作。
+2. 用户未提供有效编号时先搜索，再从本次结果选择匹配对象；详情与关联查询的标识选择规则见 `references/api.md`。
+3. 需要广告表现、内容结构或下游相似度输入时，按用途选择扩展数据；不在搜索后附带用户未要求的详情或关系调用。
+4. 展示已有结果、查询范围及局限；失败或空结果后，不经用户同意自动改过滤条件、翻页或重复付费查询。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-ads-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数、主业务列表长度和前 3 条样本；优先 `data.items` / 业务 `*.items`，跳过 embedding/vector）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：接口按每次 9 或 18 算力计费，具体见“算力消耗预估”。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改过滤条件连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 解决认证和算力问题
+### 输出策略
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-ads-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、已返回的常见状态与计数字段，以及主业务列表的长度和前 3 条样本；优先选择 `data.items` 或业务 `*.items`，跳过 embedding/vector。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-- `LINKFOX_AGENT_API_KEY` 与 `LINKFOXAGENT_API_KEY` 均未配置。
-- 网关返回 401 或 402。
-- 响应提示算力、余额、quota、套餐到期或充值问题。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## Usage Examples
+## 执行规则
 
-```bash
-python scripts/chuhaijiang_ad_search.py '{"country":"us","keyword":"beauty","page":1,"pageSize":3}'
-python scripts/chuhaijiang_ad_detail.py '{"country":"us","id":"7658119807128046879","include":"core"}'
-python scripts/chuhaijiang_ad_related_products.py '{"country":"us","id":"7658119807128046879","page":1,"pageSize":3}'
-python scripts/chuhaijiang_creative_search.py '{"country":"us","hasProduct":true,"page":1,"pageSize":3}'
-python scripts/chuhaijiang_creative_detail.py '{"country":"us","id":"7668708053428047118","include":"analysis,embedding"}'
-```
+### 算力消耗预估
 
-The IDs above were valid during release validation but may age. In user workflows, prefer IDs from the current search response.
+广告搜索、广告关联商品和创意搜索：18 算力 / 次；广告详情和创意详情：9 算力 / 次。每个接口独立计费，高频调用或跨接口钻取前说明预计次数及总算力。
 
-## Display Rules
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-1. State the marketplace, filters, current page, and `data.total_count` for searches.
-2. For ads, show title, advertiser, public links, duration, active-day count, views/engagement, GMV/ROAS, product title, and the lookup `id` when available.
-3. For related products, show product title/images, price range, rating, commission, total and 30-day sales/GMV, status, and product ID.
-4. For creatives, show description, author, launch date, duration, views/likes/comments/shares/saves, engagement, product relationship, GMV/GPM, AIGC flag, and lookup `id` when available.
-5. When `analysis` is requested, summarize the hook, formula, angle, structured transcript, and storyboards; do not dump a raw embedding vector into chat.
-6. Preserve returned units, public URLs, identifiers, booleans, nulls, and unknown fields. Never expose API keys or cache-key fingerprints.
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## Important Limitations
+### 解决认证和算力问题
 
-1. Data describes public market ads and creative assets; it is not private spend, attribution, audience, pixel, campaign, or account data.
-2. This skill cannot create, edit, launch, pause, or optimize ad campaigns and cannot change budgets or bids.
-3. `adType` and `category` values are upstream classifications; do not invent enum labels when the user has not supplied a known value.
-4. Results and performance metrics change over time. Report the request date and filters with any analysis.
-5. Embeddings are machine-oriented vectors. Retrieve them only for an explicit downstream similarity/ML need.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## User Expression & Scenario Quick Reference
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**Applicable**:
+### 约束与建议
 
-- **广告发现与商品关系**：“用出海匠找美国 TikTok 美妆广告”，“看看这个广告详情和它关联的商品”。
-- **创意筛选**：“筛 TikTok 带货素材”，“找 AIGC 创意”，“看赞助内容素材”。
-- **结构拆解**：“用 Chuhaijiang 拆这个创意的 hook、脚本和分镜”，“取素材标签或 embedding 做相似度分析”。
+- **说明数据范围**：数据来自公开市场，不能作为私人账户花费、归因或广告管理数据；指标会变化，分析注明请求日期、市场、过滤条件和当前页，并区分总匹配量与本页记录数。
+- **广告展示**：优先展示标题、广告主、公开链接、时长、投放天数、播放与互动、GMV、ROAS、推广商品和查询编号；缺失项不补造。
+- **关联商品展示**：展示商品名称、图片、价格区间、评分、佣金、累计与近 30 天销量和 GMV、状态及商品编号。
+- **创意展示**：展示文案、作者、发布日期、时长、播放、点赞、评论、分享、收藏、互动率、关联商品、GMV、GPM、AIGC 标记和查询编号。
+- **内容拆解**：总结 hook、formula、angle、结构化转录和分镜；向量只用于用户明确要求的相似度或机器学习任务，不在聊天中倾倒完整向量。
+- **保留原始语义**：保留单位、公开 URL、标识符、布尔值、null 和未知字段；金额计算先检查运行时类型。来源前缀与嵌套数据解释见接口文档，不擅自合并广告和商品字段。
+- **缓存和摘要**：业务封装提供成功响应缓存及业务记录优先摘要，避免把向量当成主列表；具体缓存隔离、CLI 和落盘约定见 `references/api.md`。不向用户披露密钥或缓存身份指纹。
+- **反馈授权与脱敏**：提交反馈前须由用户明确要求或明确授权；先概括并脱敏，不发送原始用户消息、无关上下文、手机号或凭证。
 
-**Adjacent**: TikTok 商品研究 belongs to `linkfox-chuhaijiang-tiktok-product`; public video search/detail without an ad-creative requirement belongs to `linkfox-chuhaijiang-tiktok-video` or `linkfox-kalodata-tiktok-video`; campaign/account operations belong to a TikTok Ads management integration.
+## 使用示例
 
-**Not applicable**: campaign creation, budget/bid changes, audience targeting, pixel/events setup, private-account reporting, media downloading, or image/video generation.
+### 搜索广告
 
-## 算力消耗规则
+用户：用出海匠找美国 TikTok 美妆广告。
 
-按端点分别计费：广告详情和创意详情 9 算力/次；广告搜索、广告关联商品和创意搜索 18 算力/次。
+按指定市场和关键词检索，展示匹配范围与广告指标；不附带详情或商品查询。
 
-> 用户会因算力消耗而支付费用。高频调用或多端点钻取前，先说明预计调用次数与算力消耗。
+### 查看广告与推广商品
 
-**Feedback:** Use the Feedback API in `references/api.md` only when the user explicitly asks to submit feedback or explicitly authorizes submission after an issue is identified. Summarize and sanitize the content; never include API keys, raw user messages, or unrelated task context.
+用户：看这个广告的表现和关联商品。
+
+确认广告对象，按需读取表现与商品关系，区分广告指标和关联商品销售数据。
+
+### 拆解创意
+
+用户：拆这个创意的开头、脚本和分镜。
+
+读取对应创意的内容分析，总结结构；仅在用户另有明确机器处理用途时提取向量。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

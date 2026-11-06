@@ -14,30 +14,30 @@ dateRange:
   dataRetentionDays: 60
 ---
 
-# SB Search Term
+# SB 搜索词
 
-Search term reports contain search term performance metrics broken down by targeting expressions and keywords. Note that search term reports only include impressions that resulted in at least one ad click. Use the keywordType filter to include either targeting expressions or keywords in your report.
+搜索词报告按定向表达式和关键词拆分搜索词效果。只包含产生至少一次广告点击的展示；可用 `keywordType` 筛选定向表达式或关键词。
 
-> **Note**
-> If a placement does not have a search keyword associated with it on a product detail page, the search term in the report will be an asterisk `*`.
+> **说明**
+> 商品详情页广告位没有关联搜索关键词时，报告中的搜索词为星号 `*`。
 
-> **Note**
-> This report is currently available in preview. During the preview period, data related to Sponsored Brands campaigns with flag isMultiAdGroupsEnabled set to FALSE won't be available. Once version 3 reporting supports all Sponsored Brands campaigns, we will announce general availability in the release notes.
+> **说明**
+> 报告预览期不提供 `isMultiAdGroupsEnabled=False` 的 SB 活动数据。v3 报告支持全部 SB 活动的正式可用状态以 Amazon 版本说明为准，不能假定此限制已解除。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sbSearchTerm |
-| Maximum date range | 31 days |
-| Data retention | 60 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 60 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | searchTerm |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | adGroupId |
 | adGroupName |
@@ -83,55 +83,57 @@ Search term reports contain search term performance metrics broken down by targe
 | viewableImpressions |
 | viewClickThroughRate |
 
-## Group by searchTerm
+## 分组：searchTerm
 
-**Additional metrics**: adKeywordStatus
+附加指标：
 
-**Filters**:
-- keywordType (values: BROAD, PHRASE, EXACT, TARGETING_EXPRESSION, TARGETING_EXPRESSION_PREDEFINED)
+| 字段 |
+|---|
+| adKeywordStatus |
 
-## Sample call
+**筛选**：
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxx' \
---data '{
-    "name": "SP search terms report 9/5-9/10",
-    "startDate": "2023-09-05",
-    "endDate": "2023-09-10",
-    "configuration": {
-        "adProduct": "SPONSORED_BRANDS",
-        "groupBy": [
-            "searchTerm"
-        ],
-        "columns": [
-            "impressions",
-            "clicks",
-            "cost",
-            "campaignId",
-            "adGroupId",
-            "startDate",
-            "endDate",
-            "matchType",
-            "keywordId",
-            "searchTerm"
-        ],
-        "filters": [
-            {
-                "field": "keywordType",
-                "values": [
-                    "BROAD",
-                    "PHRASE",
-                    "EXACT"
-                ]
-            }
-        ],
-        "reportTypeId": "sbSearchTerm",
-        "timeUnit": "SUMMARY",
-        "format": "GZIP_JSON"
-    }
-}'
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| keywordType | array[string] | BROAD, PHRASE, EXACT, TARGETING_EXPRESSION, TARGETING_EXPRESSION_PREDEFINED |
+
+## 配置示例
+
+```json
+{
+  "name": "SP search terms report 9/5-9/10",
+  "startDate": "2023-09-05",
+  "endDate": "2023-09-10",
+  "configuration": {
+    "adProduct": "SPONSORED_BRANDS",
+    "groupBy": [
+      "searchTerm"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "adGroupId",
+      "startDate",
+      "endDate",
+      "matchType",
+      "keywordId",
+      "searchTerm"
+    ],
+    "filters": [
+      {
+        "field": "keywordType",
+        "values": [
+          "BROAD",
+          "PHRASE",
+          "EXACT"
+        ]
+      }
+    ],
+    "reportTypeId": "sbSearchTerm",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

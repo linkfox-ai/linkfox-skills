@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Amazon Ads Reporting API v1 workflow for SP insight reports.
+"""SP 洞察报告的账号映射、创建、轮询、CSV 下载及数据处理。
 
-The entry script owns the LinkFox gateway transport, cache, and result landing.
-This module only builds the documented Ads v1 requests, polls the asynchronous
-report, downloads completed report parts, and returns a JSON-serializable result.
+入口负责业务缓存及落盘，经公共调用器执行 LinkFox 请求；本模块仅直接下载
+Amazon 返回的非 LinkFox CSV 素材。
 """
 
 import gzip
@@ -59,6 +58,8 @@ def _redact_presigned_urls(node):
         return redacted
     if isinstance(node, list):
         return [_redact_presigned_urls(value) for value in node]
+    if isinstance(node, str) and node.lower().startswith(("http://", "https://")):
+        return "[redacted]"
     return node
 
 
@@ -115,7 +116,7 @@ def _reject_unknown_params(params, kind):
 
 def _positive_int(params, key, default, minimum, maximum):
     value = params.get(key, default)
-    if isinstance(value, bool):
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
         raise WorkflowError("%s must be an integer" % key)
     try:
         value = int(value)
@@ -128,7 +129,10 @@ def _positive_int(params, key, default, minimum, maximum):
 
 def _parse_date(value, key):
     try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
+        parsed = datetime.strptime(value, "%Y-%m-%d").date()
+        if parsed.isoformat() != value:
+            raise ValueError("日期必须补齐年月日位数")
+        return parsed
     except (TypeError, ValueError):
         raise WorkflowError("%s must use YYYY-MM-DD" % key)
 
@@ -140,8 +144,11 @@ def _validate_base_params(params, poll_only):
     if isinstance(profile_id, bool) or not isinstance(profile_id, (int, str)):
         raise WorkflowError("Missing or invalid parameter: profileId")
     profile_id = str(profile_id).strip()
-    if not profile_id.isdigit() or int(profile_id) <= 0:
-        raise WorkflowError("profileId must be a positive numeric identifier")
+    if (not profile_id.isascii() or not profile_id.isdecimal()
+            or len(profile_id.lstrip('0')) > 19
+            or not 0 < int(profile_id.lstrip('0') or '0') <= 9223372036854775807):
+        raise WorkflowError("profileId 必须为Long范围内的正整数或数字字符串")
+    profile_id = profile_id.lstrip('0') or '0'
     region = _required_string(params, "region").upper()
     if region not in VALID_REGIONS:
         raise WorkflowError("region must be one of NA, EU, FE")
@@ -405,6 +412,7 @@ def _find_report(body, report_id=None):
         for candidate in candidates:
             if str(candidate.get("reportId", "")) == str(report_id):
                 return candidate
+        return None
     for candidate in candidates:
         if candidate.get("reportId"):
             return candidate
@@ -513,14 +521,14 @@ def _download_completed_parts(report, resolve_data_path, skill_slug):
     parts = report.get("completedReportParts") or report.get("reportParts") or []
     if not isinstance(parts, list):
         raise WorkflowError("Completed report returned invalid completedReportParts", report)
+    report_format = str(report.get("format", "CSV")).upper()
+    if report_format != "CSV":
+        raise WorkflowError("Completed report returned an unexpected format", report_format)
     if not parts:
         return [], 0, []
     files = []
     preview = []
     total_rows = 0
-    report_format = str(report.get("format", "CSV")).upper()
-    if report_format != "CSV":
-        raise WorkflowError("Completed report returned an unexpected format", report_format)
     try:
         for index, part in enumerate(parts, 1):
             url = _part_url(part)
@@ -548,11 +556,13 @@ def _download_completed_parts(report, resolve_data_path, skill_slug):
 
 def run_report_workflow(params, call_api, resolve_data_path, kind, skill_slug):
     """Run account mapping, report creation, polling, and part download."""
+    report_id = None
     try:
         _reject_sensitive_values(params)
         _reject_unknown_params(params, kind)
-        report_id = params.get("reportId") if isinstance(params, dict) else None
-        poll_only = bool(report_id)
+        poll_only = isinstance(params, dict) and "reportId" in params
+        if poll_only:
+            report_id = _required_string(params, "reportId")
         profile_id, region, start_date, end_date, span_days = _validate_base_params(params, poll_only)
         poll_interval = _positive_int(params, "pollInterval", 60, 5, 300)
         max_attempts = _positive_int(params, "maxAttempts", 10, 1, 120)
@@ -560,11 +570,9 @@ def run_report_workflow(params, call_api, resolve_data_path, kind, skill_slug):
         advertiser_account_id = None
         created_report = None
 
-        if poll_only:
-            report_id = str(report_id).strip()
-            if not report_id:
-                raise WorkflowError("reportId must not be empty")
-        else:
+        if not poll_only:
+            # 固定字段和枚举在账号查询前校验，避免非法组合先发出网关请求。
+            _build_create_body(kind, "validation-only", start_date, end_date, params)
             advertiser_account_id = _resolve_advertiser_account(
                 call_api,
                 profile_id,
@@ -694,6 +702,9 @@ def run_report_workflow(params, call_api, resolve_data_path, kind, skill_slug):
             },
         )
     except WorkflowError as exc:
-        return _fail(exc.message, exc.details)
+        return _fail(exc.message, exc.details, **({"reportId": report_id} if report_id else {}))
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        return _fail("Failed to process Amazon Ads report", str(exc))
+        return _fail(
+            "Failed to process Amazon Ads report", str(exc),
+            **({"reportId": report_id} if report_id else {}),
+        )

@@ -1,20 +1,20 @@
 # `GET_ORDER_REPORT_DATA_SHIPPING`
 
-> **分类**：9. Order Reports  
-> **说明**：Order shipping data  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：订单配送数据  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#scheduled-xml-order-report-shipping)（章节：**Scheduled XML Order Report (Shipping)**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#scheduled-xml-order-report-shipping)（章节：**Scheduled XML Order Report (Shipping)**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
+- **角色**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
 - **Order Fulfillment Channel**：MFN
-- **Availability**：Seller Central sellers
-- **Requested/scheduled**：Scheduled
-- **Report output type**：XML
-- **要点**：This report is for shipping seller fulfilled orders to customers. The report includes all new orders since the last report. For new reports, it contains order reports from the past 38 days. You can only schedule one GET_ORDER_REPORT_DATA_SHIPPING or GET_FLAT_FILE_ORDER_REPORT_DATA_SHIPPING report at a time. If you have one of these reports scheduled and you schedule a new report, the existing report is canceled.
+- **可用范围**：Seller Central 卖家
+- **按需/计划**：Scheduled
+- **输出格式**：XML
+- **要点**：用于向客户配送卖家自配送订单，包含自上份报告以来的全部新订单；首次报告回溯 38 天。同时仅可计划一份 GET_ORDER_REPORT_DATA_SHIPPING 或 GET_FLAT_FILE_ORDER_REPORT_DATA_SHIPPING；新增计划会取消已有计划。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#scheduled-xml-order-report-shipping>
 

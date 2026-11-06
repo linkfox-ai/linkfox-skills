@@ -26,17 +26,7 @@ def load_entry(path):
     return module
 
 
-def check_output_directory():
-    configured = (os.environ.get("ACPX_WORKSPACES") or "").split(os.pathsep)[0].strip()
-    if configured and Path(configured).resolve() != Path.cwd().resolve():
-        raise RuntimeError("Unset ACPX_WORKSPACES and run from a writable task directory")
-    output = Path.cwd() / "linkfox"
-    output.mkdir(exist_ok=True)
-    probe = output / (".write-probe-" + str(time.time_ns()))
-    try:
-        probe.write_bytes(b"")
-    finally:
-        probe.unlink(missing_ok=True)
+from _video_runtime import check_output_directory
 
 
 def invoke(path, params, no_cache=False):
@@ -62,7 +52,23 @@ def invoke(path, params, no_cache=False):
 
 
 def api_error(result):
-    return bool(result.get("error")) or result.get("errcode") not in (None, 0, 200, "0", "200") or result.get("code") not in (None, 0, 200, "0", "200")
+    if not isinstance(result, dict) or result.get("error"):
+        return True
+    status = result.get("transportHttpStatus")
+    if status is not None and (type(status) is not int or not 200 <= status < 300):
+        return True
+    # 兼容任务响应可能另带 code；同时检查业务状态，不能用它绕过 errcode 基础规则。
+    if result.get("code") not in (None, 0, 200, "0", "200"):
+        return True
+    code = result.get("errcode")
+    if code is None or isinstance(code, str) and not code.strip():
+        return False
+    if isinstance(code, str):
+        code = code.strip()
+        if len(code) != 3 or not code.isascii() or not code.isdigit():
+            return True
+        code = int(code)
+    return not (type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0)
 
 
 def prepare_media(params, scripts):
@@ -91,8 +97,6 @@ def prepare_media(params, scripts):
 
 def download_results(result, scripts):
     entry = scripts / "query_task.py"
-    if not entry.exists():
-        entry = scripts / "task_query.py"
     storage = load_entry(entry)
     slug = scripts.parent.name
     stamp = time.time()

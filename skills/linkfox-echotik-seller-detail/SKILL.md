@@ -1,162 +1,102 @@
 ---
 name: linkfox-echotik-seller-detail
-description: 查询TikTok Shop店铺（卖家）详情，通过sellerId获取单个店铺的完整档案，返回总销量、多周期(1天/7天/30天/90天)销量与销售额(GMV)、粉丝数、评分、评价数、好评率、送达率、回复率、在店商品数、带货达人数、带货视频数、直播数、价格区间、商品分类、预估上架时间等指标。当用户提到TikTok店铺详情、TikTok卖家详情、TikTok店铺分析、TikTok店铺数据、TikTok店铺档案、TikTok Shop store detail、TikTok seller detail、EchoTik store profile时触发此技能。即使用户未明确提及"EchoTik"或"TikTok"，只要其需求涉及查询某个TikTok Shop店铺的完整详情/档案（已知sellerId），也应触发此技能。
+description: 查询单个 TikTok Shop 店铺的完整档案，展示总销量、1天/7天/30天/90天销量与销售额（GMV）、粉丝、评分、评价、履约健康、商品、价格、类目和达人/视频/直播触达指标。适用于已知店铺的详情查询、经营表现分析和店铺对标，无需明确提及 EchoTik。不适用于店铺列表筛选、商品搜索或排行、达人或视频单体分析、其他平台数据以及订单、物流、广告管理。
 ---
 
-# EchoTik TikTok Seller Detail
+# EchoTik TikTok 店铺详情
 
-This skill fetches the full profile of a single TikTok Shop store (seller) by its `sellerId`, helping cross-border sellers and marketers deep-dive one store's performance — sales, multi-period GMV, followers, ratings, fulfillment, and influencer/video/livestream reach.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-EchoTik is a TikTok Shop analytics platform. This tool returns one store's complete detail object: total and incremental (1d/7d/30d/90d) sales volume and GMV, followers, rating, reviews, positive-feedback / response / delivery rates, product counts, price range, categories, and promoting-influencer / video / livestream counts.
+查看已知 TikTok Shop 店铺的完整档案，分析其销售表现、增长动向、店铺健康和带货触达。
 
-**Where to get a `sellerId`**: This skill requires a store's `sellerId`. Obtain it from the **EchoTik TikTok Seller Search** skill (`linkfox-echotik-list-seller`), which lists and filters TikTok Shop stores by region, category, GMV, trend, and store type.
+**场景速查**
 
-**Listing date**: `firstCrawlDt` uses a compact integer format `YYYYMMDD` (e.g. `20240504` for May 4, 2024).
+| 用户表达 | 查询场景 |
+|----------|----------|
+| TikTok 店铺详情 / TikTok store detail | 查看指定店铺的完整档案。 |
+| 查看这个 TikTok 店铺的数据 | 深查搜索结果中已确定的店铺。 |
+| 分析 medicube 这家 TikTok 店 | 查看单店经营表现及身份属性。 |
+| 这个 TikTok 店铺的 GMV 和粉丝数 | 展示销售额、销量和粉丝指标。 |
 
-## Data Fields
+### 边界
 
-The response is a flat store object (top level also carries `errcode`, `errmsg`, `costToken`, `columns`, `type`).
+发现、列举或筛选店铺时，使用 `linkfox-echotik-list-seller`；商品搜索或排行使用对应 EchoTik 商品技能。达人、视频单体分析、其他平台数据和店铺运营操作不属于本技能范围。
 
-| Field | Description |
-|-------|-------------|
-| sellerId | Store ID |
-| sellerName | Store name |
-| sellerLink | Store link |
-| coverUrl | Store cover image URL |
-| region | Marketplace code |
-| categoryId / categoryL2Id / categoryL3Id | Level-1 / 2 / 3 category ID |
-| totalSaleCnt | Total sales volume |
-| totalSale1dCnt / 7dCnt / 30dCnt / 90dCnt | Sales volume (1d/7d/30d/90d, incremental) |
-| totalSaleGmvAmt | Total GMV (revenue) |
-| totalSaleGmv1dAmt / 7dAmt / 30dAmt / 90dAmt | GMV (1d/7d/30d/90d, incremental) |
-| followersCount | Follower count |
-| rating | Store rating |
-| reviewCount | Review count |
-| positiveFeedbackRate | Positive feedback rate |
-| responseRate | Response rate |
-| deliveryRate | Delivery rate |
-| totalProductCnt | Historical product count (incl. delisted) |
-| totalCrawlProductCnt | Current in-store product count |
-| spuAvgPrice | Avg SKU price in store |
-| minPrice / maxPrice | Min / max price |
-| totalIflCnt | Number of promoting influencers |
-| totalVideoCnt | Number of promo videos |
-| totalLiveCnt | Number of livestreams |
-| salesFlagText | Main sales channel (视频带货 / 直播带货) |
-| salesTrendFlagText | Sales trend (上升 / 下降 / 平稳) |
-| shopIdentityLabel | Store identity label (e.g. OFFICIAL SHOP) |
-| shopTypeText | Brand store flag (是 / 否) |
-| fromFlagText | Local/cross-border flag (本土 / 跨境) |
-| productCategoryList | Product categories (JSON string) |
-| mostProductCategoryList | TOP1 product category (JSON string) |
-| firstCrawlDt | Estimated listing time (YYYYMMDD) |
-| userId | Influencer UID |
-| sourceType | Source type (e.g. Tiktok) |
-| sourceTool | Source tool |
-| costToken | Tokens consumed |
-| columns | Render column definitions (display metadata) |
-| type | Render style (e.g. tableListWorkbenches) |
+## 前置条件
 
-## Parameter Guide
+**先确定目标店铺**：从用户已知的店铺 ID、店铺链接或 `linkfox-echotik-list-seller` 搜索结果取得目标标识；仅有店名且无法确定店铺时，先走店铺搜索。请求要求见 `references/api.md`。
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| sellerId | string | Yes | - | TikTok Shop store ID. Obtain it from the Seller Search skill's results. Max length 1000 |
+## 查询流程
 
-## 调用方式
+1. 确认用户要查看的店铺，并从已有信息或上游店铺搜索结果确定目标。
+2. 阅读 `references/api.md`，准备请求并查询详情；同一任务优先复用已有响应或本地缓存。
+3. 按接口参考判断响应；认证或算力问题按下方指引处理，失败或空结果遵守成本约束。
+4. 按店铺档案、销售表现、店铺健康和带货触达整理结果，保留完整响应供按需提取。
 
-- **API 端点**：`POST /echotik/sellerDetail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_seller_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 执行方式
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-seller-detail-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_seller_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 5 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 输出策略
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-seller-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 序列化响应不超过 8000 个 UTF-8 字节：保存后，将完整 JSON 打印到标准输出。
+- 序列化响应超过 8000 个 UTF-8 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## Usage Examples
+## 执行规则
 
-**1. Fetch a store's full profile**
-```json
-{
-  "sellerId": "7495514739648989419"
-}
-```
+### 算力消耗预估
 
-**2. Deep-dive a store found via Seller Search**
-```
-先用店铺搜索列出美国GMV前列店铺，再查看其中 medicube US Store（sellerId 7495514739648989419）的完整详情
-```
+5 算力 / 次
 
-## Display Rules
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-1. **Present a clear store profile**: Show store name, region, seller link, cover image, and identity label (e.g. OFFICIAL SHOP)
-2. **Sales & GMV granularity**: Show total sales and total GMV; surface the multi-period breakdown (1d/7d/30d/90d) for both volume and GMV so the user sees momentum
-3. **Store health metrics**: Show followers, rating, review count, positive-feedback rate, response rate, and delivery rate together
-4. **Store attributes**: Show `fromFlagText` (本土/跨境), `salesFlagText` (视频/直播带货), `salesTrendFlagText` (trend), and `shopTypeText` (brand store) for benchmarking
-5. **Reach metrics**: Surface `totalIflCnt` (influencers), `totalVideoCnt` (videos), `totalLiveCnt` (livestreams), and product counts
-6. **Store link**: When `sellerLink` is present, surface it so the user can open the store
-7. **No secondary processing**: Results are live queries, not stored in a database; secondary SQL/data processing is not available
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## Important Limitations
+### 解决认证和算力问题
 
-1. **sellerId required**: `sellerId` is mandatory; obtain it from the EchoTik TikTok Seller Search skill (`linkfox-echotik-list-seller`) or a known store link/ID
-2. **Single store only**: This returns one store's detail; to list and filter stores, use the Seller Search skill
-3. **Listing date format**: `firstCrawlDt` uses `YYYYMMDD` integers (e.g. `20240504`)
-4. **Category IDs**: `categoryId` / `categoryL2Id` / `categoryL3Id` are internal IDs, not human-readable names
-5. **Data real-time nature**: Results are live queries, not stored in a database; secondary SQL/data processing is not available
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## User Expression & Scenario Quick Reference
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**Applicable** — Deep-dive one TikTok Shop store's full profile:
+### 约束与建议
 
-| User Says | Scenario |
-|-----------|----------|
-| "TikTok店铺详情" / "TikTok store detail" | Fetch one store's full profile by sellerId |
-| "查看这个TikTok店铺的数据" | Deep-dive a store found via search |
-| "分析medicube这家TikTok店" | Single-store performance analysis |
-| "这个TikTok店铺的GMV和粉丝数" | Store-level sales/GMV/follower metrics |
+- **理解数据来源**：EchoTik 是 TikTok Shop 数据分析平台，指标用于查看店铺档案及经营表现。
+- **清晰展示档案**：呈现店铺名称、地区、封面和身份标识（如 OFFICIAL SHOP）；返回店铺链接时展示可点击链接。
+- **展示销售动向**：同时展示总销量、总 GMV，以及 1天、7天、30天、90天的销量和 GMV 增量，避免将周期增量当作累计值。
+- **集中展示店铺健康**：将粉丝数、评分、评价数、好评率、回复率、送达率放在一起，方便比较。
+- **展示店铺属性**：展示本土/跨境、主要带货方式、销售趋势、是否品牌店铺和身份标识。
+- **展示商品和触达**：展示历史商品数（含下架）与当前在店商品数、SKU 均价、最低价、最高价，以及带货达人、视频、直播数量。
+- **解释类目和上架时间**：结合返回的商品分类展示类目，按接口参考解释类目编号及预估上架时间，避免将内部编号误作名称。
+- **遵守数据能力边界**：响应形态、单店查询和实时数据使用限制见 `references/api.md`；不要承诺接口不支持的数据处理能力。
 
-**Not applicable** — Needs beyond a single store detail:
+## 使用示例
 
-- Listing or filtering TikTok Shop stores by region/GMV/trend (use EchoTik TikTok Seller Search)
-- TikTok product search or product rankings (use EchoTik product search/rank skills)
-- TikTok creator/influencer analytics (follower counts, engagement of creators)
-- TikTok video performance analytics (views, likes on specific videos)
-- Amazon, Shopee, or other non-TikTok platform data
-- Store-level operations: order/logistics/ads management
+### 查看已知店铺的完整档案
 
-**Boundary judgment**: When users say "分析这家店铺" or "查看店铺详情" with a known store (sellerId or store link), this skill applies. If they want to discover or list stores by criteria, use the Seller Search skill instead.
+用户：查看 sellerId 为 7495514739648989419 的 TikTok 店铺详情。
 
-## 算力消耗规则
+查询指定店铺，展示档案、销售表现、健康指标和带货触达。
 
-消耗 5 算力。
+### 深查店铺搜索结果
 
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+用户：先找美国 GMV 前列店铺，再查看其中 medicube US Store 的完整详情。
 
-**Feedback:**
+先使用 `linkfox-echotik-list-seller` 完成搜索，再以已确定店铺的标识查询详情；搜索与详情调用分别遵守对应技能的成本约束。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+## 使用反馈
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

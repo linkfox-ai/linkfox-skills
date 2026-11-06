@@ -1,0 +1,56 @@
+[
+  {
+    "name": "kling-v3-omni",
+    "requestValue": "kling-v3-omni",
+    "documentedCapabilities": [
+      "可灵 V3-Omni",
+      "-1",
+      "4 张"
+    ]
+  },
+  {
+    "name": "gemini-omni-flash",
+    "requestValue": "gemini-omni-flash",
+    "documentedCapabilities": [
+      "Gemini Omni Flash 1.1",
+      "-1",
+      "10 张"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-0",
+    "requestValue": "doubao-seedance-2-0",
+    "documentedCapabilities": [
+      "豆包 Seedance 2.0",
+      "5 / 10 / 15",
+      "6 张"
+    ]
+  },
+  {
+    "name": "happyhorse-v2",
+    "requestValue": "happyhorse-v2",
+    "documentedCapabilities": [
+      "HappyHorse",
+      "-1",
+      "9 张"
+    ]
+  },
+  {
+    "name": "WAN3",
+    "requestValue": "WAN3",
+    "documentedCapabilities": [
+      "万相 3.0",
+      "5 / 10 / 15",
+      "10 张"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-5",
+    "requestValue": "doubao-seedance-2-5",
+    "documentedCapabilities": [
+      "豆包 Seedance 2.5",
+      "-1",
+      "30 张"
+    ]
+  }
+]

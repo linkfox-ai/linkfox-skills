@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import sys
 
-from _sbs_api_runner import emit_result, lf_inline_flag, run_sbs_api
+from _sbs_api_runner import run_sbs_api
 from _sbs_endpoints import list_api_names
 
 
@@ -26,8 +26,7 @@ def main() -> None:
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
-    inline = lf_inline_flag()
-    emit_result(run_sbs_api(str(params["api"]), params, "sbs_api.py"), inline)
+    run_sbs_api(str(params["api"]), params, "sbs_api.py")
 
 
 if __name__ == "__main__":

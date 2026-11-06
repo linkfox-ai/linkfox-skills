@@ -1,240 +1,123 @@
 ---
 name: linkfox-echotik-list-video
-description: 搜索和分析TikTok视频数据，按区域、达人、商品、类目、播放量、时长、发布时间、是否带货/投流/AI视频等条件筛选视频，返回播放量、点赞、评论、分享、收藏、视频销量与GMV等指标，覆盖16个TikTok Shop站点。当用户提到TikTok视频搜索、TikTok视频列表、TikTok带货视频、TikTok视频数据、TikTok视频播放量、TikTok视频销量、TikTok视频分析、EchoTik视频、TikTok video search, TikTok video list, TikTok video analytics, TikTok promotional videos, TikTok video views, TikTok video engagement时触发此技能。即使用户未明确提及"EchoTik"或"TikTok"，只要其需求涉及按条件搜索或分析TikTok视频表现指标，也应触发此技能。
+description: 搜索和分析 TikTok 视频，按站点、达人、关联商品、类目、播放量、时长、发布时间及带货、投流、AI 类型筛选，展示互动、视频销量与 GMV 估算和视频资料，覆盖 16 个 TikTok Shop 站点。适用于热门视频发现、带货内容研究、广告素材对标和达人视频表现分析，无需明确提及 EchoTik。已知单个商品的关联视频、商品排行、达人画像、直播数据、视频下载地址解析及其他平台视频不属于本技能范围。
 ---
 
-# EchoTik TikTok Video Search
+# EchoTik TikTok 视频搜索
 
-This skill searches and analyzes TikTok video data, helping cross-border sellers and marketers discover top-performing videos, benchmark content strategies, and evaluate video-level engagement and sales attribution across TikTok marketplaces.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-EchoTik is a TikTok Shop analytics platform. This tool lists TikTok videos with rich filtering — by region, creator, product, category, views, duration, publish time, and ad/AI/selling flags — and returns engagement metrics (views, likes, comments, shares, favorites), estimated sales attribution (video sales count and GMV), and video metadata (duration, resolution, cover, publish date).
+按站点发现 TikTok 视频，研究内容表现、互动情况和带货效果。用户提出站点或热门、带货、投流等筛选意图，且不是仅查询一个已知商品的关联视频时，使用本技能。
 
-**Required input**: `region` is mandatory. Optional filters narrow by creator (`userId`), product (`productId`), category (`productCategoryId`), views range, duration range, publish-time range, and video type (ad / AI / selling).
+**场景速查**
 
-**Sort fields**: videos can be sorted by likes (1), publish time (2), or views (3, default).
+| 用户表达 | 查询场景 |
+|----------|----------|
+| TikTok 热门视频有哪些 | 按播放量查看热门视频。 |
+| 看 TikTok 带货视频排行 | 筛选带货视频，查看播放表现及销量估算。 |
+| 某个达人的 TikTok 视频 | 按达人检索，比较点赞和播放表现。 |
+| TikTok 投流视频或广告视频 | 筛选投流视频，对标内容。 |
+| 最近的 TikTok AI 视频 | 筛选 AI 视频，按发布时间查看。 |
+| 近期高播放的视频 | 结合播放量和发布时间范围筛选。 |
+| 哪些视频 GMV 高 | 检索后查看 GMV，仅比较本次返回的视频。 |
 
-**Pagination**: `pageSize` must be a multiple of 10, max 100. The backend fetches in batches of 10 and merges results.
+### 边界
 
-**Related skill**: This tool lists videos by region/filters (no product required). To get videos associated with one specific product, use `linkfox-echotik-product-video` with a `productId` instead.
+已知单个商品的关联视频优先使用 `linkfox-echotik-product-video`；视频下载地址解析使用 `linkfox-echotik-get-video-download-url`。商品搜索或排行转交 EchoTik 商品技能；达人画像、直播和非 TikTok 平台视频不属于本技能范围。
 
-## Data Fields
+## 前置条件
 
-| Field | Description |
-|-------|-------------|
-| videoId | Video ID |
-| videoDesc | Video description / caption |
-| officialUrl | TikTok official video URL |
-| coverUrl | Video cover image URL |
-| duration | Video duration (seconds) |
-| width / height | Video dimensions in pixels (e.g. 576×1090) |
-| ratio | Video resolution label (e.g. 540p/720p) |
-| dataSize | Video file size |
-| createDate | Publish date |
-| userId / uniqueId / avatar | Creator ID / TikTok unique_id / creator avatar |
-| totalViewsCnt | Total views (1d/7d/30d breakdown: totalViews1dCnt / 7dCnt / 30dCnt) |
-| totalDiggCnt | Total likes (1d/7d/30d breakdown: totalDigg1dCnt / 7dCnt / 30dCnt) |
-| totalCommentsCnt | Total comments |
-| totalSharesCnt | Total shares |
-| totalFavoritesCnt | Total favorites |
-| totalVideoSaleCnt | Video sales (units) |
-| totalVideoSaleGmvAmt | Video sales GMV (amount) |
-| salesFlagText | Selling-video flag (是/否) |
-| isAdText | Ad-video flag (是/否) |
-| createdByAiText | AI-video flag (是/否/未知) |
-| productCategoryList | Product categories |
-| videoProducts | Related products |
-| region | Marketplace code |
-| sourceType / sourceTool | Source type / source tool |
+**先确定目标站点和研究范围**：用户未指定站点时，询问或默认美国站，并明确告知采用的站点。准备达人、商品或类目筛选时，从已有结果取得对应编号；字段约定见 `references/api.md`。
 
-## Parameter Guide
+## 查询流程
 
-### Required & Region
+1. 判断用户需要按站点发现视频，还是查看已知单个商品的关联视频，按适用范围选择技能。
+2. 确定站点，按用户意图组合达人、关联商品、类目、播放量、时长、发布时间和视频类型条件；根据研究目标选择播放量、点赞或发布时间排序。请求前查阅 `references/api.md`。
+3. 检索一次并保存完整结果，先看摘要，再从保存的 JSON 按需提取视频数据；失败或空结果按成本约束处理。
+4. 展示视频表现、原视频链接、估算提示及分页情况。结果较多时可建议收紧筛选或继续分页，后续检索遵守成本约束。
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| region | string | Yes | - | Marketplace code. See supported list below |
+## 执行方式
 
-### Creator / Product / Category
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_list_video.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口调用消耗 5 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| userId | string | Filter by creator (influencer) ID |
-| productId | string | Filter by related product ID |
-| productCategoryId | string | Filter by related product category ID |
+### 输出策略
 
-### Engagement / Duration / Time
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-video-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| minTotalViewsCnt / maxTotalViewsCnt | integer | Total-views range (min / max) |
-| minDuration / maxDuration | integer | Duration range in seconds (min / max) |
-| minCreateTime / maxCreateTime | integer | Publish-time range, Unix timestamp in seconds (min / max) |
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### Video Type Flags
+## 执行规则
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| salesFlag | integer | Selling video: 0=non-selling, 1=selling (带车) |
-| isAd | integer | Ad video: 0=non-ad, 1=ad (投流) |
-| createdByAi | string | AI video: `"true"`=AI, `"false"`=non-AI (string, not boolean) |
+### 算力消耗预估
 
-### Sorting & Pagination
+5 算力 / 次
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| videoSortField | integer | 3 | Sort field: 1=likes (total_digg_cnt), 2=publish time (create_time), 3=views (total_views_cnt) |
-| sortType | integer | 1 | Sort order: 0=ascending, 1=descending |
-| pageNum | integer | 1 | Page number (starts at 1) |
-| pageSize | integer | 50 | Page size — must be a multiple of 10, max 100 |
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### Supported Marketplaces
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-US (United States), ID (Indonesia), TH (Thailand), PH (Philippines), MY (Malaysia), VN (Vietnam), GB (United Kingdom), MX (Mexico), SG (Singapore), SA (Saudi Arabia), BR (Brazil), ES (Spain), JP (Japan), DE (Germany), IT (Italy), FR (France)
+### 解决认证和算力问题
 
-When the user doesn't specify a marketplace, ask or default to **US**.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## 调用方式
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-- **API 端点**：`POST /echotik/listVideo`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_list_video.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 约束与建议
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-video-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- **理解数据来源**：EchoTik 是 TikTok Shop 数据分析平台，结果用于内容发现、策略对标和视频带货归因研究。
+- **清晰展示数据**：用表格列出视频描述（过长时截断）、播放量、点赞、评论、分享、收藏、视频销量、GMV、发布日期和达人编号；可按需补充时长、分辨率、文件大小、头像、关联商品及类目。
+- **提供可访问素材**：有 `officialUrl` 时提供 TikTok 原视频链接；有 `coverUrl` 时说明可查看封面。将时长转换为易读形式，例如 90 秒显示为 `1:30`。
+- **标明估算性质**：视频销量和 GMV 是估算值，展示时提醒用户，不直接称为实际成交或转化率。
+- **说明比较范围**：查看销量或 GMV 时只能对本次已返回结果作比较，不能声称取得全站销量或 GMV 排名。
+- **保留多周期信息**：需要比较趋势时，从保存的 JSON 提取近 1 天、7 天、30 天的播放量和点赞明细。
+- **说明分页情况**：始终告知 `total` 记录数及当前页；缺失的数据如实说明，不自行推断。
+- **解释空结果和错误**：依据 `references/api.md` 判断结果与原因，保留已有数据，后续请求遵守成本约束。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 使用示例
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 美国站热门视频：按播放量降序
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Usage Examples
-
-**1. Top US videos by views**
 ```json
-{
-  "region": "US",
-  "videoSortField": 3,
-  "sortType": 1,
-  "pageSize": 20,
-  "pageNum": 1
-}
+{"region":"US","videoSortField":3,"sortType":1,"pageSize":20,"pageNum":1}
 ```
 
-**2. Highest-converting selling videos (by video sales)**
+### 带货视频：按播放量查看并比较销量估算
+
 ```json
-{
-  "region": "US",
-  "salesFlag": 1,
-  "videoSortField": 3,
-  "sortType": 1,
-  "pageSize": 20
-}
+{"region":"US","salesFlag":1,"videoSortField":3,"sortType":1,"pageSize":20}
 ```
 
-**3. Videos by a specific creator**
+### 指定达人的视频：按点赞降序
+
 ```json
-{
-  "region": "US",
-  "userId": "7234567890123456789",
-  "videoSortField": 1,
-  "sortType": 1
-}
+{"region":"US","userId":"7234567890123456789","videoSortField":1,"sortType":1}
 ```
 
-**4. High-view videos in a time range (sorted by likes)**
+### 英国站指定时间范围的高播放视频
+
 ```json
-{
-  "region": "GB",
-  "minTotalViewsCnt": 100000,
-  "minCreateTime": 1717200000,
-  "maxCreateTime": 1719792000,
-  "videoSortField": 1,
-  "sortType": 1
-}
+{"region":"GB","minTotalViewsCnt":100000,"minCreateTime":1717200000,"maxCreateTime":1719792000,"videoSortField":1,"sortType":1}
 ```
 
-**5. Recent AI videos sorted by publish date**
+### AI 视频：按发布时间降序
+
 ```json
-{
-  "region": "US",
-  "createdByAi": "true",
-  "videoSortField": 2,
-  "sortType": 1,
-  "pageSize": 50
-}
+{"region":"US","createdByAi":"true","videoSortField":2,"sortType":1,"pageSize":50}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data in tables**: Show video description (truncated if long), views, likes, comments, shares, video sales, video GMV, publish date, and creator ID
-2. **Link to original**: When `officialUrl` is available, provide it so users can view the video on TikTok
-3. **Cover image**: If `coverUrl` is present, mention it so the user knows video thumbnails are available
-4. **Duration formatting**: Convert `duration` (seconds) to a readable format (e.g., "1:30" for 90 seconds)
-5. **Estimation notice**: Video sales and GMV are estimated values, remind users these are approximations
-6. **Multi-period metrics**: When relevant, mention 1d/7d/30d views/likes breakdowns are available in the saved JSON
-7. **Result count**: Always inform the user of `total` records and the current page; suggest pagination or tighter filters when the result set is large
-
-## Important Limitations
-
-1. **Region required**: `region` is mandatory; no default is applied by the API.
-2. **pageSize rule**: Must be a multiple of 10 (max 100). Other values may be rejected or adjusted.
-3. **createdByAi is a string**: Pass `"true"` / `"false"` (not boolean) — the value is validated against `^(true|false)$`.
-4. **Timestamps**: `minCreateTime` / `maxCreateTime` are Unix timestamps in seconds.
-5. **Category/product IDs**: `productId` / `productCategoryId` / `userId` are internal IDs — obtain them from prior results.
-6. **No secondary processing**: Results are live queries, not stored in a database; secondary SQL/data processing is not available.
-7. **Product-specific videos**: To list videos for one specific product (by `productId`), prefer `linkfox-echotik-product-video`; here `productId` is only a filter within a region-scoped video listing.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — TikTok video discovery and performance analysis:
-
-| User Says | Scenario |
-|-----------|----------|
-| "TikTok热门视频" / "TikTok top videos" | List videos sorted by views (field 3) |
-| "TikTok带货视频排行" | Filter salesFlag=1, sort by views/sales |
-| "某个达人的TikTok视频" | Filter by userId |
-| "TikTok投流视频" / "TikTok广告视频" | Filter isAd=1 |
-| "TikTok AI视频" | Filter createdByAi="true" |
-| "近期高播放TikTok视频" | Views range + time range |
-| "哪个TikTok视频GMV最高" | Sort by views, inspect GMV column |
-
-**Not applicable** — Needs beyond region-scoped video listing:
-
-- Videos for one specific product by `productId` (use `linkfox-echotik-product-video`)
-- TikTok product search or rankings (use EchoTik product search/rank skills)
-- TikTok creator/influencer profile analytics (followers, bio)
-- TikTok live-stream data
-- Video download URL resolution (use `linkfox-echotik-get-video-download-url`)
-- Non-TikTok platform video data
-
-**Boundary judgment**: When users ask about "TikTok视频", determine whether they want a region-scoped video listing with filters (this skill) or videos tied to one known product (`linkfox-echotik-product-video`). If they mention a region or filters like "热门/带货/投流视频" without a specific product, this skill applies.
-
-## 算力消耗规则
-
-消耗 5 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

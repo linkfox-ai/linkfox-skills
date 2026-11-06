@@ -12,7 +12,7 @@
      - Windows PowerShell（永久）：`setx LINKFOX_AGENT_API_KEY "<key>"`
      - macOS zsh：`echo 'export LINKFOX_AGENT_API_KEY="<key>"' >> ~/.zshrc && source ~/.zshrc`
      - Linux bash：`echo 'export LINKFOX_AGENT_API_KEY="<key>"' >> ~/.bashrc && source ~/.bashrc`
-     - 优先使用 `LINKFOX_AGENT_API_KEY`；兼容旧环境时可使用 `LINKFOXAGENT_API_KEY`
+     - 变量名 `LINKFOX_AGENT_API_KEY`（主推）或 `LINKFOXAGENT_API_KEY`（老规范）任一即可
 
 **billing 场景**：`errcode=402` 或消息含 `算力/余额/quota/insufficient/充值/套餐到期`。
 - `python scripts/onboarding.py list-plans` → 有 AskUserQuestion 就弹菜单，否则输出编号清单让用户选

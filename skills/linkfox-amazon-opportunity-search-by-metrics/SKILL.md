@@ -1,174 +1,148 @@
 ---
 name: linkfox-amazon-opportunity-search-by-metrics
-description: 亚马逊反向选品：基于历史商业洞察报告沉淀的指标数据池，按 30+ 项商业维度（市场规模与增长、价格区间与档位份额、竞争密度与头部集中度、人群画像如年龄/性别/收入、评论卖点与痛点等）反向筛选亚马逊赛道与关键词。当用户提到反向选品、指标筛选、细分市场反查、蓝海赛道挖掘、低竞争赛道、新人友好赛道、品牌分散市场、痛点切入、卖点反查、定价档位机会、人群画像选品、Amazon niche reverse search, niche metrics filter, low-competition niche, blue ocean niche, demographic-based selection, pain-point niche, price tier opportunity, sweet spot pricing, brand fragmentation时触发此技能。即使用户未明确说"反向选品"，只要其需求是按商业维度筛选符合条件的亚马逊赛道，也应触发此技能。
+description: 基于历史商业洞察报告的指标数据池，按市场规模与增长、竞争密度与集中度、价格档位、人群画像、产品特征和评论卖点或痛点，反向筛选美国亚马逊赛道与关键词。适用于低竞争、新人友好、品牌分散、定价机会、季节性和人群画像选品；用户用业务条件描述希望寻找的赛道时即可使用。不适用于单关键词完整商业洞察报告、ASIN 级商品或销量研究、实时排名与搜索词挖掘，以及美国以外的市场。
 ---
 
-# Amazon Opportunity Screener by Metrics
+# 亚马逊商业指标反向选品
 
-This skill guides you on how to reverse-search Amazon niches and keywords from a metrics pool aggregated from historical opportunity reports, helping sellers turn vague selection ideas (low competition, growing demand, blue ocean, pain-point opportunity, etc.) into concrete niche candidates.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool exposes a queryable pool of **niche-level metrics** (~37 fields per record) distilled from past Amazon opportunity reports. Instead of generating a fresh report (forward analysis), it lets you **reverse-filter** the existing pool by 30+ business dimensions and returns matching `(marketplace, keyword)` records ranked by collection time (most recent first).
+将用户的业务筛选条件转成赛道候选，从历史报告沉淀的指标池中发现符合条件的关键词。
 
-Records are at the **niche / keyword** level, not ASIN level. Each record represents a niche snapshot — its market size, growth, competition, price tiers, demographics, top features, and review themes.
+**场景速查**
 
-**Forward vs. reverse**: Use `linkfox-amazon-opportunity-report` when the user has a keyword and wants a comprehensive AI report. Use this skill when the user has business criteria (filters) and wants to discover which keywords / niches fit.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 找低竞争、新人友好、品牌少的赛道 | 品牌密度与新品评论门槛。 |
+| 品牌正在退出、老玩家撤退的市场 | 品牌数同比下降。 |
+| 找快速增长、同比翻倍的蓝海赛道 | 搜索需求增长与品牌涌入速度。 |
+| 低价占主导但中档稀缺，或找高端机会 | 价格档位份额与定价区间。 |
+| 面向女性、男性、高收入消费者的市场 | 性别主导与收入画像。 |
+| 面向家长、学生、退休人群、健身人群 | 生命阶段标签。 |
+| 尺寸、质量、耐用性投诉强烈的赛道 | 差评主题与占比。 |
+| 买家重舒适或性价比的赛道 | 好评主题与占比。 |
+| 跟踪某品牌覆盖的赛道 | 头部品牌匹配。 |
+| 找第四季度旺季或 Prime Day 窗口机会 | 峰值月份与峰值搜索量。 |
 
-## Filter Dimensions
+### 边界
 
-Filters are grouped into six business dimensions. All filter parameters are optional, but **at least one of `keyword` / `nicheName` or any metric filter must be provided** — fully empty calls are rejected.
+已有一个关键词并希望生成完整的多维 AI 报告时，使用 `linkfox-amazon-opportunity-report`。
+需要赛道内的具体 ASIN、卖家、竞品或销量估算时，转交 `linkfox-amazon-search`、`linkfox-keepa-product-search` 或相应 SellerSprite / Sorftime 商品工具；实时关键词排名和搜索词挖掘转交 ABA / SIF 工具。
 
-| Dimension | Example Parameters | Typical User Intent |
-|-----------|---------------------|---------------------|
-| Market size & growth | `nicheRevenue360dMinUsdAtLeastGte`, `nichePeakSearchVolumeAtLeastGte`, `nicheSearchVolumeYoyChangePctAtLeastGte`, `nichePeakMonthGte/Lte` | "Big enough market", "fast-growing", "Q4 seasonal" |
-| Competition density | `nicheBrandCountLte`, `nicheBrandCountYoyChangePctAtLeastLte`, `nicheTop5ProductClickSharePctAtLeastLte`, `featureTop5BrandSharePctAtLeastLte` | "Newcomer-friendly", "brands fragmented", "no oligopoly", "brands exiting" |
-| Price & tier | `priceMinUsdGte`, `priceMaxUsdLte`, `priceSweetSpotMinUsdGte/Lte`, `priceEntryClickSharePctAtLeastGte`, `priceMidClickSharePctAtLeastLte`, `priceHighClickSharePctAtLeastGte` | "Affordable focus", "premium-friendly", "mid-tier blue ocean" |
-| Demographics | `demoPrimaryAgeMinGte`, `demoPrimaryAgeMaxLte`, `demoGenderDominant`, `demoPrimaryIncomeTier`, `demoLifeStageTagsContains` | "Female-driven", "high-income", "parents", "fitness enthusiasts" |
-| Product features | `featureNewAvgReviewCountAtLeastLte`, `featureEstablishedAvgReviewCountAtLeastLte`, `featureEmergingTrendTagsContains`, `featureUncommonFeatureTagsContains`, `searchTopCategory1Label` | "New-product entry barrier low", "emerging trend", "uncommon feature edge", "set/kit niches" |
-| Review insights | `reviewPositiveTop1Topic`, `reviewPositiveTop1PctAtLeastGte/Lte`, `reviewNegativeTop1Topic`, `reviewNegativeTop1PctAtLeastGte/Lte`, `reviewNegativeTop2Topic`, `reviewStrategicInsightTagsContains` | "Pain-point niche", "comfort-driven sellers", "size-issue opportunity" |
+## 前置条件
 
-See `references/api.md` for the full parameter list, types, value ranges, and response field map.
+**先明确用户的筛选意图**：提取市场、增长、竞争、价格、人群、产品特征或评论主题要求；参数取值及接口适用限制见 `references/api.md`。
 
-## Supported Marketplaces
+## 查询流程
 
-Currently only **US** (United States) is supported. Always set `amazonDomain` to `US` (or omit). If a user requests other marketplaces, inform them this tool currently only covers the US market.
+1. 判断需求是否为“按业务条件发现赛道”，记录用户明确提出的条件，不静默增加无关筛选；用户只要求增长时，不额外限定价格。
+2. 将业务意图映射为最小可用筛选集，映射示例、初筛返回数量和标签匹配约定见 `references/api.md`。较复杂的需求先选择 2–4 个核心条件，优先组合互补信号。
+3. 展示本次筛选条件，按下方算力规则提醒消耗后执行一次检索。优先复用相同参数已取得的结果，按接口参考判断响应。
+4. 用对照表呈现候选。结果为空或过少时，建议删除或放宽最严格的条件，而非增加条件或重新让用户描述全部需求；继续检索前说明额外消耗，不自动连续试探。
+5. 用户需要跨赛道分组统计时，优先对已保存的数据在本地计算；确需扩大候选范围时，按成本约束调整检索范围。需要完整赛道报告或 ASIN 研究时，按适用边界转交。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /amazon/opportunity/searchByMetrics`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/amazon_opportunity_screener.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/amazon_opportunity_screener.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-opportunity-search-by-metrics-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-opportunity-search-by-metrics-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## How to Build Queries
+### 算力消耗预估
 
-The user expresses business intent in natural language; you map it to **the smallest viable set of filters**. Principles:
+按动态规则计费：消耗算力 = 1.5 × (N ≤ 25 ? 5 : 5 + ceil((N - 25) / 5))。N 是接口实际返回的数据条数，ceil 表示向上取整。接口成功且 N ≤ 25 时（包括 N = 0 的空结果），消耗 7.5 算力，对应 15000 token；超过 25 条后，每增加 5 条（不足 5 条按 5 条计）增加 1.5 算力。
 
-1. **Convert intent into specific bounds**: "low competition" → `nicheBrandCountLte: 20`; "fast-growing" → `nicheSearchVolumeYoyChangePctAtLeastGte: 100` (≥100% YoY); "newcomer-friendly" → `featureNewAvgReviewCountAtLeastLte: 500`.
-2. **Start narrow, then loosen**: First call usually with 2–4 strong filters and `limit=25`. If the result set is empty or too small, drop or widen the most aggressive filter rather than adding new ones.
-3. **Pair complementary signals**: Brand-level + product-level concentration (`featureTop5BrandSharePctAtLeastLte` + `nicheTop5ProductClickSharePctAtLeastGte`) reveals "brands fragmented but products concentrated" — a brand-extension entry signal.
-4. **Snake_case fragments for tag fields**: `featureEmergingTrendTagsContains`, `demoLifeStageTagsContains`, `reviewNegativeTop1Topic`, etc. accept snake_case word fragments and use LIKE matching. Pass a root word (`size`, `parent`, `cordless`) to cover normalized variants.
-5. **Faithful to user intent**: Don't silently add filters the user didn't ask for. If they only said "growing", just filter on growth — don't also constrain price unless they mentioned it.
+本服务按倍数动态计算，可能一次性消耗大量算力；必须提醒用户，并由用户决定是否继续。
 
-### Common Scenarios
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**1. Niche reverse-lookup by keyword**
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解数据粒度**：每条记录是一个 `(marketplace, keyword)` 赛道快照，包含约 37 项市场、竞争、价格、人群、产品特征和评论指标，不是单个 ASIN。
+- **区分正向与反向分析**：本技能用业务条件发现关键词；完整报告技能用已有关键词生成分析。数据池随新报告逐步更新，不代表持续更新的实时市场。
+- **理解互补信号**：同时观察品牌集中度与产品集中度，可识别“品牌分散但产品集中”的情况，作为品牌延伸研究的信号。
+- **只展示数据**：用表格展示赛道名称 / 关键词、市场规模、增长、品牌数、价格区间与关键标签，不附加主观商业建议；缺失字段如实标明。
+- **回显筛选条件**：例如“当前筛选：品牌数 ≤ 20 且搜索量同比 ≥ 100%”，方便用户调整。
+- **注明快照性质**：记录反映采集时的情况；结果陈旧或与用户外部信息冲突时，明确说明时间快照，不将它当成实时数据。
+- **处理空结果与错误**：空结果先建议放宽最严格条件；失败时依据 `msg` 或 `errmsg` 说明原因，参数全空时建议补充条件。接口业务判断和错误码见 `references/api.md`。
+- **区分本地文件与数据仓库**：服务返回用于前端展示，未存入智能查询数据仓库，不能交给 `@智能数据查询` 做二次聚合；脚本保存的 JSON 可在本地计算。
+
+## 使用示例
+
+### 按关键词反查赛道
+
 ```json
 {"keyword": "whoop band", "limit": 25}
 ```
 
-**2. Newcomer-friendly low-competition niches**
+### 新人友好、低竞争赛道
+
 ```json
 {"nicheBrandCountLte": 20, "featureNewAvgReviewCountAtLeastLte": 500, "limit": 25}
 ```
 
-**3. High-growth blue ocean (≥100% YoY, brands not yet flooding in)**
+### 高增长且品牌尚未大量涌入
+
 ```json
 {"nicheSearchVolumeYoyChangePctAtLeastGte": 100, "nicheBrandCountYoyChangePctAtLeastLte": 30, "limit": 25}
 ```
 
-**4. Mid-tier price gap (low-price dominates, mid-tier scarce)**
+### 低价占主导、中档稀缺
+
 ```json
 {"priceEntryClickSharePctAtLeastGte": 70, "priceMidClickSharePctAtLeastLte": 5, "limit": 25}
 ```
 
-**5. Pain-point entry — strong size complaints**
+### 尺寸投诉强烈的痛点赛道
+
 ```json
 {"reviewNegativeTop1Topic": "size", "reviewNegativeTop1PctAtLeastGte": 70, "limit": 25}
 ```
 
-**6. Premium-friendly female-driven niches**
+### 高收入女性主导且高端份额较高
+
 ```json
 {"demoGenderDominant": "female", "demoPrimaryIncomeTier": "high", "priceHighClickSharePctAtLeastGte": 25, "limit": 25}
 ```
 
-**7. Q4 seasonal niches with ≥100k peak search**
+### 第四季度末旺季且峰值月搜索量较高
+
 ```json
 {"nichePeakMonthGte": 11, "nichePeakMonthLte": 12, "nichePeakSearchVolumeAtLeastGte": 100000, "limit": 25}
 ```
 
-**8. Track niches around a known competitor brand**
+### 跟踪指定品牌覆盖的赛道
+
 ```json
 {"featureTopBrandsContains": "WHOOP", "limit": 50}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data only**: Render the returned niches as a clean comparison table — niche name / keyword, market size, growth, brand count, price range, key tags. No subjective business advice.
-2. **Surface the active filters**: Echo the filter set you used so the user can adjust ("当前筛选：品牌数 ≤ 20 且搜索量同比 ≥ 100%").
-3. **Time-snapshot reminder**: Records reflect data at collection time and are not continuously updated. Mention this when results look stale or contradict a user's external knowledge.
-4. **Empty / few-result handling**: If `data` is empty or very short, suggest widening the most aggressive filter rather than re-asking the user from scratch.
-5. **Error handling**: When a query fails, explain the reason based on the `msg` field (most often the "fully empty parameters" guard) and suggest adding at least one filter.
-6. **No secondary aggregation**: The results power frontend rendering and are not stored, so they cannot be fed into `@智能数据查询` (intelligent data query) for further aggregation. If users ask for grouped statistics across niches, do the calculation locally or pull a wider `limit` first.
-
-## Important Limitations
-
-- **US only**: Currently only supports the United States marketplace (`amazonDomain` = `US`).
-- **No pagination**: There is no `page` parameter. Increase `limit` (max 200) to widen the candidate pool; results are sorted by collection time (newest first).
-- **At least one filter required**: Calls with no `keyword` / `nicheName` and no metric filter are rejected.
-- **Snapshot data**: Records are aggregated from historical opportunity reports; new reports refresh the pool over time, but individual records are not real-time.
-- **Niche-level granularity**: The output is niche / keyword level, not ASIN level. To dig into specific products inside a niche, hand off to `linkfox-amazon-search`, `linkfox-keepa-product-search`, etc.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Niche-level reverse selection on the US Amazon market:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Low-competition niches", "newcomer-friendly", "brand-light" | Brand-density filter |
-| "Brands are exiting", "old players retreating" | Negative brand-count YoY |
-| "Fast-growing niche", "trending up", "≥100% YoY" | Search-volume YoY filter |
-| "Mid-tier blue ocean", "low-price dominates but mid is scarce" | Price-tier share gap |
-| "Premium-friendly", "high-income consumers" | Income tier + high-tier share |
-| "Female / male / mixed market" | Gender dominance filter |
-| "Parents / students / retirees / fitness enthusiasts" | Life-stage tag |
-| "Strong size / quality / durability pain point" | Negative review topic + share |
-| "Comfort-driven", "value-driven sellers" | Positive review topic + share |
-| "Track all niches around brand X" | `featureTopBrandsContains` |
-| "Q4 seasonal niches", "Prime Day window" | Peak month + peak volume |
-
-**Not applicable** — Use other tools instead:
-- Need a comprehensive AI report on one keyword → `linkfox-amazon-opportunity-report`
-- ASIN-level competitor research, sales estimation → SellerSprite / Keepa / Sorftime tools
-- Real-time keyword ranking, search-term mining → ABA / SIF tools
-- Marketplaces other than US → not yet supported by this tool
-- Want to run group-by aggregation over niches via `@智能数据查询` → unsupported (data is not warehoused)
-
-**Boundary judgment**: When users describe selection criteria in business language and want matching candidate niches, this skill applies. When they hand you a specific keyword and want the full multi-dimensional analysis, use `linkfox-amazon-opportunity-report`. When they want to drill into ASINs / sellers within a niche, hand off to product-search tools.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 1.5 × (N ≤ 25 ? 5 : 5 + ceil((N - 25) / 5))。N 是接口实际返回的数据条数；即使 N = 0，只要接口成功也按 15000 计费。
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

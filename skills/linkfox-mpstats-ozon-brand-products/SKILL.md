@@ -1,175 +1,126 @@
 ---
 name: linkfox-mpstats-ozon-brand-products
-description: MPSTATS Ozon 俄罗斯站按品牌下钻商品列表。按 Ozon 品牌展示名（俄语/拉丁）返回该品牌下全部商品的销量、销售额、价格、评分、库存、周转、损失销售额等完整指标，支持多维数值筛选、排序、货币换算。用于品牌对标、竞品分析、品牌商品结构研究、ASIN 级（productId 级）爆款拆解。当用户提到 Ozon 品牌下钻、Ozon 品牌商品、Ozon 竞品品牌分析、品牌结构、品牌 SKU、品牌爆款、Ozon 品牌销售、MPSTATS brand, Ozon brand products, brand drill-down, brand competitor analysis, Russian marketplace brand SKUs, brand revenue share 时触发此技能。即使用户未明确说"MPSTATS"，只要意图是按 Ozon 品牌看该品牌下所有商品及其销量/价格/评分表现，也应触发此技能。
+description: 按品牌查询 Ozon 俄罗斯站商品，查看销量、销售额、价格、评分、评论、库存、周转和损失销售额，支持数值筛选、排序及货币换算。适用于品牌对标、竞品分析、品牌商品结构研究和商品级爆款拆解；用户希望查看一个品牌旗下商品表现时使用，无需明确提及 MPSTATS。不适用于跨品牌类目比较、卖家维度分析、单品历史趋势或其他平台研究。
 ---
 
-# MPSTATS Ozon Brand Products
+# MPSTATS Ozon 品牌商品查询
 
-This skill drills into all Ozon (Russia) products sold under a given brand display name, returning each SKU's sales, revenue, price, rating, stock, turnover, lost profit, and more. Built for brand competitor audits, brand SKU structure analysis, and bestseller dissection.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Brand display name**: `brandName` must match what's shown on the Ozon storefront — typically Russian (Cyrillic) or Latin (`adidas`, `Xiaomi`). Do **not** pass a category path, a seller ID, or an internal brand code here. If unsure of the exact spelling, resolve via `mpstats-ozon-product-search` first.
+查看一个 Ozon 品牌旗下商品及各商品的经营指标，用于品牌畅销商品、销售额结构、价格带、质量表现及缺货损失研究。
 
-**Filters are AND-combined**: The `filters` array supports multiple numeric conditions ANDed together. Each filter is `{field, op, value, value2?}`. Common fields and operators are in the Filter Reference below.
+**场景速查**
 
-**Currency & rate**: Default currency is **RUB**. Set `currency: "USD"` (or another code) to have monetary fields converted server-side; `currencyRate` lets you override the default rate if desired.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 看 adidas 在 Ozon 上最畅销的商品 | 品牌畅销商品下钻。 |
+| Xiaomi 卖哪些商品，按销售额排一下 | 品牌销售额结构分析。 |
+| 找这个品牌评分高、还有库存的商品 | 品牌商品质量与库存筛选。 |
+| 这个品牌哪些商品缺货损失较大 | 损失销售额研究。 |
+| 把这个品牌的商品销售额换算成美元 | 统一货币口径比较。 |
 
-**FBO / FBS mix**: `includeFbs: true` folds FBS (seller-shipped) stock + sales into the numbers; `false` keeps them FBO-only.
+### 边界
 
-## Parameters
+- 品牌名称尚未确定：先通过 MPSTATS Ozon 商品搜索核对品牌展示名。
+- 比较某类目下不同品牌：使用 MPSTATS Ozon 类目商品查询。
+- 分析特定卖家：使用 MPSTATS Ozon 卖家商品查询。
+- 查询单个商品的时间序列：使用 MPSTATS Ozon 商品趋势查询。
+- Wildberries 及其他平台不在本技能范围内。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| brandName | string | yes | Ozon brand display name (Russian or Latin) |
-| startDate | string | no | Stats window start, `YYYY-MM-DD`; latest = yesterday |
-| endDate | string | no | Stats window end, `YYYY-MM-DD`; latest = yesterday |
-| page | integer | no | Page number, starts at 1 |
-| pageSize | integer | no | Rows per page, 1-100, default 100 |
-| sortField | string | no | snake_case column: `sales`, `revenue`, `final_price`, `balance`, `rating`, ... |
-| sortDirection | string | no | `asc` or `desc` |
-| currency | string | no | Currency code, default `RUB`; e.g. `USD`, `EUR`, `CNY` |
-| currencyRate | integer | no | Custom rate when non-default currency is used |
-| includeFbs | boolean | no | Include FBS data |
-| filters | array | no | Numeric filter conditions (see below) |
+## 前置条件
 
-## Filter Reference
+**先确定目标品牌**：取得用户希望研究的 Ozon 品牌展示名，并确认需要查看的商品指标和统计口径；参数约定见 `references/api.md`。
 
-Each `filters` entry: `{"field": "<snake_case>", "op": "<OP>", "value": <num>, "value2": <num?>}`.
+## 品牌商品查询流程
 
-**Common fields**: `sales` (monthly units), `final_price` (selling price RUB), `rating` (0-5), `comments` (review count), `balance` (stock), `revenue` (sales amount RUB), `days_in_stock`, `turnover_days`, `lost_profit`, `category_position`.
+1. 确认品牌与任务；名称不确定时先核对，避免用猜测的品牌名称反复付费试探。
+2. 根据用户目标选择销量、销售额、价格、评分或损失销售额等指标，按需准备统计区间、筛选、排序、货币和配送口径；调用前核对 `references/api.md`。
+3. 先估算算力消耗并说明动态计费风险，由用户决定是否继续，再在确定的范围内查询；同一参数优先复用已有结果。
+4. 先看摘要，再按需提取已保存的数据，展示品牌商品表和本次返回范围；如需更多页或调整条件，先说明额外消耗。
+5. 空结果先核对品牌拼写、统计日期及筛选条件；错误按接口参考解释，不自动改条件连续重试。
 
-**Operators**: `GTE`, `LTE`, `GT`, `LT`, `EQ`, `NOT_EQ`, `BETWEEN` (requires `value2` as the upper bound).
+## 执行方式
 
-## 调用方式
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/mpstats_ozon_brand_products.py '<JSON 参数>' [--inline]`。
+- **成本约束**：算力规则见“算力消耗预估”。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **API 端点**：`POST /mpstats/ozon/brandProducts`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/mpstats_ozon_brand_products.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 输出策略
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-brand-products-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-brand-products-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 执行规则
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 算力消耗预估
 
-## Usage Examples
+按动态规则计费：消耗算力 = 12；列表为空返回 0 算力。服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
 
-**1. Top-50 by sales for brand `adidas`**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **明确查询维度**：本技能围绕一个品牌展示逐商品指标；“哪个品牌主导某类目”应从类目维度研究。
+- **区分配送口径**：FBO 为平台仓储配送，FBS 为卖家自发货；报告应说明本次是否合并两者的数据，具体参数语义见接口参考。
+- **紧凑商品表**：核心列为 `productId`、`title`、`price`、`monthlySalesUnits`、`monthlySalesRevenue`、`rating`、`reviewCount`、`balance`、`turnoverDays`、`lostProfit`。
+- **解释销售额占比**：`revenueSharePercent` 表示商品在当前品牌结果集内的销售额占比，范围 0–100；展示时说明分母，不能写成全平台或全类目份额。
+- **标注货币**：表头写明价格和销售额币种；使用货币换算时注明“已按 USD 换算”等实际口径，历史汇率与用户参考汇率可能略有差异。
+- **保留俄语原文**：商品标题保留原文，仅在用户要求时翻译。
+- **说明分页情况**：展示 `total` 和本页返回条数；总数超过本页时，提示可查看下一页或缩小范围，后续调用遵守成本约束。
+- **只呈现数据**：不附加主观经营建议，不根据单次快照预测未来销量。
+
+## 使用示例
+
+### 品牌销量前 50 名
+
 ```json
-{
-  "brandName": "adidas",
-  "sortField": "sales",
-  "sortDirection": "desc",
-  "pageSize": 50
-}
+{"brandName":"adidas","sortField":"sales","sortDirection":"desc","pageSize":50}
 ```
 
-**2. High-rating, mid-price filter**
+### 高评分、中等价格的品牌商品
+
 ```json
-{
-  "brandName": "Xiaomi",
-  "filters": [
-    {"field": "rating", "op": "GTE", "value": 4.5},
-    {"field": "final_price", "op": "BETWEEN", "value": 1000, "value2": 5000}
-  ],
-  "sortField": "revenue",
-  "sortDirection": "desc"
-}
+{"brandName":"Xiaomi","filters":[{"field":"rating","op":"GTE","value":4.5},{"field":"final_price","op":"BETWEEN","value":1000,"value2":5000}],"sortField":"revenue","sortDirection":"desc"}
 ```
 
-**3. USD-converted output**
+### 换算美元后按销售额排序
+
 ```json
-{
-  "brandName": "Nike",
-  "currency": "USD",
-  "sortField": "revenue"
-}
+{"brandName":"Nike","currency":"USD","sortField":"revenue"}
 ```
 
-**4. Include FBS + only in-stock items**
+### 合并 FBS 数据并仅看有库存商品
+
 ```json
-{
-  "brandName": "adidas",
-  "includeFbs": true,
-  "filters": [{"field": "balance", "op": "GT", "value": 0}]
-}
+{"brandName":"adidas","includeFbs":true,"filters":[{"field":"balance","op":"GT","value":0}]}
 ```
 
-**5. Lost-profit hunters (out-of-stock pain)**
+### 查看损失销售额较高的商品
+
 ```json
-{
-  "brandName": "Nike",
-  "filters": [{"field": "lost_profit", "op": "GTE", "value": 100000}],
-  "sortField": "lost_profit",
-  "sortDirection": "desc"
-}
+{"brandName":"Nike","filters":[{"field":"lost_profit","op":"GTE","value":100000}],"sortField":"lost_profit","sortDirection":"desc"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Compact brand table** — key columns: `productId`, `title`, `price`, `monthlySalesUnits`, `monthlySalesRevenue`, `rating`, `reviewCount`, `balance`, `turnoverDays`, `lostProfit`.
-2. **Revenue share context** — `revenueSharePercent` is the SKU's share **within this brand result set**, 0-100; clarify the base when presenting.
-3. **Currency labeling** — always state the currency in the table header; if `currency` was overridden, note "已按 USD 换算".
-4. **Russian titles** — preserve original; translate on user request.
-5. **Pagination** — report total and guide the user to next page or narrower filters when total exceeds the returned page.
-6. **No business advice** — present the data; don't project future sales from a snapshot.
-
-## Important Limitations
-
-- **Exact brand-name match** — no fuzzy search; typos return empty results. Verify via `mpstats-ozon-product-search` if unsure.
-- **Page cap** — max 100 rows per page; paginate for larger brands.
-- **Date window** — `endDate` cannot be today or a future date (T-1 data).
-- **Currency conversion** — server-side; historical rates may differ slightly from the user's reference rate.
-- **Russian-only titles** — translate only when asked.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Brand-scoped Ozon product metrics:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Show me adidas's top-selling Ozon SKUs" | Brand bestseller drill |
-| "What does Xiaomi sell on Ozon, sorted by revenue" | Brand revenue structure |
-| "Which brand-X SKUs have rating ≥4.5 and stock >0" | Brand quality filter |
-| "Are brand-X's stockouts causing big lost profit" | Lost-profit hunter |
-| "Convert brand-X's Ozon sales to USD" | Currency-normalized audit |
-
-**Not applicable** — Needs beyond brand drill-down:
-
-- Unknown exact brand name → first use `mpstats-ozon-product-search`
-- Category-level comparison across brands → use `mpstats-ozon-category-products`
-- Seller-scoped analysis → use `mpstats-ozon-seller-products`
-- Single-SKU time-series → use `mpstats-ozon-product-trend`
-- Wildberries / other Russian marketplaces → not covered
-
-**Boundary judgment**: Use this skill when the question centers on **one brand** and you want the per-SKU rollup under it. For "which brand dominates category X" use category drill-down and compare brand rows server-side.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 12。列表为空返回 0
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

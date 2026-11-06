@@ -1,34 +1,27 @@
 #!/usr/bin/env python3
-"""
-Shopee Store — generic Push API caller
-======================================
-
-Usage:
-  python push_api.py '{"api": "get_app_push_config"}'
-
-Official docs: https://open.shopee.com/documents/v2/v2.push.<api>?module=105&type=1
-"""
-
-from __future__ import annotations
-
+"""Shopee Push 通用入口；JSON 含 api 操作名，支持 --inline / --no-cache。"""
 import json
 import sys
-
 from _push_api_runner import run_push_api
 from _push_endpoints import list_api_names
-from _shopee_push_common import emit_result, lf_inline_flag
 
 
-def main() -> None:
-    if len(sys.argv) < 2:
-        print(f"Usage: push_api.py '<JSON with api field>'\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
-        sys.exit(1)
-    params = json.loads(sys.argv[1])
+def main():
+    args = [a for a in sys.argv[1:] if a not in ("--inline", "--no-cache")]
+    if not args:
+        print(f"Usage: push_api.py '<JSON with api field>' [--inline] [--no-cache]\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
+        raise SystemExit(1)
+    try:
+        params = json.loads(args[0])
+        if not isinstance(params, dict):
+            raise ValueError("JSON parameters must be an object")
+    except (ValueError, TypeError) as exc:
+        print(f"Invalid parameter format: {exc}", file=sys.stderr)
+        raise SystemExit(1)
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
-        sys.exit(1)
-    inline = lf_inline_flag()
-    emit_result(run_push_api(str(params["api"]), params, "push_api.py"), inline)
+        raise SystemExit(1)
+    run_push_api(str(params["api"]), params, "push_api.py")
 
 
 if __name__ == "__main__":

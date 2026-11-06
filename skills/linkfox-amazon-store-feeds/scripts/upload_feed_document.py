@@ -20,18 +20,17 @@ Usage:
 from __future__ import annotations
 
 import base64
-import json
 import sys
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from _spapi_feeds_common import emit_result, lf_inline_flag
+from _spapi_feeds_common import emit_result, ensure_output_available, lf_inline_flag, load_cli_params
 
 
 def _load_bytes(params: dict) -> bytes:
     if params.get("filePath"):
-        p = Path(str(params["filePath"]).expanduser())
+        p = Path(str(params["filePath"])).expanduser()
         if not p.is_file():
             print(f"filePath not found: {p}", file=sys.stderr)
             sys.exit(1)
@@ -60,11 +59,7 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-    try:
-        params = json.loads(sys.argv[1])
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON: {e}", file=sys.stderr)
-        sys.exit(1)
+    params = load_cli_params()
 
     for f in ("uploadUrl", "contentType"):
         if f not in params:
@@ -74,6 +69,7 @@ def main() -> None:
     upload_url = str(params["uploadUrl"]).strip()
     content_type = str(params["contentType"]).strip()
     payload = _load_bytes(params)
+    ensure_output_available()
 
     req = Request(
         upload_url,
@@ -97,7 +93,7 @@ def main() -> None:
         out["error"] = f"Connection failed: {e.reason}"
 
     inline = lf_inline_flag()
-    emit_result(out, inline)
+    emit_result(out, inline=inline)
     if not out.get("success"):
         sys.exit(1)
 

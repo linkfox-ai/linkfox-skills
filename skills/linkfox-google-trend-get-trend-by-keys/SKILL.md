@@ -1,159 +1,124 @@
 ---
 name: linkfox-google-trend-get-trend-by-keys
-description: Google Trends关键词搜索热度对比与趋势分析，支持全球区域和自定义时间范围。当用户提到谷歌趋势、关键词随时间变化的热度、搜索兴趣对比、关键词趋势分析、季节性趋势检测、区域搜索热度、关键词热力图、多个关键词在Google上的对比、Google Trends, keyword popularity comparison, search trends, seasonal analysis, regional popularity, keyword comparison时触发此技能。即使用户未明确说"Google Trends"，只要其需求涉及对比不同时间段或区域的关键词搜索热度趋势，也应触发此技能。
+description: 查询并分析 Google Trends 关键词搜索热度，研究不同地区和时间范围内的趋势方向、季节性、搜索峰谷及新兴需求，支持多个关键词或地区的趋势对比。适用于谷歌趋势、历史搜索兴趣和市场热度研究，即使用户未明确提及 Google Trends 也适用。不适用于绝对搜索量、广告出价与 CPC、社交媒体热点、亚马逊站内搜索数据、网站流量或 SEO 排名查询。
 ---
 
-# Google Trends Keyword Trend Analysis
+# Google Trends 关键词趋势分析
 
-This skill guides you on how to query and analyze Google Trends keyword search interest data, helping users understand how keyword popularity changes over time across different regions.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Google Trends provides normalized search interest data (0-100 scale) reflecting how popular a given search term is relative to its peak popularity in the selected region and time range. A value of 100 represents peak popularity, 50 means the term is half as popular as its peak, and 0 means insufficient data.
+查看关键词在 Google 搜索中的兴趣变化，分析季节性、事件驱动的波动及持续增长或下降。用户希望比较不同月份、年份或地区的搜索趋势时，使用本技能。
 
-**Important language rule**: Keywords must be in the language of the target country. For example, use English keywords for the US, German keywords for Germany, Japanese keywords for Japan. If the user provides keywords in the wrong language, translate them before querying.
+**场景速查**
 
-## Parameters
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个关键词在 Google 上热不热 | 基础搜索兴趣查询。 |
+| 这个词正在升温还是降温 | 趋势方向与持续性分析。 |
+| 一年中哪个月份搜索最多 | 季节性与峰谷识别。 |
+| 对比不同月份或年份的热度 | 历史趋势与跨年季节性研究。 |
+| 这个词在德国有没有热度 | 目标市场搜索兴趣研究。 |
+| 看看过去一年或节日前后的趋势 | 指定区间及事件影响分析。 |
+| 比较几个词或地区的趋势 | 分别查询并说明相对热度的可比性。 |
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| keyword | string | Yes | The search keyword to analyze (max 100 characters). Must be in the target country's language. |
-| region | string | No | Country/region code. Defaults to `US`. |
-| dayRangeStart | string | No | Start date for the time range (format: YYYY-MM-DD, from 2004 onward). |
-| dayRangeEnd | string | No | End date for the time range (format: YYYY-MM-DD, from 2004 onward). |
+## 前置条件
 
-When both `dayRangeStart` and `dayRangeEnd` are provided, the custom time range takes priority.
+先确定关键词、目标市场和分析时间范围。核对用户意图；未指定地区时采用接口默认值，并在结果中注明。请求所需字段、语言要求、地区范围和日期约定见 `references/api.md`。
 
-## Supported Regions
+## 查询与分析流程
 
-US (United States), GB (United Kingdom), JP (Japan), CA (Canada), MX (Mexico), DE (Germany), FR (France), IT (Italy), ES (Spain), NL (Netherlands), AU (Australia), SG (Singapore), AE (United Arab Emirates), BR (Brazil), IN (India), TR (Turkey), PL (Poland), SE (Sweden)
+1. 明确研究目标：基础热度、季节性、跨年对比、地区比较或新兴趋势。检查关键词与目标市场语言是否匹配，按接口定义准备请求，优先使用简短、聚焦的词语。
+2. 季节性和事件分析选择对应时间区间；跨年分析覆盖需要对比的年份。组合比较时，先明确所需查询组合及算力消耗，单次能力与调用限制见 `references/api.md`。
+3. 检查已有响应文件和缓存，避免重复请求；通过脚本获取数据后，先看摘要，再从保存的 JSON 中提取趋势明细。
+4. 根据实际数据识别峰值、谷值、突发波动及持续增长或下降。用表格或趋势曲线描述结果，说明关键词、地区、时间范围和可见模式。
+5. 查询失败或数据稀疏时，按接口定义解释原因，提出核对拼写、语言或日期区间等调整建议；后续检索遵守成本约束。
 
-Default region is **US**. Use US when the user doesn't specify a region.
+## 执行方式
 
-## 调用方式
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/google_trends_keyword.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **API 端点**：`POST /googleTrend/getTrendByKeys`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/google_trends_keyword.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 输出策略
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-google-trend-get-trend-by-keys-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-google-trend-get-trend-by-keys-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## How to Build Queries
+### 算力消耗预估
 
-### Principles for Effective Queries
+6 算力 / 次
 
-1. **Use the correct language**: Always ensure keywords match the target region's language. Translate first if needed.
-2. **Specify a region**: Default is US, but always confirm the user's intended market.
-3. **Use date ranges for focused analysis**: For seasonal trends or specific event analysis, provide `dayRangeStart` and `dayRangeEnd`.
-4. **Keep keywords concise**: Google Trends works best with short, focused search terms.
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### Usage Examples
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**1. Basic Keyword Trend (Default Region & Time)**
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **解释相对热度**：Google Trends 使用 0–100 归一化兴趣量表，100 表示所选地区和时间范围内的峰值，50 表示相对峰值的一半，0 表示数据不足。它不能提供绝对搜索量，也不能由热度值反推出搜索次数。
+- **谨慎比较**：分别查询的关键词或地区各有归一化范围，比较趋势形态、峰值时间和季节性时说明口径，不能把各自的 100 当作相等的绝对需求量。
+- **保留原始数据**：读取保存响应中的 `trendInfoForKeys[].trendValues[]`，保留 `timeRange` 和 `"<1"` 等原始值，不将其强制转为零。
+- **清晰展示趋势**：列出关键时间点、峰谷及明显变化；仅在数据支持时指出季节性、突发峰值或持续增长、下降。数据稀疏时明确说明分析局限。
+- **利用图表信息**：响应包含 `chartOption` 时，说明已有可视化数据，并描述可见趋势形态。
+- **按需提取本地数据**：优先使用 `jq` 或 `ConvertFrom-Json`。`_dataQuery_executeDynamicQuery` 查询的是 SLS 中存储的 LinkFox 会话数据，只有存在所需存储映射时才能使用，不能用它读取任意本地 JSON。
+
+## 使用示例
+
+### 默认市场的基础趋势
+
 ```json
 {"keyword": "wireless charger"}
 ```
-Query the overall search interest trend for "wireless charger" in the US.
 
-**2. Keyword Trend in a Specific Region**
+### 德国市场的本地语言关键词
+
 ```json
 {"keyword": "Ladekabel", "region": "DE"}
 ```
-Query the search interest for "Ladekabel" (charging cable) in Germany.
 
-**3. Custom Date Range Analysis**
+### 圣诞礼物的季节性趋势
+
 ```json
 {"keyword": "christmas gifts", "region": "US", "dayRangeStart": "2024-09-01", "dayRangeEnd": "2025-01-31"}
 ```
-Analyze the seasonal trend of "christmas gifts" in the US from September 2024 through January 2025.
 
-**4. Year-over-Year Comparison**
+### 澳大利亚防晒需求的跨年对比
+
 ```json
 {"keyword": "sunscreen", "region": "AU", "dayRangeStart": "2023-01-01", "dayRangeEnd": "2025-12-31"}
 ```
-Compare multi-year seasonality of "sunscreen" in Australia.
 
-**5. Regional Market Research**
+### 英国市场的区域研究
+
 ```json
 {"keyword": "yoga mat", "region": "GB"}
 ```
-Check the popularity trend of "yoga mat" in the United Kingdom.
 
-**6. Emerging Trend Detection**
+### 新兴关键词趋势
+
 ```json
 {"keyword": "AI glasses", "region": "US", "dayRangeStart": "2024-01-01", "dayRangeEnd": "2025-12-31"}
 ```
-Track the rise of "AI glasses" search interest over the past two years in the US.
 
-## Display Rules
+## 使用反馈
 
-1. **Present data clearly**: Show trend data in well-formatted tables or describe the trend curve. Include key data points such as peak values, troughs, and notable changes.
-2. **Explain the scale**: Remind users that Google Trends values are on a 0-100 normalized scale, where 100 = peak popularity in the selected scope.
-3. **Highlight patterns**: Point out seasonal patterns, sudden spikes, or sustained growth/decline when visible in the data.
-4. **Chart data availability**: When the response includes `chartOption`, mention that visualization data is available and describe the trend shape.
-5. **Error handling**: When a query fails, explain the reason and suggest adjustments (e.g., check keyword spelling, try a different date range, ensure the keyword is in the correct language).
-## Important Limitations
-
-- **Data analysis**: The response is JSON. Read `trendInfoForKeys[].trendValues[]` from the saved response; preserve `timeRange` and values such as `"<1"` without converting them to zero. `_dataQuery_executeDynamicQuery` queries Linkfox session data stored in SLS, not arbitrary JSON files; use it only when the required stored-data mapping exists.
-- **Normalized values**: Trend values are relative (0-100), not absolute search volumes.
-- **Data availability**: Data is available from 2004 onward, but very niche terms may have sparse data.
-- **Single keyword per call**: Each API call handles one keyword. For multi-keyword comparisons, make separate calls and compare results.
-- **Language requirement**: Keywords must match the target region's language for accurate results.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Queries about keyword search popularity trends:
-
-| User Says | Scenario |
-|-----------|----------|
-| "How popular is XX keyword on Google" | Basic trend lookup |
-| "Is XX trending up or down" | Trend direction analysis |
-| "When does XX peak in searches" | Seasonal peak detection |
-| "Compare popularity of XX across months" | Seasonal pattern analysis |
-| "Is XX gaining traction in Germany" | Regional trend check |
-| "What's the search trend for XX over the past year" | Historical trend analysis |
-| "Holiday search trends for XX" | Seasonal / event-driven analysis |
-
-**Not applicable** -- Needs beyond Google Trends search interest data:
-
-- Google Ads keyword planner or bid/CPC data
-- Absolute search volume numbers (Google Trends provides relative, not absolute data)
-- Social media trending topics (Twitter/X, TikTok, etc.)
-- Amazon-specific search term data (use ABA Data Explorer instead)
-- Website traffic analytics (Google Analytics, SimilarWeb, etc.)
-- Keyword ranking on search engine result pages (SEO rank tracking)
-
-**Boundary judgment**: When users say "keyword research" or "market trend analysis", if it specifically relates to search interest popularity over time from Google's perspective, this skill applies. If they want absolute traffic numbers, advertising metrics, or e-commerce-platform-specific data, it does not apply.
-
-## 算力消耗规则
-
-消耗 6 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

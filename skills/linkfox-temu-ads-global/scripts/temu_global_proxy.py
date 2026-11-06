@@ -16,9 +16,8 @@ Usage:
 import json
 import sys
 
-from _temu_common import load_json_arg, parse_nested_body, require_text
+from _temu_common import load_json_arg, require_text
 from _temu_global_common import DEFAULT_SITE, global_proxy_call
-from _temu_global_common import emit_result, lf_inline_flag
 
 def main():
     if len(sys.argv) < 2:
@@ -27,8 +26,7 @@ def main():
     params = load_json_arg(sys.argv)
     params.setdefault("site", DEFAULT_SITE)
     api_type = require_text(params, "type")
-    result = parse_nested_body(global_proxy_call(params, api_type))
-    emit_result(result, inline=lf_inline_flag())
+    global_proxy_call(params, api_type)
 
 if __name__ == "__main__":
     main()

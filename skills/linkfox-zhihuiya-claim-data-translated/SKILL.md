@@ -1,150 +1,109 @@
 ---
 name: linkfox-zhihuiya-claim-data-translated
-description: 从智慧芽专利数据库获取翻译后的专利权利要求。当用户询问专利权利要求、权利要求翻译、查看特定语言（中文、英文或日文）的权利要求、通过专利ID或公开号查询专利权利、分析权利要求文本、claim translation, patent claim translation, PatSnap, patent translation时触发此技能。即使用户未明确提及"翻译版权利要求"，只要其需求涉及获取特定语言的专利权利要求内容，也应触发此技能。
+description: 从智慧芽（PatSnap）专利数据库获取指定专利的权利要求翻译文本，支持中文、英文、日文、单件或批量查询，并可在原权利要求不可用时使用同族专利替代。适用于按专利 ID 或公开（公告）号查看权利要求、获取特定语言译文及研究权利要求文本；无需明确提及智慧芽或翻译版。不适用于关键词专利检索、引证或法律状态分析、摘要与说明书查询、专利组合统计。
 ---
 
-# Zhihuiya Patent Claims (Translated)
+# 智慧芽专利权利要求翻译
 
-This skill guides you on how to query translated patent claims from the Zhihuiya (PatSnap) patent database, enabling users to retrieve claim texts in Chinese, English, or Japanese for one or more patents.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Patent claims define the legal scope of protection granted by a patent. This tool retrieves the **translated text** of patent claims, supporting three languages: Chinese (`cn`), English (`en`), and Japanese (`jp`). You can look up patents by their internal patent ID or by their publication (announcement) number.
+获取已知专利的权利要求翻译文本，用于查看单件或多件专利的权利要求内容及保护范围相关文本。
 
-**Family patent substitution**: When claims are unavailable for a specific patent, the tool can optionally substitute claims from a related family patent. This is controlled by the `replaceByRelated` parameter.
+**场景速查**
 
-## Data Fields
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查看这个专利的权利要求 | 单件专利权利要求查询。 |
+| 把权利要求译为中文或日文 | 获取指定语言的译文。 |
+| 这个专利主张了哪些内容或保护范围 | 获取权利要求文本供阅读分析。 |
+| 查询这些专利的权利要求 | 批量查询并分专利展示。 |
+| 原权利要求不可用，使用同族专利 | 按用户意图查询同族替代文本。 |
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| Patent ID | patentId | Internal patent identifier | 84a1b2c3-... |
-| Publication Number | pn | Publication (announcement) number of the patent | CN112345678A |
-| Related Publication Number | pnRelated | Publication number of the substitute family patent (only present when family substitution is used) | US20210012345A1 |
-| Claims | claims | Translated patent claim text | 1. A method for... |
+## 前置条件
 
-## Supported Languages
+**先确定查询目标**：取得用户提供或上游已确定的专利标识，确认目标语言和是否接受同族替代。标识要求、语言默认值及批量限制见 `references/api.md`。
 
-| Code | Language |
-|------|----------|
-| en | English (default) |
-| cn | Chinese |
-| jp | Japanese |
+## 查询流程
 
-Default language is **en** (English). Use English when the user does not specify a language.
+1. 明确待查专利、译文语言和同族替代意图；按 `references/api.md` 核对输入并准备请求。
+2. 查询前说明动态算力消耗，由用户决定是否继续；复用同一会话、同一参数已有结果。
+3. 执行查询，按接口参考判断响应，先查看摘要，需要时从保存文件提取完整权利要求。
+4. 按专利分别展示译文，注明语言和同族来源；失败或空结果时解释现有响应并建议核对标识，后续查询遵守成本约束。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /zhihuiya/claimDataTranslated`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_claim_translated.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_claim_translated.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换专利标识或请求选项连续试探；需要再次请求时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-claim-data-translated-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-claim-data-translated-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Parameter Guide
+### 算力消耗预估
 
-### Patent Identification
+预计每次接口请求消耗 3 算力，按请求次数估算；批量返回的记录条数不作为该预估的乘数。拆分成多个请求或额外重新查询时，按新增请求次数累计预估，最终以实际扣除为准。
 
-You must provide **at least one** of the following:
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- **patentId** -- The internal patent ID. When both `patentId` and `patentNumber` are provided, `patentId` takes precedence. Multiple values separated by commas, up to 100 patents per request.
-- **patentNumber** -- The publication or announcement number. Multiple values separated by commas, up to 100 patents per request.
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-### Optional Parameters
+### 解决认证和算力问题
 
-- **lang** -- Target translation language: `en` (English, default), `cn` (Chinese), or `jp` (Japanese).
-- **replaceByRelated** -- Whether to substitute claims from a family patent when the original claims are unavailable: `1` = yes, `0` = no (default).
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## Usage Examples
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**1. Get English claims for a single patent by publication number**
-```
-patentNumber: "CN112345678A"
-lang: "en"
-```
+### 约束与建议
 
-**2. Get Chinese claims for multiple patents by publication number**
-```
-patentNumber: "US20210012345A1,EP3456789B1"
-lang: "cn"
-```
+- **理解权利要求**：专利权利要求界定专利保护范围；本技能获取的是权利要求译文，供用户阅读和分析。
+- **区分同族来源**：同族替代是原权利要求不可用时使用相关同族专利文本。响应出现 `pnRelated` 时，明确告知用户并展示替代专利公开号，避免将其当作原专利文本。
+- **清晰展示译文**：以各专利公开（公告）号为标题分别展示权利要求，保留编号与段落，注明译文语言。
+- **控制批量展示篇幅**：先说明本次返回专利数量，展示若干代表结果，并告知完整结果数量和文件位置。
+- **解释查询失败**：根据响应说明原因，建议核对专利 ID 或公开（公告）号；不因失败自动改变标识或启用同族替代。
+- **保持缓存与输出兼容**：脚本选项、缓存位置、有效期和工作目录约定见 `references/api.md` 的“脚本选项与运行约定”。
 
-**3. Get Japanese claims with family patent fallback**
-```
-patentNumber: "JP2021123456A"
-lang: "jp"
-replaceByRelated: 1
+## 使用示例
+
+### 按公开（公告）号获取英文权利要求
+
+```json
+{"patentNumber": "CN112345678A", "lang": "en"}
 ```
 
-**4. Query by patent ID**
+### 批量获取中文权利要求
+
+```json
+{"patentNumber": "US20210012345A1,EP3456789B1", "lang": "cn"}
 ```
-patentId: "84a1b2c3-d4e5-6f78-9abc-def012345678"
-lang: "en"
+
+### 获取日文权利要求并允许同族替代
+
+```json
+{"patentNumber": "JP2021123456A", "lang": "jp", "replaceByRelated": 1}
 ```
 
-## Display Rules
+### 按专利 ID 查询
 
-1. **Present claims clearly**: Show the translated claim text with proper formatting. If multiple patents are returned, separate each patent's claims with its publication number as a heading.
-2. **Family substitution notice**: When `pnRelated` is present in the response, clearly inform the user that the claims were sourced from a related family patent and show the substitute publication number.
-3. **Language notice**: State the language of the returned claims so the user knows which translation they are viewing.
-4. **Large results**: When multiple patents are returned, summarize the count and show a few representative entries, reminding the user of the total.
-5. **Error handling**: When a query fails, explain the reason based on the error response and suggest checking the patent ID or publication number.
-## Important Limitations
+```json
+{"patentId": "84a1b2c3-d4e5-6f78-9abc-def012345678", "lang": "en"}
+```
 
-- **At least one identifier required**: Either `patentId` or `patentNumber` must be provided; otherwise the query will fail.
-- **Batch limit**: A maximum of 100 patents per request.
-- **Language support**: Only Chinese (`cn`), English (`en`), and Japanese (`jp`) are supported.
-- **Family substitution**: Substitute claims are only returned when `replaceByRelated` is set to `1` and the original claims are unavailable.
+## 使用反馈
 
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Queries related to patent claim text and translation:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Show me the claims for patent XX" | Single patent claim lookup |
-| "Translate claims to Chinese/Japanese" | Claim translation |
-| "What does patent XX claim?" | Claim content retrieval |
-| "Get claims for these patents: XX, YY" | Batch patent claim lookup |
-| "Claims unavailable, try family patent" | Family patent substitution |
-| "Patent rights scope of XX" | Claim text retrieval |
-
-**Not applicable** -- Needs beyond patent claim translation:
-
-- Patent search or discovery (finding patents by keyword)
-- Patent citation or legal status analysis
-- Patent abstract or description retrieval
-- Patent portfolio analytics or statistics
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利权利要求翻译结果
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

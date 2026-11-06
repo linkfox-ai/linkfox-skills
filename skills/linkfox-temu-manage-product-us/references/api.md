@@ -1,87 +1,138 @@
-# linkfox-temu-manage-product-us — API 参考
+# Temu 美国站商品管理 接口说明
 
-Temu **美国站商品管理**（Partner US **Product > Manage Product**），经本 skill `temu_us_proxy`（`POST /temu/proxy`） 转发。Temu 的 `type` 写在 Body，**不是** URL 路径。
+24 个商品操作见 [接口索引](apis/README.md)；每个操作的 type 是转发标识，不是 URL path。本页定义另一个实际接口：加签文件下载。
 
-> 网关与鉴权：本 skill `scripts/`（`LINKFOXAGENT_API_KEY`、`accessToken` / `storeKey`）。授权见 `references/access-token.md`。（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
+## 公共规则
 
----
+### 调用规范
 
-## 调用规范
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-| 项 | 说明 |
-|----|------|
-| 网关根地址 | `${LINKFOX_TOOL_GATEWAY}`（可用 `TEMU_API_BASE_URL` / `STORE_API_BASE_URL` 覆盖） |
-| 商品 OpenAPI | `POST /temu/proxy` |
-| 加签文件下载 | `POST /temu/fileDownload`（`temu_us_file_download.py`） |
-| LinkFox 鉴权 | Header **`Authorization`** 与 **`Token`**（同值）；或 `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY`；或 JSON `token`（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理） |
-| Temu 鉴权 | Body `accessToken`，或 `storeKey` + `site` + `managementType` + `tokenPurpose` |
-| 默认 | `site=us`，`managementType=semi-managed`，`tokenPurpose=product-inventory` |
-| 上游 OpenAPI（US） | `https://openapi-b-us.temu.com/openapi/router`（网关按 `site` 解析） |
+### 响应码基本规则
 
-### 网关请求 Body（`/temu/proxy`）
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| site | string | 是 | `us`（本 skill 默认） |
-| managementType | string | 是 | `semi-managed` |
-| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌 |
-| storeKey | string | 与 accessToken 二选一 | `~/.linkfox/temu-access-tokens.json` 中的键 |
-| tokenPurpose | string | 否 | 建议 `product-inventory` |
-| type | string | 是 | Temu 接口名，如 `bg.local.goods.list.query` |
-| params | object | 否 | 业务参数，见各接口文档 |
+## 兼容运行约定
 
-### 网关响应
+### 认证与网关
+
+| 项目 | 约定 |
+|------|------|
+| 网关地址优先级 | LINKFOX_TOOL_GATEWAY → TEMU_API_BASE_URL → STORE_API_BASE_URL → https://tool-gateway.linkfox.com，去掉末尾斜线。 |
+| LinkFox Key 优先级 | JSON token → linkfoxToken → linkfox_token → LINKFOX_AGENT_API_KEY → LINKFOXAGENT_API_KEY；两个请求头 Authorization 与 Token 同值。 |
+| 会话头 | 保留 SESSION_ID、MESSAGE_ID、MODE_ID、APP_NAME。 |
+| Temu 店铺身份 | accessToken 优先；否则按 storeKey + site + managementType + tokenPurpose 精确读取本地令牌，无自动 OAuth。 |
+| 美国站默认值 | site=us，managementType=semi-managed，tokenPurpose=product-inventory；参数校验和授权应用见 [access-token.md](access-token.md)。 |
+| 上游地址 | 美国站由网关转发至 https://openapi-b-us.temu.com/openapi/router；紫鸟转发路由为 /temu-proxy/{site}/{managementType}。不直接发送 Temu HTTP 请求。 |
+| 参数加工 | 美国站包装器优先采用对象 params，否则将顶层非保留业务字段放入 params；request 包装层保留。通用 temu_proxy.py 则显式接收 params 对象。 |
+| 响应缓存 | 本技能所有业务调用 run 时强制 --no-cache，始终禁用响应缓存。缓存目录可能被公共脚本创建，但不读写响应缓存。不会对失败或空结果自动重试。 |
+| 输出文件 | 严格写入当前工作目录的 linkfox/<日期>/<session>/data/；不回退 /tmp、用户目录或其他工作区。使用微秒文件名保留同一秒内的多次响应。 |
+| 输出展示 | 完整响应落盘；8000 UTF-8 字节以内全量展示，超过时显示最大列表和前三条样本；--inline 强制全量。保留 body 并解析为 temuBody。 |
+
+### 辅助 CLI
+
+| 脚本 | 输入与行为 |
+|------|------|
+| scripts/check_linkfox_token.py | 可选 JSON token，使用 /temu/proxy 的 site=cn、managementType=full-managed、accessToken=probe、type=probe 探测；这是同一转发接口的认证辅助请求，不执行商品管理操作。不会自动执行。 |
+| scripts/temu_token_guide.py | JSON shopType（或 managementType）、tokenPurpose、可选 site；纯本地输出授权步骤。 |
+| scripts/save_temu_access_token.py | JSON storeKey、site、managementType、accessToken、可选 tokenPurpose（默认 default）、label；只保存本地令牌。 |
+| scripts/list_temu_access_tokens.py | 可选 JSON mask（默认 true），默认脱敏列出本地令牌。 |
+| scripts/get_temu_access_token.py | JSON storeKey、site、managementType、可选 tokenPurpose（默认 default）；返回本地令牌，找不到时退出码为 1。 |
+| scripts/temu_proxy.py | 多 site 通用转发，site、managementType、type 显式提供；与美国站包装器共用同一网关。 |
+| scripts/temu_us_proxy.py | 按 JSON type 选择操作，保留美国站默认值与参数加工。 |
+| scripts/temu_file_download.py / temu_us_file_download.py | 多 site / 美国站加签下载，具体字段见下文。 |
+
+### 认证探测输出
+
+`check_linkfox_token.py` 只在用户需要检查身份时运行，不自动探测或重试。HTTP 与 `errcode` 按公共基础规则判断；连接失败、网关异常和转发失败不能报告认证通过。正常网关响应中的 `code=1002` 表示探测已到达业务校验。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| body | string | Temu 原始 JSON 字符串；脚本解析为 `temuBody` |
-| code | integer | 网关错误码：`1002` 参数/Token，`1003` 转发失败 |
+| ok | boolean | 是否通过本次探测；失败时 CLI 退出码为 1，通过时为 0。 |
+| linkfoxToken | string | 仅通过时返回脱敏的 LinkFox Key，不显示完整密钥。 |
+| reason | string | 失败时返回：`linkfox_token_invalid` 表示 HTTP/errcode 为 401 或消息提示认证无效；`gateway_probe_failed` 表示其他探测失败。 |
+| gatewayReachable | boolean | 通过时为 true；网关异常时根据是否取得 HTTP 状态判断，连接失败为 false；认证无效分支未定义此字段。 |
+| httpStatus | integer / null | 仅 `gateway_probe_failed` 分支返回实际 HTTP 状态；连接失败为 null。 |
+| message | object / string | 失败时保留网关响应或认证消息。 |
+| hint | string | 失败时提供修正身份或按认证、网关说明处理的提示。 |
+| note | string | 仅通过时返回探测通过说明；不表示商品业务操作成功。 |
 
-解析顺序：**网关 `code`** → `JSON.parse(body)` → `success` / `errorCode` / `errorMsg` / `result`。
+## 接口：加签文件下载（fileDownload）
 
-### 脚本调用
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/fileDownload`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是 | 美国站包装器默认 us；通用脚本显式指定，支持 cn / partner / us / global / eu。 |
+| managementType | string | 是 | 美国站包装器默认 semi-managed；通用脚本显式指定，支持 full-managed / semi-managed。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌，脚本解析本地店铺身份后发送。 |
+| url | string | 是 | 待加签下载的资源 URL。 |
+| storeKey | string | 脚本兼容 | 本地店铺键，解析后不发给网关。 |
+| tokenPurpose | string | 否 | 美国站默认 product-inventory；通用脚本默认 default，仅用于本地令牌定位。 |
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox Key 覆盖值，按兼容运行约定取用，不发送到下载 Body。 |
+| --inline | CLI flag | 否 | 保存完整响应后强制全量打印。 |
+| --no-cache | CLI flag | 否 | 始终禁用响应缓存。 |
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 如存在，按公共基础规则判断。 |
+| errmsg | string | 如存在，保留网关错误消息。 |
+| code | integer | 网关错误码：1002 参数或 Token 错误，1003 转发失败。 |
+| httpStatus | integer / null | 网关定义的上游 HTTP 状态；当前服务未主动赋值，可能为空或缺失，不能代替本次网关请求的 HTTP 状态。 |
+| contentType | string / null | 网关定义的上游 Content-Type；当前服务未主动赋值，可能为空或缺失。 |
+| body | string | 网关透传的上游下载响应；可能是文件内容的 Base64 编码或原始响应，不保证编码方式，也不表示已保存为本地素材文件。 |
+| _httpStatus | integer / null | 仅脚本附加：本次请求网关的实际 HTTP 状态；连接失败为 null。与上游 httpStatus 分开保存，完整响应和标准输出均保留。 |
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关 code=1002 / 1003 时按参数/认证或转发失败处理。下载成功码未明确；须根据实际响应核实结果，不据 HTTP 成功推断文件已保存。
+- 本接口返回网关下载结果，不额外直连素材 URL，也不解析为 temuBody。
+- 上游 httpStatus 有值时也须检查该状态；body 的具体内容和编码按实际响应核实，不假定存在 downloadUrl 或自动解码保存文件。
+
+### curl 示例
 
 ```bash
-export LINKFOXAGENT_API_KEY="<key>"
-python scripts/us_manage_list_query.py '{"accessToken":"TOKEN","request":{"pageNo":1,"pageSize":20,"goodsSearchType":1,"goodsStatusFilterType":0}}'
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/fileDownload" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{"site":"us","managementType":"semi-managed","accessToken":"TOKEN","url":"https://example.com/signed-file-url"}'
 ```
 
-业务字段可放在顶层或嵌套 `params`。
+## Feedback
 
----
-
-## 接口一览（24）
-
-完整 `sub_menu_code` 与 Partner 文档 URL 见 [partner-us-catalog.md](./partner-us-catalog.md)。
-
-**每个接口单独一份文档**： [apis/README.md](./apis/README.md)（24 个 `apis/<type-slug>.md`）。
-
----
-
-## 典型管理流程
-
-```text
-1. bg.local.goods.list.query 或 temu.local.goods.list.retrieve  → 找 goodsId
-2. bg.local.goods.detail.query                                 → 拉全量详情
-3. bg.local.goods.partial.update / bg.local.goods.update       → 改标题/图/属性
-4. bg.local.goods.stock.edit                                     → 改库存
-5. bg.local.goods.sale.status.set                                → 上下架
-```
-
-发品（V2 add）请用 **`linkfox-temu-add-product-us`**。价格/供货价请用 **`linkfox-temu-price-us`**。订单请用 **`linkfox-temu-order-us`**。履约/发货请用 **`linkfox-temu-fulfillment-us`**。买家取消请用 **`linkfox-temu-cancel-order-us`**。卖家取消请用 **`linkfox-temu-cancel-order-us`**。
-
----
-
-## 网关错误码
-
-| code | 说明 | 处理 |
-|------|------|------|
-| 1002 | 参数或 LinkFox Token 无效 | 修正参数与 `LINKFOXAGENT_API_KEY` |
-| 1003 | 转发失败 | 检查 Temu token、白名单、网络 |
-
----
-
-## Feedback API
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- `skillName`: **`linkfox-temu-manage-product-us`**
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-manage-product-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

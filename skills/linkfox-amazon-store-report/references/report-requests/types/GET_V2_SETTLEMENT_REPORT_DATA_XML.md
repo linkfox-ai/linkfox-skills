@@ -1,18 +1,18 @@
 # `GET_V2_SETTLEMENT_REPORT_DATA_XML`
 
-> **分类**：14. Settlement/Payments Reports  
-> **说明**：Settlement report v2 (XML)  
-> **可用范围**：Seller only
+> **分类**：14. 结算与支付报告  
+> **说明**：结算报告 v2（XML）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Settlement Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-settlement#xml-settlement-report)（章节：**XML Settlement Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting)
-- **Availability**：Seller Central sellers
-- **Report output type**：XML
-- **要点**：This report is deprecated.
+- **角色**：[Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting)
+- **可用范围**：Seller Central 卖家
+- **输出格式**：XML
+- **要点**：此报告已弃用。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-settlement#xml-settlement-report>
 

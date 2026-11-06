@@ -31,7 +31,7 @@ Agent 的主要产物是一份合法的 linkfox-workflow agentflow v2 JSON(顶�
 **必需信息**:
 
 - 业务目标(一句话说明这个 flow 干什么)
-- 触发方式(`BusinessStart.startInputType`,只有四种:chatInput / scheduleInput / storeAuthorization / tableRecordTrigger;**没有** formInput / webhookTrigger)
+- 触发方式(`BusinessStart.startInputType`,只有三种:chatInput / scheduleInput / tableRecordTrigger;**没有** storeAuthorization / formInput / webhookTrigger)
 - 主要步骤(自然语言列表,由 Agent 翻译成节点)
 - 是否有人工审批环节
 - 是否需要循环/迭代
@@ -138,12 +138,15 @@ python scripts/save_workflow.py --content-file <临时文件> --dry-run
     - 无非法嵌套:Iteration 内不嵌 Iteration/Loop;Loop 内不含写型节点
 11. **变量替换**(`save_workflow.py` 按 error 拦下):`inputParams` 不是空数组(脚本代填的节点整个字段别写,`[]` 会被拦);手写的 `inputParams` 里用了 `{{ }}` 的字段带 `acceptVariable: true`(字段已声明只漏布尔时脚本自愈,字段整块没声明仍报 error);`{{ <nodeId>.output... }}` 的 nodeId 真实存在;不出现裸 `.output`。
 12. **Condition operation**(`save_workflow.py` 按 error 拦下):逐字属于该 `type` 的合法枚举 —— `equal` 而不是 `equals`,`larger` 只对 number 合法。
-13. **占位字段**:model / credentialId / documentStore uuid / flowId / `amazonStore` / `expertId` 若非空,提醒用户"这些应留占位;检测到具体值,是否确认要写死"(`save_workflow.py` 给 warning,不拦)。
+13. **占位字段**:model / credentialId / documentStore uuid / flowId / `amazonStore`(DataReader 的店铺)/ `expertId` 若非空,提醒用户"这些应留占位;检测到具体值,是否确认要写死"(`save_workflow.py` 给 warning,不拦)。
+14. **DataReader 亚马逊分支**(`save_workflow.py` 按 error 拦下):`amazonDataType` 只能是 `listing` / `orders` / `ads`(已删除的 `orderList` / `afterSalesOrder` / `fbaInventory` / `removalOrder` 直接报错);`ads` 必须同时给 `amazonStartDate` / `amazonEndDate` 且区间 ≤90 天,`orders` 的日期要么都给要么都不给;日期格式 `yyyy-MM-dd`;`amazonAsin` ≤32 / `amazonSku` ≤160 / `amazonKeyword` ≤500 / `amazonTitle` ≤500 字符;`amazonStartPage` ≥1 正整数、`amazonPageSize` 1..200;店铺值带 `\|` 的旧格式报错。不属于当前数据类型的筛选(如 `listing` 下的日期、`orders` 下的关键词 / 标题、`ads` 下的 ASIN / SKU)只 warning(运行时不读)。
+15. **亚马逊 DataReader 不能直连 `WriteFile`**(`save_workflow.py` 按 error 拦下):这一分支输出 `orders` / `listings`,没有 `rows`,直连会把整份聚合结果写成一条记录;中间必须夹一层 `CustomFunction` 映射成 `{rows: [...]}`。
+16. **DataReader 行数上限**(`save_workflow.py`):`maxRows` > 2000 或非正整数报 error(运行时会静默夹到 2000);`amazonDataType=ads` 且 `maxRows` > 200 给 warning —— 广告只请求一页 200 条、不翻页,`truncated` 恒 false、`total` 恒 null,超出的部分**静默丢**,要全量只能按日期区间切批(见 `nodes-linkfox-custom.md`「逐页读取 → 处理 → 落盘 → 下一页」)。
 
 问题分级:
 
 - **error**:结构非法,导入 linkfox-workflow 系统会报错或渲染错乱。
-- **warning**:可导入但语义可能不对(如 Condition 没接 Else、HumanInput 只接一个出口)。
+- **warning**:可导入但语义可能不对(如 Condition 没接 Else、HumanInput 只接一个出口;亚马逊店铺数据用 `LinkfoxHTTP` 直调查询接口却没有它不透传的专属参数,应改回 `DataReader`)。
 
 ## export:输出
 
@@ -194,5 +197,5 @@ python scripts/save_workflow.py --content-file <临时文件> --dry-run
   - **"要等一会儿 / 要轮询异步任务"不在此列**:`CustomFunction` 里 `await sleep(ms)` 可以延时,AIGC 这类只回 `taskId` 的接口按 sleep → 查询 → `Condition` → `Loop` 搭轮询环即可,正常生成,不要报 blocked。见 `nodes-linkfox-custom.md` 的「异步任务接口」。
 - 用户提供的原 JSON 不是合法 agentflow v2 结构(缺顶层字段、`data.type` 未知),让用户确认来源。
 - LinkFox API Key 无法从运行时环境解析,或导入/mapping 校验失败。保留 workspace 文件,不输出 flow info 标签。
-- 用户要求发布、删除 flow,删除或修改执行记录,或查询 model / credential / documentStore 目录;说明当前授权边界只覆盖确认后的 workflow 创建/更新,以及明确要求时的执行与执行记录查询。
+- 用户要求发布、删除 flow,删除或修改执行记录,或查询 model / documentStore 目录;说明当前授权边界只覆盖确认后的 workflow 创建/更新、明确要求时的执行与执行记录查询、以及变量 / 凭据的 `workflow_config.py` 管理(不查看凭据明文)。
 - 用户要求执行(`run`)或查执行记录(`runs`)但拿不到 workflowId(对话里没有 `<linkfox-flow-info id="...">`,也无法唯一确定是哪个流程);问一次是哪个流程,不猜、不拿展示名反推。

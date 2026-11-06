@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
-"""
-Upload Local Image - LinkFox Skill
-Uploads a local image file to LinkFox OSS and returns a publicly accessible URL.
+"""上传本地图片：获取预签名、OSS PUT，再输出公开图片链接。
 
-Steps:
-  1. Request a presigned PUT URL from the LinkFox OSS gateway
-  2. Upload the local file to the presigned URL
-  3. Return the public URL (valid for 24 hours)
-
-Usage:
-  python upload_image.py /path/to/local/image.png
+用法：python upload_image.py <本地图片路径>
+公开链接有效 24 小时；stdout 输出 {"url": "..."}。
 """
 
 import json
@@ -18,144 +11,85 @@ import sys
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
-_API_BASE = (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
-PRESIGN_URL = f"{_API_BASE}/oss/file/presignedPut"
+from _ruiguan_common import run_gateway, is_normal_response
+from call_api import get_api_key
 
+API_PATH = '/oss/file/presignedPut'
+SLUG = 'linkfox-ruiguan-detection-patent-design-upload'
 CONTENT_TYPE_MAP = {
-    "jpg": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "png": "image/png",
-    "gif": "image/gif",
-    "webp": "image/webp",
-    "heic": "image/heic",
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'heic': 'image/heic',
 }
 
 
-def get_api_key():
-    """
-    获取配置在环境变量的API Key。
-    如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-    """
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
-
-
 def get_presigned_url(content_type: str, file_extension: str) -> str:
-    """Request a presigned PUT URL from the OSS gateway."""
-    api_key = get_api_key()
-    data = json.dumps({
-        "contentType": content_type,
-        "fileExtension": file_extension,
-    }).encode("utf-8")
-
-    req = Request(
-        PRESIGN_URL,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
-
+    """通过公共调用器请求预签名，不读取或写入响应缓存。"""
     try:
-        with urlopen(req, timeout=150) as response:
-            result = json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        print(f"Failed to get presigned URL: HTTP {e.code}: {e.reason}\n{body}", file=sys.stderr)
-        sys.exit(1)
-    except URLError as e:
-        print(f"Connection failed: {e.reason}", file=sys.stderr)
-        sys.exit(1)
-
-    if result.get("errcode") != 200:
-        print(f"API error: {result.get('errmsg', 'unknown error')}", file=sys.stderr)
-        sys.exit(1)
-
-    return result["url"]
+        status, result, _ = run_gateway(API_PATH, SLUG, {
+            'contentType': content_type,
+            'fileExtension': file_extension,
+        })
+    except OSError as exc:
+        print(f'无法保存预签名响应：{exc}', file=sys.stderr)
+        raise SystemExit(1)
+    if not is_normal_response(status, result):
+        print(f'获取预签名失败：HTTP {status}，{json.dumps(result, ensure_ascii=False)}', file=sys.stderr)
+        raise SystemExit(1)
+    url = result.get('url')
+    if not isinstance(url, str) or not url.strip():
+        print('预签名响应缺少有效 url', file=sys.stderr)
+        raise SystemExit(1)
+    return url
 
 
 def upload_file(presigned_url: str, file_path: str, content_type: str):
-    """Upload the local file to the presigned OSS URL via HTTP PUT."""
-    with open(file_path, "rb") as f:
-        file_data = f.read()
-
-    req = Request(
-        presigned_url,
-        data=file_data,
-        headers={
-            "Content-Type": content_type,
-            "x-oss-object-acl": "public-read",
-        },
-        method="PUT",
-    )
-
+    """仅对预签名存储地址执行 PUT，保留原始查询串和编码。"""
+    with open(file_path, 'rb') as stream:
+        file_data = stream.read()
+    req = Request(presigned_url, data=file_data, headers={
+        'Content-Type': content_type,
+        'x-oss-object-acl': 'public-read',
+    }, method='PUT')
     try:
         with urlopen(req, timeout=120) as response:
             if response.status not in (200, 201):
-                print(f"Upload failed with status: {response.status}", file=sys.stderr)
-                sys.exit(1)
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        print(f"Upload failed: HTTP {e.code}: {e.reason}\n{body}", file=sys.stderr)
-        sys.exit(1)
-    except URLError as e:
-        print(f"Upload connection failed: {e.reason}", file=sys.stderr)
-        sys.exit(1)
+                print(f'图片上传失败，状态码：{response.status}', file=sys.stderr)
+                raise SystemExit(1)
+    except HTTPError as exc:
+        body = exc.read().decode('utf-8') if exc.fp else ''
+        print(f'图片上传失败：HTTP {exc.code}: {exc.reason}\n{body}', file=sys.stderr)
+        raise SystemExit(1)
+    except URLError as exc:
+        print(f'图片上传连接失败：{exc.reason}', file=sys.stderr)
+        raise SystemExit(1)
 
 
 def extract_public_url(presigned_url: str) -> str:
-    """Extract the base public URL by stripping query parameters."""
-    return presigned_url.split("?")[0]
+    """仅移除签名查询串，不解码或重建对象路径。"""
+    return presigned_url.split('?')[0]
 
 
 def main():
     if len(sys.argv) < 2:
-        print(
-            "Usage: upload_image.py <local_image_path>\n"
-            "Example: upload_image.py /path/to/product.png",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
+        print('用法：upload_image.py <本地图片路径>', file=sys.stderr)
+        raise SystemExit(1)
     file_path = sys.argv[1]
-
     if not os.path.isfile(file_path):
-        print(f"File not found: {file_path}", file=sys.stderr)
-        sys.exit(1)
-
-    extension = os.path.splitext(file_path)[1].lstrip(".").lower()
+        print(f'文件不存在：{file_path}', file=sys.stderr)
+        raise SystemExit(1)
+    extension = os.path.splitext(file_path)[1].lstrip('.').lower()
     content_type = CONTENT_TYPE_MAP.get(extension)
     if not content_type:
-        print(
-            f"Unsupported image format: .{extension}\n"
-            f"Supported formats: {', '.join(CONTENT_TYPE_MAP.keys())}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    # Step 1: Get presigned URL
+        print(f'不支持的图片格式：.{extension}；支持：{", ".join(CONTENT_TYPE_MAP)}', file=sys.stderr)
+        raise SystemExit(1)
     presigned_url = get_presigned_url(content_type, extension)
-
-    # Step 2: Upload file
     upload_file(presigned_url, file_path, content_type)
-
-    # Step 3: Output public URL
-    public_url = extract_public_url(presigned_url)
-    print(json.dumps({"url": public_url}, indent=2, ensure_ascii=False))
+    print(json.dumps({'url': extract_public_url(presigned_url)}, indent=2, ensure_ascii=False))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

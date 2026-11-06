@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Factory for thin US Returns & Refunds API CLI scripts."""
+"""Global 退货退款 CLI 的业务入口。"""
 
 import sys
 

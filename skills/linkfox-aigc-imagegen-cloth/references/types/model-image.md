@@ -30,7 +30,7 @@
 
 ```bash
 DATADIR=$(python <brand-gene根目录>/scripts/save_brand_gene.py --datadir)
-python scripts/build_imagegen_prompt.py \
+python <本skill根目录>/scripts/build_imagegen_prompt.py \
   --type MODEL_IMAGE \
   --image-urls '<步骤1的URL JSON数组>' \
   --image-desc '<imageDesc，可空>' \

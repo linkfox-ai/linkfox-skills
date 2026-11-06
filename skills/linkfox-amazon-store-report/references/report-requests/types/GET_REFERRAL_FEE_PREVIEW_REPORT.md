@@ -1,18 +1,18 @@
 # `GET_REFERRAL_FEE_PREVIEW_REPORT`
 
-> **分类**：7. Inventory Reports  
-> **说明**：Referral fee preview  
-> **可用范围**：Seller only
+> **分类**：7. 库存报告  
+> **说明**：佣金预览  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Inventory Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory)（章节：**GET_REFERRAL_FEE_PREVIEW_REPORT**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [库存报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory)（章节：**GET_REFERRAL_FEE_PREVIEW_REPORT**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting)
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **要点**：Contains the seller's open listings as well as the price and estimated referral fees for each SKU. 📘NoteThe information in this report may be up to 24 hours old. Do not request a report more than once per 24-hour period.
+- **角色**：[Finance and Accounting](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#finance-and-accounting)
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：包含卖家的开放刊登、每个 SKU 的价格和预计佣金。数据可能延迟最多 24 小时；24 小时内不要重复请求。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory>
 

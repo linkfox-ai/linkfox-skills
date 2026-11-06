@@ -22,18 +22,11 @@ paginationToken（上一页响应中的 nextToken）、includedData、skipDepChe
 
 from __future__ import annotations
 
-import json
 import sys
 from typing import List
 from urllib.parse import quote
 
-from _spapi_orders_common import (
-    developer_proxy_call,
-    emit_result,
-    ensure_auth_skill_available,
-        lf_inline_flag,
-    merge_json_body,
-)
+from _spapi_orders_common import run_proxy, ensure_auth_skill_available, load_cli_params, require_fields
 
 PATH = "orders/2026-01-01/orders"
 
@@ -81,7 +74,11 @@ def _build_query(p: dict) -> str:
     if lub:
         add("lastUpdatedBefore", str(lub).strip())
 
-    for mid in _str_list(p.get("marketplaceIds"), "marketplaceIds"):
+    marketplaces = _str_list(p.get("marketplaceIds"), "marketplaceIds")
+    if not 1 <= len(marketplaces) <= 50:
+        print("marketplaceIds 必须包含 1～50 个站点 ID。", file=sys.stderr)
+        raise SystemExit(1)
+    for mid in marketplaces:
         add("marketplaceIds", mid)
     for fs in _str_list(p.get("fulfillmentStatuses"), "fulfillmentStatuses"):
         add("fulfillmentStatuses", fs)
@@ -92,7 +89,15 @@ def _build_query(p: dict) -> str:
 
     mrp = p.get("maxResultsPerPage")
     if mrp is not None:
-        add("maxResultsPerPage", str(int(mrp)))
+        try:
+            page_size = int(mrp)
+        except (TypeError, ValueError, OverflowError):
+            print("maxResultsPerPage 必须为 1～100 的整数。", file=sys.stderr)
+            raise SystemExit(1)
+        if isinstance(mrp, bool) or not 1 <= page_size <= 100:
+            print("maxResultsPerPage 必须为 1～100 的整数。", file=sys.stderr)
+            raise SystemExit(1)
+        add("maxResultsPerPage", str(page_size))
 
     pt = p.get("paginationToken")
     if pt:
@@ -110,29 +115,19 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-    try:
-        params = json.loads(sys.argv[1])
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON: {e}", file=sys.stderr)
-        sys.exit(1)
+    params = load_cli_params()
 
     if not params.get("skipDepCheck"):
         ensure_auth_skill_available("search_orders.py")
 
-    for f in ("sellerId", "region", "marketplaceIds"):
-        if f not in params:
-            print(f"Missing required field: {f}", file=sys.stderr)
-            sys.exit(1)
+    require_fields(params, ("sellerId", "region", "marketplaceIds"))
 
     seller_id = str(params["sellerId"])
     region = str(params["region"])
     qs = _build_query(params)
 
-    proxy = developer_proxy_call(region, PATH, "GET", seller_id, query_string=qs)
-    out: dict = {"developerProxy": proxy, "resolvedPath": PATH, "queryString": qs}
-    merge_json_body(out, proxy, "searchOrders")
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy("searchOrders", region, PATH, "GET", seller_id,
+              query_string=qs, result_field="searchOrders")
 
 
 if __name__ == "__main__":

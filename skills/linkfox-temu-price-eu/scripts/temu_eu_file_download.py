@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""US site file download via /temu/fileDownload (default site=eu)."""
+"""EU 加签文件下载，默认 site=eu。"""
 
 import json
 import sys

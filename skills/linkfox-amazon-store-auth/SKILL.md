@@ -1,262 +1,127 @@
 ---
 name: linkfox-amazon-store-auth
-description: 亚马逊卖家店铺授权与账号连接管理。用于生成授权链接、绑定店铺、查询已授权店铺、检查授权状态、刷新访问令牌和本地取消/解绑授权；生成授权链接时需要 sellerName 区分店铺。用户提到亚马逊店铺授权、批量授权、绑定或连接 Amazon Seller 账号、查看已授权店铺、授权失效、刷新令牌、token 状态、取消授权、解绑店铺、停用授权、Amazon seller authorization、bind seller account、refresh access token、disconnect seller account 时触发。即使未明确说“授权”，只要其他亚马逊店铺操作因未绑定店铺、凭证过期或需要选择授权账号而无法继续，也应触发此技能。授权时支持保留原手动流程或选择紫鸟 CLI 自动授权。
+description: 管理亚马逊卖家店铺授权与账号连接，支持手动授权、紫鸟 CLI 自动或批量授权、已授权店铺查询、授权状态检查、令牌刷新及本地解绑。适用于新增或恢复店铺连接、授权失效排查和为卖家后台业务选择账号；不适用于报告下载、商品刊登、订单、库存或广告业务本身。
 ---
-
 # Amazon 店铺授权与管理
 
-本 skill 负责 **亚马逊卖家店铺的 OAuth 授权、已授权店铺列表、授权状态查询、令牌刷新与本地取消授权**，是拉取报告、查询库存、同步订单等所有下游操作的前置依赖。下游业务经 `developerProxy` 传入 `sellerId`+`region` 即可，**无需**先取 raw token。
+## 适用范围
 
-> 📌 **Related skill**：如果用户需要 **拉取亚马逊店铺报告**（库存 / 订单 / 销售 / 财务报告等），请切换到 `linkfox-amazon-store-report`。该 skill 依赖本 skill 提供的授权与令牌能力。
+### 适用
 
-## 授权方式路由（授权任务最先执行）
+管理 Amazon 卖家店铺的 OAuth 授权与连接，为下游业务确定目标店铺。
+用户希望绑定账号、查看店铺、检查或恢复授权、解绑连接，或下游操作因未连接店铺而无法继续时使用本技能。
 
-本节优先于后续 `Core Concepts`、`Usage Scenarios` 和参数要求。只有用户要新增、恢复或批量执行授权时才进行选择；查询、刷新和解绑仍直接执行原场景。
+**场景速查**
 
-需要授权且用户尚未选择方式时，必须先让用户选择：
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 授权或绑定我的亚马逊店铺 | 选择手动或紫鸟 CLI 自动授权。 |
+| 自动授权、批量授权、全部授权 | 对所选 Amazon 店铺执行紫鸟 CLI 授权。 |
+| 看看已授权店铺 | 展示当前成员的店铺列表。 |
+| 令牌过期了、刷新令牌 | 刷新并展示状态。 |
+| 检查店铺授权或 token 状态 | 展示授权状态与过期元数据。 |
+| 取消授权、解绑这个店铺 | 核对范围后解除当前成员的区域连接。 |
+| 查订单或拉报告之前需要选店 | 完成选店与授权确认后交给对应业务技能。 |
 
-1. **手动授权**：选择后继续执行原 Scenario 1，此时才询问并使用 `sellerName`。调用原 `authorize_url.py` 时还需传入 `central: "seller"` 和目标站点的 `marketplace`（如美国站为 `US`）；当前紫鸟接口缺少 `marketplace` 会拒绝生成链接。站点不明确时先向用户确认，不得仅凭区域猜测。原手动脚本保持不变。
-2. **紫鸟 CLI 自动授权**：向用户展示此选项时只用一句话说明：“紫鸟 CLI 自动授权（推荐，仅支持本机 Windows/macOS；Agent 会自动检查并推进，只有登录、系统确认或审核等必要步骤才需要你操作）”。该模式要求 CLI、紫鸟客户端和 Bridge 位于同一台用户可见的电脑；云端 Agent、远程主机/虚拟机、容器、WSL 和 Linux（包括本机 Ubuntu）均不支持，不能因为远端装得上软件就启用。用户选择后在后台完成环境、版本和现有配置检查，正常项不逐条汇报，已有可用配置直接复用。只有执行环境被明确识别为用户本机后才完整执行 `references/automatic-authorization.md`；否则提示本机使用自动授权或选择手动授权，禁止在当前环境安装 CLI、申请 Key 或打开店铺。自动模式不得询问手动流程的 `sellerName`；所选紫鸟店铺的 `storeName` 用作授权标记。
+### 边界
 
-用户已在当前请求中明确说“自动授权”“紫鸟 CLI 自动授权”或同义表达时，直接进入自动流程，不重复询问授权方式，也不能先询问 `sellerName`。“全部授权”只表示全部所选 Amazon 店铺的卖家店铺授权，并且只创建对应店铺 worker。
+本技能负责授权、店铺连接和选店前置流程。报告业务转交 `linkfox-amazon-store-report`；刊登、订单、库存和广告业务转交对应技能，下游使用选定账号，无需取得 raw token。
 
-## Core Concepts
+## 接口清单
 
-Selling Partner API 是亚马逊为卖家提供的官方接口。本 skill 负责 OAuth 2.0 授权流程与令牌生命周期管理：
-
-**授权流程**：生成授权 URL → 用户在 Amazon 完成授权 → Amazon 回调并附带授权码 → 系统用授权码换取令牌 → 令牌安全保存。
-
-**店铺名（`sellerName`）必填**：调用 `/spApi/authorizeUrl` 前**必须**向用户询问并获取一个清晰、非空的店铺名。它用来在"已授权店铺列表"中标记该账号；不要留空或使用空白字符串。
-
-**令牌生命周期**：`accessToken` 通常 1 小时过期；`refreshToken` 用于在不重新授权的前提下续签新的 `accessToken`。
-
-## Data Fields
-
-### Authorization URL Response
-
-| Field | Type | Description |
-|-------|------|-------------|
-| authorizeUrl | string | 让用户在浏览器打开的 Amazon 授权链接 |
-
-### Authorized Store Item
-
-| Field | Type | Description |
-|-------|------|-------------|
-| sellerId | string | Amazon Seller ID (Merchant ID) |
-| sellerName | string | 店铺名（授权时必填） |
-| region | string | 市场区域代码 NA / EU / FE |
-
-### Store Tokens（授权状态，非 raw token 下发）
-
-`POST /spApi/storeTokens` 返回**状态与元数据**（具体字段以网关为准），供确认授权是否有效、何时过期。**不要**将响应当作下游 `developerProxy` 的 token 来源。
-
-| Field | Type | Description |
-|-------|------|-------------|
-| status | string | 授权/令牌状态（如有效、过期、缺失） |
-| authRecordId | integer | 授权记录 ID（如有） |
-| expiresIn | integer | 距 accessToken 过期的秒数（如有） |
-| tokenExpiresAt | string | 绝对过期时间（如有） |
-| message | string | 补充说明 |
-| errcode / errmsg | integer / string | 网关错误（失败时） |
-
-> 兼容说明：旧版网关可能仍返回 `accessToken`/`refreshToken`；Agent **不应**优先读取或传递给下游。下游应使用 `sellerId`+`region` 调 `developerProxy`。
-
-## Supported Regions
-
-| Code | Name | Marketplaces |
-|------|------|--------------|
-| NA | 北美 | 加拿大、美国、墨西哥、巴西 |
-| EU | 欧洲 | 爱尔兰、西班牙、英国、法国、比利时、荷兰、德国、意大利、瑞典、南非、波兰、沙特阿拉伯、埃及、土耳其、阿联酋、印度 |
-| FE | 远东 | 新加坡、澳大利亚、日本 |
-
-Amazon SP-API 没有独立的东南亚区域代码；东南亚目前只有新加坡站，使用 **FE**。`region` 由目标 Amazon 站点决定，而不是由卖家所在地决定；例如越南卖家经营美国站时仍使用 **NA**。
-
-默认区域为 **NA**；解绑时按 Scenario 5 明确目标区域。
-
-## 调用方式
-
-- **API 端点**：`POST /spApi/{authorizeUrl|storeTokens|authorizedStores|refreshToken|cancelAuthorization}`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文）
-- **成本约束**：本工具会消耗算力；失败/空结果不得自动连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/<skill-name>-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Usage Scenarios
-
-### Scenario 1: Authorize New Store
-
-**User request**：「我要授权我的亚马逊北美站点」
-
-**Steps**：
-1. **询问店铺名 `sellerName`**（若用户未提供）。`/spApi/authorizeUrl` 要求 `sellerName` 为非空字符串；向用户说明这只是在 LinkFox 里识别店铺的标签，建议与 Seller Central 后台名字保持一致。
-2. 调用 `/spApi/authorizeUrl`，传入 `region` 与 `sellerName`
-3. 把返回的 `authorizeUrl` 以文本格式给用户，让其在浏览器中打开。紧接授权链接之后，必须按「Display Rules」原封不动显示安全警告，不得省略或改写
-4. 用户在 Amazon 完成授权 → Amazon 回调系统 → 系统自动保存授权
-5. 可选：调用 `/spApi/authorizedStores` 确认授权成功
-
-### Scenario 1B: Batch Authorization（紫鸟 CLI）
-
-完整执行 `references/automatic-authorization.md`。每家所选店铺建立一个 worker；先生成本店授权链接并用对应紫鸟店铺打开，由 Agent 仅沿本次授权链路持续推进；可恢复问题自主处理，确需用户处理时才转人工，其余店铺继续。
-
-### Scenario 2: View Authorized Stores
-
-**User request**：「列一下我已授权的亚马逊店铺」
-
-**Steps**：
-1. 调用 `/spApi/authorizedStores`
-2. 展示店铺列表（sellerName / sellerId / region）
-3. 按 sellerId、region 排序
-
-### Scenario 3: Refresh Expired Token
-
-**User request**：「我店铺的令牌过期了，帮我刷新」
-
-**Steps**：
-1. 调用 `/spApi/refreshToken`，传入 `sellerId`（可选 `region`）
-2. 返回刷新**状态与元数据**（如 `status`、`message`、`expiresIn`）；服务端更新令牌
-3. 下游可直接重试 `developerProxy`（传入相同 `sellerId`+`region`），**无需**读取 raw token
-
-### Scenario 4: Query Store Token Status
-
-**User request**：「查一下北美站点 A123 店铺的授权/令牌状态」
-
-**Steps**：
-1. 调用 `/spApi/storeTokens`，传入 `sellerId` 与 `region`
-2. 向用户展示**状态字段**（`status`、`expiresIn`、`tokenExpiresAt`、`message` 等）
-3. **不要**把响应当作下游 proxy 的 token；业务调用直接带 `sellerId`+`region`
-
-### Scenario 5: Cancel Local Authorization
-
-**User request**：「取消/解绑我的亚马逊店铺授权」
-
-仅在用户要求时执行。当前用户按 API key 对应的成员身份识别；共用该身份的使用者会一起受影响。
-
-**Steps**：
-
-1. 从用户指定目标或 `/spApi/authorizedStores` 确定 `sellerId + region`；不使用默认区域，有歧义时让用户选择。
-2. 说明解绑覆盖整个区域；若用户只要求单站点，须先取得对整个区域解绑的明确同意。
-3. 调用 `/spApi/cancelAuthorization`，传入选定的 `sellerId` 与 `region`。
-4. 按 `references/api.md` 解释结果；后续重新查询店铺，不自动重新授权。
-
-### Scenario 6: Prepare Account Selector for Any Store Operation (Standard Preparation Workflow)
-
-当用户提出任何涉及卖家后台数据的请求（拉报告、查库存、看订单等），**本 skill 负责前置的「选店 → 确认授权」**，具体业务由相应的下游 skill 接手。
-
-**Steps**：
-1. **列出已授权店铺**：调用 `/spApi/authorizedStores`
-2. **让用户选择店铺**：如果有多家店铺，请用户明确选哪一家，确定 `sellerId` 与 `region`
-3. （可选）调用 `/spApi/storeTokens` **仅作状态确认**（过期则先 `refreshToken`）
-4. **把 `sellerId`+`region` 交给下游 skill**（例如 `linkfox-amazon-store-report`），由下游直接调 `developerProxy`
-
-**Why this workflow is critical**：
-- 用户可能同时授权了多家不同区域的店铺
-- 每家店铺的令牌与权限彼此独立
-- 必须使用与店铺匹配的 `sellerId`+`region`，跳过「选店」会导致歧义和错误
-
-## Display Rules
-
-1. **先有店铺名再生成授权链接**：若用户未提供 `sellerName`，**必须先问**，不允许带空值调用 `/spApi/authorizeUrl`。
-2. **只呈现数据**：展示授权结果、店铺列表、令牌信息即可，不做业务建议。
-3. **安全意识**：响应若含 legacy token 字段，不要明文展示；优先呈现 `status` / 过期时间等元数据。
-4. **授权链接安全警告（强制逐字输出）**：成功生成并向用户返回授权链接后，必须紧接链接显示下面这段文字。必须原封不动输出，包括“警告：”、括号、标点和结尾感叹号；不得省略、改写、翻译、缩写或用其他提示替代：
-
-   > 警告：必须在你日常登录店铺的安全IP（或紫鸟浏览器）下打开授权链接！
-
-5. **清晰引导**：返回授权链接时，明确告知用户在浏览器中打开并完成授权。
-6. **错误说明**：授权失败时，基于错误码解释原因并给出建议。
-7. **成功确认**：授权完成后与用户确认，可选择展示该店铺基本信息。
-
-## Important Limitations
-
-- **sellerName 必填**：`/spApi/authorizeUrl` 必须传入非空 `seller Name`；脚本与 agent 在调用前务必校验。
-- **令牌有效期**：`accessToken` 1 小时过期，需及时刷新。
-- **区域专属**：每次店铺授权都与具体区域绑定，不同区域需分别授权。
-- **用户隔离**：用户只能查看/管理自己授权的店铺。
-- **回调白名单**：系统回调 URL 必须在授权方（紫鸟）处加白名单。
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — 授权与令牌管理场景：
-
-| User Says | Scenario |
-|-----------|----------|
-| "授权我的亚马逊店铺" / "Authorize my Amazon store" | 新店铺授权 |
-| "看看已授权的亚马逊店铺" / "Show my authorized stores" | 列出已授权店铺 |
-| "令牌过期了" / "My token expired" | 刷新令牌 |
-| "查 XXX 店铺授权状态" / "Check store token status" | 查询授权状态（storeTokens） |
-| "绑定我的亚马逊账号" / "Connect my Amazon seller account" | 新店铺授权 |
-| "取消授权" / "解绑这个亚马逊店铺" / "Disconnect seller account" | 本地取消/解绑授权 |
-
-**Not applicable** — 超出本 skill 的业务：
-
-- **拉取亚马逊报告** → 请使用 `linkfox-amazon-store-report`
-- 产品 listing 管理、订单处理、库存管理、广告投放 → 由其他 skill 负责
-
-**Boundary judgment**：
-- 本 skill 只负责「授权 + 管店铺 + 令牌刷新/状态查询 + 为下游准备 `sellerId`+`region` 选店信息」。
-- **不要**为下游 `developerProxy` 调用 `storeTokens` 取 raw `accessToken`（除非兼容极旧客户端且用户明确要求）。
-- 当用户要做具体卖家后台业务（如拉报告）时：
-  1. 本 skill 执行 Scenario 6 的标准前置流程（选店）
-  2. 随后切换到对应下游 skill，直接 `developerProxy` + `sellerId`+`region`
-- 不要直接越过本 skill 去调具体 Amazon 开放接口。
-
-## Quick Reference
-
-### Authorization & Token Management APIs
-
-| API | Path | Purpose | Auth Required |
-|-----|------|---------|---------------|
-| Get Authorization URL | /spApi/authorizeUrl | 生成授权链接（需要 sellerName） | ✅ Yes |
-| List Authorized Stores | /spApi/authorizedStores | 查询用户的店铺列表 | ✅ Yes |
-| Refresh Token | /spApi/refreshToken | 刷新访问令牌 | ✅ Yes |
-| Query Store Token Status | /spApi/storeTokens | 查询某店铺授权/令牌状态（非下游 token 来源） | ✅ Yes |
-| Cancel Authorization | /spApi/cancelAuthorization | 本地取消/解绑当前用户的店铺授权 | ✅ Yes |
-
-详细请求参数、响应结构、错误码，见 `references/api.md`。完整授权流程图，见 `references/authorization-flow.md`。快速上手示例，见 `references/quick-start.md`。
-
-## Amazon SP-API 接口保护与重试指引
-
-同一店铺连续收到 Amazon SP-API 的 400、403、404 或 429 时，网关会返回 450、453、454 或 459 并短暂冷却。这些自定义状态码不是 Amazon 原生状态，也不表示封号；目的是避免持续异常或高频调用扩大店铺风险。
-
-| 状态与 message | 范围 | 触发与冷却 | 处理 |
+| 接口 | 端点 | 对应脚本 | 说明 |
 |---|---|---|---|
-| `450`：`400，请求异常，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：20 分钟 | 停止原参数重试，检查必填字段、marketplace、ID、日期和请求体 |
-| `453`：`403，店铺未授权，请先授权` | 店铺全部接口 | 60 秒内超过 2 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 停止该店铺调用，检查授权、权限、店铺归属和区域 |
-| `454`：`404，资源不存在，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 确认资源 ID、所属店铺/站点、资源状态和接口路径 |
-| `459`：`429限流中，请降低频率` | 店铺+接口 | 首次：15 秒；2 分钟内超过 2 次：30 秒；3 分钟内超过 4 次：2 分钟 | 降低并发、分页和轮询频率并逐级退避 |
+| 获取授权链接（authorizeUrl） | POST `/spApi/authorizeUrl` | `scripts/authorize_url.py`、`scripts/automatic_authorize_url.py` | 手动或自动流程生成授权链接。 |
+| 查询已授权店铺（authorizedStores） | POST `/spApi/authorizedStores` | `scripts/authorized_stores.py`、`scripts/automatic_verify.py` | 查询和核验当前成员的店铺连接。 |
+| 刷新令牌（refreshToken） | POST `/spApi/refreshToken` | `scripts/refresh_token.py` | 服务端更新令牌并返回状态。 |
+| 查询授权状态（storeTokens） | POST `/spApi/storeTokens` | `scripts/store_tokens.py` | 只读状态与元数据。 |
+| 本地解绑（cancelAuthorization） | POST `/spApi/cancelAuthorization` | `scripts/cancel_authorization.py` | 解除当前成员的区域绑定。 |
 
-- 立即停止自动或并发重试，不得通过换脚本或重复创建任务绕过保护；优先遵循 `retryAfter`、`blockedUntil`，没有时按表中时长说明。
-- 450/453/454 必须先修正参数、授权或资源标识，冷却后最多谨慎重试一次；再次触发则停止调用。453 期间停止该店铺全部 SP-API。
-- 保留已有 `reportId`、`feedId` 等任务 ID；写操作结果不确定时先查询状态，不直接重放。
-- 向用户先说明店铺保护，再给原因、处理和等待时间。可回复：“为保护您的亚马逊店铺安全，检测到 Amazon SP-API 连续返回{原因}，当前已进入短暂保护。请先{处理动作}，预计{等待时间}后再试；这不代表封号，也不是套餐或算力限制。”不要只说“LinkFox 限流”或“服务器繁忙”。
+## 前置条件
 
-## 算力消耗规则
+确认 LinkFox 身份凭据可用，按任务确定目标店铺和站点。自动授权必须先确认运行位置为用户本机；具体接口信息、脚本选项及运行限制见 `references/api.md`，自动流程见 `references/automatic-authorization.md`。
 
-不消耗算力。
+## 授权与店铺管理流程
 
-**Feedback**：
+1. **先路由授权方式**：仅新增、恢复或批量授权需要选择方式；查询、刷新和解绑直接进入对应流程。用户未选时先提供“手动授权”和“紫鸟 CLI 自动授权（推荐，仅支持本机 Windows/macOS；Agent 会自动检查并推进，只有登录、系统确认或审核等必要步骤才需要你操作）”。已明确自动授权时直接进入，不再询问方式或手动店铺名。
+2. **手动授权**：取得可识别的店铺名并确认目标站点，按接口定义准备参数后生成链接。将链接以文本给用户，紧接下方逐字安全警告，引导用户完成 Amazon 授权。回调由服务端保存，可查询店铺确认；参数要求见 `references/api.md`。
+3. **自动或批量授权**：完整执行 `references/automatic-authorization.md`，复用已有可用环境与配置；以所选紫鸟店铺名作授权标记，不询问手动流程的店铺名。“全部授权”仅表示所选 Amazon 店铺的卖家授权。按该文档逐店推进、核验和收尾。
+4. **查询店铺**：读取已授权列表，按卖家和区域排序展示店铺名、卖家标识及区域。
+5. **刷新或查状态**：确定目标连接，查询状态或执行刷新，仅展示状态和元数据。刷新完成后将相同店铺选择信息交给下游重试，无需读取 raw token。
+6. **本地解绑**：仅按用户要求执行。从用户目标或已授权列表确定连接，有歧义时让用户选择；说明解绑覆盖整个区域及共用成员身份的影响。用户只要求单站点时，须先取得对整个区域解绑的明确同意。解绑后按接口定义解释结果，可重新查询列表，不自动重新授权。
+7. **下游业务前置**：先列店铺；多店铺时让用户明确选择，确认卖家与区域匹配。可选查状态，过期时刷新。将选定账号交给相应业务技能，不越过选店流程直接请求 Amazon 业务接口。
 
-当出现以下任一情况时，自动通过 Feedback API 上报反馈：
-1. 本 skill 描述的功能与实际行为不符
-2. skill 的结果与用户意图不符
-3. 用户表达了对本 skill 的不满或赞赏
-4. 任何你认为可以改进的点
+## 执行方式
 
-按 `references/api.md` 中的规范调用 Feedback API，不要打断用户的主流程。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：所有业务脚本均关闭响应缓存，不自动重试。失败或空结果时，先核对目标、参数和授权状态，不自动连续试探；店铺保护与冷却要求见 `references/spapi-protection.md`。
+
+### 输出策略
+
+- 普通 JSON 入口先递归移除 raw token 字段，再保存完整业务响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-auth-<接口标识>-<timestamp>.<随机标识>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应在发请求前报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大非空列表字段的长度和前 3 条样本。响应头的 `X-Cost-Credit` 如有则写入响应的 `costCredit`，按需从保存文件读取。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+自动脚本 stdout 仅输出一个 JSON 文档，由调用方安全捕获。自动生成授权链接时，完整 OAuth URL 只在内存传递，落盘仅保存移除链接后的状态元数据，不打印到聊天或日志；具体规则见 `references/api.md`。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+不消耗算力 （限时）。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解授权过程**：生成链接 → 用户在 Amazon 同意 → 服务端接收回调、换取并保存令牌。令牌由后台管理，查询状态不能当作下游凭证来源；生命周期、区域与兼容字段见 `references/api.md`。
+- **逐字展示安全警告**：成功向用户提供授权链接时，紧接链接原封不动输出：
+
+  > 警告：必须在你日常登录店铺的安全IP（或紫鸟浏览器）下打开授权链接！
+
+- **只呈现数据**：展示授权结果、店铺列表和状态，不附加业务建议。失败时按错误解释原因和处理动作，成功后确认结果，可展示店铺基本信息。
+- **保护敏感信息**：响应中意外出现令牌字段时，先脱敏，不明文展示或传递给下游；优先展示状态与过期信息。自动流程的 OAuth URL、账号与验证码保护遵循自动授权文档。
+- **区分本地解绑与 Amazon 撤权**：本地解绑只解除当前成员的连接；说明实际影响，不能宣称撤销了 Amazon 授权。
+- **按需读取参考**：接口、脚本 CLI 与使用限制见 `references/api.md`；服务端内部回调和数据模型见 `references/authorization-flow.md`；快速操作见 `references/quick-start.md`；店铺冷却处理见 `references/spapi-protection.md`。
+- **读取落盘数据**：先看摘要，按需提取字段。接口脚本不缓存响应，自动模式的单 JSON 输出与敏感链接不落盘规则见接口文档。
+- **以文本形式展示链接**：授权链接只能以文本展示（plaintext），不要转成链接给用户。
+
+## 使用示例
+
+### 新增授权
+
+用户：我要绑定美国站店铺。
+
+先选择授权方式；手动模式取得店铺名并确认站点后生成链接，展示安全警告。自动模式确认本机条件后按自动授权文档推进并核验。
+
+### 恢复店铺连接
+
+用户：这个店铺 token 过期了。
+
+确定目标连接，按需查状态并刷新，返回可用元数据；失败则根据接口规则处理，不自动连续试探。
+
+### 解绑与后续业务
+
+用户：解绑我的欧洲店铺。或：拉报告之前帮我选店。
+
+前者明确区域影响后执行本地解绑；后者列店铺并确认账号，交给报告技能继续。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

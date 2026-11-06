@@ -11,7 +11,7 @@ state + image-plan.json 在内存组装第 i 个任务，按任务 type 跑通 t
 stdout 输出一行 ``Saved full response: ["/abs/img.png"]``（成功）或失败 JSON 路径，
 同时落盘 ``<datadir>/task-result-<id>.json`` 片段供 summary 阶段汇总。
 
-由 agent 在 plan 确认后，并发 N 次调用本脚本（每个任务 1 次 Bash，--index 1..N）。
+由 dispatch 在 plan 确认后内部并发调用本脚本（--index 1..N），agent 只运行一次 dispatch。
 完整交付协议见 ``references/runtime/03-deliver.md``。
 """
 

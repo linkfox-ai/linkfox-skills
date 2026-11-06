@@ -1,7 +1,8 @@
-"""Run any Shopee Returns module API via developerProxy."""
+"""退货退款参数映射、响应加工和统一 CLI。"""
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from typing import Any, List, Optional
@@ -9,6 +10,8 @@ from typing import Any, List, Optional
 from _returns_endpoints import LIST_QUERY_FIELDS, RETURNS_ENDPOINTS, RESERVED_PARAM_KEYS
 from _shopee_returns_common import (
     developer_proxy_call,
+    gateway_ok,
+    SLUG,
     ensure_auth_skill_available,
     merge_shopee_body,
     qs_add,
@@ -22,13 +25,13 @@ def _comma_join_list(val: object, field: str, max_items: int) -> str:
     elif isinstance(val, list):
         items = [str(x).strip() for x in val if str(x).strip()]
     else:
-        print(f"{field} must be string or string[]", file=sys.stderr)
+        print(f"{field} 必须为 string 或 string[]", file=sys.stderr)
         sys.exit(1)
     if not items:
-        print(f"{field} cannot be empty", file=sys.stderr)
+        print(f"{field} 不能为空", file=sys.stderr)
         sys.exit(1)
     if len(items) > max_items:
-        print(f"{field} supports at most {max_items} values", file=sys.stderr)
+        print(f"{field} 最多支持 {max_items} 个值", file=sys.stderr)
         sys.exit(1)
     return ",".join(items)
 
@@ -74,7 +77,7 @@ def _build_post_body(params: dict, spec: dict) -> str:
 
     if not body_obj:
         print(
-            "POST requires 'body' / 'requestBody' or documented body fields in params",
+            "POST 需要 body / requestBody 或已配置的 body_fields 字段",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -83,13 +86,13 @@ def _build_post_body(params: dict, spec: dict) -> str:
 
 def run_returns_api(api_name: str, params: dict, caller: Optional[str] = None) -> dict:
     if api_name not in RETURNS_ENDPOINTS:
-        print(f"Unknown api: {api_name}. Valid: {', '.join(sorted(RETURNS_ENDPOINTS))}", file=sys.stderr)
+        print(f"未知 api： {api_name}. 可用操作： {', '.join(sorted(RETURNS_ENDPOINTS))}", file=sys.stderr)
         sys.exit(1)
 
     spec = RETURNS_ENDPOINTS[api_name]
     for field in spec.get("required") or []:
         if field not in params or params[field] is None or params[field] == "":
-            print(f"Missing required field: {field}", file=sys.stderr)
+            print(f"缺少必填字段： {field}", file=sys.stderr)
             sys.exit(1)
 
     if not params.get("skipDepCheck"):
@@ -108,31 +111,54 @@ def run_returns_api(api_name: str, params: dict, caller: Optional[str] = None) -
     else:
         body = _build_post_body(params, spec)
 
+    if body is not None:
+        try:
+            body_obj = json.loads(body) if body else None
+        except json.JSONDecodeError as exc:
+            print(f"body / requestBody 必须为合法 JSON：{exc}", file=sys.stderr)
+            raise SystemExit(1)
+
     shop_id = params.get("shopId")
     merchant_id = params.get("merchantId")
     if not shop_id and not merchant_id:
-        print("Missing required field: shopId OR merchantId", file=sys.stderr)
+        print("缺少必填字段： shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
-        path,
-        method,
-        shop_id=shop_id,
-        merchant_id=merchant_id,
-        query_string=query_string or None,
-        body=body,
-        content_type=content_type,
+    def transform(status, proxy):
+        out = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = body_obj
+        if gateway_ok(status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
+        path, method, shop_id=shop_id, merchant_id=merchant_id,
+        query_string=query_string or None, body=body, content_type=content_type,
+        transform=transform, slug=f"{SLUG}-{api_name}",
     )
 
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
 
-    merge_shopee_body(out, proxy, response_key)
-    return out
+def run_cli(api_name=None):
+    parser = argparse.ArgumentParser(description="Shopee 店铺退货退款；完整字段见 references/apis/。")
+    parser.add_argument("params", help="JSON 对象；通用入口须包含 api 字段")
+    parser.add_argument("--inline", action="store_true", help="保存并打印完整响应")
+    parser.add_argument("--no-cache", action="store_true", help="业务封装始终禁用响应缓存")
+    args = parser.parse_args()
+    try:
+        params = json.loads(args.params)
+    except json.JSONDecodeError as exc:
+        parser.error(f"JSON 参数无效：{exc}")
+    if not isinstance(params, dict):
+        parser.error("参数必须为 JSON 对象")
+    selected = api_name or params.get("api")
+    if not selected:
+        parser.error("通用入口缺少 api 字段")
+    run_returns_api(str(selected), params, f"{api_name or 'returns_api'}.py")

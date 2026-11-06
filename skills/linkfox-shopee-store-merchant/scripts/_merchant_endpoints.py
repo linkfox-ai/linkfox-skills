@@ -1,10 +1,9 @@
-"""Shopee Merchant module API registry (v2.merchant.*)."""
+"""Shopee Merchant 模块接口注册表（v2.merchant.*）。"""
 
 from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-SHOPEE_DOC_MODULE = "93"
 
 class MerchantEndpoint(TypedDict, total=False):
     path: str
@@ -19,38 +18,38 @@ MERCHANT_ENDPOINTS: dict[str, MerchantEndpoint] = {
         "path": "api/v2/merchant/get_merchant_info",
         "method": "GET",
         "response_key": "getMerchantInfo",
-        "notes": 'Merchant name, region, currency, auth/expire time',
+        "notes": '商户名称、区域、币种、授权和过期时间',
     },
     "get_shop_list_by_merchant": {
         "path": "api/v2/merchant/get_shop_list_by_merchant",
         "method": "GET",
         "response_key": "getShopListByMerchant",
         "required": ['page_no', 'page_size'],
-        "notes": 'Shops bound to merchant; page_size max 500',
+        "notes": '商户绑定店铺；page_size 最大 500',
     },
     "get_merchant_warehouse_location_list": {
         "path": "api/v2/merchant/get_merchant_warehouse_location_list",
         "method": "GET",
         "response_key": "getMerchantWarehouseLocationList",
-        "notes": 'Merchant warehouse locations',
+        "notes": '商户仓库位置',
     },
     "get_merchant_warehouse_list": {
         "path": "api/v2/merchant/get_merchant_warehouse_list",
         "method": "GET",
         "response_key": "getMerchantWarehouseList",
-        "notes": 'Merchant warehouse list',
+        "notes": '商户仓库列表',
     },
     "get_warehouse_eligible_shop_list": {
         "path": "api/v2/merchant/get_warehouse_eligible_shop_list",
         "method": "GET",
         "response_key": "getWarehouseEligibleShopList",
-        "notes": 'Shops eligible for warehouse',
+        "notes": '可使用仓库的店铺',
     },
     "get_merchant_prepaid_account_list": {
         "path": "api/v2/merchant/get_merchant_prepaid_account_list",
         "method": "GET",
         "response_key": "getMerchantPrepaidAccountList",
-        "notes": 'Merchant prepaid accounts',
+        "notes": '商户预付账户',
     },
 }
 
@@ -60,11 +59,6 @@ RESERVED_PARAM_KEYS = frozenset({
 
 LIST_QUERY_FIELDS = frozenset()
 
-def official_doc_url(api_name: str) -> str:
-    return (
-        f"https://open.shopee.com/documents/v2/v2.merchant.{api_name}"
-        f"?module={SHOPEE_DOC_MODULE}&type=1"
-    )
 
 def list_api_names() -> list[str]:
     return sorted(MERCHANT_ENDPOINTS.keys())

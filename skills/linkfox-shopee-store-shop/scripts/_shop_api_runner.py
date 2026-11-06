@@ -1,4 +1,4 @@
-"""Run any Shopee Shop module API via developerProxy."""
+"""映射 Shopee Shop 参数，经公共调用器转发并解析业务结果。"""
 
 from __future__ import annotations
 
@@ -64,32 +64,42 @@ def run_shop_api(api_name: str, params: dict, caller: Optional[str] = None) -> d
         sys.exit(1)
 
     spec = SHOP_ENDPOINTS[api_name]
+    if not isinstance(params, dict):
+        print("参数错误：JSON 参数必须为对象", file=sys.stderr)
+        sys.exit(1)
+    method = spec["method"]
+    body = _build_post_body(params, spec) if method == "POST" else None
+    try:
+        body_obj = json.loads(body) if body is not None else None
+    except json.JSONDecodeError as exc:
+        print(f"参数错误：POST 请求体不是有效 JSON：{exc}", file=sys.stderr)
+        sys.exit(1)
+    if method == "POST" and not isinstance(body_obj, dict):
+        print("参数错误：POST 请求体必须为 JSON 对象", file=sys.stderr)
+        sys.exit(1)
+    fields = body_obj if method == "POST" else params
     for field in spec.get("required") or []:
-        if field not in params or params[field] is None or params[field] == "":
+        if field not in fields or fields[field] is None or fields[field] == "":
             print(f"Missing required field: {field}", file=sys.stderr)
             sys.exit(1)
-
-    if api_name == "update_profile":
-        has_field = any(params.get(k) for k in ("shop_name", "shop_logo", "description", "body", "requestBody"))
-        if not has_field:
-            print("update_profile requires at least one of: shop_name, shop_logo, description, body", file=sys.stderr)
-            sys.exit(1)
+    if api_name == "update_profile" and not any(
+        k in body_obj and body_obj[k] is not None
+        for k in ("shop_name", "shop_logo", "description")
+    ):
+        print("update_profile requires at least one of: shop_name, shop_logo, description", file=sys.stderr)
+        sys.exit(1)
 
     if not params.get("skipDepCheck"):
         ensure_auth_skill_available(caller or f"{api_name}.py")
 
-    method = spec["method"]
     path = spec["path"]
     response_key = spec["response_key"]
 
     query_string: Optional[str] = None
-    body: Optional[str] = None
     content_type = str(params.get("contentType") or "application/json")
 
     if method == "GET":
         query_string = _build_get_query(params)
-    else:
-        body = _build_post_body(params, spec)
 
     shop_id = params.get("shopId")
     merchant_id = params.get("merchantId")
@@ -111,6 +121,7 @@ def run_shop_api(api_name: str, params: dict, caller: Optional[str] = None) -> d
         "api": api_name,
         "developerProxy": proxy,
         "resolvedPath": path,
+        "transportHttpStatus": getattr(proxy, "transport_http_status", None),
     }
     if query_string:
         out["queryString"] = query_string

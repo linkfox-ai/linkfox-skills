@@ -1,4 +1,4 @@
-"""Shared orchestration; HTTP API calls and response storage stay in official entries."""
+"""素材编排与下载；LinkFox 请求由业务入口委托公共模板。"""
 import contextlib
 import importlib.util
 import io
@@ -10,6 +10,7 @@ import sys
 import time
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
+from _aigc_api import api_error
 
 MEDIA_FIELDS = {"imageUrl", "lastFrameImageUrl", "modelImageUrl", "sceneImageUrl",
                 "sourceVideoUrl", "refVideoUrl", "imageList", "refImageList", "video"}
@@ -61,9 +62,6 @@ def invoke(path, params, no_cache=False):
     return result, artifact
 
 
-def api_error(result):
-    return bool(result.get("error")) or result.get("errcode") not in (None, 0, 200, "0", "200") or result.get("code") not in (None, 0, 200, "0", "200")
-
 
 def prepare_media(params, scripts):
     prepared = json.loads(json.dumps(params))
@@ -90,6 +88,13 @@ def prepare_media(params, scripts):
 
 
 def download_results(result, scripts):
+    if api_error(result):
+        raise RuntimeError("查询响应异常，保留原始响应并停止下载")
+    results = result.get("resultList")
+    if results is None:
+        results = []
+    if not isinstance(results, list):
+        raise RuntimeError("resultList 必须是数组，保留原始响应并停止下载")
     entry = scripts / "query_task.py"
     if not entry.exists():
         entry = scripts / "task_query.py"
@@ -102,7 +107,10 @@ def download_results(result, scripts):
     media.mkdir(exist_ok=True)
     paths, items = [], []
     if result.get("status") == "SUCCESS":
-        for index, item in enumerate(result.get("resultList") or [], 1):
+        for index, item in enumerate(results, 1):
+            if not isinstance(item, dict):
+                items.append({"id": None, "type": None, "downloadError": "结果项不是对象，未下载"})
+                continue
             record = {"id": item.get("id"), "type": item.get("type")}
             for key in ("status", "errorCode", "errorMsg"):
                 if key in item:
@@ -110,6 +118,7 @@ def download_results(result, scripts):
             items.append(record)
             url = item.get("url")
             if item.get("status") not in (None, 1) or not isinstance(url, str) or not url:
+                record["downloadError"] = "结果项未成功或缺少下载地址，未下载；保留查询响应，不重建任务"
                 continue
             temporary = media / (".download-" + str(time.time_ns()))
             try:

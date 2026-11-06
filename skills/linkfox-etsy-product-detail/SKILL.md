@@ -1,126 +1,98 @@
 ---
 name: linkfox-etsy-product-detail
-description: 查询单个 Etsy Listing 的公共商品详情。输入 Etsy 商品直链，返回商品标题与描述、价格区间、币种、主图与图片集、变体、库存上限、类目、发货地与预计送达、店铺资料、评论数量、评分及买家反馈标签等数据。当用户提到 Etsy 商品详情、Etsy listing 解析、Etsy 商品链接查询、竞品 Listing 拆解、价格图片提取、店铺与评论概况、Etsy product details、Etsy listing lookup 时触发。即使用户未明确说“商品详情”，只要提供带数字 listing ID 的 Etsy 商品直链并希望读取当前公开商品页信息，也应触发此技能。
+description: 查询单个 Etsy Listing 的公开商品详情，提取标题、描述、价格区间、币种、图片、变体、最大可购数量、类目、发货地、预计送达、店铺资料以及评论数量、评分和买家反馈概况。适用于已知 Etsy 商品链接的详情查询、竞品 Listing 拆解和内容提取；不适用于关键词找品、批量筛选、独立店铺搜索、逐条评论分析或卖家刊登与订单管理。
 ---
 
-# Etsy Product Detail Lookup
+# Etsy 商品详情查询
 
-Fetch the current public detail of one Etsy listing from its direct product URL for listing research and competitor-page audits.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- **Direct listing URL required**: use an Etsy HTTPS URL whose path is `/listing/<numeric-id>` or `/listing/<numeric-id>/<one-slug-segment>`, with an optional trailing slash and query string.
-- **One listing per call**: this is a detail lookup, not Etsy keyword search or bulk screening.
-- **Structured public-page data**: the response groups listing, price, media, shop, delivery, and review-summary fields.
-- **Current snapshot**: values reflect what the public listing exposes when queried and may be absent or inconsistent.
+根据已知 Etsy 商品直链查看公开商品页的当前详情，进行竞品页面研究或提取商品内容。用户提供链接并希望了解商品资料时即可使用，无需明确说“商品详情”。
 
-## Data Fields
+**场景速查**
 
-| Field | Description |
-|-------|-------------|
-| productId / productUrl | Etsy listing ID and canonical/product URL |
-| title / description | Listing title and description sections |
-| image / images | Primary image and full image list |
-| price / lowPrice / highPrice / oldPrice | Current, range, and previous price strings when available |
-| currency | Returned currency code |
-| maxQuantity / variants | Reported maximum quantity and variation options |
-| category | Etsy category breadcrumb |
-| countryShippingFrom | Shipping origin country |
-| deliveryDaysMin / deliveryDaysMax | Estimated delivery window; may be null or omitted |
-| shopId / shopName / shopUrl / shopSales | Shop identity and public sales data |
-| reviews / star / shopReviews | Listing review count, rating, and shop review count |
-| highlightsTags / reviewsTags | Buyer-feedback highlights and tag frequencies |
-| reviewsScores | Dynamic review-score breakdown; keys vary by listing |
-| yearsOnEtsy | Public shop tenure |
-| hasRatingsBadge / hasConvosBadge / hasShippingBadge | Public shop/listing badge flags |
-| moreLikeUrl / searchPosition | Related-link or source-position fields when available |
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查这个 Etsy 商品链接的详情 | 展示商品资料与公开页面概况。 |
+| 提取这个 Etsy Listing 的标题、描述和图片 | 提取商品内容与媒体。 |
+| 看看它的价格区间、变体和发货信息 | 核对报价、可购选项与配送信息。 |
+| 这个 Etsy 商品的店铺和评论概况如何 | 展示关联店铺与评论聚合信号。 |
 
-The tool returns aggregate review signals, not individual review records.
+### 边界
 
-## Parameter Guide
+关键词搜索、类目发现或多条件找品转交 Etsy 商品查询技能；没有指定商品的店铺搜索或排名、逐条评论获取及全文情感分析、刊登创建与编辑、订单或卖家账号操作不属于本技能范围。
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| productUrl | Yes | - | Public HTTPS Etsy listing URL on `etsy.com` or a subdomain, without embedded credentials, using the default HTTPS port; the path is `/listing/<numeric-id>` with at most one slug segment, and an optional trailing slash/query string |
+## 前置条件
 
-Search pages, shop pages, non-Etsy hosts, and listing URLs without a numeric listing ID are not valid inputs.
+**先取得商品直链**：用户只有商品名称或店铺名时，先补充目标商品链接。完整链接格式要求见 `references/api.md`。
 
-## 调用方式
+## 查询流程
 
-- **API 端点**：`POST /etsy/product/detail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/etsy_product_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+1. 确定用户要查看的商品及关注信息，按 `references/api.md` 检查链接和所需条件。
+2. 查询前复用同一任务已保存的结果或有效缓存；首次查询按已确认参数执行，保留完整响应和文件路径。
+3. 按接口参考判断响应，提取所需商品、价格、媒体、店铺、配送与评论概况；空结果或错误按业务规则解释，不自动改链接连续试探。
+4. 先概括核心信息，再按需从保存文件提取完整描述、图片或其他字段；补充查询其他 Listing 前说明会分别产生额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-etsy-product-detail-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/etsy_product_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口调用消耗 6 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 解决认证和算力问题
+### 输出策略
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-etsy-product-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-- **未配置 API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应 401 或 402 状态码**。
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”或类似含义。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-```bash
-python scripts/etsy_product_detail.py '{"productUrl":"https://www.etsy.com/listing/1710567856/its-okay-to-make-some-mistakes-shirt"}'
+6 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **公开页面快照**：数据是查询时页面所公开的商品、报价、媒体、店铺、配送和评论概况，分析时注明这一时点口径；具体能力限制见 `references/api.md`。
+- **先展示核心信息**：优先展示标题、Listing ID、店铺名称、类目、价格区间和币种；有店铺公开销量与年限时，注明它们是店铺口径。
+- **图片适量展示**：默认内联展示主图，说明其余图片数量；长描述与图片集先摘要，需要原文或全部链接时再从保存文件提取。
+- **如实呈现变体和数量**：只展示实际返回的可购选项与数量，不补造选项；空变体列表是有效数据。
+- **区分评论口径**：Listing 评论数与店铺评论数分开呈现，买家反馈标签、标签频次和分项评分标注为聚合信号，不当作逐条评论。
+- **谨慎展示送达时间**：只有来源上下限均有意义时展示预计送达范围；保留 null，缺失时注明不可用。
+- **保留价格原值**：未经用户明确要求，不擅自规范化价格字符串或进行币种换算。
+- **说明提取不确定性**：字段缺失、空值或不合理的店铺信息按提取不确定性说明，不自行推断或静默修复；动态分项评分仅按实际键值解释。
+
+## 使用示例
+
+### 查看指定商品详情
+
+```json
+{"productUrl":"https://www.etsy.com/listing/1710567856/its-okay-to-make-some-mistakes-shirt"}
 ```
 
-## Display Rules
+按用户关注点展示核心商品资料、价格区间、变体、发货信息或关联店铺与评论概况，完整内容保留在输出文件中。
 
-1. Lead with title, listing ID, shop name, category, price range, and currency.
-2. Show the primary image inline and offer the remaining image count rather than rendering every image by default.
-3. Present variants and quantity only when returned; an empty variants list is a valid result.
-4. Keep listing reviews and shop reviews distinct, and label buyer-feedback tags as aggregate signals.
-5. Show delivery estimates only when both source values are meaningful; preserve nulls as unavailable.
-6. Do not normalize or convert price strings without an explicit user request.
-7. Treat missing, empty, or implausible shop fields as extraction uncertainty; do not silently repair them.
-8. For long descriptions and image arrays, summarize first and extract exact content from the saved JSON on demand.
+## 使用反馈
 
-## Important Limitations
-
-1. Public Etsy page structure changes can cause fields to be absent, empty, or occasionally misidentified.
-2. `star`, price fields, delivery estimates, shop metadata, and badges are not guaranteed for every listing.
-3. The response includes review counts, tags, and aggregate scores, but not individual buyer reviews.
-4. This tool does not provide historical prices, Etsy keyword rankings, or guaranteed sales estimates.
-5. This tool does not search Etsy; use the Etsy product-query skill when the user needs keyword or multi-filter discovery.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — one known Etsy listing URL:
-
-| User Says | Scenario |
-|-----------|----------|
-| “查这个 Etsy 商品链接的详情” | Listing detail lookup |
-| “提取这个 Etsy Listing 的标题、描述和图片” | Listing-content extraction |
-| “看看它的价格区间、变体和发货信息” | Offer and delivery audit |
-| “这个 Etsy 商品的店铺和评论概况如何？” | Shop and review-summary lookup |
-
-**Not applicable**:
-
-- Etsy keyword search, category discovery, or multi-product screening
-- Etsy shop search/ranking without a specific listing URL
-- Individual review retrieval or sentiment analysis from full review text
-- Listing creation, editing, order management, or other seller-account operations
-
-## 算力消耗规则
-
-消耗 6 算力。
-
-> 用户会因算力消耗而支付费用。重复查询其他 Listing 会分别计费；继续调用前应让用户知晓额外消耗。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when the described capability differs from actual behavior, results miss the user's intent, the user expresses praise or dissatisfaction, or the skill can be improved. Follow `references/api.md` without interrupting the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

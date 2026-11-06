@@ -15,7 +15,6 @@ import json
 import sys
 
 from _first_mile_api_runner import run_first_mile_api
-from _shopee_first_mile_common import emit_result, lf_inline_flag
 from _first_mile_endpoints import list_api_names
 
 
@@ -27,8 +26,7 @@ def main() -> None:
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
-    inline = lf_inline_flag()
-    emit_result(run_first_mile_api(str(params["api"]), params, "first_mile_api.py"), inline)
+    run_first_mile_api(str(params["api"]), params, "first_mile_api.py")
 
 
 if __name__ == "__main__":

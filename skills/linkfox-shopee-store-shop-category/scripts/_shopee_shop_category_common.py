@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import json
 import os
-import secrets
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
-from urllib.error import HTTPError, URLError
 from urllib.parse import quote
-from urllib.request import Request, urlopen
+from contextlib import redirect_stdout
+from io import StringIO
+from urllib.parse import urlsplit
+
+import call_api as gateway
 
 API_BASE_URL = (
     os.environ.get("LINKFOX_TOOL_GATEWAY")
@@ -56,46 +58,69 @@ def ensure_auth_skill_available(caller: str = "shop-category script") -> None:
         sys.exit(DEPENDENCY_EXIT_CODE)
 
 
-def get_api_key() -> str:
-    """
-    获取配置在环境变量的API Key。
-    如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-    """
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
+class _GatewayResult(dict):
+    """保存普通字典返回值及公共调用器已写入的文件位置，避免二次落盘。"""
+
+    def __init__(self, payload, output_path):
+        super().__init__(payload)
+        self.output_path = output_path
 
 
-def call_api(endpoint: str, params: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    req = Request(
-        endpoint,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
+def call_api(endpoint: str, params: dict, transform=None) -> dict:
+    """经公共 run 调用网关；支持认证、兼容网关变量和无响应缓存。"""
+    parts = urlsplit(endpoint)
+    base = endpoint[:-len(parts.path)] if parts.path else endpoint
+    output_path = None
+    result = None
+    original_transport = gateway.call_api
+    original_path = gateway._resolve_output_path
+    previous_base = os.environ.get('LINKFOX_TOOL_GATEWAY')
+    previous_root = gateway._SESSION_CACHE.get('_root')
+    # 数据保存在 cwd，不允许调用器回退到家目录或临时目录。
+    root = Path.cwd() / 'linkfox'
+    root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryFile(dir=root):
+        pass
+
+    def adapt(api_path, request_params):
+        nonlocal result
+        status, payload = original_transport(api_path, request_params)
+        result = transform(status, payload) if transform else payload
+        return status, result
+
+    def output(_slug, _ts):
+        return output_path
+
+    operation = str(params.get('path') or parts.path).rsplit('/', 1)[-1]
     try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+        os.environ['LINKFOX_TOOL_GATEWAY'] = base
+        gateway._SESSION_CACHE['_root'] = str(root)
+        # 请求前检查最终会话 data 目录，根目录可写并不代表该目录可写。
+        output_path = gateway.resolve_data_path(f'{SLUG}-{operation}', time.time())
+        with tempfile.TemporaryFile(dir=Path(output_path).parent):
+            pass
+        gateway.call_api = adapt
+        gateway._resolve_output_path = output
+        argv = [json.dumps(params, ensure_ascii=False), '--no-cache']
+        if lf_inline_flag():
+            argv.append('--inline')
+        # CLI 输出由 emit_result 展示；run 已保存最终加工结果。
+        with redirect_stdout(StringIO()):
+            gateway.run(parts.path, f'{SLUG}-{operation}', argv=argv)
+    finally:
+        gateway.call_api = original_transport
+        gateway._resolve_output_path = original_path
+        if previous_base is None:
+            os.environ.pop('LINKFOX_TOOL_GATEWAY', None)
+        else:
+            os.environ['LINKFOX_TOOL_GATEWAY'] = previous_base
+        if previous_root is None:
+            gateway._SESSION_CACHE.pop('_root', None)
+        else:
+            gateway._SESSION_CACHE['_root'] = previous_root
+    if not output_path or not Path(output_path).is_file():
+        raise OSError('完整响应未能保存到当前工作目录')
+    return _GatewayResult(result, output_path)
 
 
 def resolve_store_tokens(params: dict) -> dict:
@@ -121,6 +146,7 @@ def developer_proxy_call(
     body: Optional[str] = None,
     content_type: str = "application/json",
     access_token: Optional[str] = None,
+    transform=None,
 ) -> dict:
     if not path.startswith("api/v2"):
         print(f"Error: path must start with 'api/v2', got {path!r}", file=sys.stderr)
@@ -143,9 +169,7 @@ def developer_proxy_call(
     if body is not None:
         proxy["body"] = body
         proxy["contentType"] = content_type
-    return call_api(DEVELOPER_PROXY_ENDPOINT, proxy)
-
-
+    return call_api(DEVELOPER_PROXY_ENDPOINT, proxy, transform=transform)
 
 
 def qs_add(parts: list[str], key: str, value: str) -> None:
@@ -153,15 +177,19 @@ def qs_add(parts: list[str], key: str, value: str) -> None:
 
 
 def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
-    if int(proxy.get("httpStatus") or 0) != 200:
+    status = proxy.get("httpStatus")
+    if not (
+        type(status) in (int, float) and status == 200
+        or isinstance(status, str) and status.strip() == "200"
+    ):
         return
     body_raw = proxy.get("body")
-    if not body_raw or not str(body_raw).strip():
+    if not isinstance(body_raw, (str, bytes, bytearray)) or not body_raw.strip():
         out[key] = None
         return
     try:
         parsed = json.loads(body_raw)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         out[key] = None
         return
     out[key] = parsed
@@ -170,13 +198,12 @@ def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
 
 
 # ===== LinkFox 统一输出层（落盘 + 摘要，无缓存）=====
-# 本块追加到共享模块（_xxx_common.py）末尾，供各入口脚本调用 emit_result()。
+# 各入口脚本调用 emit_result() 保存响应并展示摘要。
 # 依赖：json, os, sys, time, secrets, tempfile（共享模块通常已 import json/os/sys；
 #       若缺 time/secrets/tempfile，请在文件顶部补 import）。
 
 import time as _lf_time
 import secrets as _lf_secrets
-import tempfile as _lf_tempfile
 
 LF_SMALL_THRESHOLD = 8000
 _LF_SESSION_CACHE: dict = {}
@@ -185,33 +212,11 @@ SLUG = "linkfox-shopee-store-shop-category"
 
 
 def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
+    root = Path.cwd() / 'linkfox'
+    root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryFile(dir=root):
+        pass
+    return str(root)
 
 
 def _lf_iso(ts: float) -> str:
@@ -316,9 +321,16 @@ def _lf_update_meta(session_dir: str, *, skill: str, file_rel: str, ts: float) -
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
 
-def emit_result(result, slug=SLUG, inline=False):
+def emit_result(result, inline=False, slug=SLUG):
     """落盘完整响应到 linkfox/<date>/<session>/data/<slug>-<ts>.json；大响应只打印摘要。无缓存。"""
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
+    if isinstance(result, _GatewayResult):
+        print(f"Saved full response: {result.output_path} ({len(serialized.encode('utf-8'))} bytes)")
+        if inline or len(serialized.encode('utf-8')) <= LF_SMALL_THRESHOLD:
+            print(serialized)
+        else:
+            _lf_summarize(result)
+        return
     ts = _lf_time.time()
     date_str = _lf_time.strftime("%Y-%m-%d", _lf_time.localtime(ts))
     sid = _lf_session_id(ts)

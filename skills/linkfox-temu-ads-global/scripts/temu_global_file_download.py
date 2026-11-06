@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""US site signed file download via /temu/fileDownload."""
+"""全球站加签文件下载。"""
 
 import json
 import sys
 
 from _temu_common import load_json_arg
 from _temu_global_common import DEFAULT_SITE, global_file_download_call
-from _temu_global_common import emit_result, lf_inline_flag
 
 def main():
     if len(sys.argv) < 2:
@@ -17,8 +16,7 @@ def main():
         sys.exit(1)
     params = load_json_arg(sys.argv)
     params.setdefault("site", DEFAULT_SITE)
-    result = global_file_download_call(params)
-    emit_result(result, inline=lf_inline_flag())
+    global_file_download_call(params)
 
 if __name__ == "__main__":
     main()

@@ -1,16 +1,66 @@
-# 视频封面 — `bg.local.goods.videocoverimage.get`
+# Temu 全球站商品管理接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/global_manage_videocoverimage_get.py` |
-| **Partner 文档** | https://partner-global.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=2a343c65a03d42d380e9ad835aa7b54b |
-| **网关** | `POST /temu/proxy`，`type`=`bg.local.goods.videocoverimage.get`，业务载荷放在 Body 的 `params` |
+[公共运行约定](../api.md#运行约定) · [完整接口索引](README.md)
 
-**Description:** Obtain cover image of video frame（按视频 `vid` 批量获取视频封面图）。
+## 公共规则
 
----
+### 调用规范
 
-## Request 结构（官方顶层）
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：视频封面 — `bg.local.goods.videocoverimage.get`
+
+> Partner 文档：https://partner-global.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=2a343c65a03d42d380e9ad835aa7b54b
+> 部分 sub_menu_code 使用 US 文档编号；须在 Global Partner 后台按 type 核对，索引链接不代表地址已实时校验。
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是 | 本技能默认 `global`，全球区（非 US/EU）；由网关选择上游 `https://openapi-b-global.temu.com/openapi/router`。兼容脚本可显式指定 `cn` / `partner` / `us` / `global` / `eu`，须与实际授权区域一致。 |
+| managementType | string | 是 | 本技能默认 `semi-managed`；通用脚本支持 `full-managed` / `semi-managed`。 |
+| accessToken | string | 是 | Temu 店铺令牌；与 LinkFox 用户密钥不同。使用 `storeKey` 时由业务脚本读取本地令牌并转换为此字段。 |
+| type | string | 是 | 本接口固定 `bg.local.goods.videocoverimage.get`。 |
+| params | object | 否 | 本接口业务载荷；通常为 `{"request": {...}}`，具体结构见下文。 |
+
+#### 脚本兼容参数与选项
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| token / linkfoxToken / linkfox_token | string | 否 | 仅脚本鉴权参数，按所列顺序取首个非空值，优先于环境变量；不转发到 Temu 业务参数。 |
+| LINKFOX_AGENT_API_KEY / LINKFOXAGENT_API_KEY | 环境变量 | 无 JSON 密钥时必填 | 优先使用前者，同时支持两个变量；`Authorization` 与 `Token` 请求头同值。 |
+| storeKey | string | 与 accessToken 二选一 | 从本地 store 取 Temu 令牌；直接传入 accessToken 时优先使用该值。 |
+| tokenPurpose | string | 否 | Global 包装默认 `product-inventory`；与 storeKey、site、managementType 一起精确匹配，不回退到其他区域或用途的令牌。 |
+| params | object | 否 | 显式传入时优先使用整个 params；否则将顶层除鉴权、店铺、站点、type、params 外的字段作为业务载荷。 |
+| --inline | CLI flag | 否 | 完整打印响应，仍保存文件。 |
+| --no-cache | CLI flag | 否 | 本技能不使用响应缓存，业务包装调用 run 时始终添加此选项，不读写响应缓存。 |
+
+Global 脚本自动补全站点、管理模式和令牌用途；`temu_proxy.py` 兼容入口要求显式传 site、managementType 和 type。业务载荷保持原始层级，不自动展平 request。授权步骤和本地令牌 CLI 见 [access-token.md](../access-token.md)。
+
+#### 业务包装
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| params.request | OBJECT | 否 | 业务请求包装为选填，内部必填字段仍按下表执行。 |
 
 ```text
 params
@@ -18,39 +68,29 @@ params
     └── vidList[]              ← 视频 vid 列表
 ```
 
-### `request` 内字段
+##### `request` 内字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| vidList | STRING[] | 否 | vid list for video（待查询封面的视频 vid 列表） |
+| vidList | STRING[] | 否 | 待查询封面的视频 vid 列表 |
 
 > 实际调用时通常传入至少一个 `vid`；`vid` 来自商品详情或视频上传接口返回，勿与规格属性值 `vid` 混淆（以 Partner 上下文为准）。
 
-### 网关 `params` 写法
+> **勿**使用字段 `videoUrl`；官方入参为 **`request.vidList`**。
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "vidList": ["video-vid-001", "video-vid-002"]
-  }
-}
-```
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "vidList": ["58224724203874"]
-  }
-}
-```
+#### 网关与脚本输出字段
 
-> **勿**使用旧字段 `videoUrl`；官方入参为 **`request.vidList`**。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 网关业务状态；按公共规则判断。未出现时仍须结合外层 HTTP 状态与下列业务字段。 |
+| errmsg | string | 网关错误或提示消息。 |
+| code | integer | 网关错误码：1002 表示参数或 LinkFox Token 无效，1003 表示转发失败；不能替代外层 HTTP/errcode 判断。 |
+| body | string | Temu 原始 JSON 字符串；保留原文。 |
+| temuBody | object / array / scalar | 脚本附加字段，仅当 body 为可解析 JSON 字符串时生成；解析仅用于展示，不代表业务成功。 |
 
----
-
-## Response（Temu `body` 解析后）
+下面的字段以解析后的 Temu body 为作用域；未展开定义的子对象按实际返回解释，不推测补造字段。
 
 ```text
 response
@@ -63,65 +103,85 @@ response
 └── errorMsg
 ```
 
-### `response` 顶层字段
+##### `response` 顶层字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | result | OBJECT | 业务结果对象 |
-| success | BOOLEAN | success（当前请求是否成功） |
-| errorCode | INTEGER | error code（错误码） |
-| errorMsg | STRING | error message（错误信息） |
+| success | BOOLEAN | 是否成功（当前请求是否成功） |
+| errorCode | INTEGER | 错误码 |
+| errorMsg | STRING | 错误信息 |
 
-### `result`
+##### `result`
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| videoInfoMap | MAP | Video Information（视频信息映射） |
+| videoInfoMap | MAP | 视频信息映射 |
 
-### `result.videoInfoMap`（MAP 键值）
+##### `result.videoInfoMap`（MAP 键值）
 
 | 键 / 值 | 类型 | 说明 |
 |---------|------|------|
 | `$key`（vid） | STRING | vid（视频 ID，与入参 `vidList` 中元素对应） |
-| `$value` | OBJECT | Video Details（该视频详情） |
+| `$value` | OBJECT | 该视频详情 |
 
-#### `videoInfoMap.$value`
+###### `videoInfoMap.$value`
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| coverImage | STRING | Video Cover image（视频封面图 URL） |
+| coverImage | STRING | 视频封面图 URL |
 
 > 批量查询时遍历 **`result.videoInfoMap`**，以 **key（vid）** 与入参对照；某 `vid` 无 key 或 `coverImage` 为空时，表示该视频暂无封面或查询失败（以实网返回为准）。
 
-### 响应示例（结构示意）
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 基础规则通过后，核对网关 code，再检查 body 中的 success、errorCode、errorMsg 与 result。仅 body 解析成功不能认定操作成功。
+- code=1002 时核对参数与 LinkFox 用户令牌；code=1003 时核对 Temu 店铺令牌、IP 白名单与转发情况。
+
+- 按 videoInfoMap 的视频 vid 键匹配请求；缺少键或 coverImage 为空时说明无封面或查询失败，以实际返回为准。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "global",
+  "managementType": "semi-managed",
+  "accessToken": "TOKEN",
+  "type": "bg.local.goods.videocoverimage.get",
+  "params": {
+    "request": {
+      "vidList": [
+        "video-vid-001",
+        "video-vid-002"
+      ]
+    }
+  }
+}'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "success": true,
-  "errorCode": 0,
-  "errorMsg": "",
-  "result": {
-    "videoInfoMap": {
-      "video-vid-001": {
-        "coverImage": "https://cdn.example.com/cover1.jpg"
-      },
-      "video-vid-002": {
-        "coverImage": "https://cdn.example.com/cover2.jpg"
-      }
-    }
-  }
+  "skillName": "linkfox-temu-manage-product-global",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
-```
-
----
-
-## 示例
-
-```bash
-python scripts/global_manage_videocoverimage_get.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "vidList": ["video-vid-001"]
-  }
-}'
 ```

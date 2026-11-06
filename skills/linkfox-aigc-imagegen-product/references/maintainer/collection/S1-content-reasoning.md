@@ -1,5 +1,7 @@
 # S1 内容推理
 
+> 维护说明。plan phase 内部依序处理 S1 和品牌基因提取，Agent 不额外并发发起这两个任务。运行时以 references/runtime/01-plan.md 为准。
+
 - **输入**：图片 + point/pointHint/imageDesc（agent 层传入）+ 上下文历史卖点
 - **依赖**：S0（场景路由决定是否执行本步）
 - **操作**：识别品类/材质/形状，推理卖点与画面内容
@@ -8,11 +10,11 @@
 
 ---
 
-## 并行执行：S1 内容推理 + 品牌基因提取
+## plan 内部执行：S1 内容推理 + 品牌基因提取
 
-S0 场景路由完成后，**在同一轮响应中同时触发**以下两个任务，两者都完成后才进入 S2：
+S0 场景路由完成后，由 plan phase 处理以下两个任务，两者都完成后才进入 S2（下表为逻辑任务，非额外工具调用）：
 
-| 并行任务 | 调用方式 | 条件 |
+| 逻辑任务 | 调用方式 | 条件 |
 |----------|----------|------|
 | S1 内容推理 | 当前步骤（见下方规则） | 场景路由要求执行步骤一时 |
 | 品牌基因提取 | 调用 skill `linkfox-aigc-imagegen-brand-gene-extract` | 仅当上下文中**没有**已提取的品牌基因时（即场景D首次做套图） |
@@ -23,7 +25,7 @@ S0 场景路由完成后，**在同一轮响应中同时触发**以下两个任�
   - 如果用户输入中包含 `品牌基因` 字段，直接使用其中的 language、platform、salesRegion；若包含 brandColor、fontStyle 一并传入
   - 如果用户输入中不包含 `品牌基因` 字段，则从用户意图或上下文中提取 language、platform、salesRegion
   - 若从意图/上下文中均无法提取，默认填充：salesRegion=美国、language=英文、platform=亚马逊
-- skill 返回的 JSON 即为 `brandGeneJson`；**必须**经 `linkfox-aigc-imagegen-brand-gene-extract` 的 `save_brand_gene.py` 落盘到会话 `data/`，将 stdout 的 `Saved full response: <绝对路径>` 记入上下文，供后续 plan 阶段写入 `collection-state.json` 的 `brand_gene_file`、run_one_task 据此传**文件路径**复用（**禁止**内联进 state、**禁止**仅存于对话上下文）
+- skill 返回的 JSON 即为 `brandGeneJson`；**必须**经 `linkfox-aigc-imagegen-brand-gene-extract` 的 `scripts/save_brand_gene.py` 落盘到会话 `data/`，将 stdout 的 `Saved full response: <绝对路径>` 记入上下文，供后续 plan 阶段写入 `collection-state.json` 的 `brand_gene_file`、run_one_task 据此传**文件路径**复用（**禁止**内联进 state、**禁止**仅存于对话上下文）
 
 **不触发品牌基因提取的场景（B/C/E/F）**：上下文中已有品牌基因结果，直接复用，仅执行 S1 内容推理。
 
@@ -35,7 +37,7 @@ S1 的推理结果（point / image_desc / desc / layout）是 S2 imagePlanList �
 
 1. **禁止逐条向用户展示** S1 推理的 point、image_desc、desc 原文——它们只需内部持有，直接压缩进 S2 的 imagePlanList 规划表中呈现
 2. S1 完成后**立即进入 S2 组装 imagePlanList**，不做中间汇报，以控制单轮响应体积、避免因响应过长被截断
-3. S2 用户确认后须按 `S2-plan-confirm.md`「用户确认后立即落盘」经 `save_image_plan.py` 逐条写入 `$DATADIR/image-plan.json`，**禁止**把完整 plan 只留在上下文供 S3 重建
+3. S2 用户确认后须按 `S2-plan-confirm.md`「用户确认后立即落盘」确认 pipeline 已保存最终计划，必要时经 `scripts/save_image_plan.py` 增量更新 `$DATADIR/image-plan.json`，**禁止**把完整 plan 只留在上下文供 S3 重建
 
 ---
 

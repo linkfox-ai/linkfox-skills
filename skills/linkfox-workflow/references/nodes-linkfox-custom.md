@@ -2,9 +2,9 @@
 
 在原生 15 个节点之外（其中原生 `Start` 已被 `BusinessStart` 取代，禁止生成），linkfox-workflow 系统额外提供 **8 个定制 Agentflow v2 节点**。生成、修改或校验涉及以下能力时必读本文件：
 
-- 亚马逊授权店铺事件 / 业务定时启动 / 手动"点一下就跑" → `BusinessStart`
+- 业务定时启动 / 手动"点一下就跑" / 多维表格记录触发 → `BusinessStart`（**没有**店铺事件触发，2026-10-30 已删除）
 - 调用跨境专家平台已配置的专家 → `CrossBorderExpert`
-- 读取 CSV / Excel / 多维表 / 亚马逊授权店铺订单 → `DataReader`
+- 读取 CSV / Excel / 多维表 / 亚马逊授权店铺的 Listing、订单、广告表现 → `DataReader`
 - 暂停流程、让用户填一组结构化字段（含单文件上传）后再继续 → `FillForm`
 - 并行投递邮件 / 飞书 / 钉钉通知 → `SendNotification`
 - 将上游结果写入 Linkfox 多维表（写已有表 / 新建表 / **改已有行**）→ `WriteFile`
@@ -16,7 +16,7 @@
 - `category`: `"Agent Flows"`
 - 顶层 `type`: `"agentFlow"`
 - `data.id` = 顶层 `id` = `<data.name>_<数字>`（新建节点用顺序号 `_0` / `_1`；refine 时基线里画布生成的随机数字后缀如 `_415972` 原样保留，详见 `flow-structure.md`）
-- **`inputParams` 整个字段别写**：本文件这 8 个节点（`HumanInput` / `CustomPythonFunction` 不在此文件，但同理）的 `inputParams` 由 `save_workflow.py` 按 `data.name` 代填，`acceptVariable` 也已标好。写成 `[]` 不算省略 —— 空数组不代填、直接报 error。下面各节的「核心字段」表说的是 `inputs`（字段**值**），那部分仍要你自己填。细节见 SKILL.md 的「`inputParams` 交给脚本」
+- **`inputParams` 大半由脚本代填**：BusinessStart / FillForm / CrossBorderExpert / SendNotification / WriteFile / LinkfoxHTTP / End（以及 `HumanInput` / `CustomFunction` / `CustomPythonFunction` / `Condition` / `HTTP`，不在此文件）的 `inputParams` 由 `save_workflow.py` 按 `data.name` 代填，`acceptVariable` 也已标好——**整个字段别写**。写成 `[]` 不算省略 —— 空数组不代填、直接报 error。**`DataReader` 是例外**：它的 `inputParams` 要你自己写完整（字段见下文这一节，`amazon*` 那几个新字段也得逐个声明），漏了会报「data.inputParams 是空数组」。下面各节的「核心字段」表说的是 `inputs`（字段**值**），那部分仍要你自己填。细节见 SKILL.md 的「`inputParams` 交给脚本」
 - **锚名 ≠ output 字段名**：下面每个节点表格里的"输出锚点"（`data` / `sent` / `written` / `completed` / `submitted`）只用于 edge 的 `sourceHandle`，**不是** `output` 里的字段。跨节点取值一律查 `output-and-state.md` 的字段表——写 `{{ <id>.output.data }}` / `.output.sent` / `.output.written` 这类锚名路径，运行时不报错但模板不会被替换
 - 除 `FillForm` 和 `End` 外，凭据都是 `linkfoxAgentApi`；生成时 credential id 一律留 `""`
 - **`linkfoxAgentApi` 凭据由后台自动绑定**：上传后服务端会给这些节点自动绑上，用户不需要在页面上手工绑。补配置指引、计划里的「上传后要补什么」、执行前缺项转述里**都不要**出现「绑定 `linkfoxAgentApi` 凭据」这类提示；只点名真正要用户配的东西（店铺、专家、表、机器人地址、模型等）
@@ -30,7 +30,7 @@
   ```
 
   写成类型名时导入不报错、画布看不出异常，要跑到那个节点才失败；`save_workflow.py` 对此按 error 拦截。
-- refine 时 `data.credential` 与 `inputs.FLOWISE_CREDENTIAL_ID` 指同一个凭据，**要么都是那个实例 id，要么都空**；只填一处通常是漏改（脚本报 warning）。fetch 回来的基线里带着已绑好的 id（后台自动绑定或用户在界面上选的）是正常的，**不要把它"修正"成空串**——那会清掉已有的绑定。
+- refine 时 `data.credential` 与 `inputs.FLOWISE_CREDENTIAL_ID` 指同一个凭据，**要么都是那个实例 id，要么都空**；只填一处通常是漏改（脚本报 warning）。`inputs` 里本来就没有这个键的节点（原生 HTTP、LinkfoxHTTP 这类）只认 `data.credential`，不会因此报警。fetch 回来的基线里带着已绑好的 id（后台自动绑定或用户在界面上选的）是正常的，**不要把它"修正"成空串**——那会清掉已有的绑定。
 - 所有 `asyncOptions` 字段（`amazonStore` / `expertId` / `executeFlowSelectedFlow` 等）**必须留空字符串**，导入后由用户在界面上刷新选择。**多维表（`notebookId` / `tableId`）例外**：用智能表格 skill 查出用户的表、问用户选哪张后填真实 id，见 `SKILL.md`「选表」一节
 
 ---
@@ -41,10 +41,10 @@
 | --- | --- |
 | `data.name` | `businessStartAgentflow` |
 | `data.type` | `BusinessStart` |
-| `version` | `1.8` |
+| `version` | `1.9` |
 | `color` | `#8B5CF6` |
 | `baseClasses` | `["Start"]` |
-| `credential` | `linkfoxAgentApi`（`storeAuthorization` 与 `tableRecordTrigger` 两种启动方式都必填） |
+| `credential` | `linkfoxAgentApi`（仅 `tableRecordTrigger` 记录触发需要） |
 | 输出锚点 | `<id>-output-businessStartAgentflow` |
 
 **用途**：面向运营的开始节点，**LinkFox 分支的唯一开始节点**。每个 flow 必须且只能有一个 `BusinessStart`；**禁止使用原生 `Start`**（`save_workflow.py` 会直接拒绝）。
@@ -53,10 +53,7 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `startInputType` | options，卡片式 | 只有四个合法值：`chatInput` = 手动启动（默认，无对话框，聊天面板显示"启动任务"按钮）；`scheduleInput` = 按业务时间；`storeAuthorization` = 店铺授权事件；`tableRecordTrigger` = 多维表格记录触发。**没有** `formInput` / `webhookTrigger`——那两个只在原生 `Start` 上，而原生 Start 已禁止生成 |
-| `amazonStore` | asyncOptions | `storeAuthorization` 时必填；值格式 `<sellerId>\|<region>\|<marketplaceIds>`（三段，与 DataReader 的「亚马逊授权店铺」共用同一份下拉；老流程存的两段 `<sellerId>\|<region>` 仍能解析，此时 `marketplaceIds` 为空数组）；生成时留 `""` |
-| `storeChangeType` | options，默认 `orderList` | 只有五个合法值：`listing` / `orderList` / `afterSalesOrder` / `fbaInventory` / `removalOrder`（与 DataReader 的 `amazonDataType` 同一套枚举），列表外的值保存会被拒绝 |
-| `storeCheckIntervalMinutes` | number，默认 `10` | 必须为正整数 |
+| `startInputType` | options，卡片式 | 只有三个合法值：`chatInput` = 手动启动（默认，无对话框，聊天面板显示"启动任务"按钮）；`scheduleInput` = 按业务时间；`tableRecordTrigger` = 多维表格记录触发。**没有** `storeAuthorization`（店铺事件触发已于 2026-10-30 删除：仓库里从来没有店铺事件服务，那个分支不请求任何平台、也不会自己跑），也**没有** `formInput` / `webhookTrigger`（那两个只在原生 `Start` 上，而原生 Start 已禁止生成）。存量 flowData 里残留的 `storeAuthorization` 服务端仍允许保存，但它永远不会触发 |
 | `notebookId` | asyncOptions | `tableRecordTrigger` 时的**第一级**：多维表格（容器，`nbk` 前缀；散表 `__loose__`）；填用户选定的表所在容器 |
 | `tableId` | asyncOptions | `tableRecordTrigger` 时的**第二级**：数据表（`tbl` 前缀），必填；填用户选定的数据表 |
 | `recordEventType` | options，卡片式，默认 `recordCreated` | `recordCreated` / `recordUpdated` / `recordConditionMet` 三种可用；`recordTimeReached`（到达记录中的时间时）卡片显示但**禁用**，写它保存会被拒绝 |
@@ -68,7 +65,7 @@
 | `schedule*` | 复用原生 `Start` 的 schedule 字段 | 默认视觉配置为每周、`09:00`、周一、`Asia/Shanghai`。`BusinessStart` **没有** `scheduleCronExpression` / `scheduleInputMode` / `scheduleDefaultInput`——排期固定走 `visualPicker`、无 Cron、无默认文本。需要 Cron 或默认输入的场景本节点表达不了 |
 | `linkfoxTableAutomationContext` | object | 仅 `scheduleInput`:把定时流**挂到某张多维表下**(表格自动化侧栏可见),形如 `{"notebookId": "nbk…", "tableId": "tbl…"}`。缺 `notebookId` = 不挂表;不带整个对象 = 普通定时流。**不是记录触发**,记录变更不会触发它;id 不写在上面记录触发那组 `notebookId` / `tableId` 里。何时带、上传结果怎么回报见 `table-automation.md` §1.5 |
 
-**保存会被服务端 400 拒绝的情况**：未选 Credential；`tableId` 不以 `tbl` 开头；`recordEventType` 不在三种可用事件里（`recordTimeReached` 报 "The selected Record Event is not available yet."）；`recordConditionMet` 缺条件字段 / 算子非法 / 该带值的算子没给值；`recordCheckIntervalMinutes` 或 `storeCheckIntervalMinutes` 不是正整数；`storeChangeType` 不在五种之内。**生成阶段把 `tableId` 留 `""` 是对的**，但留占位的记录触发 flow 在 `upload_workflow.py` 阶段可能被服务端 400 顶回来（报 "Data Table is required on the Start node."）。要为记录触发出 flow 时，先跟用户确认这一点：**要么由用户在界面上先绑好表再保存，要么这条流先用手动启动上线、之后在界面上切成记录触发**。
+**保存会被服务端 400 拒绝的情况**：`tableRecordTrigger` 未选 Credential；`tableId` 不以 `tbl` 开头；`recordEventType` 不在三种可用事件里（`recordTimeReached` 报 "The selected Record Event is not available yet."）；`recordConditionMet` 缺条件字段 / 算子非法 / 该带值的算子没给值；`recordCheckIntervalMinutes` 不是正整数。**生成阶段把 `tableId` 留 `""` 是对的**，但留占位的记录触发 flow 在 `upload_workflow.py` 阶段可能被服务端 400 顶回来（报 "Data Table is required on the Start node."）。要为记录触发出 flow 时，先跟用户确认这一点：**要么由用户在界面上先绑好表再保存，要么这条流先用手动启动上线、之后在界面上切成记录触发**。
 
 **没有 `startState`（重要）**：`BusinessStart` 的 `startState` / `startEphemeralMemory` / `startPersistState` 三项都不存在。所以：
 
@@ -79,20 +76,7 @@
 
 **手动启动的运行时约定**：`input.question` 与 `output.question` 恒为 `""`，下游节点读到的 `<id>.output.question` 恒为空串——依赖用户文本输入的场景本节点表达不了（原生 `Start` 的 `chatInput` / `formInput` 已禁止生成）。
 
-**店铺授权的运行时输出**（非敏感字段，不含 API Key / Credential）：
-
-```json
-{
-  "storeAuthorization": {
-    "sellerId": "<sellerId>",
-    "region": "<region>",
-    "marketplaceIds": ["<marketplaceId>"],
-    "changeType": "fbaInventory",
-    "checkIntervalMinutes": 10
-  },
-  "question": " "
-}
-```
+**店铺事件触发已经没有了**：2026-10-30 起 `startInputType` 不再有 `storeAuthorization`，原来的 `amazonStore` / `storeChangeType` / `storeCheckIntervalMinutes` 三个字段与 `output.storeAuthorization` 一并删除。用户要"店铺有新订单 / 库存变了就跑"，按 `intent-routing.md` 的替代方案走（定时 + `DataReader` 轮询，或改成多维表格记录触发），**不要**再生成这个触发方式，也不要引用 `output.storeAuthorization`。
 
 ### 多维表格记录触发（`tableRecordTrigger`）
 
@@ -276,11 +260,13 @@
 
 ## DataReader（数据读取）
 
+> **亚马逊店铺数据默认走本节点**：Listing / 订单 / 广告表现一律先用 `DataReader`（`sourceType=amazonStore`），凭证注入、`total` / `truncated` 判定、分页都在节点里。**只有节点不透传的那几个参数**才用 `LinkfoxHTTP` 直调（清单见下面「节点不透传的搜索参数」）。逐个 `LinkfoxHTTP` 手写 body 时，`save_workflow.py` 会提醒你改回 `DataReader`。
+
 | 字段 | 值 |
 | --- | --- |
 | `data.name` | `dataReaderAgentflow` |
 | `data.type` | `DataReader` |
-| `version` | `1.0` |
+| `version` | `1.1` |
 | `color` | `#0F766E` |
 | `baseClasses` | `["DataReader"]` |
 | `credential` | `linkfoxAgentApi`（仅 `linkfoxTable` / `amazonStore` 时必填） |
@@ -295,17 +281,36 @@
 | `excelFile` / `sheetName` / `headerRow` | 文件与解析选项（`sourceType=excel`） | `sheetName` 空则读第一个 sheet；`headerRow` 默认 `1` |
 | `notebookId` | asyncOptions | `sourceType=linkfoxTable` 时的**第一级**：多维表格（容器，`nbk` 前缀；散表 `__loose__`）；填用户选定的表所在容器 |
 | `tableId` | asyncOptions | `sourceType=linkfoxTable` 时的**第二级**：数据表（`tbl` 前缀），必填；填用户选定的数据表。读取只认它，填 `nbk` 会被拒 |
-| `amazonStore` | asyncOptions | `sourceType=amazonStore`；值 `<sellerId>\|<region>\|<marketplaceIds>`（三段；老流程的两段仍能解析，`marketplaceIds` 为空数组）。与 BusinessStart 的「授权店铺」共用同一份下拉 |
-| `amazonDataType` | options，默认 `orderList` | `listing` / `orderList` / `afterSalesOrder` / `fbaInventory` / `removalOrder`（与 BusinessStart 的 `storeChangeType` 同一套枚举）；列表外的值会被拒 |
-| `amazonCheckIntervalMinutes` | number，默认 `10` | 亚马逊读取窗口（读取最近 N 分钟的数据） |
-| `maxRows` | number，默认 `2000` | 硬上限 2000，不可超过 |
+| `amazonStore` | asyncOptions | `sourceType=amazonStore`；**值是 `storeId`**（如 `"2092577240692461569"`），不再是 `<sellerId>\|<region>\|<marketplaceIds>`。旧值（含 `\|`）节点会报「旧版本的店铺选择，请重新选择授权店铺」——旧值里没有 `storeId`，无法迁移。生成时留 `""`，由用户在界面上选 |
+| `amazonMarketplace` | asyncOptions，可选 | `sourceType=amazonStore`；该店铺下的**站点**二级下拉（`listAmazonMarketplaces`）。留空 / `__ALL__`（「全部站点」）= 不传 `marketplaceId`，接口在店铺全部有效站点间统一分页。生成时留 `""`。它依赖上级 `amazonStore`，店铺没选时下拉是空的 |
+| `amazonDataType` | options，默认 `orders` | **只有三种**：`listing`（Listing，分页单位是条）/ `orders`（订单，分页单位是订单，每条带全部商品行）/ `ads`（广告表现，当前只有 `unmappedMetrics` 有真实指标）。`orderList` / `afterSalesOrder` / `fbaInventory` / `removalOrder` 都已删除，写了节点会报「不支持的数据类型」 |
+| `amazonStartDate` / `amazonEndDate` | datePicker | 只在 `orders` / `ads` 下生效。`orders`：**可选但必须成对**（都不给 = 查全部已同步历史）；`ads`：**必填**，且区间（含首尾）≤ **90** 天，缺日期保存会被服务端 400。格式 `yyyy-MM-dd`（`2026-10-01T00:00:00.000Z` 也认，只取前 10 位）；`endDate` 不能早于 `startDate`。`listing` 不读这两个键 |
+| `amazonAsin` / `amazonSku` | string，可选 | `listing` / `orders` 都生效：按 ASIN（≤32 字符）/ Seller SKU（≤160 字符）**精确匹配**，同时填按 AND 组合。`ads` 不读 |
+| `amazonKeyword` / `amazonTitle` | string，可选 | **仅 `listing`**：关键词在 Seller SKU / ASIN / 标题之间做 OR 字面包含匹配，标题只匹配标题；都是**包含匹配**、≤500 字符，与 `asin`/`sku` 等按 AND 组合。订单侧节点不展示也不下发（订单接口其实收，要模糊查走 `LinkfoxHTTP`） |
+| `amazonStartPage` / `amazonPageSize` | number，可选 | **高级设置、三种数据类型都显示**。起始页默认 `1`（≥1），每页条数默认 `200`（1..200）。逐页读全量就靠这两个 + `Iteration`，见下面「逐页读取」 |
+| `maxRows` | number，默认 `2000` | **本次执行**的上限、不是能读到的最深处：硬上限 2000（超了运行时静默夹到 2000，`save_workflow.py` 按 error 拦）。`orders` / `listing` 从 `amazonStartPage` 起内部翻页到它为止；**`ads` 只取一页、不看这个值** |
 | `outputVariableName` | string，默认 `tableData` | **同时**是 output 字段名和 State key：结果写进 `{{ <id>.output.<名称> }}` 与 `{{$flow.state.<名称>}}`。禁止取 `content` / `status` / `rowCount` / `truncated`（会覆盖固定字段）；推荐 camelCase |
+
+**已删除的字段**：`amazonCheckIntervalMinutes`（「检查间隔」）随新接口一起删掉了 —— 店铺助手那三个接口读的是已落库数据，没有时间窗语义。**不要再写它**，节点运行时不读，面板上也没有这个框。
+
+**亚马逊分支的筛选项按数据类型收敛**（2026-10-30 定口径，2026-11-02 补文本筛选）：`listing` = 店铺 + 站点 + ASIN + SKU + 关键词 + 标题；`orders` = 店铺 + 站点 + 日期（可选成对）+ ASIN + SKU；`ads` = 店铺 + 站点 + 日期（必填）。不属于当前数据类型的键**即使 flowData 里残留也不会发出去**（节点只按 `amazonDataType` 决定读不读），所以别写、也别指望它生效。
+
+**节点不透传的搜索参数**（这几个只能走 `LinkfoxHTTP`，写进 DataReader 的 `inputs` 不生效也不报错）：
+
+| 参数 | 适用接口 | 语义 |
+| --- | --- | --- |
+| `storeName` | 三个接口 | 店铺名**不区分大小写**的包含匹配，≤200 |
+| `countryCode` | 三个接口 | 两位国家代码（`US` / `DE` / `JP`） |
+| `orderId` | `orders` | Amazon 订单号精确匹配，≤64 |
+| `keyword` / `title` | `orders` | 订单侧 `keyword` 在**订单号 / SKU / ASIN / 标题**间 OR 包含；`listing` 侧这两个 DataReader 已经有 |
+
+除了这五项，别的筛选、分页、凭证、`total` / `truncated` 都优先用 `DataReader` —— 用 `LinkfoxHTTP` 重写一遍等于自己丢一遍这些能力，`save_workflow.py` 会对此报 warning。
 
 **选表是两级的，不是一级**：先选「多维表格」再选它下面的「数据表」，切换上一级后要点数据表右侧的刷新按钮。两个值都填用户选定的真实 id（见 `SKILL.md`「选表」）。`WriteFile` 与 `BusinessStart` 记录触发的选表行为与此一致。
 
-**运行时输出**（字段表见 `output-and-state.md`）：固定字段 `content`（整个表格结果的 JSON 字符串）/ `status`（成功恒为 `ok`）/ `rowCount` / `truncated`，外加动态字段 `<outputVariableName>`。**没有** `output.data`——`data` 只是锚名，写 `{{ <id>.output.data }}` 模板不会被替换。
+**运行时输出**（字段表见 `output-and-state.md`）：固定字段 `content`（整个结果的 JSON 字符串）/ `status`（成功恒为 `ok`）/ `rowCount` / `truncated`，外加动态字段 `<outputVariableName>`。**没有** `output.data`——`data` 只是锚名，写 `{{ <id>.output.data }}` 模板不会被替换。
 
-`outputVariableName` 用默认值时，表格对象在 `{{ <id>.output.tableData }}`；`csv` / `excel` / `linkfoxTable` 三种数据源的形状为
+`outputVariableName` 用默认值时，结果在 `{{ <id>.output.tableData }}`；`csv` / `excel` / `linkfoxTable` 三种数据源的形状为
 
 ```json
 {
@@ -315,7 +320,76 @@
 }
 ```
 
-`amazonStore` 是例外：**没有 `columns` / `pageInfo`**，形状随 `amazonDataType` 变（`orderList` → `{orders:[]}`、`listing` → `{listings:[]}`、`fbaInventory` → `{inventorySummaries:[]}`、`afterSalesOrder` / `removalOrder` → `{reportType, reportId, rows:[]}`）。完整表见 `output-and-state.md` 第 2.3 节。
+`amazonStore` 是例外：**没有 `columns` / `pageInfo`**，直接透出店铺助手接口的结构，形状随 `amazonDataType` 变（`orders` → `orders: []`、`listing` → `listings: []`、`ads` → `portfolios` + `unmappedMetrics`）。完整字段见 `output-and-state.md` 第 2.3 节。
+
+亚马逊分支的 `total` 是接口给的**真实匹配总数**（Listing 按条、订单按单），所以这一支的 `rowCount` / `truncated` / `onTruncate: "error"` 是可靠的；广告接口的 `total` 恒为 `null`、永不判截断。
+
+### 逐页读取 → 处理 → 落盘 → 下一页（超过 200 条 / 要全量）
+
+亚马逊分支单次执行最多读 `maxRows`（硬上限 2000）。**要读得更多、或者不想一次把几万条塞进一个节点**，就用节点自带的「高级设置」`amazonStartPage` / `amazonPageSize` 逐页读：每次执行只读**一页**，处理完立刻落盘，再进下一页。不要用 `LinkfoxHTTP` 自己拼 `page` —— 那等于绕开 `total` / `truncated` / 凭证注入一整套。
+
+三种数据类型的单页能力（`pageSize` 上界都是 200）：
+
+| 数据类型 | 单次执行 | 超过时 |
+| --- | --- | --- |
+| `orders` / `listing` | 从 `amazonStartPage` 起内部翻页到 `maxRows`（≤2000） | `truncated=true` + `total` 真实总数；逐页模式把 `maxRows` 设成和 `amazonPageSize` 一样，就变成「一次一页」 |
+| `ads` | **只请求一页，不翻页** | **静默丢**：`total` 恒 `null`、`truncated` 恒 `false`。只能切日期区间（≤90 天） |
+
+**固定拓扑**（`orders` / `listing` 都用这一套，别自创）：
+
+```text
+BusinessStart
+  └─ DataReader[探测]      maxRows=1，pageSize=200，startPage=1      # 只为一件事：拿 total
+       └─ CustomPythonFunction[算页]   total → pages=[1..ceil(total/200)]
+            └─ Iteration             iterationInput = {{<算页>.output.result.pages}}
+                 ├─ DataReader[逐页]  startPage={{$iteration}}，pageSize=200，maxRows=200
+                 ├─ CustomFunction    page 数据 → {rows: [...]}（见下方「为什么必须夹一层」）
+                 └─ WriteFile         写这一页，写完立刻落盘
+```
+
+各节点填什么：
+
+| 节点 | 关键配置 |
+| --- | --- |
+| `DataReader[探测]` | `amazonStore` / 站点 / `amazonDataType` 与子节点**完全一致**（含日期、ASIN、SKU、关键词、标题，否则页数算错）；`amazonStartPage=1`、`amazonPageSize=200`、`maxRows=1`。只读 1 条，成本可忽略，但一定拿得到 `total` |
+| `CustomPythonFunction[算页]` | 输入变量 `pageJson = {{ <探测>.output.tableData }}`；`total = json.loads(pageJson)["total"] or 0`；`pages = list(range(1, math.ceil(total / 200) + 1))`；`result = {"pages": pages, "total": total}`。**元素必须是数字**。再加一个写死的页数上限（默认 50，见下「成本」） |
+| `Iteration` | `iterationInput = {{ <算页>.output.result.pages }}`（取到叶子字段，别写裸 `.output`） |
+| `DataReader[逐页]` | 与探测节点同样的筛选条件；`amazonPageSize=200`、`maxRows=200`、`amazonStartPage="{{$iteration}}"`。**子节点带 `parentNode` + `extent: "parent"`** |
+| `CustomFunction` | 把 `{{ <逐页>.output.tableData.orders }}`（或 `.listings`）映射成 `{rows: [...]}`，见下 |
+| `WriteFile` | 同一个目标表；每条记录 key 必须是真字段名。200 行一次写没问题（节点内部按 100 条拆批） |
+
+**三条不能破的约束**：
+
+1. **`maxRows` 必须等于 `amazonPageSize`**。`maxRows` 大于单页时，节点会在一次执行里继续往后翻，`amazonStartPage` 就变成「起点」而不是「这一页」，逐页就会漏页 / 重页。
+2. **`onTruncate` 保持默认 `truncate`，不要设 `error`**。逐页模式下每一整页的「后面还有页」都会被判成 `truncated=true`，设了 `error` 会**每页都失败**。截断与否在逐页模式里由 `pages` 数组决定，不靠这个开关。
+3. **`amazonStartPage` 是 `number` 字段，默认不吃变量**。要在 `inputParams` 里给它显式标 `"acceptVariable": true`，`{{$iteration}}` 才会被替换；漏标运行时不替换，节点报「起始页必须是正整数」。这条**先跑一小段（2–3 页）验证**再据此搭全量。验证通过后**别再在画布上打开这个子节点改它**——数字输入框会把 `{{$iteration}}` 当成非法值，用户一保存就可能被清空。
+
+**为什么必须夹一层 `CustomFunction`**：亚马逊分支的输出是接口原样结构（`orders` / `listings` + 一堆元信息），**没有 `rows`**。`WriteFile` 只认上一步的 `{rows: [...]}` / `{records: [...]}`，直接接会在多维表里写进**一条**名为 `dataType / storeId / orders…` 的聚合记录，行数据一条都没有，而且运行时不报错（`save_workflow.py` 对「亚马逊 DataReader 直连 WriteFile」报 error 拦下）。
+
+```javascript
+// CustomFunction：订单 —— 订单 + 商品行两层，默认展开成「一行一个商品行」
+// 输入变量页填 pageData = {{ <逐页>.output.tableData }}；代码里用 $pageData 读（值是字符串）
+const data = JSON.parse($pageData)
+const rows = []
+for (const order of data.orders || []) {
+  const base = { orderId: order.orderId, purchaseDate: order.purchaseDate,
+                 orderAmount: order.orderAmount, currency: order.currency,
+                 financialStatus: order.financialStatus }
+  for (const item of order.items || []) rows.push({ ...base, sku: item.sku, asin: item.asin,
+                 title: item.title, quantity: item.quantity, itemAmount: item.itemAmount })
+}
+return { rows }                            // 只要订单主表就保留 items 为 JSON 文本、不展开
+```
+
+`listing` 分支把 `rows` 直接取 `data.listings` 即可（本来就是平表）。返回的对象会被 JSON 序列化成 `output.content`，`WriteFile` 认得其中的 `rows`，**不要再套一层 `{rows: {rows: [...]}}`**。
+
+**成本与失败边界**：N 页 = N 次请求 + N 次映射 + N 次写入，耗时按页数线性增长，方案里要说清「分 N 批、耗时约 N 倍」。页数由 `total / 200` 决定，几万条就是几十上百页 —— 这种量级**先问用户**是只要最近一段（加日期 / 文本筛选，单个 `DataReader` 就够），还是要全量；要全量就按上表搭，并在「算页」里加页数上限（默认 50 页 = 1 万条），超出部分告知用户分批跑。每页独立落盘，失败只丢当前页；重跑时把 `pages` 截到失败页起即可（逐页读天然支持断点续读）。
+
+**`ads` 不适用**：广告接口不认 `page`，逐页只会拿到同一份 `unmappedMetrics`，老老实实切日期区间。
+
+**什么时候不搭**：只是「看最近的订单 / 广告」、或 `total` 明摆着 ≤2000，就用单个 `DataReader`，别为了保险硬加循环。
+
+**为什么是 `Iteration` 而不是 `Loop`**：`Loop` 的循环体只允许只读节点（见 `nodes-control-flow.md`），`WriteFile` 不能放进回跳路径，只能把每批往 `$flow.state` 里累积 —— 几千条既撑爆 state，中途失败还全部丢。`Iteration` 的子节点可以正常串 `WriteFile`，**每页处理完立刻落盘**。
 
 CSV / Excel 上传有 5MB 硬上限，超出直接报错。
 
@@ -437,6 +511,8 @@ CSV / Excel 上传有 5MB 硬上限，超出直接报错。
 
 ## LinkfoxHTTP（Linkfox HTTP 工具）
 
+> **亚马逊店铺数据不要用本节点兜底**：Listing / 订单 / 广告表现先用 `DataReader`（`sourceType=amazonStore`）。只有 `storeName` / `countryCode` / `orderId` / 订单侧 `keyword`、`title` 这五项节点不透传的参数，或者用户点名要自己控制请求体时，才用本节点直调 `/store-assistant/v1/*`。
+
 | 字段 | 值 |
 | --- | --- |
 | `data.name` | `linkfoxHttpAgentflow` |
@@ -487,8 +563,15 @@ CSV / Excel 上传有 5MB 硬上限，超出直接报错。
 | 用途 | `method` | `path` | `body` |
 | --- | --- | --- | --- |
 | 生成亚马逊广告授权链接 | `POST` | `/amazonAds/authorizeUrl` | `{"region":"<region>","accountName":"<String>"}` |
-| 查询已授权店铺列表 | `POST` | `/spApi/authorizedStores` | `{}` |
-| 调 SP-API developerProxy | `POST` | `/spApi/developerProxy` | `{"sellerId":"<sellerId>","region":"<region>","path":"<String>","method":"GET","queryString":"<String>"}` |
+| 查询已授权店铺与有效站点 | `POST` | `/store-assistant/open-api/authorized-stores` | `{}`（返回 `storeId` + `marketplaces[]`，DataReader 的店铺 / 站点下拉用的就是它） |
+| 搜索有效 Listing | `POST` | `/store-assistant/v1/listings/search` | `{"storeId","marketplaceId?","page","pageSize"}` + 文本筛选 |
+| 搜索订单（按订单分页，带商品行） | `POST` | `/store-assistant/v1/orders/search` | `{"storeId","marketplaceId?","page","pageSize","startDate?","endDate?","asin?","sku?"}` |
+| 查广告指标 | `POST` | `/store-assistant/v1/ads/performance` | `{"storeId","marketplaceId?","startDate","endDate"}`（日期必填、≤90 天） |
+| 调 SP-API developerProxy（旧路径） | `POST` | `/spApi/developerProxy` | `{"sellerId":"<sellerId>","region":"<region>","path":"<String>","method":"GET","queryString":"<String>"}` |
+
+DataReader 的 `amazonStore` 分支 2026-10-30 起改打上面前四个接口（不再走 `/spApi/...`）。**默认用 `DataReader`，不要用 `LinkfoxHTTP` 重写这三个查询接口**：分页走节点自带的高级设置（`amazonStartPage` / `amazonPageSize`），不要自己拼 `page`。只有「节点不透传的搜索参数」里的五项（`storeName` / `countryCode` / `orderId` / 订单侧 `keyword` / `title`）必须用 `LinkfoxHTTP`。
+
+⚠️ **别把这几个键写进 DataReader 的 `inputs`**：节点是逐字段拼请求体的（`amazonPageBody` 只发 `storeId` / `marketplaceId` / `page` / `pageSize` / `asin` / `sku` / `keyword` / `title` / 起止日期），写了既不上报、也不报错，用户会以为在筛。列表 / 订单接口的 HTTP 恒为 200，业务成败看响应体 `errcode`。
 
 **如何确定 `path` / `body` / `headers` / `queryParams`（业务接口维度，不是节点 schema 维度）**：
 
@@ -708,12 +791,12 @@ return 'waited 30000ms';
 
 ## 生成检查清单
 
-- [ ] 用户描述涉及"店铺事件 / 授权店铺 / 业务定时 / 邮件通知 / 飞书 / 钉钉 / 跨境专家 / 多维表 / CSV 或 Excel 读取"等场景时，**优先使用本文件的节点**，不要用原生 HTTP / CustomFunction 手工模拟。
+- [ ] 用户描述涉及"授权店铺 / 业务定时 / 邮件通知 / 飞书 / 钉钉 / 跨境专家 / 多维表 / CSV 或 Excel 读取"等场景时，**优先使用本文件的节点**，不要用原生 HTTP / CustomFunction 手工模拟。（"店铺事件触发"已不存在，见「店铺事件触发已经没有了」）
 - [ ] 同一 flow 只放一个开始节点，且是 `BusinessStart`，没有原生 `Start`。
 - [ ] 所有 `asyncOptions` 值（`amazonStore` / `expertId`）、`credential`、`FLOWISE_CREDENTIAL_ID` 一律留 `""`（`credential` 由后台自动绑定，`asyncOptions` 导入后由用户选择）；多维表 `notebookId` / `tableId` 填用户选定的真实 id。
 - [ ] `data.color`、`data.name`、`data.type`、`baseClasses`、`sourceHandle` 严格按本文件复制，禁止改写或翻译。
-- [ ] **`inputParams` 整个字段没出现**（本文件这些节点全部由 `save_workflow.py` 代填，`taskInstruction` / `messageContent` / `recipients` / `emailSubject` / `emailCc` / `newTableName` 的 `acceptVariable` 与 `crossBorderExpertUpdateState.value` 的 `acceptNodeOutputAsVariable` 都已在模板里）。写成 `[]` 不算省略、会被 error 拦下。
-- [ ] 下游取值用各节点**真实的 output 字段**（`output.expertResult` / `output.<outputVariableName>` / `output.status` / `output.successChannels` / `output.recordCount` / `output.result` / `output.filledForm` / `output.http.data` / `output.storeAuthorization`），禁止用裸 `.output`，也**禁止把锚名当字段**（不存在 `output.data` / `output.sent` / `output.written` / `output.completed` / `output.submitted`）。字段表见 `output-and-state.md`。
+- [ ] **`inputParams` 只给需要手写的节点写**：`BusinessStart` / `CrossBorderExpert` / `FillForm` / `SendNotification` / `WriteFile` / `LinkfoxHTTP` / `End` 整个字段别出现（`save_workflow.py` 代填，`taskInstruction` / `messageContent` / `recipients` / `emailSubject` / `emailCc` / `newTableName` 的 `acceptVariable` 与 `crossBorderExpertUpdateState.value` 的 `acceptNodeOutputAsVariable` 都已在模板里）；**`DataReader` 例外，要写完整**（含 `amazonStore` / `amazonMarketplace` / `amazonDataType` / 日期 / `amazonAsin` / `amazonSku` / `amazonKeyword` / `amazonTitle` / `amazonStartPage` / `amazonPageSize`；逐页模式要把 `amazonStartPage` 标 `acceptVariable: true`）。写成 `[]` 不算省略、会被 error 拦下。
+- [ ] 下游取值用各节点**真实的 output 字段**（`output.expertResult` / `output.<outputVariableName>` / `output.status` / `output.successChannels` / `output.recordCount` / `output.result` / `output.filledForm` / `output.http.data` / `output.recordEvent`），禁止用裸 `.output`，也**禁止把锚名当字段**（不存在 `output.data` / `output.sent` / `output.written` / `output.completed` / `output.submitted`，`output.storeAuthorization` 也已随触发方式删除）。字段表见 `output-and-state.md`。
 - [ ] 没给 `WriteFile` / `SendNotification` / `LinkfoxHTTP` / `DataReader` / `FillForm` / `End` 造 `UpdateState` 字段——只有 9 个节点有（见 `output-and-state.md` 第 4.2 节），其中本文件只有 `CrossBorderExpert` 一个。
 - [ ] 没在 `BusinessStart` 的 `inputs` 里写 `startState` / `startPersistState`——它们不存在。
 - [ ] `WriteFile` 的 `writeDestination` 只用 `linkfoxTable` / `newLinkfoxTable` / `updateLinkfoxTable` 三者之一，没有用 `productLibrary`。写已有表、改已有行时**两级都给了**（`notebookId` + `tableId`，填用户选定的表）；新建表时用 `newTableNotebookId`（默认 `__new__`）+ `newTableName`。
@@ -725,6 +808,7 @@ return 'waited 30000ms';
 - [ ] 补配置指引里**没有**让用户去页面上绑定 `linkfoxAgentApi` 凭据——这个凭据由后台自动绑定。
 - [ ] **含 `FillForm` 的 flow 已告知用户它会暂停流程等人填表**：试跑会停在这个节点并返回 `STOPPED`，那不是失败、也不是超时，要有人在界面上提交表单才继续。`formFields` 里**没有** `formTitle` / `description` / `defaultValue`。
 - [ ] 调 Linkfox 工具网关 / 内部服务用 `LinkfoxHTTP` + 相对路径，**不要**用原生 `HTTP` 手写 `tool-gateway.linkfox.com` 全量 URL 再自拼认证头；调第三方外部 API 才用原生 `HTTP`。
+- [ ] **亚马逊店铺数据用的是 `DataReader`**：Listing / 订单 / 广告表现（含全量逐页读）都是 `sourceType=amazonStore` 的 `DataReader`，没有用 `LinkfoxHTTP` 重写 `/store-assistant/v1/{listings,orders}/search` 或 `/ads/performance`；只有 `storeName` / `countryCode` / `orderId` / 订单侧 `keyword`、`title` 这五项才直调，且方案里说明了原因。
 - [ ] **逐个数了 flow 里的 `LinkfoxHTTP` 节点数量，并确认已对每一个都用 `query_tools_matrix.py` 查过对应端点**（见上方"如何确定 path/body/headers/queryParams"）；用户规格文档只给了 skill 名/endpoint_path 没给完整字段也算触发条件，不因为 path 已知就跳过 body。没有任何一个节点的 `body` 是占位 `"{}"` 或直接照抄规格文档字面量——确实查不到已上线的匹配工具才允许留空占位，并在补配置指引里逐个点名。
 - [ ] **每个 `LinkfoxHTTP` 的 `body` 里，必填参数的值真的接到了上游字段**（`{{fillFormAgentflow_0.output.filledForm.<字段>}}` 或 `{{<上游>.output.http.data.<叶子路径>}}`），没有"字段名组好了、值全是空串"的形态——那个形态运行时报 `xxx 为必填参数`。见上方"`body` 的必填参数必须真的接上游数据"。
 - [ ] **每个 `CrossBorderExpert` 的 `taskInstruction` 都没有内联整体响应**（`.output.http.data` / `.output.http` / `.output.expertResult` / `.output.content` / `.output.tableData` 这类停在根字段上的引用），且字面量在 9000 字符以内——专家平台硬上限 10000 字符。见上方"`taskInstruction` 有 10000 字符硬上限"。

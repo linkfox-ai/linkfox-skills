@@ -1,19 +1,19 @@
 # `GST_MTR_B2B`
 
-> **分类**：15. Tax Reports  
-> **说明**：GST Monthly Tax Report B2B  
-> **可用范围**：Seller only
+> **分类**：15. 税务报告  
+> **说明**：GST 月度税务报告 B2B  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Tax Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#gst-merchant-tax-report---business-to-business)（章节：**GST Merchant Tax Report - Business to Business**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [税务报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#gst-merchant-tax-report---business-to-business)（章节：**GST Merchant Tax Report - Business to Business**）。**与专页其它段落冲突时以官方英文文档为准。**
 
-- **受限报告**：未在相邻 Note 中写明，但 **Role** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
-- **Role**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
-- **Requested/scheduled**：This report can only be scheduled.
-- **Report output type**：Comma-separated flat file
-- **Store availability**：IN
-- **要点**：Provides detailed information about sales, refunds, and cancellations from Amazon Business invoices issued within a date range that you specify.
+- **受限报告**：未在相邻 Note 中写明，但 **角色** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
+- **角色**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
+- **按需/计划**：本报告仅可计划生成。
+- **输出格式**：逗号分隔的平面文件
+- **店铺范围**：IN
+- **要点**：提供指定日期范围内开具的 Amazon Business 发票对应销售、退款和取消明细。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#gst-merchant-tax-report---business-to-business>
 

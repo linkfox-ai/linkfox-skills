@@ -1,62 +1,170 @@
-# get_punishment_history — 处罚历史
+# Shopee 处罚历史 接口说明
 
-| 项 | 值 |
-|----|-----|
-| 脚本 | `scripts/get_punishment_history.py` |
-| Method / path | GET `api/v2/account_health/get_punishment_history` |
-| 官方文档 | [v2.account_health.get_punishment_history](https://open.shopee.com/documents/v2/v2.account_health.get_punishment_history?module=103&type=1) |
-| 用途 | 查询**当前季度**处罚（punishment）记录 |
+## 公共规则
 
-经 **`POST /shopee/developerProxy`** 转发；依赖 **`linkfox-shopee-store-auth`** 选店（传 `shopId` 或 `merchantId`）。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## 脚本 JSON 入参
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：处罚历史（get_punishment_history）
+
+> 官方：[v2.account_health.get_punishment_history](https://open.shopee.com/documents/v2/v2.account_health.get_punishment_history?module=103&type=1)
+
+查询当前季度进行中或已结束的处罚。
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/shopee/developerProxy`
+
+### 请求参数
+
+#### 网关 POST Body
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| path | string | 是 | 固定 `api/v2/account_health/get_punishment_history`，必须以 `api/v2` 开头；账户健康路径须属于 `api/v2/account_health/`。 |
+| method | string | 是 | 固定 `GET`；网关外层仍使用 POST。 |
+| shopId | string | 与 merchantId 至少一个 | 店铺 ID，推荐使用；由服务端解析已授权令牌。 |
+| merchantId | string | 与 shopId 至少一个 | 商户 ID；支持同时传入两个标识，不自动更换目标。 |
+| queryString | string | 否（网关层） | 不带 `?` 的上游查询串；本操作所需业务字段与条件见脚本 JSON 参数。 |
+| body | string | 否 | 共享代理封装保留的上游请求体；六个 GET 操作不传。 |
+| contentType | string | 否 | 共享代理封装默认 `application/json`；仅有 body 时发送。 |
+
+#### 脚本 JSON 参数
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `shopId` | string | 与 `merchantId` 二选一 | 店铺 ID（推荐） |
-| `merchantId` | string | 与 `shopId` 二选一 | 商户 ID |
-| `punishment_status` | int | **是** | `1`=Ongoing（进行中），`2`=Ended（已结束） |
+| `shopId` | string | 与 `merchantId` 至少一个 | 店铺 ID（推荐） |
+| `merchantId` | string | 与 `shopId` 至少一个 | 商户 ID |
+| `punishment_status` | int | **是** | `1`=进行中（Ongoing），`2`=已结束（Ended） |
 | `page_no` | int | 否 | 页码，从 **1** 起；默认 **1** |
 | `page_size` | int | 否 | 每页条数，范围 **1–100**；默认 **10** |
 
-- GET：业务字段放 JSON **顶层**，runner 拼进 `queryString`（不含 `?`）
-- `shopId` / `merchantId` / `skipDepCheck` 等为网关选店保留字段，不会进 Shopee query
+#### 脚本选项与运行约定
 
-### 常见 `punishment_type`（响应字段，节选）
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| api | string | 通用入口必填 | `scripts/account_health_api.py` 的操作名，允许六个账户健康操作；专用入口已固定操作。 |
+| skipDepCheck | boolean | 否 | 默认 false；仅在外部流程已确认依赖时跳过本地安装检测，不绕过店铺授权。 |
+| --inline | CLI flag | 否 | 强制完整打印，同时仍保存完整响应。 |
+| --no-cache | CLI flag | 否 | 兼容公共 CLI；本技能始终向 `call_api.run` 传入此选项，不读取或写入响应缓存。 |
+
+业务参数放在 JSON 顶层，由脚本组成不含 `?` 的 `queryString`。`shopId`、`merchantId`、`skipDepCheck`、`api`、`body`、`requestBody`、`contentType` 为保留字段，不进入上游 query。普通标量按值百分号编码，布尔值转为小写，null 和对象、数组不进入 query；当前六个操作没有列表 query 字段。分页默认值由上游采用，脚本未显式传入时不主动补值。
+
+`body` / `requestBody` / `contentType` 为共享调用器的兼容选项，六个 GET 操作不发送请求体；不要用它们代替顶层业务参数。通用入口不接受原始代理 path，只允许已登记的六个操作。
+
+依赖检测、网关环境变量、认证与当前工作目录输出约定见 [公共运行约定](../api.md#运行约定)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| errcode | integer / string / null | 网关业务状态码，按公共响应码基本规则判断。 |
+| errmsg | string | 网关消息，错误时用于解释原因。 |
+| httpStatus | integer | Shopee 上游状态码，与外层 LinkFox HTTP 状态不同。 |
+| contentType | string | 上游响应内容类型。 |
+| body | string | Shopee 原始 JSON 字符串，业务字段完整保留于此。 |
+
+#### 本地错误附加字段
+
+公共调用器在 HTTP 错误正文为空、无法解析为 JSON 或连接失败时，可能在脚本输出的 `developerProxy` 中构造下列字段；它们不是网关成功响应的固定字段。HTTP 错误若带有有效 JSON，则保留该 JSON；外层状态另见 `transportHttpStatus`。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| error | string | 本地构造的 HTTP 错误或连接失败说明。 |
+| details | string | HTTP 错误正文无法解析为 JSON 时保留的原始正文；并非必返。 |
+
+#### 脚本输出字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| api | string | 本次账户健康操作名。 |
+| developerProxy | object | 上述完整网关响应；错误时也保留。 |
+| resolvedPath | string | 实际转发的相对路径。 |
+| queryString | string | 非空时输出实际发送的无问号查询串。 |
+| transportHttpStatus | integer / null | LinkFox 外层 HTTP 状态，连接失败时为 null。 |
+| getPunishmentHistory | JSON 值 / null | 外层正常且上游状态为 200 时解析的完整 Shopee body，并非只取其中 response；body 为空或 JSON 无效时为 null。异常网关或上游状态时不生成。 |
+| getPunishmentHistoryResponse | object / array / 以实际返回为准 | 仅在解析对象的 response 非 null 时输出该值；实际类型由上游决定。 |
+
+下列业务字段位于 `getPunishmentHistory.response`（同时映射为 `getPunishmentHistoryResponse`）。以下仅列出常见业务字段，不构成完整上游 schema；标注“以实际返回为准”的字段不预设类型或必返性，不补造字段。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| punishment_list | array | 当前季度处罚记录。 |
+| punishment_list[].punishment_type | 以实际返回为准 | 处罚类型，常见值见下表。 |
+| punishment_list[].reason | 以实际返回为准 | 处罚原因。 |
+| punishment_list[].start_time | 以实际返回为准 | 开始时间；时间单位以实际返回为准。 |
+| punishment_list[].end_time | 以实际返回为准 | 结束时间；时间单位以实际返回为准。 |
+| punishment_list[].listing_limit | 以实际返回为准 | 商品刊登数量限制。 |
+| punishment_list[].order_limit | 以实际返回为准 | 订单数量限制。 |
+
+#### 常见 `punishment_type`（响应字段，节选）
 
 | 值 | 说明 |
 |----|------|
-| `103` | Listings not displayed in category browsing |
-| `104` | Listings not displayed in search |
-| `105` | Unable to create new listings |
-| `106` | Unable to edit listings |
-| `107` | Unable to join marketing campaigns |
-| `109` | Account is suspended |
-| `1109–1112` | Listing Limit reduced |
-| `2008` | Order Limit applied |
+| `103` | 商品不在类目浏览中展示（Listings not displayed in category browsing） |
+| `104` | 商品不在搜索中展示（Listings not displayed in search） |
+| `105` | 无法创建新商品刊登（Unable to create new listings） |
+| `106` | 无法编辑商品刊登（Unable to edit listings） |
+| `107` | 无法参加营销活动（Unable to join marketing campaigns） |
+| `109` | 账户被暂停（Account is suspended） |
+| `1109–1112` | 商品刊登上限降低（Listing Limit reduced） |
+| `2008` | 施加订单上限（Order Limit applied） |
 
----
+### 响应码规则
 
-## 调用示例
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 外层响应正常后，再检查 `developerProxy.httpStatus`；上游状态为 200 才解析 Shopee body，不把网关转发完成直接视为业务成功。
+- Shopee 业务错误按 body 中的实际错误码与消息解释；保留 body 的完整内容，不将 JSON 可解析直接视为健康或无处罚。
+- 上游 body 为空或非有效 JSON 时，解析字段为 null，原始 body 保留在 `developerProxy`；上游非 200 或网关失败时不生成解析字段。
+
+### curl 示例
 
 ```bash
-export LINKFOXAGENT_API_KEY="<your-key>"
-
-# 进行中的处罚
-python scripts/get_punishment_history.py '{"shopId":"67890","punishment_status":1,"page_no":1,"page_size":20}'
-
-# 已结束的处罚
-python scripts/get_punishment_history.py '{"shopId":"67890","punishment_status":2,"page_size":50}'
-
-python scripts/account_health_api.py '{"api":"get_punishment_history","shopId":"67890","punishment_status":1}'
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/shopee/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+    "path": "api/v2/account_health/get_punishment_history",
+    "method": "GET",
+    "shopId": "67890",
+    "queryString": "punishment_status=1&page_no=1&page_size=20"
+  }'
 ```
 
----
+更多公共运行约定、接口索引与 [Feedback](../api.md#Feedback) 见 [模块参考](../api.md)。
 
-## 响应要点
+## Feedback
 
-1. 先看 **`developerProxy.httpStatus`** / `errcode`
-2. 再读 **`getPunishmentHistory`**
-3. 常见字段：`punishment_list[]`（如 `punishment_type`、`reason`、`start_time`、`end_time`、`listing_limit`、`order_limit`）
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-shopee-store-account-health",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

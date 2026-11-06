@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: get_booking_shipping_document_parameter.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_logistics_api("get_booking_shipping_document_parameter", params, "get_booking_shipping_document_parameter.py"), indent=2, ensure_ascii=False))
+    run_logistics_api("get_booking_shipping_document_parameter", params, "get_booking_shipping_document_parameter.py")
 
 
 if __name__ == "__main__":

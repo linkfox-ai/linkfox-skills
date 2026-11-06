@@ -16,19 +16,19 @@ import sys
 
 from _product_api_runner import run_product_api
 from _product_endpoints import list_api_names
-from _shopee_product_common import emit_result, lf_inline_flag
+from _shopee_product_common import emit_result, lf_inline_flag, load_cli_params
 
 
 def main() -> None:
     if len(sys.argv) < 2:
         print(f"Usage: product_api.py '<JSON with api field>'\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
         sys.exit(1)
-    params = json.loads(sys.argv[1])
+    params = load_cli_params()
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
     inline = lf_inline_flag()
-    emit_result(run_product_api(str(params["api"]), params, "product_api.py"), inline)
+    emit_result(run_product_api(str(params["api"]), params, "product_api.py"), slug="linkfox-shopee-store-product-" + str(params["api"]), inline=inline)
 
 
 if __name__ == "__main__":

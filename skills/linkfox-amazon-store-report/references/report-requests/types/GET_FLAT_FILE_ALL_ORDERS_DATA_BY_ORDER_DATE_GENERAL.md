@@ -1,20 +1,20 @@
 # `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL`
 
-> **分类**：9. Order Reports  
-> **说明**：All orders by order date  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：按下单日期的全部订单  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#flat-file-orders-by-order-date-report)（章节：**Flat File Orders By Order Date Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#flat-file-orders-by-order-date-report)（章节：**Flat File Orders By Order Date Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Order Fulfillment Channel**：MFN and FBA
-- **Availability**：Sellers
-- **Requested/scheduled**：Requested
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment), [Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
-- **要点**：Contains all orders that were placed in the specified period.
+- **履约渠道**：MFN 与 FBA
+- **可用范围**：卖家
+- **按需/计划**：Requested
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment), [Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
+- **要点**：包含指定时期内创建的全部订单。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#flat-file-orders-by-order-date-report>
 

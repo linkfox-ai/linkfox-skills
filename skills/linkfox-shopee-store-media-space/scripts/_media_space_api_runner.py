@@ -115,6 +115,9 @@ def run_media_space_api(api_name: str, params: dict, caller: Optional[str] = Non
     else:
         body = _build_post_body(params, spec)
 
+    if body:
+        json.loads(body)
+
     shop_id = params.get("shopId")
     merchant_id = params.get("merchantId")
     if not shop_id and not merchant_id:

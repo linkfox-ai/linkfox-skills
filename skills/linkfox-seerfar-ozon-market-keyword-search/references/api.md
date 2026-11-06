@@ -1,13 +1,31 @@
-# Seerfar Ozon 市场热词搜索 API 参考
+# Seerfar Ozon 市场热词搜索 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：市场热词搜索
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/seerfar/ozon/marketKeywordSearch`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
-- **User-Agent**：`LinkFox-Skill/2.0`；HTTP 超时 150s
 
-## 请求参数
+### 请求参数
 
 POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` 必填外，其余均可选；所有范围筛选项均为 `{min, max}` 对象，可单边或双边传值。
 
@@ -38,11 +56,63 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` �
 | uId | string | 否 | 用户 ID |
 | memberId | string | 否 | 成员 ID（一个成员唯一标识，数据归属于 memberId） |
 
-> **必填约束**：`page` 为唯一必填项；不传 `page` 请求会被拒绝。
-> **范围筛选**：所有 `{min,max}` 对象的两个子字段都可选，传单边即做下/上界过滤。
-> **排序**：建议通过 `page.orders` 按核心指标排序（如 `searchVolume` DESC、`sellers` ASC），避免在无序大结果集中翻页。
+#### 分页排序子字段
 
-## 响应结构
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page.orders[].field | string | 未明确 | 排序指标字段；热词用 `searchVolume` 降序，上升词用 `count30GrowthRate` 降序，低竞争用 `sellers` 升序，避免在无序大结果集中翻页。 |
+| page.orders[].direction | string | 未明确 | `DESC` 倒序、`ASC` 正序。 |
+
+#### 范围对象子字段
+
+以下字段均继承所属范围对象的指标含义。上下界的标量类型未明确，不额外限定整数或小数；未传边界不参与过滤。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| searchVolume.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| searchVolume.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| searchChange30.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| searchChange30.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| monthlySales.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| monthlySales.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| monthlyRevenue.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| monthlyRevenue.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| price.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| price.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| productViews.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| productViews.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| products.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| products.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| volume.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| volume.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| marketSpace.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| marketSpace.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| conversionSharing.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| conversionSharing.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| reviews.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| reviews.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| ratings.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| ratings.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| sellers.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| sellers.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+| weight.min | 未明确 | 否 | 该指标下界，可单独传入。 |
+| weight.max | 未明确 | 否 | 该指标上界，可单独传入。 |
+
+#### 使用限制与脚本约定
+
+| 项目 | 约定 |
+|------|------|
+| 平台筛选 | 请求无平台选择器；服务端决定 Ozon / Wildberries 数据混合情况，需要时按响应 `platform` 在客户端筛选。 |
+| 类目编号 | `categories` 使用 Seerfar 类目 ID，不接受可读类目名称替代。 |
+| 分页上限 | 通过 `page.page` 和 `page.pageSize` 分页；很大的 pageSize 可能被服务端截断，固定上限未明确。 |
+| --inline | CLI 开关；强制完整打印，仍落盘。 |
+| --no-cache | CLI 开关；跳过缓存读取和写入。默认启用 24 小时缓存，键为排序后的 JSON 参数 SHA-256 前 16 位；缓存位置为 `<cwd>/linkfox/.cache/linkfox-seerfar-ozon-market-keyword-search/`。仅公共调用器维护这一层缓存，也会缓存业务错误和空结果。 |
+| 认证与网关 | 优先 `LINKFOX_AGENT_API_KEY`，兼容 `LINKFOXAGENT_API_KEY`；`LINKFOX_TOOL_GATEWAY` 可覆盖默认网关，自动移除末尾 `/`。 |
+| 会话请求头 | 透传 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME` 环境变量。 |
+| 落盘保护 | 业务入口在请求前检查当前目录、会话目录、`data` 目录及会话元数据可写，禁止 `/tmp`；完整响应使用 UTF-8 写入当前目录下的会话数据路径，不回退到家目录或临时目录。 |
+
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -57,7 +127,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` �
 | costToken | integer | 消耗 Token 数量 |
 | type | string | 响应展示类型，如 `tableListWorkbenches` |
 
-### data[*] 关键词市场对象字段
+#### data[*] 关键词市场对象字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -81,8 +151,10 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` �
 | categoryInfos | array | 类目信息（详见下方） |
 | products | array | Top 商品数据（详见下方） |
 | id | string | 记录 ID |
-
-> `relevancy`（相关度）、`titleDensity`（标题密度）、`wordCount`（字数）、`dimension`（维度信息）在 outputSchema 中有定义，但实际响应中通常不返回或为 `null`，使用前需判空。
+| relevancy | 未明确 | 相关度；outputSchema 有定义，通常缺失或为 `null`，使用前判空。 |
+| titleDensity | 未明确 | 标题密度；outputSchema 有定义，通常缺失或为 `null`，使用前判空。 |
+| wordCount | 未明确 | 字数；outputSchema 有定义，通常缺失或为 `null`，使用前判空。 |
+| dimension | 未明确 | 维度信息；outputSchema 有定义，通常缺失、为 `null` 或仅部分填充，使用前判空。 |
 
 #### products[*] Top 商品对象字段
 
@@ -107,31 +179,52 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` �
 | id | string | 类目 ID |
 | crossBorderSellable | boolean | 是否可跨境销售 |
 
-## 错误码
+#### columns[*] 列定义
 
-正常情况下 HTTP 状态码为 200，业务结果通过响应体区分：
-- **成功**：返回 `code:"200"` + `errcode:200`（`msg` / `errmsg` 均为 `ok`）。
-- **业务错误**：HTTP 仍为 200，但仅返回 `errcode`（非 200）+ `errmsg`（原因），无 `code` 字段。
-- **认证失败**：HTTP 状态码 401，响应体 `{"errcode":401,"errmsg":"authorized error"}`。
+列定义可能不透明或仅部分填充；以下子字段的类型及更细结构未明确，应按实际响应读取，不据此补造业务数据。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| field | 未明确 | 列对应的字段。 |
+| title | 未明确 | 列标题。 |
+| cellType | 未明确 | 单元格展示类型。 |
+| sortable | 未明确 | 排序标记。 |
+| filterable | 未明确 | 筛选标记。 |
+
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 典型成功载荷同时含 `code:"200"`、`errcode:200`，`msg` / `errmsg` 为 `ok`；这只是本接口返回形态示例，正常响应判定仍遵守公共规则。
+- 业务异常可能只有 `errcode` 与 `errmsg`，没有 `code`；结合原因解释，不以 `code` 缺失单独判错。
+- 脚本的本地附加字段 `_http_status` 记录本次网络请求的实际 HTTP 状态，供公共响应规则和认证/算力引导使用；它不是网关业务字段。命中缓存时，该值是缓存生成时的历史状态，`_cache.hit` 为 `true`，不代表本次发起了请求。
+- 已有缓存可能没有 `_http_status`，不能据此推断 HTTP 成功，也不为补状态自动绕过缓存重发。结合 `errcode`、`errmsg` 及本地 `error` / `details` 解释结果；`error` 表示请求失败，不能仅因缺少 `errcode` 判为正常响应。如确需重新请求，先遵守成本约束。
 
 | errcode | 含义 | 处理建议 |
 |---------|------|----------|
-| 200 | 成功 | 正常解析 `data` 字段 |
-| 400 | 参数错误 | 查看 `errmsg`；常见为缺 `page`、`searchDate` 格式错误、类目 ID 不合法等 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 402 | 计费失败 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 其他非 200 值 | 业务异常 | 查看 `errmsg` 获取具体原因 |
+| 400 | 参数错误 | 查看 `errmsg`，核对是否缺少 `page`、日期格式是否正确、类目 ID 是否合法。 |
+| 其他业务异常值 | 业务异常 | 查看 `errmsg` 获取原因；调整筛选或后续检索遵守 SKILL.md 成本约束。 |
 
-错误响应示例：
+### 响应示例（错误载荷）
+
+参数错误载荷：
 
 ```json
-{
-    "errcode": 400,
-    "errmsg": "page 为必填参数"
-}
+{"errcode": 400, "errmsg": "page 为必填参数"}
 ```
 
-## curl 示例
+认证失败载荷（HTTP 401）：
+
+```json
+{"errcode": 401, "errmsg": "authorized error"}
+```
+
+### curl 示例
 
 ```bash
 curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/marketKeywordSearch \
@@ -143,7 +236,7 @@ curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/marketKeywordSearch \
   }'
 ```
 
-## 响应示例（简略）
+### 响应示例（简略）
 
 ```json
 {
@@ -202,26 +295,40 @@ curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/marketKeywordSearch \
 }
 ```
 
----
+### 筛选参数示例
 
-## Feedback API
+以下为同一接口的不同查询意图，仅按本次任务选择一组，不默认逐一请求。
 
-> 该接口与上方工具接口不同，**请勿混用两个基础 URL**。
+#### 高搜索、少卖家的关键词
+
+```json
+{"page":{"page":1,"pageSize":20,"orders":[{"field":"searchVolume","direction":"DESC"}]},"searchVolume":{"min":10000},"sellers":{"max":50}}
+```
+
+#### 俄语关键词模糊匹配
+
+```json
+{"page":{"page":1,"pageSize":20},"keywords":["телефон"],"matchType":1}
+```
+
+#### 指定月份及月销量下限
+
+```json
+{"page":{"page":1,"pageSize":20},"searchDate":"2026-04-01","monthlySales":{"min":1000}}
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
   "skillName": "linkfox-seerfar-ozon-market-keyword-search",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "User successfully discovered high-volume low-competition Ozon keywords."
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**字段说明：**
-- `skillName`：使用本 skill 的 YAML `name`
-- `sentiment`：`POSITIVE` / `NEUTRAL` / `NEGATIVE` 三选一
-- `category`：`BUG` / `COMPLAINT` / `SUGGESTION` / `OTHER` 四选一
-- `content`：用户表达、实际现象、为什么算问题或好评

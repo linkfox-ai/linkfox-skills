@@ -1,266 +1,134 @@
 ---
 name: linkfox-sif-asin-summary
-description: 使用SIF（搜索情报框架）数据分析ASIN的流量来源构成与曝光分布，覆盖本期/上期/新进/退出周期对比。当用户提到ASIN流量来源、流量结构分析、自然流量与付费流量占比、曝光得分拆解、周期对比、新进/退出流量词、竞品流量分析、SP广告关键词数量、品牌广告曝光、Amazon's Choice曝光、编辑推荐曝光、Top Rated曝光、视频广告曝光、自然搜索曝光比例、PPC流量来源、促销秒杀流量来源、推荐位结构拆解、ASIN traffic analysis, traffic sources, organic traffic share, ad traffic share, exposure analysis, traffic structure, period-over-period comparison, keyword churn, SIF时触发此技能。即使用户未明确提及"SIF"，只要其需求涉及分析ASIN的流量来源、曝光渠道分布、跨周期对比或竞品流量结构对比，也应触发此技能。
+description: 使用 SIF（搜索情报框架）分析亚马逊 ASIN 的流量来源与曝光分布，覆盖自然搜索、SP 广告、品牌广告、视频广告、推荐位和促销来源，以及本期、上期、新进和退出流量词对比。适用于单品流量拆解、自然与付费曝光占比、广告渠道识别和多商品竞品对比，无需用户明确提及 SIF。不适用于长期历史趋势、关键词级搜索量或排名查询、销量营收估算、Listing 文案优化及广告出价或预算建议。
 ---
 
-# SIF ASIN Summary
+# SIF ASIN 流量来源分析
 
-This skill guides you on how to query and analyze ASIN-level traffic source data, helping Amazon sellers understand the exposure and traffic structure of any product across multiple channels.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-SIF (Search Intelligence Framework) ASIN Summary provides a comprehensive breakdown of an ASIN's traffic sources on Amazon. It reveals how a product's total exposure is distributed across organic search, Sponsored Products ads, brand ads, video ads, Amazon's Choice, Editorial Recommendations, and Top Rated recommendations. This is essential for competitive analysis and traffic strategy optimization.
+分析亚马逊商品的流量结构、曝光渠道与跨周期变化，帮助卖家研究竞品和流量策略。
 
-**Exposure score**: A composite metric reflecting the overall visibility of a product across all keywords in a given channel. A higher score means greater exposure. The **exposure ratio** fields show what percentage of total exposure comes from each channel (values range 0~1 or 0~100 depending on the field).
+**场景速查**
 
-**Traffic keyword count**: The total number of keywords through which a product is discovered, broken down by channel (organic search, SP ads, brand ads, video ads, etc.).
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个 ASIN 的流量从哪里来 | 拆解自然搜索、广告及推荐位曝光。 |
+| 自然曝光占多少，是否依赖广告 | 对比自然搜索和 SP、品牌、视频广告的曝光占比。 |
+| 竞品广告投得多吗，用了哪些渠道 | 查看广告曝光、PPC 来源与各渠道流量词数。 |
+| SP、品牌、视频广告各覆盖多少词 | 对比 SP、品牌广告总词数、顶部/底部品牌广告词数及视频广告词数。 |
+| 这些 ASIN 的流量结构有什么差别 | 多商品并列表格对比。 |
+| 有没有 Amazon's Choice 或编辑推荐曝光 | 查看 AC、ER、Top Rated、高频购买和其他推荐位数据。 |
+| 商品有哪些促销或秒杀流量来源 | 查看响应中的促销活动标记。 |
+| 这个商品有多少流量词 | 展示总词数及自然、广告、推荐渠道分布。 |
+| 与上期相比流量词怎样变化，新进自然词有多少 | 对比本期、上期、新进和退出数量。 |
+| 看指定日期的流量，或按 SP 曝光比较商品 | 自定义周期、渠道筛选与批量排序。 |
 
-## Data Fields
+### 边界
 
-> Field-name suffixes: `*Prev` = previous-period value; `*In` / `*Out` = keywords entering / exiting this period (for period-over-period comparison).
+本技能提供本期与上期汇总，不用于任意多周历史趋势曲线；长期趋势和关键词级搜索量、排名需使用 ABA 或 ASIN 关键词数据源。销量与营收分析、Listing 优化或文案撰写、广告出价与预算建议不属于本技能范围。
 
-| Field | API Name | Description |
-|-------|----------|-------------|
-| ASIN | asin | Amazon Standard Identification Number |
-| Product Title | productTitle | Full product title on Amazon |
-| Product Category | productCategory | Product category on Amazon |
-| Product Price | productPrice | Current listing price |
-| Product Image URL | productImageUrl | Main product image link |
-| Product Features | productFeatures | Bullet-point product features list |
-| Customer Rating Count | customerRatingCount | Total number of customer ratings |
-| Product Star Rating | productStarRating | Product star rating (0–5) |
-| Product Rating Score | productRatingScore | Product rating score (0–5, as shown on Amazon) |
-| Is Variant Product | isVariantProduct | Whether the ASIN is a variant (e.g., different color/size) |
-| Recent Monthly Sales Bucket | recentMonthlySalesBucket | Bucketed last-month sales (e.g. `"300+"`, `"1,000+"`) — only populated for keywordSummary path |
-| Is Monitored | isMonitored | Whether the ASIN is on the monitoring list |
-| Monitoring Start Time | monitoringStartTime | When the ASIN was added to monitoring |
-| Data Period Start Date | dataPeriodStartDate | Start date of the returned data period (yyyy-MM-dd) |
-| Total Exposure Score | totalExposureScore | Composite exposure score across all channels |
-| Total Exposure Score Prev | totalExposureScorePrev | Total exposure score in the previous period |
-| Total Traffic Keyword Count | totalTrafficKeywordCount | Total keywords across all channels |
-| Total Keywords In / Out / Prev | totalTrafficKeywordCountIn / Out / Prev | New / exited / previous-period counterparts |
-| Natural Search Exposure Score | naturalSearchExposureScore | Exposure score from organic search |
-| Natural Search Exposure Ratio | naturalSearchExposureRatio | Organic search share of total exposure |
-| Natural Search Exposure Score Prev | naturalSearchExposureScorePrev | Previous-period organic exposure score |
-| Natural Search Keyword Count | naturalSearchKeywordCount | Keywords found in organic search results |
-| Natural Keywords In / Out / Prev | naturalSearchKeywordCountIn / Out / Prev | New / exited / previous-period counterparts |
-| SP Ad Exposure Score | sponsoredProductsExposureScore | Exposure score from Sponsored Products ads |
-| SP Ad Exposure Ratio | sponsoredProductsExposureRatio | SP ad share of total exposure |
-| SP Ad Exposure Score Prev | sponsoredProductsExposureScorePrev | Previous-period SP exposure score |
-| SP Ad Keyword Count | sponsoredProductsKeywordCount | Keywords with SP ad placements |
-| Brand Ad Exposure Score | brandAdExposureScore | Exposure score from brand ads |
-| Brand Ad Exposure Ratio | brandAdExposureRatio | Brand ad share of total exposure |
-| Brand Ad Exposure Score Prev | brandAdExposureScorePrev | Previous-period brand ad exposure score |
-| Brand Ad Keyword Count | brandAdKeywordCount | Total brand ad keywords |
-| Top Brand Ad Keyword Count | topBrandAdKeywordCount | Keywords in top-of-page brand ads |
-| Bottom Brand Ad Keyword Count | bottomBrandAdKeywordCount | Keywords in bottom-of-page brand ads |
-| Video Ad Exposure Score | videoAdExposureScore | Exposure score from video ads |
-| Video Ad Exposure Ratio | videoAdExposureRatio | Video ad share of total exposure |
-| Video Ad Exposure Score Prev | videoAdExposureScorePrev | Previous-period video ad exposure score |
-| Video Ad Keyword Count | videoAdKeywordCount | Keywords with video ad placements |
-| Amazon's Choice Exposure Score | amazonsChoiceExposureScore | Exposure score from AC badge |
-| Amazon's Choice Exposure Ratio | amazonsChoiceExposureRatio | AC share of total exposure |
-| Amazon's Choice Exposure Score Prev | amazonsChoiceExposureScorePrev | Previous-period AC exposure score |
-| Amazon's Choice Keyword Count | amazonsChoiceKeywordCount | Keywords with AC badge |
-| AC Keywords In / Out | amazonsChoiceKeywordCountIn / Out | New / exited AC keywords this period |
-| Editorial Recommendations Exposure Score | editorialRecommendationsExposureScore | Exposure from editorial recommendations |
-| Editorial Recommendations Exposure Ratio | editorialRecommendationsExposureRatio | ER share of total exposure |
-| Editorial Recommendations Keyword Count | editorialRecommendationsKeywordCount | Keywords with ER placements |
-| Top Rated Exposure Score | topRatedExposureScore | Exposure from Top Rated recommendations |
-| Top Rated Exposure Ratio | topRatedExposureRatio | TR share of total exposure |
-| Top Rated Keyword Count | topRatedKeywordCount | Keywords with TR placements |
-| Frequently Bought Keyword Count | frequentlyBoughtKeywordCount | Keywords in frequently-bought recommendations |
-| Recommend Position Exposure Score | recommendPositionExposureScore | Total recommendation-position exposure score |
-| Recommend Ad Exposure Score | recommendAdExposureScore | Ad portion of recommendation-position exposure |
-| Recommend Non-ad Exposure Score | recommendNonadExposureScore | Non-ad portion of recommendation-position exposure |
-| Non-AC Recommend Exposure Score | nonAcRecommendExposureScore | Recommendation-position exposure excluding AC slots |
-| Recommend Keyword Count | recommendKeywordCount | Total recommendation-position keywords |
-| Recommend Ad Keyword Count | recommendAdKeywordCount | Ad portion of recommendation keywords |
-| Recommend Non-ad Keyword Count | recommendNonadKeywordCount | Non-ad portion of recommendation keywords |
-| PPC Traffic Sources | ppcTrafficSources | List of paid ad types (SP, Top Brand Ad, Bottom Brand Ad, Video Ad) |
-| Natural Search Traffic Sources | naturalSearchTrafficSources | Organic search type markers |
-| Amazon Recommendation Sources | amazonRecommendationSources | Recommendation types (Best Seller, AC, ER, TR, TRFOB, etc.) |
-| Promotional Deal Sources | promotionalDealSources | Active promotions (Coupon, Limited Time Deal, Lowest Price in 30 Days, etc.) |
+## 前置条件
 
-## Supported Marketplaces
+**先确定查询目标**：取得用户要研究的 ASIN，确认站点及所需对比周期。完整参数约定、站点覆盖、筛选排序及使用限制见 [接口说明](references/api.md)。
 
-13 marketplaces: US (United States), UK (United Kingdom), DE (Germany), CA (Canada), JP (Japan), FR (France), ES (Spain), IT (Italy), MX (Mexico), AU (Australia), AE (United Arab Emirates), BR (Brazil), SA (Saudi Arabia).
+## 查询与分析流程
 
-Default marketplace is **US**. Use US when the user does not specify a marketplace. Codes outside this list will be rejected by the API pattern.
+1. 明确任务是单品流量拆解、竞品比较、自然与付费对比、广告渠道分析还是周期变化；按接口说明准备 ASIN、站点、周期及必要的筛选排序。
+2. 检查是否已有同参数缓存或已保存结果；需要请求时调用脚本，保留完整响应文件，不为失败或空结果自动追加调用。
+3. 按接口说明分别判断网关响应和 SIF 业务结果。失败时依据返回消息解释原因，提示核对 ASIN 与站点；认证或算力问题按“解决认证和算力问题”指引处理。
+4. 从保存的数据中提取产品信息、各渠道曝光与流量词数；按任务展示单品结构、多个 ASIN 的差异或本期与上期变化，注明数据周期与变体情况。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /sif/asinSummary`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sif_asin_summary.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sif_asin_summary.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次接口调用消耗 9 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sif-asin-summary-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sif-asin-summary-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Parameter Guide
+### 算力消耗预估
 
-### searchValue (required)
+9 算力 / 次
 
-One or more ASIN codes separated by commas. Maximum 10 ASINs per request.
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- Single ASIN: `B0XXXXXXXX`
-- Multiple ASINs: `B0XXXXXXXX,B0YYYYYYYY,B0ZZZZZZZZ`
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-### country (optional)
+### 解决认证和算力问题
 
-Marketplace code. Defaults to `US`. See the Supported Marketplaces section for all valid codes.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### Time window (optional)
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-- `last7d` (boolean, default `true`): Use the latest 7 days. When `false`, the API uses `startDate`/`endDate` to define the window.
-- `startDate` (string, `yyyy-MM-dd`): Start date for a custom window. Takes effect when `last7d=false`; if omitted, the system's latest ABA week is used.
-- `endDate` (string, `yyyy-MM-dd`): End date paired with `startDate`.
+### 约束与建议
 
-### conditions (optional)
+- **理解指标口径**：曝光分数是商品在各关键词、各渠道可见度的综合相对指标，越高表示曝光越强，可用于跨渠道和跨 ASIN 比较，不能等同于绝对流量、访问量或销量。流量关键词数表示商品被发现的关键词数量，可按自然、SP、品牌、视频及推荐渠道拆解。
+- **区分渠道**：SIF 覆盖自然搜索、Sponsored Products、品牌与视频广告、Amazon's Choice、Editorial Recommendations 和 Top Rated；另有推荐位广告/非广告、非 AC 推荐、高频购买和促销活动来源。按实际返回展示，不补造缺失渠道。
+- **清晰展示数据**：用表格分别展示商品元信息、本期曝光分数、关键词数和跨周期数据。单 ASIN 主动概括流量结构；多个 ASIN 使用并列表格。
+- **百分比口径**：曝光占比按百分比展示，例如已确认是比例值的 `0.45` 展示为 `45.0%`。原数据可能使用 0～1 或 0～100 的口径，应核对返回字段的实际单位，不能把已是百分数的值再次乘以 100；单位不明时保留原值并说明。
+- **标明周期**：`*Prev` 表示上期，`*In` / `*Out` 表示本期相对上期新进/退出的流量词数。每次展示这些值或计算变化，都标明本期与比较窗口，例如前一个七天周期或实际起止日期，不展示未注明周期的增减值。
+- **自然与付费比较**：对比自然搜索与 SP、品牌、视频广告曝光占比；广告深查时展示 SP、品牌总词数、顶部与底部品牌广告词数和视频广告词数。推荐位指标按其含义单独说明，避免与其他渠道重复加总。
+- **变体意识**：商品为变体时注明这一点，可建议用户进一步核对父 ASIN 以了解完整情况；父体与变体相关字段以接口实际返回为准。
+- **按需读大结果**：先读摘要，按需从已保存文件提取明细并说明返回范围；分页和数据覆盖限制见接口说明，后续查询仍遵守成本约束。
 
-Comma-separated traffic-channel filters. Only returns ASIN-summary rows that have traffic from at least one of the listed channels. Valid values:
+## 使用示例
 
-- `nf` — natural search
-- `sp` — SP ads
-- `sb` — SB regular
-- `sbv` — video ads (SBV)
-- `ad` — any ad traffic
-- `acAd` — SP recommendation
-- `totalPeriod.in` — newly-entered traffic keywords this period
+### 单 ASIN 流量拆解或自然与付费占比
 
-### sortBy (optional)
-
-Sort field. Leave empty for system default. Valid values:
-
-`totalKeywordNum` (total keyword count), `naturalKeywordNum` (natural keyword count), `brandKeywordNum` (brand ad keyword count), `vedioKeywordNum` (video ad keyword count), `acKeywordNum` (AC keyword count), `erKeywordNum` (ER keyword count), `trKeywordNum` (TR keyword count), `sumScore` (all-keyword total exposure), `totalNfScore` (all natural exposure), `totalSpSocre` (all SP exposure; note the spelling), `totalBrandScore` (all brand ad exposure), `totalVedioScore` (all video ad exposure), `totalAcScore` (all AC exposure), `totalTrScore` (all TR exposure), `totalErScore` (all ER exposure).
-
-### Pagination
-
-- `pageNum`: Page number, defaults to 1
-- `pageSize`: Results per page, minimum 10, maximum **10000**, defaults to **10000**
-
-### Sorting
-
-- `desc`: Sort in descending order when `true` (default), ascending when `false`
-
-## Usage Examples
-
-**1. Single ASIN traffic breakdown**
-> "Show me the traffic sources for B09V3KXJPB on the US marketplace"
-
-Query with `searchValue = "B09V3KXJPB"`, `country = "US"`.
-
-**2. Multi-ASIN competitor comparison**
-> "Compare traffic structures of B09V3KXJPB and B0BN1K7WJP on Amazon US"
-
-Query with `searchValue = "B09V3KXJPB,B0BN1K7WJP"`, `country = "US"`.
-
-**3. Specific marketplace query**
-> "Analyze traffic sources for B07XJ8C8F5 on Amazon Japan"
-
-Query with `searchValue = "B07XJ8C8F5"`, `country = "JP"`.
-
-**4. Organic vs paid traffic analysis**
-> "What percentage of B09V3KXJPB's exposure comes from organic search vs ads?"
-
-Query the ASIN, then compare `naturalSearchExposureRatio` against `sponsoredProductsExposureRatio`, `brandAdExposureRatio`, and `videoAdExposureRatio`.
-
-**5. Ad channel deep-dive**
-> "How many keywords does B0BN1K7WJP advertise on through SP, brand ads, and video ads?"
-
-Query the ASIN and present `sponsoredProductsKeywordCount`, `brandAdKeywordCount`, `topBrandAdKeywordCount`, `bottomBrandAdKeywordCount`, and `videoAdKeywordCount`.
-
-**6. Period-over-period comparison**
-> "How did this ASIN's total keywords change compared to last week?"
-
-Query the ASIN and present `totalTrafficKeywordCount` (current), `totalTrafficKeywordCountPrev` (previous), `totalTrafficKeywordCountIn` (new this period), `totalTrafficKeywordCountOut` (exited this period). Do the same for the natural-search variant with the `naturalSearchKeywordCount*` family.
-
-**7. Custom date range**
-> "Traffic structure for B0XXX between 2026-03-08 and 2026-03-14"
-
-```
-searchValue: "B0XXX", country: "US", last7d: false, startDate: "2026-03-08", endDate: "2026-03-14"
+```json
+{"searchValue":"B09V3KXJPB","country":"US"}
 ```
 
-**8. Filter by traffic channel and sort by SP exposure**
-> "Top SP-running ASINs among my 10 products, sorted by SP exposure"
+展示自然搜索、SP、品牌、视频及推荐位的可用指标，并概括流量结构。
 
+### 多 ASIN 竞品对比
+
+```json
+{"searchValue":"B09V3KXJPB,B0BN1K7WJP","country":"US"}
 ```
-searchValue: "B0A,B0B,...,B0J", conditions: "sp", sortBy: "totalSpSocre", desc: true
+
+使用并列表格展示各商品的渠道曝光、流量词数及广告覆盖差异。
+
+### 日本站流量分析
+
+```json
+{"searchValue":"B07XJ8C8F5","country":"JP"}
 ```
 
-## Display Rules
+### 本期与上期流量词变化
 
-1. **Present data clearly**: Show query results in well-structured tables; separate product metadata, current-period scores, keyword counts, and period-over-period comparison columns into logical groups for readability
-2. **Percentage formatting**: When displaying exposure ratios, format them as percentages (e.g., 0.45 as 45.0%) for easier comprehension
-3. **Traffic structure summary**: When a user queries a single ASIN, proactively summarize the traffic structure (e.g., "65% organic, 25% SP ads, 10% brand ads") to give an at-a-glance overview
-4. **Period annotation**: Whenever showing `*In` / `*Out` / `*Prev` fields, label the period explicitly (e.g., "vs. previous 7 days"; or the resolved `startDate ~ endDate` range). Do not present period-over-period deltas without naming the comparison window.
-5. **Competitor comparison layout**: When multiple ASINs are queried, use a side-by-side comparison table so differences are immediately visible
-6. **Error handling**: When a query fails, explain the reason based on the `msg` field and suggest checking the ASIN validity or marketplace selection
-7. **Variant awareness**: If `isVariantProduct` is true, note that the ASIN is a variant and the user may want to also check the parent ASIN for a complete picture.
-## Important Limitations
+查询指定 ASIN 后，展示总流量词与自然搜索流量词的本期、上期、新进、退出数量，标明比较周期。
 
-- **ASIN cap per request**: Maximum 10 ASINs can be queried in a single call
-- **Page size cap**: Maximum 10000 results per page
-- **Marketplace coverage**: 13 marketplaces only — IN / NL / SE / PL / TR / SG are no longer available
-- **Snapshot vs window**: Default window is the latest 7 days (`last7d=true`). To query a different window, set `last7d=false` and pass `startDate`/`endDate`
-- **Exposure scores are relative**: Scores are useful for cross-channel and cross-ASIN comparison, but are not absolute traffic volumes
+### 指定日期区间并筛选广告流量
 
-## User Expression & Scenario Quick Reference
+```json
+{"searchValue":"B09V3KXJPB","country":"US","last7d":false,"startDate":"2026-03-08","endDate":"2026-03-14","conditions":"ad","sortBy":"totalSpSocre"}
+```
 
-**Applicable** -- Traffic source and exposure analysis for Amazon ASINs:
+### 按 SP 曝光比较一组商品
 
-| User Says | Scenario |
-|-----------|----------|
-| "Where does this ASIN's traffic come from" | Traffic source breakdown |
-| "How much organic traffic does this product have" | Natural search exposure analysis |
-| "Is this competitor running a lot of ads" | SP/brand/video ad exposure check |
-| "Compare traffic structures of these ASINs" | Multi-ASIN competitor comparison |
-| "Does this product have Amazon's Choice" | AC/ER/TR recommendation check |
-| "What ad channels is this ASIN using" | PPC traffic source identification |
-| "How many keywords does this ASIN rank for" | Traffic keyword count analysis |
-| "Is this product relying on paid or organic traffic" | Organic vs paid traffic split |
-| "How did keywords change vs last week" | Period-over-period comparison (In/Out/Prev) |
-| "How many new organic keywords did this ASIN get" | New-in keyword count (`naturalSearchKeywordCountIn`) |
-| "Pull the numbers for a specific date range" | Custom time window via `startDate`/`endDate` |
-| "Rank 10 ASINs by SP exposure" | `sortBy=totalSpSocre` across a batch |
+```json
+{"searchValue":"B09V3KXJPB,B0BN1K7WJP","country":"US","conditions":"sp","sortBy":"totalSpSocre","desc":true}
+```
 
-**Not applicable** -- Needs beyond ASIN traffic source data:
-- Arbitrary multi-week historical trend curves (this tool exposes current + previous period only; use ABA data for long trends)
-- Keyword-level search volume or ranking data for the ASIN (use ABA data or the ASIN-keywords tool instead)
-- Sales estimation or revenue analysis
-- Listing optimization or copywriting
-- Advertising bid or budget recommendations
+## 使用反馈
 
-## 算力消耗规则
-
-消耗 9 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

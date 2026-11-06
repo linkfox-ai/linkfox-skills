@@ -38,7 +38,7 @@ python scripts/check_linkfox_token.py
 3. **服务市场** → **授权管理**
 4. **获取授权** → 选择 **「Cyber-ERP酷鸟助手」**
 5. 全选授权 → 确认 → 复制 token
-6. 调用 API：`site=eu` / `global` / `eu`，`managementType=semi-managed`
+6. 调用 API：`site=us` / `global` / `eu`，`managementType=semi-managed`
 
 ## 3. 全托管店铺
 
@@ -60,7 +60,7 @@ python scripts/check_linkfox_token.py
 |------|------|-----------|
 | cn | 中国站 | openapi.kuajingmaihuo.com |
 | partner | Partner 网关 | openapi-b-partner.temu.com |
-| us | 欧洲站 | openapi-b-eu.temu.com |
+| us | 美国站 | openapi-b-us.temu.com |
 | global | 全球区 | openapi-b-global.temu.com |
 | eu | 欧洲站 | openapi-b-eu.temu.com |
 
@@ -112,3 +112,20 @@ python scripts/temu_proxy.py '{
 | `save_temu_access_token.py` | 保存 accessToken 到本地 |
 | `list_temu_access_tokens.py` | 列出已保存 token（默认脱敏）|
 | `get_temu_access_token.py` | 读取指定 store 的 token |
+
+## 本技能的欧洲站默认值
+
+EU 商品与文件下载脚本默认 site=eu、managementType=semi-managed、tokenPurpose=product-inventory。上方 cn/partner 是通用商品令牌授权指引，不应据此把目标欧洲站自动改到其他区域；以目标后台实际授权的站点、托管模式与令牌用途为准。脚本支持 LINKFOX_AGENT_API_KEY 与 LINKFOXAGENT_API_KEY，也兼容 JSON 的 token / linkfoxToken / linkfox_token。
+
+## 本地授权脚本参数
+
+以下脚本操作本地令牌库，不发送店铺请求，也不是响应缓存。
+
+| 脚本 | JSON 参数 | 默认值与行为 |
+|------|-----------|--------------|
+| `temu_token_guide.py` | `shopType`（或兼容 `managementType`）、`tokenPurpose`、`site` | shopType 必填，可选 `semi-managed`、`full-managed`、`local-native`；tokenPurpose 默认 `default`，可选 `product-inventory`、`order-shipping`、`full-managed`、`local-native`、`default`。根据类型与用途显示授权步骤，不自动授权。 |
+| `save_temu_access_token.py` | `storeKey`、`site`、`managementType`、`accessToken`，可选 `tokenPurpose`、`label` | 前四项必填；tokenPurpose 默认 `default`。以 storeKey 定位店铺，按 site + managementType + tokenPurpose 匹配令牌；同组合替换，不同组合保留。返回 replaced、storePath、updatedAt 等保存结果，不回显令牌。 |
+| `list_temu_access_tokens.py` | 可选 `mask` | 默认 true，脱敏展示；仅显式传 false 时回显完整令牌。 |
+| `get_temu_access_token.py` | `storeKey`、`site`、`managementType`，可选 `tokenPurpose` | 前三项必填；tokenPurpose 默认 `default`。找到时返回 found=true 与完整 accessToken；未找到时返回 found=false、提示及退出码 1。 |
+
+EU 业务入口在未传 tokenPurpose 且使用 storeKey 时补入 `product-inventory`；保存与读取本地令牌的通用脚本不自动使用此用途，保存 EU 商品令牌时应显式指定。显式传入空字符串或纯空白 tokenPurpose 时，本地查找使用 `default`。直接传 accessToken 时优先使用该令牌，不再查本地库。令牌文件采用 UTF-8 JSON，保存后可跨会话读取；令牌本身过期时应重新授权并替换。

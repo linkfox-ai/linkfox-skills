@@ -1,165 +1,371 @@
-# TikTok 广告与创意情报 API 参考
+# 出海匠 TikTok 广告与创意情报 接口说明
 
-## 调用规范
+## 公共规则
 
-- **请求地址（广告搜索）**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/search`
-- **请求地址（广告详情）**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/detail`
-- **请求地址（广告关联商品）**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/related-products`
-- **请求地址（创意搜索）**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/creatives/search`
-- **请求地址（创意详情）**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/creatives/detail`
-- **请求方式**：POST，`Content-Type: application/json`
-- **认证方式**：Header `Authorization: <api_key>`；api_key 优先从环境变量 `LINKFOX_AGENT_API_KEY` 读取，兼容回退 `LINKFOXAGENT_API_KEY`
-- **User-Agent**：`LinkFox-Skill/2.0`
-- **透传头**：`SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME`（未设置时为空串）
-- **超时**：150s
+### 调用规范
 
-`${LINKFOX_TOOL_GATEWAY}` 未设置时，脚本回退到 `https://tool-gateway.linkfox.com`。
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## 入口脚本与端点
+### 响应码基本规则
 
-| 能力 | 脚本 | 算力/次 |
-|---|---|---:|
-| 广告搜索 | `chuhaijiang_ad_search.py` | 18 |
-| 广告详情 | `chuhaijiang_ad_detail.py` | 9 |
-| 广告关联商品 | `chuhaijiang_ad_related_products.py` | 18 |
-| 创意搜索 | `chuhaijiang_creative_search.py` | 18 |
-| 创意详情 | `chuhaijiang_creative_detail.py` | 9 |
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-五个业务入口脚本默认缓存成功响应 24 小时。缓存按当前工作目录、调用身份、网关、端点和完整请求参数隔离；相同组合命中时输出 `Cache hit`，不会发起新的付费请求。HTTP 或业务失败不写入缓存；业务成功的空结果可以缓存。`--inline` 不绕过缓存；`--no-cache` 会跳过缓存读写并强制发起真实请求，可能再次消耗算力，仅在用户明确同意额外消耗或调试时使用。
+## 接口：广告搜索
 
-## 公共约定
+### 调用规范
 
-- 网关请求字段使用 Java/MCP 的 camelCase 名；服务端再映射成上游 snake_case。脚本调用不得直接传 `page_size`、`ad_type`、`has_product` 等 snake_case 字段。
-- 普通请求的 `country` 必须是小写：`br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`。
-- 搜索和关联商品的 `page` 默认 1、最小 1；`pageSize` 可选且最大 10。
-- `sort` 格式为 `field:asc` 或 `field:desc`。Java 层不维护可选字段枚举；不要臆造排序字段，未知时省略并使用上游默认值。
-- 金额/GMV/GPM/花费通常为 `{ "unit": string, "value": number }`，但调用方仍应按运行时类型解析。
-
-### 公共成功响应
-
-2026-08-29 使用真实网关链路验证五个端点时，成功响应均为 HTTP 200 且使用以下顶层结构：
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `errcode` | integer | 200 表示本次业务成功 |
-| `errmsg` | string | 成功时为 `ok` |
-| `request_id` | string | 请求追踪 ID |
-| `data` | object | 端点业务数据，结构见各节 |
-
-入口脚本始终保留完整原始 JSON，不移除未知业务字段。
-
-## 广告搜索
-
-### 接口信息
-
-- **地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/search`
-- **脚本**：`chuhaijiang_ad_search.py`
-- **成功数据**：`data.items[]`；总数为 `data.total_count`
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/search`
 
 ### 请求参数
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |---|---|---:|---|---|
-| `country` | string | 是 | - | 支持的小写国家码 |
+| `country` | string | 是 | - | 支持小写国家码 `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn` |
 | `page` | integer | 否 | 1 | 页码，最小 1 |
 | `pageSize` | integer | 否 | 上游默认 | 每页数量，最大 10 |
 | `keyword` | string | 否 | - | 搜索关键词 |
 | `category` | string | 否 | - | 商品分类 |
 | `adType` | string | 否 | - | 上游广告类型分类值 |
 | `excludeSparkAds` | boolean | 否 | - | 是否排除 Spark Ads |
-| `minViews` / `maxViews` | number | 否 | - | 最低/最高播放量 |
-| `minGmv` / `maxGmv` | number | 否 | - | 最低/最高 GMV |
-| `minDays` / `maxDays` | number | 否 | - | 最低/最高投放天数 |
+| `minViews` | number | 否 | - | 最低播放量 |
+| `maxViews` | number | 否 | - | 最高播放量 |
+| `minGmv` | number | 否 | - | 最低 GMV |
+| `maxGmv` | number | 否 | - | 最高 GMV |
+| `minDays` | number | 否 | - | 最少投放天数 |
+| `maxDays` | number | 否 | - | 最多投放天数 |
 | `sort` | string | 否 | `gmv:desc` | `field:asc` 或 `field:desc` |
 
+网关字段使用 Java/MCP camelCase，再由服务端映射上游 snake_case；不得直接发送 `page_size`、`ad_type`、`has_product` 等上游字段。
+
+`sort` 为 `field:asc` 或 `field:desc`，默认 `gmv:desc`；Java 层没有排序字段枚举，不臆造字段，未知时省略。`category` 为上游分类，不编造标签。
+
+`adType` 使用上游广告类型分类，未提供已知值时不要编造枚举。
+
+脚本选项、缓存、认证兼容与落盘行为见 [脚本运行约定](#脚本运行约定)。
+
+### 响应结构
+
+成功响应示例为 HTTP 200、`errcode=200`、`errmsg=ok`；成功判定遵循公共规则，不限于此示例。除明确列出类型外，业务字段按实际响应解析，允许 null 或缺失，不补造嵌套属性。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `errcode` | integer / string / null | 网关状态，按下方基础规则判断；成功响应示例为 200。 |
+| `errmsg` | string | 网关消息；成功响应示例为 ok。 |
+| `request_id` | string | 请求追踪编号。 |
+| `data` | object | 本接口业务数据。 |
+| `data.total_count` | integer | 总匹配记录数；并非本页 data.items 长度，缺失时不推算。 |
+| `data.items` | array<object> | 主业务记录列表。 |
+
+#### `data.items[]` 字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `data.items[].id` | 未固定；按运行时类型解析 | 广告查询编号；对应广告详情与关联商品必须用此 id，不用 video_id、product_id 或 advertiser_id。 |
+| `data.items[].video_id` | 未固定；按运行时类型解析 | 视频编号，不替代搜索结果 id。 |
+| `data.items[].product_id` | 未固定；按运行时类型解析 | 关联商品编号，不替代搜索结果 id。 |
+| `data.items[].advertiser_id` | 未固定；按运行时类型解析 | 广告主编号。 |
+| `data.items[].ad_url` | 未固定；按运行时类型解析 | 广告公开链接。 |
+| `data.items[].web_url` | 未固定；按运行时类型解析 | 落地页公开链接。 |
+| `data.items[].advertiser_url` | 未固定；按运行时类型解析 | 广告主公开链接。 |
+| `data.items[].ad_title` | 未固定；按运行时类型解析 | 广告标题。 |
+| `data.items[].advertiser_name` | 未固定；按运行时类型解析 | 广告主名称。 |
+| `data.items[].button_text` | 未固定；按运行时类型解析 | 行动按钮文案。 |
+| `data.items[].product_title` | 未固定；按运行时类型解析 | 商品标题。 |
+| `data.items[].create_time` | 未固定；按运行时类型解析 | 记录创建时间。 |
+| `data.items[].ad_create_time` | 未固定；按运行时类型解析 | 广告创建时间。 |
+| `data.items[].last_update_time` | 未固定；按运行时类型解析 | 最后更新时间。 |
+| `data.items[].duration` | 未固定；按运行时类型解析 | 广告时长。 |
+| `data.items[].ad_day_count` | 未固定；按运行时类型解析 | 投放天数。 |
+| `data.items[].video_play_count` | 未固定；按运行时类型解析 | 播放量。 |
+| `data.items[].video_like_count` | 未固定；按运行时类型解析 | 点赞数。 |
+| `data.items[].video_like_rate` | 未固定；按运行时类型解析 | 点赞率。 |
+| `data.items[].video_engagement_rate` | 未固定；按运行时类型解析 | 互动率。 |
+| `data.items[].video_popularity` | 未固定；按运行时类型解析 | 视频热度。 |
+| `data.items[].total_sc` | 未固定；按运行时类型解析 | 累计销量指标（保留来源口径）。 |
+| `data.items[].total_gmv` | 通常 object；以实际类型为准 | 累计 GMV；通常含 unit 和 value，不得当作纯数值。 |
+| `data.items[].total_gmv.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.items[].total_gmv.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.items[].video_gpm_30d` | 通常 object；以实际类型为准 | 近 30 天视频 GPM；通常含 unit 和 value，不得当作纯数值。 |
+| `data.items[].video_gpm_30d.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.items[].video_gpm_30d.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.items[].ad_maximum_cost` | 通常 object；以实际类型为准 | 广告最高花费指标；通常含 unit 和 value，不得当作纯数值。 |
+| `data.items[].ad_maximum_cost.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.items[].ad_maximum_cost.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.items[].ad_roas` | 未固定；按运行时类型解析 | 广告 ROAS。 |
+| `data.items[].product_l1_category` | 未固定；按运行时类型解析 | 商品一级类目。 |
+| `data.items[].product_l2_category` | 未固定；按运行时类型解析 | 商品二级类目。 |
+| `data.items[].product_l3_category` | 未固定；按运行时类型解析 | 商品三级类目。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+| errcode / HTTP | 含义 | 处理建议 |
+|---|---|---|
+| 400 | 必填参数缺失等请求错误 | 根据 errmsg 补齐或修正参数，不得原样重试。 |
+| 501 | 参数校验或上游调用失败 | 展示 errmsg 并停止；需要重试时先说明额外算力消耗，由用户决定。 |
+
+错误时保留已取得的数据并停止，不自动连续试探付费端点。
+
+### curl 示例
+
 ```bash
-python scripts/chuhaijiang_ad_search.py '{"country":"us","keyword":"beauty","page":1,"pageSize":3}'
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/chuhaijiang/ad-creative/ads/search" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -H "SESSION_ID: ${SESSION_ID}" \
+  -H "MESSAGE_ID: ${MESSAGE_ID}" \
+  -H "MODE_ID: ${MODE_ID}" \
+  -H "APP_NAME: ${APP_NAME}" \
+  -d '{"country":"us","page":1,"pageSize":3,"keyword":"beauty"}'
 ```
 
-### 响应字段
+示例编号可能过时；实际任务优先使用本次搜索结果。每次请求 18 算力。
 
-真实非空样本的 `data.items[]` 包含：
+---
 
-- 标识/链接：`id`、`video_id`、`product_id`、`advertiser_id`、`ad_url`、`web_url`、`advertiser_url`
-- 文案/主体：`ad_title`、`advertiser_name`、`button_text`、`product_title`
-- 时间/投放：`create_time`、`ad_create_time`、`last_update_time`、`duration`、`ad_day_count`
-- 表现：`video_play_count`、`video_like_count`、`video_like_rate`、`video_engagement_rate`、`video_popularity`、`total_sc`
-- 商业指标：`total_gmv`、`video_gpm_30d`、`ad_maximum_cost`、`ad_roas`
-- 分类：`product_l1_category`、`product_l2_category`、`product_l3_category`
+## 接口：广告详情
 
-后续广告详情和关联商品必须使用本对象的 `id`，不是 `video_id` 或 `product_id`。
+### 调用规范
 
-## 广告详情
-
-### 接口信息
-
-- **地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/detail`
-- **脚本**：`chuhaijiang_ad_detail.py`
-- **成功数据**：基础信息 `data.items[]`；请求 `include=core` 时另有 `data.core.items[]`
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/detail`
 
 ### 请求参数
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---:|---|
-| `country` | string | 是 | 支持的小写国家码 |
+| `country` | string | 是 | 支持小写国家码 `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn` |
 | `id` | string | 是 | 广告搜索返回的 `id` |
 | `include` | string | 否 | 可选值 `core`；多个值语法为英文逗号分隔 |
 
+网关字段使用 Java/MCP camelCase，再由服务端映射上游 snake_case；不得直接发送 `page_size`、`ad_type`、`has_product` 等上游字段。
+
+必须使用广告搜索对象的 `id`，不得替换成 `video_id`、`product_id` 或 `advertiser_id`。
+
+脚本选项、缓存、认证兼容与落盘行为见 [脚本运行约定](#脚本运行约定)。
+
+### 响应结构
+
+成功响应示例为 HTTP 200、`errcode=200`、`errmsg=ok`；成功判定遵循公共规则，不限于此示例。除明确列出类型外，业务字段按实际响应解析，允许 null 或缺失，不补造嵌套属性。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `errcode` | integer / string / null | 网关状态，按下方基础规则判断；成功响应示例为 200。 |
+| `errmsg` | string | 网关消息；成功响应示例为 ok。 |
+| `request_id` | string | 请求追踪编号。 |
+| `data` | object | 本接口业务数据。 |
+| `data.total_count` | integer | 总匹配记录数；并非本页 data.items 长度，缺失时不推算。 |
+| `data.items` | array<object> | 主业务记录列表。 |
+| `data.core` | object | include=core 时返回的表现数据。 |
+| `data.core.items` | array<object> | 广告表现记录列表。 |
+
+#### `data.items[]` 字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `data.items[].id` | 未固定；按运行时类型解析 | 广告基础记录编号。 |
+| `data.items[].ad_title` | 未固定；按运行时类型解析 | 广告标题。 |
+| `data.items[].advertiser_id` | 未固定；按运行时类型解析 | 广告主编号。 |
+| `data.items[].advertiser_name` | 未固定；按运行时类型解析 | 广告主名称。 |
+| `data.items[].advertiser_avatar` | object | 广告主头像嵌套对象；属性未约定，使用前检查。 |
+| `data.items[].ad_cover` | object | 广告封面嵌套对象；属性未约定，使用前检查。 |
+| `data.items[].ad_url` | 未固定；按运行时类型解析 | 广告公开链接。 |
+| `data.items[].web_url` | 未固定；按运行时类型解析 | 落地页公开链接。 |
+| `data.items[].button_text` | 未固定；按运行时类型解析 | 行动按钮文案。 |
+| `data.items[].duration` | 未固定；按运行时类型解析 | 广告时长。 |
+| `data.items[].ad_create_time` | 未固定；按运行时类型解析 | 广告创建时间。 |
+| `data.items[].create_time` | 未固定；按运行时类型解析 | 记录创建时间。 |
+| `data.items[].last_update_time` | 未固定；按运行时类型解析 | 最后更新时间。 |
+
+#### `data.core.items[]` 字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `data.core.items[].core_creative_id` | 未固定；按运行时类型解析 | 创意编号。 |
+| `data.core.items[].core_ad_type` | 未固定；按运行时类型解析 | 广告类型。 |
+| `data.core.items[].core_ad_day_count` | 未固定；按运行时类型解析 | 投放天数。 |
+| `data.core.items[].core_ad_play_ratio` | 未固定；按运行时类型解析 | 广告播放占比。 |
+| `data.core.items[].core_ad_gmv_ratio` | 未固定；按运行时类型解析 | 广告 GMV 占比。 |
+| `data.core.items[].core_ad_maximum_cost` | 通常 object；以实际类型为准 | 广告最高花费指标；通常含 unit 和 value，不得当作纯数值。 |
+| `data.core.items[].core_ad_maximum_cost.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.core.items[].core_ad_maximum_cost.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.core.items[].core_ad_roas` | 未固定；按运行时类型解析 | 广告 ROAS。 |
+| `data.core.items[].core_total_gmv` | 通常 object；以实际类型为准 | 累计 GMV；通常含 unit 和 value，不得当作纯数值。 |
+| `data.core.items[].core_total_gmv.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.core.items[].core_total_gmv.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.core.items[].core_total_sc` | 未固定；按运行时类型解析 | 累计销量指标（保留来源口径）。 |
+| `data.core.items[].core_video_play_count` | 未固定；按运行时类型解析 | 播放量。 |
+| `data.core.items[].core_video_like_count` | 未固定；按运行时类型解析 | 点赞数。 |
+| `data.core.items[].core_video_comment_count` | 未固定；按运行时类型解析 | 评论数。 |
+| `data.core.items[].core_video_share_count` | 未固定；按运行时类型解析 | 分享数。 |
+| `data.core.items[].core_video_collect_count` | 未固定；按运行时类型解析 | 收藏数。 |
+| `data.core.items[].core_video_gpm_30d` | 通常 object；以实际类型为准 | 近 30 天视频 GPM；通常含 unit 和 value，不得当作纯数值。 |
+| `data.core.items[].core_video_gpm_30d.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.core.items[].core_video_gpm_30d.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.core.items[].core_video_popularity` | 未固定；按运行时类型解析 | 视频热度。 |
+| `data.core.items[].id` | 未固定；按运行时类型解析 | 当前扩展数据记录编号，保留来源值。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+| errcode / HTTP | 含义 | 处理建议 |
+|---|---|---|
+| 400 | 必填参数缺失等请求错误 | 根据 errmsg 补齐或修正参数，不得原样重试。 |
+| 501 | 参数校验或上游调用失败 | 展示 errmsg 并停止；需要重试时先说明额外算力消耗，由用户决定。 |
+
+错误时保留已取得的数据并停止，不自动连续试探付费端点。
+
+### curl 示例
+
 ```bash
-python scripts/chuhaijiang_ad_detail.py '{"country":"us","id":"7658119807128046879","include":"core"}'
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/chuhaijiang/ad-creative/ads/detail" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -H "SESSION_ID: ${SESSION_ID}" \
+  -H "MESSAGE_ID: ${MESSAGE_ID}" \
+  -H "MODE_ID: ${MODE_ID}" \
+  -H "APP_NAME: ${APP_NAME}" \
+  -d '{"country":"us","id":"7658119807128046879","include":"core"}'
 ```
 
-### 响应字段
+示例编号可能过时；实际任务优先使用本次搜索结果。每次请求 9 算力。
 
-- `data.items[]`：`id`、`ad_title`、`advertiser_id`、`advertiser_name`、`advertiser_avatar`、`ad_cover`、`ad_url`、`web_url`、`button_text`、`duration`、`ad_create_time`、`create_time`、`last_update_time`。
-- `data.core.items[]`：`core_creative_id`、`core_ad_type`、`core_ad_day_count`、`core_ad_play_ratio`、`core_ad_gmv_ratio`、`core_ad_maximum_cost`、`core_ad_roas`、`core_total_gmv`、`core_total_sc`、`core_video_play_count`、`core_video_like_count`、`core_video_comment_count`、`core_video_share_count`、`core_video_collect_count`、`core_video_gpm_30d`、`core_video_popularity` 和 `id`。
+---
 
-`ad_cover`、`advertiser_avatar` 及金额字段为嵌套对象；使用前检查对象属性，不要当作纯字符串或数字。
+## 接口：广告关联商品
 
-## 广告关联商品
+### 调用规范
 
-### 接口信息
-
-- **地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/related-products`
-- **脚本**：`chuhaijiang_ad_related_products.py`
-- **成功数据**：`data.items[]`；总数为 `data.total_count`
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/related-products`
 
 ### 请求参数
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |---|---|---:|---|---|
-| `country` | string | 是 | - | 支持的小写国家码 |
+| `country` | string | 是 | - | 支持小写国家码 `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn` |
 | `id` | string | 是 | - | 广告搜索返回的 `id` |
 | `page` | integer | 否 | 1 | 页码，最小 1 |
 | `pageSize` | integer | 否 | 上游默认 | 每页数量，最大 10 |
 
+网关字段使用 Java/MCP camelCase，再由服务端映射上游 snake_case；不得直接发送 `page_size`、`ad_type`、`has_product` 等上游字段。
+
+必须使用广告搜索对象的 `id`，不得替换成 `video_id`、`product_id` 或 `advertiser_id`。
+
+脚本选项、缓存、认证兼容与落盘行为见 [脚本运行约定](#脚本运行约定)。
+
+### 响应结构
+
+成功响应示例为 HTTP 200、`errcode=200`、`errmsg=ok`；成功判定遵循公共规则，不限于此示例。除明确列出类型外，业务字段按实际响应解析，允许 null 或缺失，不补造嵌套属性。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `errcode` | integer / string / null | 网关状态，按下方基础规则判断；成功响应示例为 200。 |
+| `errmsg` | string | 网关消息；成功响应示例为 ok。 |
+| `request_id` | string | 请求追踪编号。 |
+| `data` | object | 本接口业务数据。 |
+| `data.total_count` | integer | 总匹配记录数；并非本页 data.items 长度，缺失时不推算。 |
+| `data.items` | array<object> | 主业务记录列表。 |
+
+#### `data.items[]` 字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `data.items[].tiktok_ads_detail_product_id` | 未固定；按运行时类型解析 | 关联商品编号，不替代搜索结果 id。 |
+| `data.items[].tiktok_product_detail_product_name` | 未固定；按运行时类型解析 | 商品名称。 |
+| `data.items[].tiktok_product_detail_product_images` | 未固定；按运行时类型解析 | 商品图片。 |
+| `data.items[].tiktok_product_detail_region` | 未固定；按运行时类型解析 | 商品区域。 |
+| `data.items[].tiktok_product_detail_product_status` | 未固定；按运行时类型解析 | 商品状态。 |
+| `data.items[].tiktok_product_detail_l1_category` | 未固定；按运行时类型解析 | 一级类目。 |
+| `data.items[].tiktok_product_detail_l2_category` | 未固定；按运行时类型解析 | 二级类目。 |
+| `data.items[].tiktok_product_detail_l3_category` | 未固定；按运行时类型解析 | 三级类目。 |
+| `data.items[].tiktok_product_detail_floor_price` | 未固定；按运行时类型解析 | 最低价格。 |
+| `data.items[].tiktok_product_detail_ceiling_price` | 未固定；按运行时类型解析 | 最高价格。 |
+| `data.items[].tiktok_product_detail_product_rating` | 未固定；按运行时类型解析 | 商品评分。 |
+| `data.items[].tiktok_product_detail_product_sku_props` | 未固定；按运行时类型解析 | SKU 属性。 |
+| `data.items[].tiktok_product_detail_product_skus` | 未固定；按运行时类型解析 | SKU 数据。 |
+| `data.items[].tiktok_product_detail_commission_rate` | 未固定；按运行时类型解析 | 佣金比例。 |
+| `data.items[].tiktok_ads_detail_video_id` | 未固定；按运行时类型解析 | 视频编号，不替代搜索结果 id。 |
+| `data.items[].tiktok_ads_detail_product_total_sold_count` | 未固定；按运行时类型解析 | 商品累计销量。 |
+| `data.items[].tiktok_ads_detail_product_total_gmv` | 通常 object；以实际类型为准 | 商品累计 GMV；通常含 unit 和 value，不得当作纯数值。 |
+| `data.items[].tiktok_ads_detail_product_total_gmv.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.items[].tiktok_ads_detail_product_total_gmv.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.items[].tiktok_ads_detail_video_30d_sold_count` | 未固定；按运行时类型解析 | 视频近 30 天销量。 |
+| `data.items[].tiktok_ads_detail_video_30d_gmv` | 通常 object；以实际类型为准 | 视频近 30 天 GMV；通常含 unit 和 value，不得当作纯数值。 |
+| `data.items[].tiktok_ads_detail_video_30d_gmv.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.items[].tiktok_ads_detail_video_30d_gmv.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.items[].tiktok_ads_detail_product_launch_time` | 未固定；按运行时类型解析 | 商品上架时间。 |
+| `data.items[].tiktok_ads_detail_product_country_code` | 未固定；按运行时类型解析 | 商品市场代码。 |
+| `data.items[].id` | 未固定；按运行时类型解析 | 当前关联记录编号；继续查商品详情应使用 tiktok_ads_detail_product_id。 |
+
+保留所有 `tiktok_ads_detail_` / `tiktok_product_detail_` 来源前缀，不改写成广告搜索字段。关联记录 `id` 与商品编号不同，继续查询商品时优先使用 `tiktok_ads_detail_product_id`。
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+| errcode / HTTP | 含义 | 处理建议 |
+|---|---|---|
+| 400 | 必填参数缺失等请求错误 | 根据 errmsg 补齐或修正参数，不得原样重试。 |
+| 501 | 参数校验或上游调用失败 | 展示 errmsg 并停止；需要重试时先说明额外算力消耗，由用户决定。 |
+
+错误时保留已取得的数据并停止，不自动连续试探付费端点。
+
+### curl 示例
+
 ```bash
-python scripts/chuhaijiang_ad_related_products.py '{"country":"us","id":"7658119807128046879","page":1,"pageSize":3}'
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/chuhaijiang/ad-creative/ads/related-products" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -H "SESSION_ID: ${SESSION_ID}" \
+  -H "MESSAGE_ID: ${MESSAGE_ID}" \
+  -H "MODE_ID: ${MODE_ID}" \
+  -H "APP_NAME: ${APP_NAME}" \
+  -d '{"country":"us","page":1,"pageSize":3,"id":"7658119807128046879"}'
 ```
 
-### 响应字段
+示例编号可能过时；实际任务优先使用本次搜索结果。每次请求 18 算力。
 
-真实样本使用带来源前缀的字段名，禁止擅自去前缀或映射成广告搜索字段：
+---
 
-- 商品标识/基础信息：`tiktok_ads_detail_product_id`、`tiktok_product_detail_product_name`、`tiktok_product_detail_product_images`、`tiktok_product_detail_region`、`tiktok_product_detail_product_status`
-- 分类/价格/评分：`tiktok_product_detail_l1_category`、`tiktok_product_detail_l2_category`、`tiktok_product_detail_l3_category`、`tiktok_product_detail_floor_price`、`tiktok_product_detail_ceiling_price`、`tiktok_product_detail_product_rating`
-- SKU/佣金：`tiktok_product_detail_product_sku_props`、`tiktok_product_detail_product_skus`、`tiktok_product_detail_commission_rate`
-- 销售关系：`tiktok_ads_detail_video_id`、`tiktok_ads_detail_product_total_sold_count`、`tiktok_ads_detail_product_total_gmv`、`tiktok_ads_detail_video_30d_sold_count`、`tiktok_ads_detail_video_30d_gmv`、`tiktok_ads_detail_product_launch_time`、`tiktok_ads_detail_product_country_code`
-- `id`：当前关联记录 ID；如要继续查商品详情，优先使用 `tiktok_ads_detail_product_id`
+## 接口：创意搜索
 
-## 创意搜索
+### 调用规范
 
-### 接口信息
-
-- **地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/creatives/search`
-- **脚本**：`chuhaijiang_creative_search.py`
-- **成功数据**：`data.items[]`；总数为 `data.total_count`
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/creatives/search`
 
 ### 请求参数
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |---|---|---:|---|---|
-| `country` | string | 是 | - | 支持的小写国家码 |
+| `country` | string | 是 | - | 支持小写国家码 `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn` |
 | `page` | integer | 否 | 1 | 页码，最小 1 |
 | `pageSize` | integer | 否 | 上游默认 | 每页数量，最大 10 |
 | `keyword` | string | 否 | - | 搜索关键词 |
@@ -169,67 +375,81 @@ python scripts/chuhaijiang_ad_related_products.py '{"country":"us","id":"7658119
 | `isAigc` | boolean | 否 | - | 是否为 AIGC |
 | `sort` | string | 否 | `gmv:desc` | `field:asc` 或 `field:desc` |
 
-```bash
-python scripts/chuhaijiang_creative_search.py '{"country":"us","hasProduct":true,"page":1,"pageSize":3}'
-```
+网关字段使用 Java/MCP camelCase，再由服务端映射上游 snake_case；不得直接发送 `page_size`、`ad_type`、`has_product` 等上游字段。
 
-### 响应字段
+`sort` 为 `field:asc` 或 `field:desc`，默认 `gmv:desc`；Java 层没有排序字段枚举，不臆造字段，未知时省略。`category` 为上游分类，不编造标签。
 
-真实非空样本的 `data.items[]` 包含：
+脚本选项、缓存、认证兼容与落盘行为见 [脚本运行约定](#脚本运行约定)。
 
-- 标识/作者：`id`、`video_id`、`product_id`、`author_uid`、`author_unique_id`、`author_nickname`、`user_avatar`、`follower_cnt`
-- 内容：`video_desc`、`content_tag_v2`、`content_intent`、`platform`、`country_code`、`is_aigc_video`
-- 时间/时长：`video_date`、`video_launch_time`、`video_duration`
-- 表现：`video_play_count`、`video_like_count`、`video_comment_count`、`video_share_count`、`video_collect_count`、`video_engagement_rate`
-- 商业指标：`video_30d_gmv`、`video_total_gmv`、`video_30d_gpm`
+### 响应结构
 
-创意详情必须使用本对象的 `id`，不是 `video_id` 或 `product_id`。
+成功响应示例为 HTTP 200、`errcode=200`、`errmsg=ok`；成功判定遵循公共规则，不限于此示例。除明确列出类型外，业务字段按实际响应解析，允许 null 或缺失，不补造嵌套属性。
 
-## 创意详情
-
-### 接口信息
-
-- **地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/creatives/detail`
-- **脚本**：`chuhaijiang_creative_detail.py`
-- **成功数据**：基础信息 `data.items[]`；按 `include` 返回 `data.analysis.items[]` 和/或 `data.embedding.items[]`
-
-### 请求参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---:|---|
-| `country` | string | 是 | 支持的小写国家码 |
-| `id` | string | 是 | 创意搜索返回的 `id` |
-| `include` | string | 否 | `analysis`、`embedding`；多个值用英文逗号分隔 |
-
-```bash
-python scripts/chuhaijiang_creative_detail.py '{"country":"us","id":"7668708053428047118","include":"analysis,embedding"}'
-```
-
-### 响应字段
-
-- `data.items[]`：创意/作者/商品/表现组合数据，包括 `id`、`video_id`、`uid`、`unique_id`、`nickname`、`follower_count`、`share_url`、`product_id`、`product_name`、`product_images`、类目、价格、评分、佣金、状态、销量/GMV，以及视频播放/互动/30 天销售指标。
-- `data.analysis.items[]`：`id`、`video_id`、`video_uri`、`video_cover`、`country_code`、`platform`、`is_aigc_video`、`hook_type`、`hook_subtype`、`formula_type`、`formula_subtype`、`angle_type`、`angle_subtype`、`transcription_with_structure`、`storyboards`。
-- `data.embedding.items[]`：`id`、`video_id`、`video_uri`、`video_cover`、`country_code`、`platform`、`extracted_content`、`matched_tags`、`embedding`。
-
-`embedding` 是数值数组，可能显著增大响应；只有明确需要相似度或下游模型输入时才请求。用户可见答复应总结分析字段，不要内联完整向量。
-
-## 错误码与失败处理
-
-| `errcode` / HTTP | 含义 | 处理建议 |
+| 字段 | 类型 | 说明 |
 |---|---|---|
-| 200 | 成功 | 按端点数据路径解析 |
-| 400 | 必填参数缺失等请求错误 | 根据 `errmsg` 补齐或修正参数；不得原样重试 |
-| 401 | 认证失败 | 按 `SKILL.md` 的“解决认证和算力问题”处理 |
-| 402 | 算力/余额不足 | 停止重试并引导授权或充值 |
-| 501 | 参数校验或上游调用失败 | 回显 `errmsg` 并停止，不得自动重试；如需重试，先向用户说明会产生额外算力消耗 |
-| 其他非 200 | 业务异常 | 回显错误，不得自动连续试探付费端点 |
+| `errcode` | integer / string / null | 网关状态，按下方基础规则判断；成功响应示例为 200。 |
+| `errmsg` | string | 网关消息；成功响应示例为 ok。 |
+| `request_id` | string | 请求追踪编号。 |
+| `data` | object | 本接口业务数据。 |
+| `data.total_count` | integer | 总匹配记录数；并非本页 data.items 长度，缺失时不推算。 |
+| `data.items` | array<object> | 主业务记录列表。 |
 
-网关可能以 HTTP 200 包装业务错误，因此必须同时检查 `errcode` 和 `errmsg`。真实测试中，创意搜索带一组过滤条件时曾收到 `BACKEND_ERROR`，缩减为合法最小请求后成功；不要把一次 5xx 当成字段枚举依据。
+#### `data.items[]` 字段
 
-## curl 示例
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `data.items[].id` | 未固定；按运行时类型解析 | 创意查询编号；对应创意详情必须用此 id，不用 video_id 或 product_id。 |
+| `data.items[].video_id` | 未固定；按运行时类型解析 | 视频编号，不替代搜索结果 id。 |
+| `data.items[].product_id` | 未固定；按运行时类型解析 | 关联商品编号，不替代搜索结果 id。 |
+| `data.items[].author_uid` | 未固定；按运行时类型解析 | 作者编号。 |
+| `data.items[].author_unique_id` | 未固定；按运行时类型解析 | 作者账号标识。 |
+| `data.items[].author_nickname` | 未固定；按运行时类型解析 | 作者昵称。 |
+| `data.items[].user_avatar` | 未固定；按运行时类型解析 | 作者头像。 |
+| `data.items[].follower_cnt` | 未固定；按运行时类型解析 | 粉丝数。 |
+| `data.items[].video_desc` | 未固定；按运行时类型解析 | 视频描述。 |
+| `data.items[].content_tag_v2` | 未固定；按运行时类型解析 | 内容标签。 |
+| `data.items[].content_intent` | 未固定；按运行时类型解析 | 内容意图。 |
+| `data.items[].platform` | 未固定；按运行时类型解析 | 平台。 |
+| `data.items[].country_code` | 未固定；按运行时类型解析 | 市场代码。 |
+| `data.items[].is_aigc_video` | 未固定；按运行时类型解析 | AIGC 标记。 |
+| `data.items[].video_date` | 未固定；按运行时类型解析 | 视频日期。 |
+| `data.items[].video_launch_time` | 未固定；按运行时类型解析 | 视频发布日期。 |
+| `data.items[].video_duration` | 未固定；按运行时类型解析 | 视频时长。 |
+| `data.items[].video_play_count` | 未固定；按运行时类型解析 | 播放量。 |
+| `data.items[].video_like_count` | 未固定；按运行时类型解析 | 点赞数。 |
+| `data.items[].video_comment_count` | 未固定；按运行时类型解析 | 评论数。 |
+| `data.items[].video_share_count` | 未固定；按运行时类型解析 | 分享数。 |
+| `data.items[].video_collect_count` | 未固定；按运行时类型解析 | 收藏数。 |
+| `data.items[].video_engagement_rate` | 未固定；按运行时类型解析 | 互动率。 |
+| `data.items[].video_30d_gmv` | 通常 object；以实际类型为准 | 视频近 30 天 GMV；通常含 unit 和 value，不得当作纯数值。 |
+| `data.items[].video_30d_gmv.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.items[].video_30d_gmv.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.items[].video_total_gmv` | 通常 object；以实际类型为准 | 视频累计 GMV；通常含 unit 和 value，不得当作纯数值。 |
+| `data.items[].video_total_gmv.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.items[].video_total_gmv.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+| `data.items[].video_30d_gpm` | 通常 object；以实际类型为准 | 视频近 30 天 GPM；通常含 unit 和 value，不得当作纯数值。 |
+| `data.items[].video_30d_gpm.unit` | string | 当金额为对象时的原始单位，例如 US；保留返回值。 |
+| `data.items[].video_30d_gpm.value` | number | 当金额为对象时的数值，计算前检查运行时类型。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+| errcode / HTTP | 含义 | 处理建议 |
+|---|---|---|
+| 400 | 必填参数缺失等请求错误 | 根据 errmsg 补齐或修正参数，不得原样重试。 |
+| 501 | 参数校验或上游调用失败 | 展示 errmsg 并停止；需要重试时先说明额外算力消耗，由用户决定。 |
+
+本接口可能在带过滤条件时返回 `BACKEND_ERROR`，合法最小请求也可能成功；不要自动缩减过滤条件重试或连续试探付费端点，也不能据一次 5xx 推断参数枚举。
+
+### curl 示例
 
 ```bash
-curl -X POST "${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/search" \
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/chuhaijiang/ad-creative/creatives/search" \
   -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
   -H "Content-Type: application/json" \
   -H "User-Agent: LinkFox-Skill/2.0" \
@@ -237,33 +457,167 @@ curl -X POST "${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/ads/search" \
   -H "MESSAGE_ID: ${MESSAGE_ID}" \
   -H "MODE_ID: ${MODE_ID}" \
   -H "APP_NAME: ${APP_NAME}" \
-  -d '{"country":"us","keyword":"beauty","page":1,"pageSize":3}'
+  -d '{"country":"us","page":1,"pageSize":3,"hasProduct":true}'
 ```
 
-```bash
-curl -X POST "${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/creatives/detail" \
-  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/2.0" \
-  -d '{"country":"us","id":"7668708053428047118","include":"analysis,embedding"}'
-```
+示例编号可能过时；实际任务优先使用本次搜索结果。每次请求 18 算力。
 
 ---
 
-## Feedback API
+## 接口：创意详情
 
-此端点独立于工具网关。仅在用户明确要求提交反馈，或发现问题后明确授权提交时调用。提交前应概括并脱敏，不得发送原始用户消息、无关任务上下文、手机号或任何凭证。
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/chuhaijiang/ad-creative/creatives/detail`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `country` | string | 是 | 支持小写国家码 `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn` |
+| `id` | string | 是 | 创意搜索返回的 `id` |
+| `include` | string | 否 | `analysis`、`embedding`；多个值用英文逗号分隔 |
+
+网关字段使用 Java/MCP camelCase，再由服务端映射上游 snake_case；不得直接发送 `page_size`、`ad_type`、`has_product` 等上游字段。
+
+必须使用创意搜索对象的 `id`，不得替换成视频或商品编号。`include` 可省略，`analysis` 用于内容结构；需要提取内容 `extracted_content`、匹配标签 `matched_tags`，或用于明确的相似度/机器学习下游任务的数值向量时，才请求 `embedding`。两者以英文逗号组合，例如 `analysis,embedding`。该扩展可能一并返回显著增大响应的向量；只需要内容或标签时按需提取，不在聊天中内联完整向量。
+
+脚本选项、缓存、认证兼容与落盘行为见 [脚本运行约定](#脚本运行约定)。
+
+### 响应结构
+
+成功响应示例为 HTTP 200、`errcode=200`、`errmsg=ok`；成功判定遵循公共规则，不限于此示例。除明确列出类型外，业务字段按实际响应解析，允许 null 或缺失，不补造嵌套属性。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `errcode` | integer / string / null | 网关状态，按下方基础规则判断；成功响应示例为 200。 |
+| `errmsg` | string | 网关消息；成功响应示例为 ok。 |
+| `request_id` | string | 请求追踪编号。 |
+| `data` | object | 本接口业务数据。 |
+| `data.total_count` | integer | 总匹配记录数；并非本页 data.items 长度，缺失时不推算。 |
+| `data.items` | array<object> | 主业务记录列表。 |
+| `data.analysis` | object | 按 include 返回内容分析。 |
+| `data.analysis.items` | array<object> | 内容分析记录列表。 |
+| `data.embedding` | object | 按 include 返回向量相关数据。 |
+| `data.embedding.items` | array<object> | 向量相关记录列表。 |
+
+#### `data.items[]` 字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `data.items[].id` | 未固定；按运行时类型解析 | 创意基础记录编号。 |
+| `data.items[].video_id` | 未固定；按运行时类型解析 | 视频编号，不替代搜索结果 id。 |
+| `data.items[].uid` | 未固定；按运行时类型解析 | 作者编号。 |
+| `data.items[].unique_id` | 未固定；按运行时类型解析 | 作者账号标识。 |
+| `data.items[].nickname` | 未固定；按运行时类型解析 | 作者昵称。 |
+| `data.items[].follower_count` | 未固定；按运行时类型解析 | 粉丝数。 |
+| `data.items[].share_url` | 未固定；按运行时类型解析 | 分享链接。 |
+| `data.items[].product_id` | 未固定；按运行时类型解析 | 关联商品编号，不替代搜索结果 id。 |
+| `data.items[].product_name` | 未固定；按运行时类型解析 | 商品名称。 |
+| `data.items[].product_images` | 未固定；按运行时类型解析 | 商品图片。 |
+
+#### `data.analysis.items[]` 字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `data.analysis.items[].id` | 未固定；按运行时类型解析 | 当前扩展数据记录编号，保留来源值。 |
+| `data.analysis.items[].video_id` | 未固定；按运行时类型解析 | 视频编号，不替代搜索结果 id。 |
+| `data.analysis.items[].video_uri` | 未固定；按运行时类型解析 | 视频资源 URI。 |
+| `data.analysis.items[].video_cover` | 未固定；按运行时类型解析 | 视频封面。 |
+| `data.analysis.items[].country_code` | 未固定；按运行时类型解析 | 市场代码。 |
+| `data.analysis.items[].platform` | 未固定；按运行时类型解析 | 平台。 |
+| `data.analysis.items[].is_aigc_video` | 未固定；按运行时类型解析 | AIGC 标记。 |
+| `data.analysis.items[].hook_type` | 未固定；按运行时类型解析 | 开头钩子类型。 |
+| `data.analysis.items[].hook_subtype` | 未固定；按运行时类型解析 | 开头钩子子类型。 |
+| `data.analysis.items[].formula_type` | 未固定；按运行时类型解析 | 创意公式类型。 |
+| `data.analysis.items[].formula_subtype` | 未固定；按运行时类型解析 | 创意公式子类型。 |
+| `data.analysis.items[].angle_type` | 未固定；按运行时类型解析 | 内容角度类型。 |
+| `data.analysis.items[].angle_subtype` | 未固定；按运行时类型解析 | 内容角度子类型。 |
+| `data.analysis.items[].transcription_with_structure` | 未固定；按运行时类型解析 | 结构化转录；内部结构未约定。 |
+| `data.analysis.items[].storyboards` | 未固定；按运行时类型解析 | 分镜；内部结构未约定。 |
+
+#### `data.embedding.items[]` 字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `data.embedding.items[].id` | 未固定；按运行时类型解析 | 当前扩展数据记录编号，保留来源值。 |
+| `data.embedding.items[].video_id` | 未固定；按运行时类型解析 | 视频编号，不替代搜索结果 id。 |
+| `data.embedding.items[].video_uri` | 未固定；按运行时类型解析 | 视频资源 URI。 |
+| `data.embedding.items[].video_cover` | 未固定；按运行时类型解析 | 视频封面。 |
+| `data.embedding.items[].country_code` | 未固定；按运行时类型解析 | 市场代码。 |
+| `data.embedding.items[].platform` | 未固定；按运行时类型解析 | 平台。 |
+| `data.embedding.items[].extracted_content` | 未固定；按运行时类型解析 | 提取的内容。 |
+| `data.embedding.items[].matched_tags` | 未固定；按运行时类型解析 | 匹配标签。 |
+| `data.embedding.items[].embedding` | array<number> | 机器处理用数值向量，不在聊天内联。 |
+
+`data.items[]` 还可包含以下组合数据；其确切键名与嵌套结构未约定，应保留真实返回，不能凭语义构造字段：
+
+| 数据内容 | 类型 | 说明 |
+|---|---|---|
+| 商品类目、价格、评分、佣金、状态 | 未约定 | 键名、类型和内部属性未约定，以真实响应为准。 |
+| 商品销量与 GMV | 未约定 | 按来源口径解析；金额通常为 unit/value 对象。 |
+| 视频播放、互动及近 30 天销售指标 | 未约定 | 具体键名未约定，保留原始字段与单位。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+| errcode / HTTP | 含义 | 处理建议 |
+|---|---|---|
+| 400 | 必填参数缺失等请求错误 | 根据 errmsg 补齐或修正参数，不得原样重试。 |
+| 501 | 参数校验或上游调用失败 | 展示 errmsg 并停止；需要重试时先说明额外算力消耗，由用户决定。 |
+
+错误时保留已取得的数据并停止，不自动连续试探付费端点。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/chuhaijiang/ad-creative/creatives/detail" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -H "SESSION_ID: ${SESSION_ID}" \
+  -H "MESSAGE_ID: ${MESSAGE_ID}" \
+  -H "MODE_ID: ${MODE_ID}" \
+  -H "APP_NAME: ${APP_NAME}" \
+  -d '{"country":"us","id":"7668708053428047118","include":"analysis,embedding"}'
+```
+
+示例编号可能过时；实际任务优先使用本次搜索结果。每次请求 9 算力。
+
+---
+
+## 脚本运行约定
+
+| 参数 / 选项 | 类型 | 必填 | 默认值与说明 |
+|---|---|---|---|
+| JSON 参数 | JSON | 是 | 原样传给网关，未知字段不擅自移除。 |
+| --inline | CLI flag | 否 | 强制全量输出，同时保存完整响应；不绕过缓存。 |
+| --no-cache | CLI flag | 否 | 跳过业务缓存读写，强制请求，可能再次消耗算力；仅在用户明确同意额外消耗或调试时使用。 |
+
+业务封装 `_chuhaijiang.py` 提供唯一的 24 小时本地缓存，缓存路径为 `<cwd>/linkfox/.cache/linkfox-chuhaijiang-tiktok-ads/`。缓存键由规范化 JSON 中的 version=1、apiBase、完整 apiPath、apiKeyFingerprint 和全部 params 生成，身份指纹使用 SHA-256；当前工作目录也自然隔离缓存。符合当前键格式和成功判定的有效缓存可命中，命中输出 `Cache hit`，不发送付费请求。仅 HTTP 200 且符合公共 errcode 基本规则、没有显式失败标志的对象可缓存；成功空列表可以缓存，HTTP、业务和连接失败均不缓存。损坏或超过 24 小时的缓存不复用。业务封装始终给 `call_api.run` 加 `--no-cache`，关闭公共调用器缓存，不叠加第二层缓存。
+
+认证优先读取 `LINKFOX_AGENT_API_KEY`，回退 `LINKFOXAGENT_API_KEY`；基础地址支持 `LINKFOX_TOOL_GATEWAY` 覆盖，默认使用正式网关。透传头为 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME`，未设置为空串。Windows 标准输出与错误输出使用 UTF-8。
+
+完整原始响应落到 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-ads-<timestamp>.json`，不移除未知字段，按 `SESSION_ID`（去除首尾空白）聚合；未设置时为进程内稳定的自动会话标识。维护会话 `_meta.json` 和根目录 `index.jsonl`。不回退到家目录或临时目录，当前目录不可写时在请求前报错；禁止将工作目录选在 `/tmp`。上游同名 `_cache` 字段原样保存，不作为本地缓存命中依据。小响应全量输出，大响应摘要优先 `data.items` / 业务 `*.items`，跳过 embedding/vector，最多取前三条记录。
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type**：`application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
   "skillName": "linkfox-chuhaijiang-tiktok-ads",
-  "sentiment": "NEUTRAL",
-  "category": "SUGGESTION",
-  "content": "Describe the user intent, actual behavior, and improvement clearly."
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-`sentiment` 取 `POSITIVE`、`NEUTRAL` 或 `NEGATIVE`；`category` 取 `BUG`、`COMPLAINT`、`SUGGESTION` 或 `OTHER`。不得在反馈内容中包含 API Key。

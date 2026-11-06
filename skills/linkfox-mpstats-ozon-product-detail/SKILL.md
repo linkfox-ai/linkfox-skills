@@ -1,145 +1,118 @@
 ---
 name: linkfox-mpstats-ozon-product-detail
-description: MPSTATS Ozon 俄罗斯站单个 SKU 全量详情查询。传入一个 Ozon 商品 ID（productId），返回该 SKU 的价格、折扣、Ozon Card 价、评分、评论数、库存、销量、销售额、潜在销售额/损失销售额、上架日期、图片等完整商品卡。当用户提到 Ozon 商品详情、Ozon SKU 详情、Ozon 价格/评分/销量/库存核对、单个 Ozon SKU 查询、竞品 Ozon 基础数据拉取、Ozon 竞品卡片、MPSTATS Ozon detail, Ozon SKU detail, Ozon product card, single Ozon SKU lookup, Russian marketplace product detail 时触发此技能。即使用户未明确说"MPSTATS"，只要意图是按单个 Ozon SKU 拉取全量商品卡数据，也应触发此技能。
+description: 查询 MPSTATS Ozon 俄罗斯站单个 SKU 的完整商品卡，核对价格、Ozon Card 价、折扣、评分、评论数、库存、统计期销量与销售额、前期对比、潜在销售额、缺货损失、上架日期及图片。适用于已知 Ozon 商品编号的详情核验和竞品基础数据研究，无需明确提及 MPSTATS；不适用于关键词找品、逐日趋势、品牌、类目或卖家维度筛选，也不处理 Wildberries 数据、评论内容或图片深度分析。
 ---
 
-# MPSTATS Ozon Product Detail (Single SKU)
+# MPSTATS Ozon 商品详情（单个 SKU）
 
-This skill fetches the full product card for one Ozon (Russia) SKU via MPSTATS. Returned fields include price, Ozon Card price, discount, rating, reviews, stock, monthly sales units, monthly sales revenue, lost profit, potential revenue, first listing date, image, and more.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Single-SKU semantics**: Pass exactly one `productId` in a call. `productIds` arrays/lists are no longer accepted by this skill; for multiple SKUs, make separate calls only after confirming the extra credit cost with the user.
+查看一个 Ozon SKU 的完整商品卡及统计期汇总数据。
+用户已有商品编号，希望核对销量、销售额、价格、库存、评分或竞品基础资料时，使用本技能。
 
-**Fulfillment model per SKU**: Each product card carries `deliveryScheme`:
-- `FBO` — Fulfillment by Ozon (stock in Ozon warehouses)
-- `FBS` — Fulfillment by Seller (seller-shipped)
+**场景速查**
 
-Pass `includeFbs: true` to allow FBS SKUs and FBS-scoped metrics into the response; `false` (or omitted) keeps the result FBO-centric. This switch applies to the whole request.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查这个 Ozon SKU 的完整详情 | 商品卡：展示基础资料及可用指标。 |
+| Ozon 商品 1786874757 的价格、评分和库存是多少 | 数据核对：展示价格、评分、评论数和库存。 |
+| 拉取这个 Ozon 竞品的销量和销售额 | 竞品核验：展示统计期指标及前期对比。 |
+| 对比这个商品的 FBO 与包含 FBS 的指标 | 配送口径比较：明确查询范围及额外消耗后分别取得数据。 |
 
-**Previous-period comparison**: The card includes `previousSalesUnits` / `previousRevenue` — sales and revenue from the equal-length period immediately before `[startDate, endDate]` — ready for MoM / period-over-period diffs without extra calls.
+### 边界
 
-**Revenue potential**: `revenuePotential` projects what the SKU could have earned if it had been in stock every day of the window; compare with `monthlySalesRevenue` to quantify stock-out drag, together with `lostProfit` / `lostProfitPercent`.
+- 尚无商品编号时，先使用 MPSTATS Ozon 商品搜索技能发现候选，再选定商品。
+- 逐日时间序列使用 MPSTATS Ozon 商品趋势技能；本技能只提供统计期汇总。
+- 品牌、类目或卖家维度的筛选使用对应的 MPSTATS Ozon 品牌商品、类目商品或卖家商品技能。
+- Listing 文案、评论内容和图片深度分析超出本技能范围，图片仅返回链接等资料。
 
-**Date window**: `startDate` / `endDate` define the period for all period-aggregated metrics. Latest selectable date is **yesterday** (T-1); today and future dates are rejected.
+## 前置条件
 
-## Parameters
+**先确定商品编号与研究口径**：用户提供 Ozon SKU，或从上游搜索结果选定商品；核对统计区间和是否需要包含卖家自配数据。具体参数及使用限制见 `references/api.md`。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| productId | integer\|string | yes | Single Ozon SKU ID |
-| startDate | string | no | Stats window start, `YYYY-MM-DD`; latest = yesterday |
-| endDate | string | no | Stats window end, `YYYY-MM-DD`; latest = yesterday |
-| includeFbs | boolean | no | `true` to include FBS data; `false` = FBO-only |
+## 查询流程
 
-## 调用方式
+1. 从用户提供的信息或上游搜索结果确定待查商品；多个商品须先说明并确认逐个查询的额外算力消耗。
+2. 依据 `references/api.md` 核对请求口径，优先复用同一会话已有结果；需要请求时执行商品详情查询。
+3. 按接口响应规则判断结果，展示取得的商品卡及失败明细；保留完整响应文件供后续按需提取。
+4. 对照用户目的解释前期变化、配送口径或缺货影响；需要逐日走势或其他维度的数据时转交对应技能，后续请求仍遵守成本约束。
 
-- **API 端点**：`POST /mpstats/ozon/productDetail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/mpstats_ozon_product_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 执行方式
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-product-detail-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/mpstats_ozon_product_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按“算力消耗预估”中的动态规则计费。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 输出策略
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-product-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Usage Examples
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**1. Single-SKU detail**
+## 执行规则
+
+### 算力消耗预估
+
+按动态规则计费：消耗算力 = 12；`productId` 为空时消耗 0 算力 （限时）。
+
+本服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **清晰展示商品卡**：优先用紧凑表格呈现 `productId`、`title`、`price`、`monthlySalesUnits`、`monthlySalesRevenue`、`rating`、`reviewCount`、`balance`、`deliveryScheme` 和 `firstDate`，注明统计区间。
+- **区分配送方式**：FBO 为 Ozon 仓配，FBS 为卖家自配；以商品实际返回的 `deliveryScheme` 为准，不默认假设全部为 FBO。
+- **解释前期对比**：`previousSalesUnits` 和 `previousRevenue` 表示紧接当期之前的等长统计期，可与当期并列或计算差值。单期汇总不能当作逐日趋势。
+- **解释缺货影响**：`revenuePotential` 是全期有货情况下的估算销售额，结合实际销售额、`lostProfit` 和 `lostProfitPercent` 展示；不要将潜在值当作实际收入。
+- **区分有货日与全部日期**：`salesPerDayWithStock`、`dailySalesRevenueWithStock` 仅统计有库存日，与 `salesPerDay`、`dailySalesRevenue` 分别展示。
+- **保留失败信息**：`failedCount > 0` 时列出 `failures` 中失败的商品编号和错误信息，不静默丢弃。
+- **保留币种与原文**：Ozon 原生币种为 RUB，按响应中的 `currency` 符号展示，不悄悄更换币种。标题通常为俄语，按用户需要翻译，保留原文便于核对。
+- **明确数据用途**：呈现实际数据，不在缺少更广泛分析时推断“这个 SKU 值得销售”。字段缺失与数据覆盖差异的处理见接口文档。
+
+## 使用示例
+
+### 查询单个 SKU
+
 ```json
 {"productId": 1786874757}
 ```
 
-**2. Single-SKU lookup with period**
+### 指定统计区间并包含 FBS 数据
+
 ```json
-{
-  "productId": 1786874757,
-  "startDate": "2025-03-01",
-  "endDate": "2025-03-31",
-  "includeFbs": true
-}
+{"productId": 1786874757, "startDate": "2025-03-01", "endDate": "2025-03-31", "includeFbs": true}
 ```
 
-**3. FBO-only snapshot**
+### 查询 FBO 口径商品卡
+
 ```json
 {"productId": 1786874757, "includeFbs": false}
 ```
 
-**4. SKU discovered upstream — full card**
-```json
-{"productId": <productId from mpstats-ozon-product-search>}
-```
+### 从上游搜索结果继续查询
 
-## How to Chain with Other Ozon Skills
+从 MPSTATS Ozon 商品搜索结果选定一个商品，将其 `productId` 用于详情查询，再按用户需要展示指标。
 
-1. **Search → detail**: Use `mpstats-ozon-product-search` to resolve a keyword / brand / seller into candidate `productId`s, choose one SKU, then pass that `productId` here for full metrics.
-2. **Detail vs trend**: This endpoint is a **period aggregate** per SKU; for day-by-day time-series on a single SKU, use `mpstats-ozon-product-trend`.
-3. **Detail vs drill-downs**: When the input dimension is a brand / category / seller (not a single SKU), prefer `brand-products` / `category-products` / `seller-products` — they already return aggregated metrics per SKU under that dimension.
+## 使用反馈
 
-## Display Rules
-
-1. **Compact table** — lead with `productId`, `title`, `price`, `monthlySalesUnits`, `monthlySalesRevenue`, `rating`, `reviewCount`, `balance`, `deliveryScheme`, `firstDate`. Pull `revenuePotential` / `lostProfit` / `lostProfitPercent` in when the user asks about stock-out impact.
-2. **Currency** — Ozon native currency is **RUB**; the `currency` field carries the symbol. Do not silently relabel.
-3. **Failure handling** — the response carries `successCount` / `failedCount` / `failures`; when `failedCount > 0`, list the failed `productId` from `failures` to the user rather than silently dropping it.
-4. **Period-over-period** — when both current and `previous*` fields are present, render them side-by-side or as diff; don't report a single-period number as "trend".
-5. **With-stock vs all-days** — `salesPerDayWithStock` / `dailySalesRevenueWithStock` only count days that had inventory; distinguish from the plain `salesPerDay` / `dailySalesRevenue`.
-6. **Delivery model** — prefer the per-SKU `deliveryScheme` value over assuming FBO.
-7. **No business advice** — present data; do not extrapolate "this SKU is worth selling" without a wider analysis.
-
-## Important Limitations
-
-- **Single-SKU input only** — pass `productId`, not `productIds`; arrays/lists are invalid. For multiple SKUs, call once per SKU only after confirming the added credit cost.
-- **Ozon-only** — this tool does not cover Wildberries or other Russian marketplaces.
-- **T-1 data** — `endDate` must not be today or future.
-- **FBS coverage** — some categories have partial FBS coverage; if the input set is FBS-heavy, expect sparser cards.
-- **Field set differs from brand/seller** — this endpoint does **not** return `brandId`, `country`, `category`, `minPrice` / `maxPrice` / `averagePrice`, `balanceFbs`, `frozenStocks`, `warehousesCount`, `daysInSite` / `daysInStock` / `turnoverDays`, `position` / `categoryPosition` / `revenueSharePercent`, `isFbs`. Use `brand-products` / `category-products` / `seller-products` if those are needed.
-- **No translation** — titles are returned in Russian; translate on demand when presenting to Chinese / English users.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Per-SKU Ozon card lookup:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Pull Ozon details for this SKU" | Single card fetch |
-| "What's the price / rating / stock of Ozon SKU 1786874757" | Single-SKU card |
-| "Competitor's Ozon listing, give me sales & rating" | Competitor card audit |
-| "Compare FBO vs FBO+FBS metrics for this SKU" | Fulfillment-model comparison |
-
-**Not applicable** — Needs beyond per-SKU card:
-
-- Keyword-based discovery → use `mpstats-ozon-product-search`
-- Day-by-day time-series for one SKU → use `mpstats-ozon-product-trend`
-- Listing copy / reviews / images analysis beyond URL → out of scope
-- Brand / category / seller drill-down with filters → use the matching drill-down skill
-
-**Boundary judgment**: If the user already has a single **SKU** and wants sales / price / stock / rating, this is the skill. If they provide multiple SKUs, process them one at a time only after confirming the added credit cost. If they don't yet have SKUs, route through the search or drill-down skills first.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 12。`productId` 为空返回 0
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

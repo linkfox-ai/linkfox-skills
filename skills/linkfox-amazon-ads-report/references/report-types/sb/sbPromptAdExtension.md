@@ -14,34 +14,34 @@ dateRange:
   dataRetentionDays: 95
 ---
 
-# SB Prompt Ad Extension
+# SB Prompt 广告扩展
 
-Prompt Ad Extension reports contain performance data for Sponsored Products and Sponsored Brands ads that include metrics for AI-powered prompt ads. Prompts are designed to help shoppers discover products through conversational experiences on Amazon by surfacing relevant product information through intelligent suggestions and guiding questions.
+Prompt 广告扩展报告提供 SP 与 SB 的 AI 提示广告效果指标。Prompt 通过智能建议和引导问题展示相关商品信息，帮助买家在 Amazon 对话体验中发现商品。
 
-## About Prompts
+## Prompt 说明
 
-Prompts are a new ad format that integrates into your existing Sponsored Products and Sponsored Brands campaigns with zero additional setup required. They enhance product discovery at crucial shopper decision points by:
+Prompt 可整合到现有 SP / SB 活动，无需额外设置，在买家决策时通过以下方式帮助发现商品：
 
-- Showcasing your product expertise at scale during critical shopper decision moments
-- Engaging high-intent shoppers with relevant product information
-- Anticipating and answering shopper questions about your products
+- 在买家关键决策时展示商品专业信息。
+- 用相关商品信息触达高意向买家。
+- 预判并回答买家的商品问题。
 
-Prompts with clicks will show in your existing Sponsored Products or Sponsored Brands reporting, and you can pause individual prompts through the Amazon Ads console.
+产生点击的 Prompt 会出现在现有 SP / SB 报告中，可通过 Amazon Ads 控制台暂停单条 Prompt。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sbPromptAdExtension |
-| Maximum date range | 90 days |
-| Data retention | 95 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 90 天 |
+| 数据保留期 | 95 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | promptAdExtension |
-| format | GZIP_JSON or XLSX |
+| format | GZIP_JSON / XLSX |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | date |
 | startDate |
@@ -114,32 +114,49 @@ Prompts with clicks will show in your existing Sponsored Products or Sponsored B
 | newToBrandSales |
 | newToBrandSalesPercentage |
 
-## Group by promptAdExtension
+## 分组：promptAdExtension
 
-**Additional metrics**: N/A
+无附加指标。
 
-**Filters**:
-- marketplaceId (values: US)
+**筛选**：
 
-## Sample call
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| marketplaceId | array[string] | US |
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxxx' \
---data '{
-    "name":"SB prompt ad extension report 4/13-4/16",
-    "startDate":"2026-04-13",
-    "endDate":"2026-04-16",
-    "configuration":{
-        "adProduct":"SPONSORED_BRANDS",
-        "groupBy":["promptAdExtension"],
-        "columns":["date","campaignId","campaignName","adGroupId","adGroupName","adId","adName","creativeExtensionId","promptText","impressions","clicks","cost","purchases7d","sales7d","newToBrandPurchases","newToBrandSales"],
-        "reportTypeId":"sbPromptAdExtension",
-        "timeUnit":"DAILY",
-        "format":"GZIP_JSON"
-    }
-}'
+## 配置示例
+
+```json
+{
+  "name": "SB prompt ad extension report 4/13-4/16",
+  "startDate": "2026-04-13",
+  "endDate": "2026-04-16",
+  "configuration": {
+    "adProduct": "SPONSORED_BRANDS",
+    "groupBy": [
+      "promptAdExtension"
+    ],
+    "columns": [
+      "date",
+      "campaignId",
+      "campaignName",
+      "adGroupId",
+      "adGroupName",
+      "adId",
+      "adName",
+      "creativeExtensionId",
+      "promptText",
+      "impressions",
+      "clicks",
+      "cost",
+      "purchases7d",
+      "sales7d",
+      "newToBrandPurchases",
+      "newToBrandSales"
+    ],
+    "reportTypeId": "sbPromptAdExtension",
+    "timeUnit": "DAILY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

@@ -1,17 +1,17 @@
 # `GET_PENDING_ORDERS_DATA`
 
-> **分类**：9. Order Reports  
-> **说明**：Pending orders  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：待处理订单  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#xml-pending-orders-report)（章节：**XML Pending Orders Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#xml-pending-orders-report)（章节：**XML Pending Orders Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Requested/scheduled**：Scheduled
-- **Report output type**：XML
-- **要点**：Contains all pending orders.
+- **按需/计划**：Scheduled
+- **输出格式**：XML
+- **要点**：包含全部待处理订单。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#xml-pending-orders-report>
 

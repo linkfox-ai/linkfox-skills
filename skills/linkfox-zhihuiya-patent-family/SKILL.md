@@ -1,163 +1,119 @@
 ---
 name: linkfox-zhihuiya-patent-family
-description: 通过专利ID或公开号查询智慧芽（PatSnap）的专利家族信息。当用户提到专利家族、专利家族搜索、简单同族、INPADOC同族、PatSnap家族、同族专利查找、专利等同、家族成员、查找跨国相关专利、patent family, family patents, patent equivalents, cross-border patents, PatSnap, INPADOC family时触发此技能。即使用户未明确说"专利家族"，只要其需求涉及查询一项或多项专利的家族成员、等同专利或相关跨国申请，也应触发此技能。
+description: 通过已知专利 ID 或公开号查询智慧芽（PatSnap）专利家族，支持单项和批量查找简单同族、INPADOC 同族、PatSnap 同族及等同专利，比较家族成员与国家或地区覆盖。适用于专利家族探索、跨国相关申请查询和多种同族定义对比；不适用于关键词或分类号全文检索、专利估值、诉讼数据、自由实施或侵权分析，以及专利申请和审查事务。
 ---
 
-# Zhihuiya Patent Family Explorer
+# 智慧芽专利家族查询
 
-This skill guides you on how to query patent family information via the Zhihuiya (PatSnap) platform, helping users discover Simple Family, INPADOC Family, and PatSnap Family members for given patents.
+## 适用范围
 
-## 调用方式
+### 适用
 
-- **API 端点**：`POST /zhihuiya/patentFamily`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_patent_family.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+用户已有一项或多项专利的 ID 或公开（公告）号，希望查找同族成员、等同专利或相关跨国申请时，使用本技能；无需明确提及智慧芽或“专利家族”。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-patent-family-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+**场景速查**
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查这项专利的家族 | 查询已知专利的三类同族。 |
+| 这项专利有哪些等同专利 | 查看简单同族成员。 |
+| 这项专利在哪些国家有相关申请 | 按返回成员整理国家或地区。 |
+| 查看 INPADOC 同族或兄弟专利 | 探索较广范围的相关申请。 |
+| 比较简单同族和扩展同族 | 对比不同定义的家族成员。 |
+| 批量查这些专利的家族 | 按每项输入专利分别组织结果。 |
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 前置条件
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+**先确定已知专利**：取得用户提供的专利 ID 或公开号，并确认单项查询、批量查询或家族比较的目标。参数格式和批量限制见 `references/api.md`。
 
-## Core Concepts
+## 查询流程
 
-A **patent family** is a collection of patent documents that are related to each other by priority claims. Different family definitions capture different scopes of relatedness:
+1. 确认待查专利和希望比较的同族类型，按 `references/api.md` 整理查询条件。
+2. 按“算力消耗预估”中的每次调用费用估算消耗，在已有授权范围内执行查询；高频调用或用户对消耗量预期不足时提醒用户，由用户决定是否继续。复用相同参数的有效缓存。
+3. 按接口参考判断响应，逐项整理三类同族成员、家族标识、成员数量及国家或地区；比较任务按家族类型分组，批量任务按输入专利分组。
+4. 返回错误或空结果时，说明可能的格式问题、数据库未收录等原因，建议核对输入。不得自动变更条件连续试探；继续调用遵守成本约束。
 
-- **Simple Family**: Patents sharing exactly the same set of priority applications. These are typically direct equivalents filed in different countries.
-- **INPADOC Family**: A broader grouping defined by the European Patent Office that links patents sharing at least one common priority, even indirectly.
-- **PatSnap Family**: A proprietary family definition by PatSnap (Zhihuiya) that extends INPADOC logic with additional heuristics to capture continuations, divisionals, and other related filings.
+## 执行方式
 
-Each patent in the response carries its own `simpleFamilyId`, `inpadocFamilyId`, and `patsnapFamilyId`, which serve as unique identifiers for the family group under each definition.
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_patent_family.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## Parameter Guide
+### 输出策略
 
-You must supply at least one of the two lookup parameters. If both are provided, patent ID takes precedence.
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-patent-family-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| patentId | string | Conditionally | Patent ID(s). Separate multiple values with commas. Maximum 100 entries. |
-| patentNumber | string | Conditionally | Publication / announcement number(s). Separate multiple values with commas. Maximum 100 entries. |
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**Rules**:
-1. At least one of `patentId` or `patentNumber` must be provided.
-2. If both are provided, the API uses `patentId` and ignores `patentNumber`.
-3. Multiple values are comma-separated (e.g., `"US10000001B2,EP3000001A1"`).
-4. The upper limit is 100 patents per request.
+## 执行规则
 
-## Response Fields
+### 算力消耗预估
 
-| Field | Type | Description |
-|-------|------|-------------|
-| total | integer | Number of patent records returned |
-| data | array | List of patent family result objects |
-| data[].patentId | string | The patent ID for this record |
-| data[].pn | string | Publication / announcement number |
-| data[].simpleFamilyId | integer | Unique identifier for the Simple Family group |
-| data[].simpleFamily | array | List of Simple Family member patents |
-| data[].inpadocFamilyId | integer | Unique identifier for the INPADOC Family group |
-| data[].inpadocFamily | array | List of INPADOC Family member patents |
-| data[].patsnapFamilyId | integer | Unique identifier for the PatSnap Family group |
-| data[].patsnapFamily | array | List of PatSnap Family member patents |
-| columns | array | Column definitions for rendering |
-| costToken | integer | Tokens consumed by this request |
-| type | string | Rendering style hint |
+每次调用消耗 3 算力，不按返回 `data` 条数累乘。
 
-## Usage Examples
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**1. Look up family members by publication number**
-> "Find the patent family for US10000001B2"
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Call with:
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解家族定义**：专利家族是由优先权关系关联的一组专利文献。简单同族（Simple Family）共享完全相同的一组优先权申请，通常是不同国家的直接等同申请；INPADOC 同族由欧洲专利局定义，通过至少一项共同优先权直接或间接关联，覆盖范围更广；PatSnap 同族是智慧芽的专有定义，在 INPADOC 逻辑上增加规则，以覆盖继续申请、分案及其他相关申请。
+- **区分家族标识**：简单、INPADOC 和 PatSnap 各有独立的家族 ID，分别标识该定义下的家族分组，不能混为同一个编号。
+- **清晰展示结果**：用表格呈现专利及同族成员；按用户关注的家族类型分组对比。批量查询时按专利分别展示，避免成员混排。
+- **汇总数量和地区**：始终列出每类同族实际返回的成员数量，突出国家或地区覆盖；缺失数据标明未提供，不将查询结果条数当作家族成员数。成员覆盖只能说明相关申请分布，不能据此认定权利在当地有效。
+- **说明数据来源**：数据来自智慧芽（PatSnap），相对专利局最新公开内容可能存在轻微延迟；结果不是实时法律状态证明。
+- **只陈述事实**：展示家族数据，不对保护范围、有效性或侵权给出法律意见。
+- **按需读取数据**：家族成员为摘要信息，成员详情的使用限制见 `references/api.md`。需要具体字段时先读取已保存文件，不为展示切换同族类型重复查询。
+
+## 使用示例
+
+### 按公开号查询家族
+
+用户：查 US10000001B2 的专利家族。
+
 ```json
 {"patentNumber": "US10000001B2"}
 ```
 
-**2. Look up families for multiple patents at once**
-> "Show the INPADOC family for these patents: EP3000001A1, CN112345678A, JP2020123456A"
+### 批量查询相关申请
 
-Call with:
+用户：查看 EP3000001A1、CN112345678A、JP2020123456A 的 INPADOC 同族。
+
 ```json
 {"patentNumber": "EP3000001A1,CN112345678A,JP2020123456A"}
 ```
 
-**3. Look up by patent ID**
-> "Get the patent family for patent ID 5af83e12-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+### 按专利 ID 查询
 
-Call with:
 ```json
 {"patentId": "5af83e12-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
 ```
 
-**4. Compare family scopes**
-> "I want to see how Simple Family vs. INPADOC Family differs for US20200012345A1"
+### 比较家族范围
 
-Call with:
+用户：比较 US20200012345A1 的简单同族和 INPADOC 同族。
+
 ```json
 {"patentNumber": "US20200012345A1"}
 ```
-Then compare `simpleFamily` and `inpadocFamily` arrays in the response.
 
-## Display Rules
+从同一次返回中比较两类家族的成员、数量及地区覆盖。
 
-1. **Present data clearly**: Show patent family results in well-structured tables. Group by family type (Simple, INPADOC, PatSnap) when the user asks for comparison.
-2. **Summarize counts**: Always state how many family members were found under each family type so users can quickly gauge geographic spread.
-3. **Highlight jurisdictions**: When listing family members, call out the countries/regions covered to help users understand the patent's geographic protection scope.
-4. **Error handling**: When the API returns an error or empty results, explain the likely cause (invalid patent number format, patent not found in database, etc.) and suggest corrections.
-5. **Batch result organization**: When querying multiple patents, organize results per patent so users can easily find each one.
-6. **No subjective legal advice**: Present factual family data only. Do not provide legal opinions on patent scope, validity, or infringement.
-## Important Limitations
+## 使用反馈
 
-- **Lookup only**: This tool retrieves family information for known patents. It cannot perform keyword-based patent searches or full-text queries.
-- **Batch limit**: A maximum of 100 patent IDs or publication numbers per request.
-- **Data source**: Family data comes from the Zhihuiya (PatSnap) database and may have a slight delay relative to the very latest patent office publications.
-- **Family member detail**: The family member arrays contain summary objects. For full bibliographic data on a specific family member, a separate lookup may be required.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Patent family and equivalents lookup:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Patent family for XX" | Direct family lookup |
-| "What are the equivalents of this patent" | Simple family search |
-| "Which countries is this patent filed in" | Geographic coverage via family |
-| "INPADOC family members" | Broad family lookup |
-| "Related patents / sibling patents" | Family exploration |
-| "Compare simple vs extended family" | Multi-definition comparison |
-| "Batch check families for these patents" | Bulk family lookup |
-
-**Not applicable** -- Needs beyond patent family lookup:
-- Full-text patent search by keywords or classification codes
-- Patent valuation or litigation data
-- Freedom-to-operate or infringement analysis
-- Patent application filing or prosecution
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利同族结果
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

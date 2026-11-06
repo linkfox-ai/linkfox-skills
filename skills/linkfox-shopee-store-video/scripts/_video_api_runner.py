@@ -84,6 +84,9 @@ def _build_post_body(params: dict, spec: dict) -> str:
 
 
 def run_video_api(api_name: str, params: dict, caller: Optional[str] = None) -> dict:
+    if not isinstance(params, dict):
+        print("JSON parameters must be an object", file=sys.stderr)
+        sys.exit(1)
     if api_name not in VIDEO_ENDPOINTS:
         print(f"Unknown api: {api_name}. Valid: {', '.join(sorted(VIDEO_ENDPOINTS))}", file=sys.stderr)
         sys.exit(1)
@@ -130,11 +133,15 @@ def run_video_api(api_name: str, params: dict, caller: Optional[str] = None) -> 
         "api": api_name,
         "developerProxy": proxy,
         "resolvedPath": path,
+        "transportHttpStatus": getattr(proxy, "transport_http_status", None),
     }
     if query_string:
         out["queryString"] = query_string
     if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
+        try:
+            out["requestBody"] = json.loads(body) if body else None
+        except (TypeError, json.JSONDecodeError):
+            out["requestBody"] = body
 
     merge_shopee_body(out, proxy, response_key)
     return out

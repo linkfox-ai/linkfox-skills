@@ -1,15 +1,33 @@
-# Seerfar Ozon 关键词挖掘 API 参考
+# Seerfar Ozon 关键词挖掘 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：关键词挖掘
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/seerfar/ozon/keywordMining`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
-- **User-Agent**：`LinkFox-Skill/2.0`；HTTP 超时 150s
 
-## 请求参数
+### 请求参数
 
-POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`keyword` 与 `page` 为必填项，其余均可选；所有范围筛选项均为 `{min, max}` 对象，可单边或双边传值。
+POST Body（JSON）。以下字段与接口 `inputSchema` 一致。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -17,11 +35,11 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`keyword` 与
 | page | object | 是 | 分页与排序：`{page, pageSize, orders[]}` |
 | page.page | integer | 否 | 页码，从 1 开始，默认 1 |
 | page.pageSize | integer | 否 | 每页条数，默认 20 |
-| page.orders | array | 否 | 排序规则，元素 `{field, direction}`；`direction` 取 `DESC`（倒序）/ `ASC`（正序） |
-| matchType | integer | 否 | 关键词匹配模式：`0` 精准、`1` 模糊 |
+| page.orders | array | 否 | 排序规则，元素为 `{field, direction}`，子字段见下表 |
+| matchType | integer | 否 | 关键词匹配模式：`0` 精准、`1` 模糊；作用于种子词及 `includeKeywords`，模糊匹配用于扩大拓展，精准匹配用于收窄 |
 | includeKeywords | array<string> | 否 | 包含关键词数组（最多 1000），用于在种子词基础上进一步收窄/指定必须出现的词 |
 | excludeKeywords | array<string> | 否 | 排除关键词数组（最多 1000），用于剔除不相关词 |
-| wordCount | {min,max} | 否 | 关键词字数范围 |
+| wordCount | {min,max} | 否 | 关键词字数/字符数范围 |
 | searchVolume | {min,max} | 否 | 搜索热度范围 |
 | searchChange30 | {min,max} | 否 | 30 天搜索变化范围 |
 | productViews | {min,max} | 否 | 商品浏览量范围 |
@@ -38,12 +56,39 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`keyword` 与
 | uId | string | 否 | 用户 ID |
 | memberId | string | 否 | 成员 ID（一个成员唯一标识，数据归属于 memberId） |
 
-> **必填约束**：`keyword` 与 `page` 均为必填；缺任意一项请求会被拒绝。
-> **范围筛选**：所有 `{min,max}` 对象的两个子字段都可选，传单边即做下/上界过滤。
-> **与市场热词搜索的区别**：本接口为「围绕种子词挖掘」——必须传 `keyword`，结果是与种子词相关的关键词及其市场画像；不支持按 `searchDate` 选月、不支持按 `categories` 类目筛选，也没有 `monthlySales` / `monthlyRevenue` / `volume` / `reviews` / `ratings` / `weight` 等筛选项。若需浏览全市场热词请改用 `marketKeywordSearch`。
+> **与市场热词搜索的区别**：不支持按 `searchDate` 选月、不支持按 `categories` 类目筛选，也没有 `monthlySales` / `monthlyRevenue` / `volume` / `reviews` / `ratings` / `weight` 等筛选项。若需浏览全市场热词请改用 `marketKeywordSearch`。
 > **排序**：建议通过 `page.orders` 按核心指标排序（如 `searchVolume` DESC、`sellers` ASC、`relevancy` DESC），避免在无序大结果集中翻页。
 
-## 响应结构
+#### 排序对象 `page.orders[*]`
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| field | string | 未明确 | 排序字段，例如 `searchVolume`、`sellers`、`relevancy` |
+| direction | string | 未明确 | `DESC` 倒序、`ASC` 正序；默认值未约定 |
+
+#### 范围筛选对象
+
+上表所有 `{min,max}` 均为对象，适用于各自的指标；两个子字段均可选，可只给单边或同时给上下界。数值类型未细分为整数或小数，不额外收窄数值范围。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| min | 数值 | 否 | 对应指标下界 |
+| max | 数值 | 否 | 对应指标上界 |
+
+#### 脚本选项与缓存
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| JSON 参数 | JSON | 是 | 第一个位置参数，按上述字段原样提交 |
+| --inline | CLI flag | 否 | 强制完整打印，仍保存完整响应 |
+| --no-cache | CLI flag | 否 | 禁用响应缓存的读取和写入，重新请求 |
+
+默认使用 24 小时单层响应缓存，路径为 `<cwd>/linkfox/.cache/linkfox-seerfar-ozon-keyword-mining/`。缓存键使用参数排序 JSON 的 SHA-256 前 16 位；命中时标记 `_cache.hit=true` 并仍保存完整响应。业务脚本通过公共调用器运行，不叠加第二层缓存。错误和空结果也可能被缓存；需要绕过缓存重新查询时使用 `--no-cache`，并遵守 SKILL.md 的成本约束。
+会话数据固定保存在当前工作目录，不回退到家目录或临时目录；当前目录不可写时在请求前报错。网关支持 `LINKFOX_TOOL_GATEWAY` 覆盖；认证依次兼容 `LINKFOX_AGENT_API_KEY` 与 `LINKFOXAGENT_API_KEY`，会话请求头保留 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME`。
+
+缓存中的 `_http_status` 是产生该响应时的历史状态，命中缓存不代表发起了新请求。旧缓存可能没有此字段，此时 HTTP 状态未知，不从 `code` / `errcode` 推断；确需重新确认状态时，按成本约束决定是否使用 `--no-cache`。
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -53,12 +98,18 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`keyword` 与
 | errmsg | string | 错误消息；成功为 `ok`，业务错误时为原因描述 |
 | total | integer | 总记录数 |
 | data | array | 关键词挖掘数据（详见下方） |
-| columns | array | 列定义，元素含 `{field, title, cellType, sortable, filterable}` |
+| columns | array | 列定义，元素字段见下方 `columns[*]` 表 |
 | costTime | integer | 接口耗时（毫秒） |
 | costToken | integer | 消耗 Token 数量 |
 | type | string | 响应展示类型，如 `tableListWorkbenches` |
 
-### data[*] 关键词市场对象字段
+#### 脚本本地附加字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| _http_status | integer | 业务脚本记录的实际 HTTP 状态码，非网关业务字段；用于结合公共响应码规则判断状态，不覆盖响应体中的 `code` / `errcode` / 错误原因。未获得 HTTP 响应的连接错误不附加此字段 |
+
+#### data[*] 关键词市场对象字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -67,7 +118,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`keyword` 与
 | platform | integer | 平台：`0` Ozon，`1` Wildberries |
 | searchVolume | integer | 月搜热度 |
 | count30GrowthRate | number | 月搜增长（%，可为负） |
-| productCount | integer | 商品数（部分行可能缺失） |
+| productCount | integer | 商品数；大部分行返回，与种子词完全一致的行可能缺失 |
 | competingProducts | integer | 竞品数 |
 | sellers | integer | 卖家数 |
 | avgPrice | number | 平均价格 |
@@ -78,15 +129,14 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`keyword` 与
 | returnCancellationRate | number | 退货取消率（%） |
 | uniqQueriesWCa | integer | 加购数 |
 | ca | number | 加购转化率（%） |
-| relevancy | number | 相关度（与种子词的相关程度） |
-| titleDensity | number | 标题密度 |
-| wordCount | integer | 字数 |
+| relevancy | number | 与种子词的相关程度；种子词本身为 `100`，相关词的值更低；按该字段降序可优先保留贴合主题的词 |
+| titleDensity | number | 关键词在商品标题中的密度，数据行中有返回 |
+| wordCount | integer | 字数，数据行中有返回 |
 | categories | array | 类目 ID 数组 |
-| categoryInfos | array | 类目信息（详见下方） |
+| categoryInfos | array | schema 中定义的类目信息；仅见于列定义，数据行不填充，需判空；出现时按下方字段表解析，不套用市场关键词搜索接口的填充行为 |
 | products | array | Top 商品数据（详见下方） |
 | id | string | 记录 ID |
-
-> **字段填充（以真实响应为准）**：`relevancy`（相关度）、`titleDensity`（标题密度）、`wordCount`（字数）在实际响应中**均有返回** —— 相关度是种子词挖掘的核心输出，种子词本身相关度为 `100`，相关词按相关度递减。`productCount`（商品数）在大部分行返回，但与种子词完全一致的行可能缺失。`dimension`（维度信息）与 `categoryInfos`（类目信息）虽在 outputSchema / `columns` 中有定义，但 `data[*]` 行中**不返回**，使用前需判空。
+| dimension | 未限定 | 维度信息，虽在 schema / 列定义中出现，数据行不填充，需判空 |
 
 #### products[*] Top 商品对象字段
 
@@ -100,8 +150,6 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`keyword` 与
 
 #### categoryInfos[*] 类目信息对象字段
 
-> ⚠️ 实测 `data[*]` 行中**未返回** `categoryInfos`（仅在 `columns` 列定义中出现）；下方字段为 outputSchema 定义，仅供出现时参考。
-
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | titleCn | string | 类目中文名 |
@@ -113,41 +161,45 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`keyword` 与
 | id | string | 类目 ID |
 | crossBorderSellable | boolean | 是否可跨境销售 |
 
-## 错误码
+#### `columns[*]` 列定义
 
-正常情况下 HTTP 状态码为 200，业务结果通过响应体区分：
-- **成功**：返回 `code:"200"` + `errcode:200`（`msg` / `errmsg` 均为 `ok`）。
-- **业务错误**：HTTP 仍为 200，但仅返回 `errcode`（非 200）+ `errmsg`（原因），无 `code` 字段。
-- **认证失败**：HTTP 状态码 401，响应体 `{"errcode":401,"errmsg":"authorized error"}`。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| field | 未限定 | 列对应的字段名 |
+| title | 未限定 | 列标题 |
+| cellType | 未限定 | 单元格展示类型 |
+| sortable | 未限定 | 排序能力标记 |
+| filterable | 未限定 | 筛选能力标记 |
+
+数据以 Ozon 为主，可包含 Wildberries；无平台过滤入参，需要时按响应中的 `platform` 在本地筛选。返回的 `categories` 可用于本地分组或过滤，不代表支持同名请求参数。`columns` 不透明且可能部分填充，不作为数据行已存在对应字段的证据；缺失的 `dimension` 也需判空。
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+业务错误可能在 HTTP 200 时仅返回 `errcode`、`errmsg`，没有 `code`；按公共规则判断状态，勿因缺少 `code` 而丢弃错误原因。
 
 | errcode | 含义 | 处理建议 |
 |---------|------|----------|
-| 200 | 成功 | 正常解析 `data` 字段 |
-| 400 | 参数错误 | 查看 `errmsg`；常见为缺 `keyword` / `page`、关键词为空等 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 402 | 计费失败 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 其他非 200 值 | 业务异常 | 查看 `errmsg` 获取具体原因 |
+| 400 | 参数错误 | 查看 `errmsg`；常见为缺 `keyword` / `page` 或关键词为空，补齐后是否继续调用遵守成本约束 |
 
-错误响应示例（缺 `keyword`）：
+缺种子词的错误示例：
 
 ```json
-{
-    "errcode": 400,
-    "errmsg": "keyword 为必填参数",
-    "keyword": ""
-}
+{"errcode": 400, "errmsg": "keyword 为必填参数", "keyword": ""}
 ```
 
-缺 `page` 时：
+缺分页对象的错误示例：
 
 ```json
-{
-    "errcode": 400,
-    "errmsg": "page 为必填参数"
-}
+{"errcode": 400, "errmsg": "page 为必填参数"}
 ```
 
-## curl 示例
+### curl 示例
 
 ```bash
 curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/keywordMining \
@@ -160,7 +212,7 @@ curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/keywordMining \
   }'
 ```
 
-## 响应示例（简略）
+### 响应示例
 
 以 `keyword:"платье"`、按 `searchVolume` DESC 挖掘的真实响应（截取 2 行，`products` 各保留 1 条）：
 
@@ -230,28 +282,18 @@ curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/keywordMining \
 }
 ```
 
-> 第 1 行为种子词本身（`relevancy: 100`，无 `productCount`）；第 2 行为相关词（`relevancy: 12`，含 `productCount`）。`dimension` / `categoryInfos` 在真实 `data[*]` 中不返回。
+## Feedback
 
----
-
-## Feedback API
-
-> 该接口与上方工具接口不同，**请勿混用两个基础 URL**。
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
   "skillName": "linkfox-seerfar-ozon-keyword-mining",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "User successfully mined high-relevancy Ozon keywords around a seed term."
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**字段说明：**
-- `skillName`：使用本 skill 的 YAML `name`
-- `sentiment`：`POSITIVE` / `NEUTRAL` / `NEGATIVE` 三选一
-- `category`：`BUG` / `COMPLAINT` / `SUGGESTION` / `OTHER` 四选一
-- `content`：用户表达、实际现象、为什么算问题或好评

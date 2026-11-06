@@ -11,7 +11,10 @@ Usage:
 import json
 import sys
 
-from _temu_common import PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error, load_json_arg
+from _temu_common import (
+    PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error,
+    is_gateway_response_normal, load_json_arg,
+)
 
 def main():
     params = load_json_arg(sys.argv) if len(sys.argv) >= 2 else {}
@@ -31,13 +34,22 @@ def main():
     }
     result = call_temu_api(PROXY_URL, probe_body, timeout=150, linkfox_params=params)
 
-    if is_linkfox_auth_error(result):
+    status = result.get("transportHttpStatus")
+    # probe 仅能接受已到达网关的正常响应或预期参数错误，不能把连接失败当作成功。
+    code = result.get("code")
+    expected_business_code = is_gateway_response_normal({
+        "transportHttpStatus": 200, "errcode": code,
+    }) or (type(code) is int and code == 1002) or (
+        isinstance(code, str) and code.strip() == "1002"
+    )
+    if (is_linkfox_auth_error(result) or not is_gateway_response_normal(result)
+            or result.get("error") or not expected_business_code):
         print(
             json.dumps(
                 {
                     "ok": False,
-                    "reason": "linkfox_token_invalid",
-                    "message": result.get("message") or result,
+                    "reason": "linkfox_token_invalid" if is_linkfox_auth_error(result) or status == 401 else "gateway_probe_failed",
+                    "message": result.get("message") or result.get("errmsg") or result,
                     "hint": "Set LINKFOXAGENT_API_KEY or pass token in JSON.",
                 },
                 indent=2,

@@ -1,125 +1,41 @@
-# Fulfillment — 接口文档索引（US）
+# Temu 美国站履约接口索引
 
-每个 `type` 单独一份文档，经 `POST /temu/proxy` 调用。
+网关公共规则、运行约定和加签文件下载见 [api.md](../api.md)。Partner 文档标识见 [partner-us-catalog.md](../partner-us-catalog.md)。
 
-## Buy-Shipping（购标/面单/Scan Form）
+| 操作 | 接口文档 | 脚本 |
+|---|---|---|
+| `bg.cooperativewarehouse.fulfill.cancel` | [取消合作仓履约单](bg-cooperativewarehouse-fulfill-cancel.md) | `scripts/us_co_warehouse_cooperativewarehouse_fulfill_cancel.py` |
+| `bg.cooperativewarehouse.fulfill.submit` | [提交合作仓履约](bg-cooperativewarehouse-fulfill-submit.md) | `scripts/us_co_warehouse_cooperativewarehouse_fulfill_submit.py` |
+| `bg.cooperativewarehouse.provider.list` | [合作仓服务商列表](bg-cooperativewarehouse-provider-list.md) | `scripts/us_co_warehouse_cooperativewarehouse_provider_list.py` |
+| `bg.cooperativewarehouse.token.authorization` | [合作仓 Token 授权](bg-cooperativewarehouse-token-authorization.md) | `scripts/us_co_warehouse_cooperativewarehouse_token_authorization.py` |
+| `bg.logistics.companies.get` | [获取区域可用物流商](bg-logistics-companies-get.md) | `scripts/us_self_fulfilled_logistics_companies_get.py` |
+| `bg.logistics.shipment.create` | [在线下单购标](bg-logistics-shipment-create.md) | `scripts/us_buy_shipping_logistics_shipment_create.py` |
+| `bg.logistics.shipment.document.get` | [获取面单/运单文档](bg-logistics-shipment-document-get.md) | `scripts/us_buy_shipping_logistics_shipment_document_get.py` |
+| `bg.logistics.shipment.result.get` | [查询购标/在线下单结果](bg-logistics-shipment-result-get.md) | `scripts/us_buy_shipping_logistics_shipment_result_get.py` |
+| `bg.logistics.shipment.shippingtype.update` | [更新物流跟踪号 / 发货方式](bg-logistics-shipment-shippingtype-update.md) | `scripts/us_self_fulfilled_logistics_shipment_shippingtype_update.py` |
+| `bg.logistics.shipment.sub.confirm` | [确认子包裹发货](bg-logistics-shipment-sub-confirm.md) | `scripts/us_self_fulfilled_logistics_shipment_sub_confirm.py` |
+| `bg.logistics.shipment.update` | [更新发货/重试购标](bg-logistics-shipment-update.md) | `scripts/us_buy_shipping_logistics_shipment_update.py` |
+| `bg.logistics.shipment.v2.confirm` | [确认发货 V2](bg-logistics-shipment-v2-confirm.md) | `scripts/us_self_fulfilled_logistics_shipment_v2_confirm.py` |
+| `bg.logistics.shipment.v2.get` | [查询发货信息 V2](bg-logistics-shipment-v2-get.md) | `scripts/us_self_fulfilled_logistics_shipment_v2_get.py` |
+| `bg.logistics.shipped.package.confirm` | [确认包裹已发货](bg-logistics-shipped-package-confirm.md) | `scripts/us_buy_shipping_logistics_shipped_package_confirm.py` |
+| `bg.logistics.shippingservices.get` | [查询可用物流渠道](bg-logistics-shippingservices-get.md) | `scripts/us_buy_shipping_logistics_shippingservices_get.py` |
+| `bg.logistics.warehouse.list.get` | [店铺仓库列表](bg-logistics-warehouse-list-get.md) | `scripts/us_buy_shipping_logistics_warehouse_list_get.py` |
+| `bg.order.unshipped.package.get` | [查询未发货包裹](bg-order-unshipped-package-get.md) | `scripts/us_buy_shipping_order_unshipped_package_get.py` |
+| `temu.logistics.candidate.scanform.list.get` | [候选 Scan Form 包裹列表](temu-logistics-candidate-scanform-list-get.md) | `scripts/us_buy_shipping_logistics_candidate_scanform_list_get.py` |
+| `temu.logistics.label.list.get` | [面单列表查询](temu-logistics-label-list-get.md) | `scripts/us_buy_shipping_logistics_label_list_get.py` |
+| `temu.logistics.scanform.create` | [创建 Scan Form](temu-logistics-scanform-create.md) | `scripts/us_buy_shipping_logistics_scanform_create.py` |
+| `temu.logistics.scanform.document.get` | [获取 Scan Form 文档](temu-logistics-scanform-document-get.md) | `scripts/us_buy_shipping_logistics_scanform_document_get.py` |
+| `temu.logistics.scanform.get` | [查询 Scan Form 详情](temu-logistics-scanform-get.md) | `scripts/us_buy_shipping_logistics_scanform_get.py` |
+| `temu.logistics.shiplogisticstype.get` | [在线发货物流类型](temu-logistics-shiplogisticstype-get.md) | `scripts/us_buy_shipping_logistics_shiplogisticstype_get.py` |
+| `temu.logistics.shipment.pickup.reservation.cancel` | [取消上门揽收预约](temu-logistics-shipment-pickup-reservation-cancel.md) | `scripts/us_buy_shipping_logistics_shipment_pickup_reservation_cancel.py` |
+| `temu.logistics.shipment.pickup.reservation.create` | [预约上门揽收](temu-logistics-shipment-pickup-reservation-create.md) | `scripts/us_buy_shipping_logistics_shipment_pickup_reservation_create.py` |
+| `temu.logistics.shipment.pickup.reservation.result.get` | [查询上门揽收预约结果](temu-logistics-shipment-pickup-reservation-result-get.md) | `scripts/us_buy_shipping_logistics_shipment_pickup_reservation_result_get.py` |
+| `temu.track.trackinginfo.get` | [物流轨迹详情查询](temu-track-trackinginfo-get.md) | `scripts/us_tracking_track_trackinginfo_get.py` |
 
-每个 `type` 单独一份文档，经 `POST /temu/proxy` 调用。网关与鉴权见 [../api.md](../api.md)；目录与 `sub_menu_code` 见 [../partner-us-catalog.md](../partner-us-catalog.md)。
+合作仓仅支持半托管。下列目录操作待接入，不计入 28 个已提供接口，不能按已实现操作执行；未列出的取消或改单同样未提供。
 
-## 仓库 / 物流基础
-
-| type | 文档 |
-|------|------|
-| `bg.logistics.warehouse.list.get` | [bg-logistics-warehouse-list-get.md](./bg-logistics-warehouse-list-get.md) |
-
-## 查价 / 购标 / 面单
-
-| type | 文档 |
-|------|------|
-| `bg.logistics.shippingservices.get` | [bg-logistics-shippingservices-get.md](./bg-logistics-shippingservices-get.md) |
-| `bg.logistics.shipment.create` | [bg-logistics-shipment-create.md](./bg-logistics-shipment-create.md) |
-| `bg.logistics.shipment.result.get` | [bg-logistics-shipment-result-get.md](./bg-logistics-shipment-result-get.md) |
-| `bg.logistics.shipment.update` | [bg-logistics-shipment-update.md](./bg-logistics-shipment-update.md) |
-| `bg.logistics.shipment.document.get` | [bg-logistics-shipment-document-get.md](./bg-logistics-shipment-document-get.md) |
-| `temu.logistics.shiplogisticstype.get` | [temu-logistics-shiplogisticstype-get.md](./temu-logistics-shiplogisticstype-get.md) |
-| `temu.logistics.label.list.get` | [temu-logistics-label-list-get.md](./temu-logistics-label-list-get.md) |
-| `temu.logistics.candidate.scanform.list.get` | [temu-logistics-candidate-scanform-list-get.md](./temu-logistics-candidate-scanform-list-get.md) |
-| `temu.logistics.scanform.create` | [temu-logistics-scanform-create.md](./temu-logistics-scanform-create.md) |
-| `temu.logistics.scanform.document.get` | [temu-logistics-scanform-document-get.md](./temu-logistics-scanform-document-get.md) |
-| `temu.logistics.scanform.get` | [temu-logistics-scanform-get.md](./temu-logistics-scanform-get.md) |
-
-## 订单 / 未发货包裹 / 确认发货
-
-| type | 文档 |
-|------|------|
-| `bg.order.unshipped.package.get` | [bg-order-unshipped-package-get.md](./bg-order-unshipped-package-get.md) |
-| `bg.logistics.shipped.package.confirm` | [bg-logistics-shipped-package-confirm.md](./bg-logistics-shipped-package-confirm.md) |
-
-## 上门揽收预约（Pickup Reservation）
-
-| type | 文档 |
-|------|------|
-| `temu.logistics.shipment.pickup.reservation.create` | [temu-logistics-shipment-pickup-reservation-create.md](./temu-logistics-shipment-pickup-reservation-create.md) |
-| `temu.logistics.shipment.pickup.reservation.result.get` | [temu-logistics-shipment-pickup-reservation-result-get.md](./temu-logistics-shipment-pickup-reservation-result-get.md) |
-| `temu.logistics.shipment.pickup.reservation.cancel` | [temu-logistics-shipment-pickup-reservation-cancel.md](./temu-logistics-shipment-pickup-reservation-cancel.md) |
-
-## 取消 / 改单（待补充）
-
-| type | 文档 |
-|------|------|
-| _待用户提供 Partner 文档_ | — |
-
-## 其他（待补充）
-
-| type | 文档 |
-|------|------|
-| _待用户提供 Partner 文档_ | — |
-
-## Co-Warehouse（合作仓履约）
-
-每个 `type` 单独一份文档，经 `POST /temu/proxy` 调用。网关与鉴权见 [../api.md](../api.md)；目录与 `sub_menu_code` 见 [../partner-us-catalog.md](../partner-us-catalog.md)。
-
-> **Semi-managed only**：本 skill 仅适用于半托管（`managementType=semi-managed`）合作仓履约场景。
-
-## 合作仓服务商 / 授权
-
-| type | 文档 |
-|------|------|
-| `bg.cooperativewarehouse.provider.list` | [bg-cooperativewarehouse-provider-list.md](./bg-cooperativewarehouse-provider-list.md) |
-| `bg.cooperativewarehouse.token.authorization` | [bg-cooperativewarehouse-token-authorization.md](./bg-cooperativewarehouse-token-authorization.md) |
-
-## 合作仓履约
-
-| type | 文档 |
-|------|------|
-| `bg.cooperativewarehouse.fulfill.submit` | [bg-cooperativewarehouse-fulfill-submit.md](./bg-cooperativewarehouse-fulfill-submit.md) |
-| `bg.cooperativewarehouse.fulfill.cancel` | [bg-cooperativewarehouse-fulfill-cancel.md](./bg-cooperativewarehouse-fulfill-cancel.md) |
-| `bg.cooperativewarehouse.fulfill.query` | _待接入_ |
-
-## SKU 关系
-
-| type | 文档 |
-|------|------|
-| `temu.cooperativewarehouse.skurelationship.create` | _待接入_ |
-| `temu.cooperativewarehouse.skurelationship.get` | _待接入_ |
-
-## Self-Fulfilled Shipments（卖家自发货）
-
-每个 `type` 单独一份文档，经 `POST /temu/proxy` 调用。网关与鉴权见 [../api.md](../api.md)；目录与 `sub_menu_code` 见 [../partner-us-catalog.md](../partner-us-catalog.md)。
-
-## 发货 / 确认发货
-
-| type | 文档 |
-|------|------|
-| `bg.logistics.shipment.v2.confirm` | [bg-logistics-shipment-v2-confirm.md](./bg-logistics-shipment-v2-confirm.md) |
-| `bg.logistics.shipment.sub.confirm` | [bg-logistics-shipment-sub-confirm.md](./bg-logistics-shipment-sub-confirm.md) |
-| `bg.logistics.shipment.shippingtype.update` | [bg-logistics-shipment-shippingtype-update.md](./bg-logistics-shipment-shippingtype-update.md) |
-
-## 物流 / 面单 / 包裹
-
-| type | 文档 |
-|------|------|
-| `bg.logistics.companies.get` | [bg-logistics-companies-get.md](./bg-logistics-companies-get.md) |
-| `bg.logistics.shipment.v2.get` | [bg-logistics-shipment-v2-get.md](./bg-logistics-shipment-v2-get.md) |
-
-## 其他（待补充）
-
-| type | 文档 |
-|------|------|
-| _待用户提供 Partner 文档_ | — |
-
-## Tracking（物流跟踪）
-
-每个 `type` 单独一份文档，经 `POST /temu/proxy` 调用。网关与鉴权见 [../api.md](../api.md)；目录与 `sub_menu_code` 见 [../partner-us-catalog.md](../partner-us-catalog.md)。
-
-## 物流跟踪
-
-| type | 文档 |
-|------|------|
-| `temu.track.trackinginfo.get` | [temu-track-trackinginfo-get.md](./temu-track-trackinginfo-get.md) |
-
-## 其他（待补充）
-
-| type | 文档 |
-|------|------|
-| _待用户提供 Partner 文档_ | — |
+| 待接入操作 | 用途 |
+|---|---|
+| `bg.cooperativewarehouse.fulfill.query` | 查询合作仓履约状态 |
+| `temu.cooperativewarehouse.skurelationship.create` | 创建合作仓 SKU 关系 |
+| `temu.cooperativewarehouse.skurelationship.get` | 查询合作仓 SKU 关系 |

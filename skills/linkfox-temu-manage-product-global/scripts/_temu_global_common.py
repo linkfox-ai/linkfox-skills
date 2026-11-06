@@ -3,16 +3,7 @@
 
 import json
 
-from _temu_common import (
-    FILE_DOWNLOAD_URL,
-    PROXY_URL,
-    call_temu_api,
-    emit_result,
-    lf_inline_flag,
-    load_json_arg,
-    parse_nested_body,
-    resolve_access_token,
-)
+from _temu_common import FILE_DOWNLOAD_URL, PROXY_URL, call_temu_api, emit_result, lf_inline_flag, parse_nested_body, resolve_access_token
 
 # Partner Global 商品接口：默认全球站半托管；部分半托发品亦可用 cn/partner（见 SKILL.md）
 DEFAULT_SITE = "global"
@@ -45,11 +36,11 @@ def build_global_proxy_body(params: dict, api_type: str, business=None) -> dict:
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
-    if "tokenPurpose" not in params and params.get("storeKey") and not params.get("accessToken"):
+    if params.get("storeKey") and not params.get("accessToken"):
         params = dict(params)
         params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
-        params.setdefault("site", site)
-        params.setdefault("managementType", management_type)
+        params["site"] = site
+        params["managementType"] = management_type
 
     body = {
         "site": site,
@@ -71,6 +62,10 @@ def global_file_download_call(params: dict, timeout: int = 150) -> dict:
         params = dict(params)
         params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
 
+    params = dict(params)
+    params.setdefault("site", DEFAULT_SITE)
+    params.setdefault("managementType", DEFAULT_MANAGEMENT_TYPE)
+
     from _temu_common import require_text  # noqa: E402
 
     site = str(params.get("site", DEFAULT_SITE)).strip().lower() or DEFAULT_SITE
@@ -78,6 +73,8 @@ def global_file_download_call(params: dict, timeout: int = 150) -> dict:
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
+    params["site"] = site
+    params["managementType"] = management_type
     body = {
         "site": site,
         "managementType": management_type,

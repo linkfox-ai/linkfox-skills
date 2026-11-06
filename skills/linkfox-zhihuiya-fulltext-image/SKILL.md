@@ -1,141 +1,120 @@
 ---
 name: linkfox-zhihuiya-fulltext-image
-description: 通过专利ID或公开号获取专利文件中的全文附图（图纸、示意图、图表）。当用户询问专利图片、专利图纸、专利示意图、专利插图、全文附图、专利图表、专利技术图或想查看、下载专利文件中的嵌入图片、patent fulltext drawings, patent diagrams, technical drawings, patent images, PatSnap时触发此技能。即使用户未明确提及"全文附图"，只要其需求涉及获取特定专利中的视觉内容（图纸、示意图、图表），也应触发此技能。
+description: 通过专利 ID 或公开（公告）号获取智慧芽（PatSnap）专利文件中的全文附图，展示图纸、示意图、图表的图片类型、查看或下载链接及图片总数，支持分页查看。适用于查看特定专利的视觉内容、列出专利插图或查询附图数量；不适用于专利正文、摘要、权利要求检索、专利族与引用分析、法律状态、申请人或发明人查询，也不适用于普通图片搜索。
 ---
 
-# Zhihuiya Patent Fulltext Image
+# 智慧芽专利全文附图
 
-This skill guides you on how to retrieve fulltext images (drawings, figures, diagrams) from patent documents using the Zhihuiya patent data service, helping users access and analyze visual content within patents.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Patent fulltext images are the figures, drawings, and diagrams embedded in patent documents. They are essential for understanding the technical details of an invention. This tool queries the Zhihuiya patent database and returns image metadata including download paths and image types for a given patent.
+获取特定专利文件中的图纸、示意图、图表等视觉内容。用户希望查看、下载或列出专利附图、了解附图总数时使用，无需明确提及“全文附图”或智慧芽。
 
-**Lookup methods**: You can look up images by either **patent ID** (an internal identifier) or **publication number** (the publicly visible patent number such as `US20230012345A1` or `CN115000000A`). At least one of these must be provided.
+**场景速查**
 
-## Parameter Guide
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 看看这件专利的图纸 | 展示专利全文附图及图片链接。 |
+| 提取这份专利里的示意图或图表 | 列出返回的附图和图片类型。 |
+| 下载这件专利的图片 | 展示接口返回的可查看或下载链接。 |
+| 这件专利有多少张附图 | 展示图片总数与本次返回范围。 |
+| 看前一批或下一批专利插图 | 根据用户指定范围分页获取附图。 |
 
-| Parameter | API Name | Required | Description | Example |
-|-----------|----------|----------|-------------|---------|
-| Patent ID | patentId | No* | Internal patent identifier | 8a7b6c5d-... |
-| Publication Number | patentNumber | No* | Public patent publication/grant number | US20230012345A1 |
-| Limit | limit | No | Maximum number of images to return (max 100, default 100) | 50 |
-| Offset | offset | No | Pagination offset for image results | 0 |
+本技能不处理专利正文、摘要、权利要求检索、专利族或引用分析、法律状态、申请人或发明人查询，以及与专利无关的图片搜索。
 
-> *At least one of `patentId` or `patentNumber` must be provided.
+## 前置条件
 
-## Response Fields
+**先确认目标专利**：从用户提供的资料中取得内部专利 ID 或公开（公告）号，不编造标识。输入要求及分页约定见 [接口说明](references/api.md)。
 
-| Field | Description |
-|-------|-------------|
-| total | Total number of image records available |
-| data | Array of image entries |
-| data[].patentId | Patent identifier |
-| data[].pn | Publication/grant number |
-| data[].fulltextImagePath | URL path to download the image |
-| data[].imageType | Type/category of the image |
-| columns | Column rendering metadata |
-| costToken | Token cost of the request |
-| type | Rendering style hint |
+## 查询流程
 
-## 调用方式
+1. 确认用户要查看的专利与附图范围，按 [接口说明](references/api.md) 准备标识和分页信息。
+2. 查询该专利的附图，优先复用已有结果或本地缓存；需要新一页时先说明额外算力消耗，再按用户需求继续。
+3. 按接口说明判断响应，展示图片总数、当前返回范围及图片表格；查询失败时解释返回原因，并建议核对专利 ID 或公开（公告）号，不自动连续试探。
+4. 图片尚未取完时告知还有更多附图，可继续获取下一页；仅在任务范围内继续，不自动拉取全部分页。
 
-- **API 端点**：`POST /zhihuiya/fulltextImage`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_fulltext_image.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 执行方式
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-fulltext-image-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_fulltext_image.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次接口调用消耗 3 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 输出策略
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-fulltext-image-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## Usage Examples
+## 执行规则
 
-**1. Get all images for a patent by publication number**
+### 算力消耗预估
+
+3 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解全文附图**：全文附图是专利文档中嵌入的图纸、示意图和图表，用于理解发明技术细节。本技能返回图片元数据及图片路径，不将其等同于专利正文或权利要求。
+- **区分专利标识**：专利 ID 是内部标识；公开（公告）号是公开可见的专利编号，例如 `US20230012345A1`、`CN115000000A`。
+- **清晰展示数据**：用表格展示专利号、图片类型和图片路径，分别对应 `pn`、`imageType`、`fulltextImagePath`，必要时同时标注 `patentId`。
+- **提供可点击链接**：始终将返回的 `fulltextImagePath` 展示为可点击的查看或下载链接，不编造、补齐或替换图片地址。
+- **说明总数和分页**：始终说明专利可用附图总数（`total`）、本次返回数量及当前范围；结合本次请求的偏移量和实际返回数量判断是否还有后续附图。若只查询了后面的页，说明此前尚未获取的范围。
+- **仅展示真实返回内容**：不编造专利 ID、公开（公告）号或图片 URL；字段缺失时说明未返回。
+- **保留有效结果**：同一参数命中缓存时复用缓存中的响应；CLI 缓存与运行选项见 [接口说明](references/api.md)。
+
+## 使用示例
+
+### 按公开（公告）号获取附图
+
+用户：获取专利 US20230012345A1 的全文附图。
+
+```json
+{"patentNumber": "US20230012345A1"}
 ```
-Retrieve fulltext images for patent US20230012345A1.
+
+### 按内部专利 ID 获取图纸
+
+用户：获取内部专利 ID 为 abc123def456 的图纸。
+
+```json
+{"patentId": "abc123def456"}
 ```
-Parameters: `{"patentNumber": "US20230012345A1"}`
 
-**2. Get images for a patent by patent ID**
+### 获取前 20 张附图
+
+用户：查看专利 CN115000000A 的前 20 张附图。
+
+```json
+{"patentNumber": "CN115000000A", "limit": "20", "offset": "0"}
 ```
-Fetch the drawings for patent ID abc123def456.
+
+### 获取第 21 至 40 张附图
+
+用户：继续查看专利 CN115000000A 的第 21 至 40 张附图。
+
+```json
+{"patentNumber": "CN115000000A", "limit": "20", "offset": "20"}
 ```
-Parameters: `{"patentId": "abc123def456"}`
 
-**3. Paginated retrieval of images**
-```
-Get the first 20 images for patent CN115000000A.
-```
-Parameters: `{"patentNumber": "CN115000000A", "limit": "20", "offset": "0"}`
+## 使用反馈
 
-**4. Get the next page of images**
-```
-Get images 21-40 for patent CN115000000A.
-```
-Parameters: `{"patentNumber": "CN115000000A", "limit": "20", "offset": "20"}`
-
-## Display Rules
-
-1. **Present data clearly**: Show image results in a structured table with image type, download path, and patent number
-2. **Image links**: Always present `fulltextImagePath` values as clickable links so users can view or download images directly
-3. **Pagination notice**: When `total` exceeds the number of returned results, inform the user that more images are available and offer to fetch the next page
-4. **Error handling**: When a query fails, explain the reason and suggest verifying the patent ID or publication number
-5. **No fabrication**: Never invent patent IDs, publication numbers, or image URLs -- only display data returned by the API
-6. **Total count**: Always mention the total number of images available for the patent
-## Important Limitations
-
-- **Image limit**: Each request returns a maximum of 100 images
-- **Identifier required**: At least one of `patentId` or `patentNumber` must be supplied
-- **All parameters are strings**: Even numeric values like `limit` and `offset` must be passed as strings
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Requests involving patent visual content:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Show me the drawings for patent XX" | Fulltext image retrieval |
-| "Get the figures from this patent" | Fulltext image retrieval |
-| "Download patent images for XX" | Fulltext image retrieval |
-| "What diagrams does patent XX contain" | Fulltext image listing |
-| "How many figures are in patent XX" | Image count query |
-| "Show me the technical drawings" | Fulltext image retrieval |
-
-**Not applicable** -- Needs beyond patent fulltext images:
-- Patent text/abstract/claims search
-- Patent family or citation analysis
-- Patent legal status queries
-- Patent assignee or inventor search
-- General image search unrelated to patents
-
-## 算力消耗规则
-
-消耗 81 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

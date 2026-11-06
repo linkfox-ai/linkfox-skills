@@ -1,20 +1,20 @@
 # `GET_PAN_EU_OFFER_STATUS`
 
-> **分类**：7. Inventory Reports  
-> **说明**：Pan-European offer status  
-> **可用范围**：Seller only
+> **分类**：7. 库存报告  
+> **说明**：泛欧报价状态  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Inventory Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory)（章节：**GET_PAN_EU_OFFER_STATUS**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [库存报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory)（章节：**GET_PAN_EU_OFFER_STATUS**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Availability**：FBA sellers
-- **Marketplace availability**：Spain, UK, France, Germany, and Italy marketplaces.
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted), [Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
-- **要点**：Contains enrollment status and eligibility information for the Pan-European FBA program for each of the seller's Amazon-fulfilled listings. For more information, refer to Seller Central Help.
+- **可用范围**：FBA 卖家
+- **站点范围**：Spain, UK, France, Germany, and Italy marketplaces.
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted), [Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
+- **要点**：按每个 Amazon 配送刊登提供 Pan-European FBA 报名状态与资格；更多说明见 Seller Central 帮助。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory>
 

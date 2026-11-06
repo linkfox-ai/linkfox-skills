@@ -22,7 +22,7 @@ def main() -> None:
         sys.exit(1)
     params = json.loads(sys.argv[1])
     inline = lf_inline_flag()
-    emit_result(run_media_space_api("get_video_upload_result", params, "get_video_upload_result.py"), inline)
+    emit_result(run_media_space_api("get_video_upload_result", params, "get_video_upload_result.py"), inline=inline)
 
 
 if __name__ == "__main__":

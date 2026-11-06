@@ -1,175 +1,117 @@
 ---
 name: linkfox-sorftime-amazon-product-detail
-description: 基于Sorftime数据按ASIN查询亚马逊产品详情与历史趋势，涵盖14个站点。当用户提到Sorftime产品详情、ASIN详情查询、销量走势、价格曲线、价格历史、BSR排名历史、BSR趋势、利润分析、FBA费用分析、毛利率、产品趋势分析、日销量月销量、销售额趋势、Deal促销历史、product detail, sales trend, price history, BSR ranking, profit analysis, FBA fees时触发此技能。即使用户未明确提及"Sorftime"，只要其需求涉及按ASIN查询亚马逊产品详情或历史趋势数据，也应触发此技能。
+description: 基于 Sorftime 数据按 ASIN 查询亚马逊商品详情与历史趋势，覆盖 14 个站点，提供销量与销售额、价格与促销、多级 BSR、变体、评分、卖家、利润和 FBA 费用信息。适用于指定商品查询、趋势回顾及多商品对比，无需明确提及 Sorftime。不适用于跨市场搜品筛选、ABA 搜索词排名、广告策略、评论正文分析或专利商标检查。
 ---
 
-# Sorftime Product Detail
+# Sorftime 亚马逊商品详情与趋势
 
-This skill guides you on how to query Amazon product detail and historical trend data by ASIN via Sorftime, helping Amazon sellers analyze product performance, pricing strategy, and competitive positioning.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Sorftime Product Detail provides comprehensive product-level data by ASIN, with historical trend data going back to 2021. It covers sales volume & revenue trends, price & promotion tracking, multi-level BSR ranking history, and real-time profit analysis with FBA fee breakdown.
+用户已有具体 ASIN，希望查看商品资料、经营指标或历史变化时使用。用户说“产品分析”或“竞品对比”且实际需要查询指定 ASIN 的详情和趋势时，也适用。
 
-**Key differentiator**: This tool returns trend/time-series data for individual products. If you need to search/filter products across a category, brand, or seller, use the Sorftime Product Search skill instead.
+**场景速查**
 
-## Data Fields
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查一下这个 ASIN 的销量走势 | 日销量、月销量与销售额趋势。 |
+| 这个产品最近价格变化如何 | 售价、原价与促销历史。 |
+| 帮我看看这个产品的利润空间 | 利润金额、利润率与费用构成。 |
+| 这个 ASIN 的 BSR 排名趋势 | 大类及小类排名历史。 |
+| 对比一下这几个 ASIN 的数据 | 同站点多商品对比。 |
+| 这个产品的 FBA 费用是多少 | FBA 费用及配送、仓储明细。 |
+| 产品上架多久了，评分怎么样 | 上架时间、在售天数、评分及星级占比。 |
+| 这个产品还在售吗 | 在售或下架状态。 |
+| 这个产品有没有 Deal 促销记录 | Deal 历史与其他促销。 |
+| 看看这个产品的变体信息 | 父子 ASIN、变体数及属性。 |
 
-Response data covers the following categories (see `references/api.md` for complete field reference):
+### 边界
 
-- **Basic info**: title, brand, ASIN, listing URL, images (main + A+), store name, bullet points, product badges, off-sale status, last update date, weight, size
-- **Variations**: parent ASIN, variation count, child ASINs, variation attributes
-- **Pricing & profit**: sale price, coupon, platform fee, FBA fees (with detail breakdown), FBM shipping cost, profit amount & rate
-- **Sales**: official monthly sales (Amazon-published)
-- **Rankings**: BSR rank, category tree, sub-category rankings, listing date, days online
-- **Ratings**: rating score, rating count, star distribution (1-5 star percentages)
-- **Seller**: Buybox seller name/ID/country, FBA status, seller count
-- **Listing features**: A+ content, video, brand store, feature ratings, product info, properties
-- **Promotions**: brand promotion, deal type, extra savings
-- **Trends** (time-series): BSR rank, sub-BSR rank, daily/monthly sales volume, daily/monthly revenue, price, list price, deal status
+按类目、品牌或卖家发现和筛选商品时，使用 Sorftime 商品搜索技能。ABA 搜索词排名使用对应 ABA 数据技能；广告策略、评论正文分析和专利商标检查不在本技能范围。
 
-## Supported Marketplaces
+## 前置条件
 
-US (United States), GB (United Kingdom), DE (Germany), FR (France), IN (India), CA (Canada), JP (Japan), ES (Spain), IT (Italy), MX (Mexico), AE (United Arab Emirates), AU (Australia), BR (Brazil), SA (Saudi Arabia)
+先确定待查商品的 ASIN 和目标站点。站点选择、默认值及趋势范围约定见 `references/api.md`。
 
-Default marketplace is **US**. Use `us` when the user doesn't specify a marketplace.
+## 查询流程
 
-**Note**: Sorftime uses lowercase codes (e.g., `us`, `gb`, `de`), and UK is coded as `gb` (not `uk`).
+1. 判断用户需要指定商品详情还是跨市场发现商品，确认 ASIN 与站点；按 `references/api.md` 准备查询。
+2. 根据目标选择仅查资料或包含趋势；历史分析按用户需要确定日期范围，多商品对比优先在同站点批量查询，具体限制见接口参考。
+3. 调用前说明动态计费方式及本次范围可能带来的额外消耗，由用户决定是否继续；复用已有结果与本地缓存。
+4. 查询后先判断公共响应状态，再判断业务结果；失败时根据返回消息解释原因，后续调用遵守成本约束。
+5. 从保存的数据按需提取指标，用表格展示商品对比或趋势关键日期，遵守下方展示建议。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /sorftime/amazon/productDetail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sorftime_product_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sorftime_product_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sorftime-amazon-product-detail-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sorftime-amazon-product-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## How to Build Queries
+### 算力消耗预估
 
-The key parameters are `asin` and `marketplace` (both required), plus optional trend date range controls.
-
-### Principles for Building Queries
-
-1. **Always specify the marketplace**: Use lowercase site codes, e.g., `us`, `de`, `jp`
-2. **Choose trend inclusion carefully**: Default includes trends (last 15 days). Set `includeTrend: 2` if only basic product info is needed - this saves cost and speeds up response
-3. **Specify date range for historical analysis**: Use `queryTrendStartDate` and `queryTrendEndDate` (yyyy-MM-dd) when users need trends beyond the default 15 days. Be aware this costs double
-4. **Batch ASINs when comparing**: Up to 10 ASINs can be queried at once, comma-separated - use this for competitive comparison rather than calling one at a time
-
-### Query Examples for Common Scenarios
-
-**1. Quick product check (default 15-day trend)**
-```
-asin: B00FLYWNYQ, marketplace: us
-```
-
-**2. Long-range trend analysis (specify dates)**
-```
-asin: B00FLYWNYQ, marketplace: us
-queryTrendStartDate: 2025-01-01, queryTrendEndDate: 2025-03-31
-```
-
-**3. Batch ASIN comparison**
-```
-asin: B0088PUEPK,B00U26V4VQ,B0CVM8TXHP, marketplace: us
-```
-
-**4. Product info only, no trends**
-```
-asin: B0088PUEPK, marketplace: us, includeTrend: 2
-```
-
-**5. BSR ranking history (German market)**
-```
-asin: B00FLYWNYQ, marketplace: de
-queryTrendStartDate: 2024-06-01, queryTrendEndDate: 2025-01-01
-```
-
-## Trend Data Interpretation
-
-Trend arrays use an interleaved format: even indices are dates, odd indices are values.
-
-```
-[20250101, 150, 20250102, 180, 20250103, 165, ...]
- ^date     ^val ^date     ^val ^date     ^val
-```
-
-- **Sales volume/revenue trends**: value of `-1` means "cannot estimate" (e.g., category changed to Amazon Renewed)
-- **Price trends**: units are in local currency smallest unit (cents for USD); `-1` means no available price that day
-- **BSR rank trends**: for `bsrRankTrend`, format is `[{NodeId: xxx, Rank: [date, rank, ...]}]` per sub-category
-- **Deal trend**: value `1` = has active Deal that day, `0` = no Deal
-
-## Display Rules
-
-1. **Present data only**: Show query results in clear tables without subjective business advice
-2. **Ranking clarification**: When showing ranking data, remind users that lower values mean better rankings
-3. **Price unit awareness**: Trend data uses smallest currency unit (cents for USD). Convert to standard currency when displaying to users
-4. **Sales estimation caveat**: Values of `-1` in sales/revenue fields mean "cannot estimate" - explain this to the user rather than showing -1 directly
-5. **Trend visualization**: When showing trend data, present key data points in a readable table rather than dumping raw arrays
-6. **Off-sale handling**: When `offSale` is true, clearly inform the user the product is currently unavailable/off-sale
-7. **Error handling**: When a query fails, explain the reason based on the `msg` field and suggest adjusting query criteria
-
-## Important Limitations
-
-- **Max 10 ASINs** per query
-- **Trend cost**: Default returns last 15 days; querying > 15 days costs double
-- **Non-structured data**: Results do not support secondary analysis via `_dataQuery_executeDynamicQuery`
-- **Sales estimation**: Products in non-standard categories (e.g., Amazon Renewed) may return -1 for sales fields
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** - Product detail and trend queries by ASIN:
-
-| User Says | Scenario |
-|-----------|----------|
-| "查一下这个ASIN的销量走势" | Sales trend |
-| "这个产品最近价格变化如何" | Price history |
-| "帮我看看这个产品的利润空间" | Profit analysis |
-| "这个ASIN的BSR排名趋势" | Ranking history |
-| "对比一下这几个ASIN的数据" | Multi-ASIN comparison |
-| "这个产品的FBA费用是多少" | FBA fee breakdown |
-| "产品上架多久了，评分怎么样" | Basic product info |
-| "这个产品还在售吗" | Off-sale status check |
-| "这个产品有没有Deal促销记录" | Deal history |
-| "看看这个产品的变体信息" | Variation details |
-
-**Not applicable** - Needs beyond single-product detail:
-- Searching/filtering products across a category or brand (use Sorftime Product Search)
-- ABA search term ranking data (use ABA Data Explorer)
-- Advertising / PPC strategy
-- Product reviews content analysis
-- Patent or trademark checks
-
-**Boundary judgment**: When users say "product analysis" or "competitor comparison", if it boils down to checking specific ASINs' detail data and trend curves, then this skill applies. If they're asking to discover or filter products across a market, it does not apply.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = Sorftime内部查询次数 × 6。Sorftime内部查询次数：不同查询条件需要的查询次数可能不同，该次数由Sorftime决定。
+按动态规则计费：消耗算力 = Sorftime 内部查询次数 × 6。不同查询条件所需的内部查询次数可能不同，由 Sorftime 决定；趋势范围的额外计费约定见 `references/api.md`。
 
 > **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
 
-**Feedback:**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解数据范围**：本技能提供单商品资料及时间序列，历史趋势可追溯至 2021 年，实际以返回数据为准。可展示基本资料与主图/A+ 图片、父子变体、价格与利润、官方月销量、类目排名、评分分布、Buybox 卖家、Listing 特征和促销；完整字段定义见 `references/api.md`。
+- **清晰展示数据**：只呈现查询所得数据，用表格说明指标，不附加主观经营建议；注明站点、日期范围和更新时间。
+- **解释排名**：展示 BSR 时提醒用户数值越小排名越靠前，并区分大类和小类。
+- **区分金额口径**：展示趋势金额时按当地货币单位换算，美元美分转换为美元；区分扣除 Coupon 后的当前售价与未扣 Coupon 的售价趋势，具体单位和特殊值见接口参考。
+- **解释无法预估的数据**：销量或销售额不可用时标为“无法预估”，不要把缺失值当成零销量。非标准类目情形见接口参考。
+- **展示趋势关键点**：先按接口参考的交错格式还原日期和值，用可读的表格呈现，避免直接输出原始数组。
+- **说明在售状态**：商品下架或不可售时明确告知用户。
+- **解释错误**：结合接口参考及实际返回的消息说明失败原因，可建议核对查询条件；再次调用前说明额外消耗。
+
+## 使用示例
+
+### 快速查看商品
+
+用户：查一下 B00FLYWNYQ 的商品资料和近期走势。
+
+未指定站点时按接口参考采用默认站点；说明费用后查询，展示资料与近期趋势。
+
+### 长区间趋势与 BSR 历史
+
+用户：查看这个美国站商品 2025 年第一季度的销量趋势，或这个德国站商品 2024 年 6 月至 2025 年 1 月的 BSR 历史。
+
+按用户指定站点和日期范围准备查询，说明趋势范围对应的额外费用后执行，按日期展示关键数据。
+
+### 多商品对比或仅查资料
+
+用户：对比 B0088PUEPK、B00U26V4VQ、B0CVM8TXHP；只需要基本资料时不查趋势。
+
+按接口参考批量查询，按需关闭趋势以减少消耗、缩短响应时间，用表格比较已有数据。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

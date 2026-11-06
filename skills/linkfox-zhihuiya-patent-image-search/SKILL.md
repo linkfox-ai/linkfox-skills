@@ -1,251 +1,135 @@
 ---
 name: linkfox-zhihuiya-patent-image-search
-description: 基于智慧芽的专利图片相似度搜索，支持通过图片URL检索外观设计专利。当用户提到专利图片搜索、外观设计专利侵权检查、外观专利搜索、视觉专利查询、以图搜专利、专利相似度检测、专利图片匹配、洛迦诺分类搜索、检查产品设计是否侵犯已有专利、patent image search, design patent search, patent reverse image search, design patent lookup, PatSnap, patent similarity时触发此技能。即使用户未明确提及"智慧芽"或"专利图片"，只要其需求涉及通过图片查找相似外观专利或排查外观专利风险，也应触发此技能。本技能仅支持外观设计专利，实用新型专利检索请使用 linkfox-zhihuiya-utility-patent-image-search。
+description: 基于智慧芽通过产品图片查找相似外观设计专利，支持本地图片上传、多国家受理局、洛迦诺分类、法律状态、日期和专利权人筛选，帮助进行设计相似度研究和外观专利风险初筛。适用于以图搜专利、视觉专利查询、竞品外观专利发现和设计相似度排查，无需明确提及智慧芽或 PatSnap。不适用于实用新型图像检索、独立的文本专利检索、法律状态监控、专利估值、许可谈判、专利族或引证分析及 FTO 法律意见。
 ---
 
-# Zhihuiya Patent Image Search
+# 智慧芽外观专利图片检索
 
-This skill guides you on how to perform image-based patent similarity searches using the Zhihuiya patent database, helping users identify potentially similar **design patents**. This skill supports design patents only; for utility model patents use `linkfox-zhihuiya-utility-patent-image-search`.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Patent Image Search** uses visual AI models to compare a given product or design image against a global patent image database. It returns a ranked list of similar patents, enabling users to evaluate infringement risks or conduct prior-art research.
+使用产品或设计图片查找相似的外观设计专利，辅助现有设计研究与潜在风险识别。
 
-**This skill supports design patents only:**
+**场景速查**
 
-| Type | Code | Description |
-|------|------|-------------|
-| Design Patent | `D` | Protects the ornamental appearance of a product |
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 检查这个产品外观有没有相似专利 | 外观专利风险初筛。 |
+| 找出和这张图片相似的设计专利 | 专利图片相似度检索。 |
+| 查这个产品在中国和美国的外观专利风险 | 多国家受理局检索。 |
+| 找出这个类别里仍有效的外观专利 | 分类与法律状态筛选。 |
+| 哪家公司持有与这款设计相似的专利 | 竞品专利权人研究。 |
+| 用这张本地图片查专利 | 先上传图片，再检索。 |
 
-**Search models** for design patents:
+### 边界
 
-| Model ID | Strategy | Recommendation |
-|----------|----------|----------------|
-| 1 | Intelligent Association | Recommended for design patents (default) |
-| 2 | Search This Image | Exact visual match |
+实用新型图片检索转交 `linkfox-zhihuiya-utility-patent-image-search`。本技能不提供独立的关键词、摘要或权利要求文本检索、法律状态监控或年费管理、估值与许可谈判、专利族与引证分析，也不形成自由实施（FTO）法律意见。
 
-> Utility model patents (model 3/4) are not supported by this skill. Use `linkfox-zhihuiya-utility-patent-image-search` instead.
+## 接口清单
 
-**Scoring logic**: A higher `score` value means greater visual similarity. When presenting results, sort by score in descending order (highest similarity first) so users can prioritize the most relevant patents for review.
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 外观专利图片检索 | POST `/zhihuiya/patentImageSearch` | `scripts/zhihuiya_patent_image_search.py` | 根据图片与筛选条件检索相似专利。 |
+| 获取图片上传预签名地址 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 获取上传地址，再向 OSS 上传本地图片并输出公开 URL。 |
 
-## Parameter Guide
+## 前置条件
 
-### Required Parameters
+准备产品或设计图片，明确需要研究的市场和筛选范围。接受公开图片链接或本地图片文件；本地图片由上传脚本转换为公开 URL。图片要求和上传格式见 `references/api.md`。
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| url | The image URL to search against | `https://example.com/product.jpg` |
-| patentType | Patent type, fixed to `D` (design) by this skill | `D` |
-| model | Search model ID: `1` (recommended) or `2` | `1` |
+## 检索流程
 
-### Common Optional Parameters
+1. 确认用户希望研究外观设计专利，并收集图片及国家、分类、法律状态、日期或专利权人范围；参数定义见 `references/api.md`。
+2. 用户提供本地图片时，先运行 `python scripts/upload_image.py '<本地图片路径>'`，读取返回的公开 URL；已有公开链接时直接使用。
+3. 按选定范围执行外观专利检索，先查看摘要，再从落盘响应提取所需专利数据。
+4. 按相似度整理完整图文结果，说明本次返回条数、匹配总数和可继续查询的范围。继续检索遵守成本约束；失败或空结果不自动变更条件重试。
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| country | Patent authority country codes, comma-separated (e.g., `CN,US,JP`) | All countries |
-| loc | Locarno classification codes, connectable with AND/OR/NOT | None |
-| legalStatus | Legal status codes, comma-separated | None |
-| simpleLegalStatus | Simple legal status: `0` (expired), `1` (active), `2` (pending) | None |
-| assignees | Applicant / patent holder name | None |
-| applyStartTime | Application start date (`yyyyMMdd`) | None |
-| applyEndTime | Application end date (`yyyyMMdd`) | None |
-| publicStartTime | Publication start date (`yyyyMMdd`) | None |
-| publicEndTime | Publication end date (`yyyyMMdd`) | None |
-| limit | Number of results to return (1-100) | 10 |
-| offset | Pagination offset (0-1000) | 0 |
-| field | Sort field: `SCORE`, `APD`, `PBD`, `ISD` | `SCORE` |
-| order | Sort order: `desc` or `asc` (for APD/PBD/ISD) | `desc` |
-| lang | Title language preference: `original`, `cn`, `en` | `original` |
-| preFilter | Enable country/LOC pre-filtering: `1` (on) / `0` (off) | `1` |
-| stemming | Enable stemming: `1` (on) / `0` (off) | `0` |
-| mainField | Search within title, abstract, claims, description, publication number, application number, applicant, inventor, IPC/UPC/LOC | None |
-| includeMachineTranslation | Include machine-translated data in search | None |
-| scoreExpansion | Enable score expansion | None |
-| isHttps | Return HTTPS image URLs: `1` (yes) / `0` (no) | `0` |
-| returnImgId | Return image IDs in results | `false` |
+## 执行方式
 
-### Commonly Used Country Codes
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_patent_image_search.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：专利图片检索消耗 81 算力 / 次。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-| Code | Country/Region |
-|------|---------------|
-| CN | China |
-| US | United States |
-| JP | Japan |
-| KR | South Korea |
-| EP | European Patent Office |
-| WO | WIPO |
-| DE | Germany |
-| GB | United Kingdom |
-| FR | France |
-| AU | Australia |
+### 输出策略
 
-## 调用方式
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-patent-image-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-- **API 端点**：`POST /zhihuiya/patentImageSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_patent_image_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-patent-image-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行规则
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 算力消耗预估
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+专利图片检索消耗 81 算力 / 次。图片上传预签名接口的算力标准未单独声明，不推定为免费。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## Local Image Upload
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-This tool requires a **publicly accessible image URL**. If the user provides a local image file path (e.g., `C:\Users\...\photo.png`, `/home/.../image.jpg`), you must upload it first to obtain a public URL.
+### 解决认证和算力问题
 
-Run the upload script:
-```bash
-python scripts/upload_image.py /path/to/local/image.png
-```
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-The script will return a public URL (valid for 24 hours) that can be used as the image URL parameter.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## Usage Examples
+### 约束与建议
 
-**1. Basic design patent search (recommended starting point)**
-Search for design patents similar to a product image across all countries:
+- **理解外观专利与视觉检索**：外观设计专利保护产品的装饰性外观；视觉模型将输入图片与全球专利图片库比较，返回相似专利。模型、专利类型与筛选限制见 `references/api.md`。
+- **按相似度展示**：展示时始终将有效的 `score` 按降序排列，分数越高代表视觉越接近。分数有效条件见接口定义；缺失或无效时说明，不能补造或当成零分。
+- **完整展示每项专利**：不得遗漏或缩略申请号（`apno`）、中文标题（请求中文标题或提供翻译）、发明人（`inventor`）、匹配附图（`url`）、图片列表中的每一张专利图片、摘要、描述、LOC 分类（`loc`）、可用的雷达结果（`radarResult`）和专利说明书。接口未返回的内容明确标为“未返回”，不能编造，也不因此自动扩展收费查询。
+- **解释分数含义**：相似度只表示视觉接近程度，不构成侵权法律判断；相似度低或空结果也不能证明无风险。
+- **保留法律提醒**：每次结果末尾附上：“本检索结果由 LinkfoxAgent 生成。涉及法律意见，建议咨询专业专利律师。”
+- **说明分页情况**：以匹配总数与本次返回条数比较，说明还有多少结果；具体分页方式见接口定义，继续调用前说明额外消耗。
+- **说明错误与缺失**：检索失败时解释原因，建议核对图片可访问性、国家代码和日期格式；不得将接口报错解释为没有相似专利。
+- **衔接上传与检索结果**：本地图片上传后使用返回的公开 URL 检索；上传与检索的输出、缓存和 CLI 约定统一见 `references/api.md`，按需读取对应接口说明。
+
+## 使用示例
+
+### 全球外观专利检索
+
 ```json
-{
-  "url": "https://example.com/my-product.jpg",
-  "patentType": "D",
-  "model": 1,
-  "limit": 20
-}
+{"url":"https://example.com/my-product.jpg","patentType":"D","model":1,"limit":20}
 ```
 
-**2. Design patent search limited to specific countries**
-Search only in China and the United States:
+### 限定中国和美国
+
 ```json
-{
-  "url": "https://example.com/my-product.jpg",
-  "patentType": "D",
-  "model": 1,
-  "country": "CN,US",
-  "limit": 20
-}
+{"url":"https://example.com/my-product.jpg","patentType":"D","model":1,"country":"CN,US","limit":20}
 ```
 
-**3. Search with Locarno classification filter**
-Narrow results to a specific product category (e.g., LOC 07-01 for tableware):
+### 按洛迦诺分类检索餐具
+
 ```json
-{
-  "url": "https://example.com/my-product.jpg",
-  "patentType": "D",
-  "model": 1,
-  "loc": "07-01",
-  "preFilter": 1,
-  "limit": 20
-}
+{"url":"https://example.com/my-product.jpg","patentType":"D","model":1,"loc":"07-01","preFilter":1,"limit":20}
 ```
 
-**4. Search only active patents within a date range**
-Find active design patents filed after 2020:
+### 查询 2020 年以来申请且有效的专利
+
 ```json
-{
-  "url": "https://example.com/my-product.jpg",
-  "patentType": "D",
-  "model": 1,
-  "simpleLegalStatus": "1",
-  "applyStartTime": "20200101",
-  "limit": 30
-}
+{"url":"https://example.com/my-product.jpg","patentType":"D","model":1,"simpleLegalStatus":"1","applyStartTime":"20200101","limit":30}
 ```
 
-**5. Search by specific assignee**
-Find patents held by a particular company:
+### 按专利权人筛选
+
 ```json
-{
-  "url": "https://example.com/my-product.jpg",
-  "patentType": "D",
-  "model": 1,
-  "assignees": "Apple Inc.",
-  "limit": 20
-}
+{"url":"https://example.com/my-product.jpg","patentType":"D","model":1,"assignees":"Apple Inc.","limit":20}
 ```
 
-**6. Get results with Chinese-translated titles**
+### 优先返回中文标题
+
 ```json
-{
-  "url": "https://example.com/my-product.jpg",
-  "patentType": "D",
-  "model": 1,
-  "lang": "cn",
-  "limit": 20
-}
+{"url":"https://example.com/my-product.jpg","patentType":"D","model":1,"lang":"cn","limit":20}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Sort by score**: Always sort results by `score` in descending order (highest similarity first) to help users quickly identify the most relevant infringement risks.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
-2. **Show complete details**: When summarizing results or generating reports, include ALL of the following for each patent -- do NOT omit or abbreviate:
-   - Application number (`apno`)
-   - Patent title in Chinese (use `lang: cn` or provide translation)
-   - Inventor (`inventor`)
-   - Patent drawing (the matched `url` image)
-   - **Every** patent image in the image list
-   - Patent abstract
-   - Patent description
-   - LOC classification information (`loc`)
-   - Radar result (`radarResult`) if available
-   - Patent specification
-
-3. **Legal disclaimer**: Always append a friendly reminder at the end of results:
-   > This search result was generated by LinkfoxAgent. It is recommended to consult a professional patent attorney for legal advice.
-
-4. **Score explanation**: Remind users that the score represents visual similarity -- a higher score indicates a closer match, but does not constitute a legal determination of infringement.
-
-5. **Pagination guidance**: When the total count exceeds the returned results, inform users about the total number of matching patents and guide them to use `offset` and `limit` for additional pages.
-
-6. **Error handling**: When a query fails, explain the reason and suggest adjustments (e.g., verify the image URL is publicly accessible, check country codes, adjust date formats).
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Image-based patent similarity searches:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Check if my product design infringes any patents" | Design patent infringement check |
-| "Search for similar design patents" | Design patent similarity search |
-| "Find patents that look like this image" | Visual patent lookup |
-| "Are there any patents similar to my product appearance" | Appearance risk assessment |
-| "Utility model patent search by image" | Utility model search |
-| "Check patent risks for this product in China and US" | Multi-country patent check |
-| "Find active design patents in this category" | Filtered patent search |
-| "Who holds patents similar to this design" | Competitor patent discovery |
-
-**Not applicable** -- Needs beyond patent image search:
-- Text-based patent search (keyword/abstract/claim search)
-- Patent legal status monitoring or annuity management
-- Patent valuation or licensing negotiation
-- Freedom-to-operate (FTO) legal opinions
-- Patent family or citation analysis
-
-## 算力消耗规则
-
-消耗 81 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

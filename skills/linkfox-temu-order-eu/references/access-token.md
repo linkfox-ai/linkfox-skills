@@ -1,18 +1,15 @@
 # Temu accessToken 授权与获取
 
-Temu **没有** LinkFox 侧自动 OAuth；`accessToken` 须在 Temu 卖家后台「服务市场 → 授权管理」**手动复制**。与 `LINKFOXAGENT_API_KEY`（LinkFox 用户鉴权）是两套令牌。（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
+Temu **没有** LinkFox 侧自动 OAuth；`accessToken` 须在 Temu 卖家后台「服务市场 → 授权管理」**手动复制**。与 `LINKFOXAGENT_API_KEY`（LinkFox 用户鉴权）是两套令牌。（如未配置 按 SKILL.md 的 **执行规则 → 解决认证和算力问题** 处理）
 
 ## 两种鉴权（勿混淆）
 
 | 令牌 | 用途 | 获取方式 |
 |------|------|----------|
-| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token`；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理） |
+| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token`；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **执行规则 → 解决认证和算力问题** 处理） |
 | **Temu accessToken** | Temu 业务 API（经紫鸟转发） | Temu 卖家后台授权后复制 |
 
-```bash
-export LINKFOXAGENT_API_KEY="<your-key>"
-python scripts/check_linkfox_token.py
-```
+`check_linkfox_token.py` 会对 `/temu/proxy` 发起最小探测请求，不是纯本地检查；仅在需要诊断且已明确允许探测时运行。LinkFox 密钥还支持 `LINKFOX_AGENT_API_KEY`，JSON 别名按 `token`、`linkfoxToken`、`linkfox_token` 顺序优先。
 
 ## tokenPurpose 与场景
 
@@ -38,7 +35,7 @@ python scripts/check_linkfox_token.py
 3. **服务市场** → **授权管理**
 4. **获取授权** → 选择 **「Cyber-ERP酷鸟助手」**
 5. 全选授权 → 确认 → 复制 token
-6. 调用 API：`site=eu` / `global` / `eu`，`managementType=semi-managed`
+6. 调用 API：`site=us` / `global` / `eu`，`managementType=semi-managed`
 
 ## 3. 全托管店铺
 
@@ -60,7 +57,7 @@ python scripts/check_linkfox_token.py
 |------|------|-----------|
 | cn | 中国站 | openapi.kuajingmaihuo.com |
 | partner | Partner 网关 | openapi-b-partner.temu.com |
-| us | 欧洲站 | openapi-b-eu.temu.com |
+| us | 美国站 | openapi-b-us.temu.com |
 | global | 全球区 | openapi-b-global.temu.com |
 | eu | 欧洲站 | openapi-b-eu.temu.com |
 

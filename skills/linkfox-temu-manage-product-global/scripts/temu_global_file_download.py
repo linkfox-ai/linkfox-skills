@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""US site file download via /temu/fileDownload (default site=global)."""
+"""通过 /temu/fileDownload 获取加签资源下载结果，默认全球区。"""
 
 import json
 import sys

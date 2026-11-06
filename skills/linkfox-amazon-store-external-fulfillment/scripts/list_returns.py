@@ -10,17 +10,13 @@ GET `externalFulfillment/2024-09-11/returns`
 
 from __future__ import annotations
 
-import sys
 
 from _spapi_ef_common import (
     PATH_RETURNS,
     build_query,
-    developer_proxy_call,
-    emit_result,
+    run_proxy,
     ensure_auth_skill_available,
-    lf_inline_flag,
     load_params_or_exit,
-    merge_json_body,
     require_fields,
 )
 
@@ -51,16 +47,7 @@ def main() -> None:
             ("nextToken", params.get("nextToken")),
         ]
     )
-    proxy = developer_proxy_call(
-        str(params["region"]),
-        PATH_RETURNS,
-        "GET",
-        str(params["sellerId"]),
-        query_string=qs,
-    )
-    out = {"developerProxy": proxy, "resolvedPath": PATH_RETURNS, "queryString": qs}
-    merge_json_body(out, proxy, "returns")
-    emit_result(out, inline=lf_inline_flag())
+    run_proxy(str(params['region']), PATH_RETURNS, 'GET', str(params['sellerId']), query_string=qs, result_field='returns', operation='list_returns', output_fields={'queryString': qs})
 
 
 if __name__ == "__main__":

@@ -11,10 +11,10 @@ Official docs: https://open.shopee.com/documents/v2/v2.top_picks.<api>?module=10
 
 from __future__ import annotations
 
-import json
 import sys
 
-from _top_picks_api_runner import emit_result, lf_inline_flag, run_top_picks_api
+from _shopee_top_picks_common import load_cli_params
+from _top_picks_api_runner import run_top_picks_api
 from _top_picks_endpoints import list_api_names
 
 
@@ -22,12 +22,11 @@ def main() -> None:
     if len(sys.argv) < 2:
         print(f"Usage: top_picks_api.py '<JSON with api field>'\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
         sys.exit(1)
-    params = json.loads(sys.argv[1])
+    params = load_cli_params()
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
-    inline = lf_inline_flag()
-    emit_result(run_top_picks_api(str(params["api"]), params, "top_picks_api.py"), inline)
+    run_top_picks_api(str(params["api"]), params, "top_picks_api.py")
 
 
 if __name__ == "__main__":

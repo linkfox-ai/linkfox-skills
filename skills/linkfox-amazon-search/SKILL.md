@@ -1,238 +1,123 @@
 ---
 name: linkfox-amazon-search
-description: 模拟真实用户在亚马逊前台搜索，获取实时关键词排名和搜索结果页数据。当用户提到亚马逊商品搜索、搜索结果抓取、关键词在搜索页的排名、ASIN排名位置查询、竞品发现、搜索页价格对比、广告商品分析、新品监控、前台搜索模拟、Amazon search, keyword ranking, search results, ASIN ranking position, competitor discovery, price comparison, sponsored product analysis, real-time search, new product monitoring时触发此技能。即使用户未明确提及"搜索模拟"，只要其需求涉及实时亚马逊搜索结果、商品排位数据或前台SERP分析，也应触发此技能。
+description: 模拟真实用户在亚马逊前台搜索，获取实时搜索结果、关键词下的商品位置、价格、评分、评论数、广告标记及配送信息，按需补全卖家精灵竞品数据。适用于亚马逊商品搜索、ASIN 排位核对、竞品发现、价格对比、广告商品分析、新品监控和不同站点或设备的搜索结果比较。不适用于历史搜索量或排名趋势、广告管理、独立销量趋势分析、评论情感分析、Listing 文案优化及库存供应链管理。
 ---
 
-# Amazon Product Search
+# 亚马逊前台搜索
 
-This skill guides you on how to perform Amazon storefront search simulations, helping Amazon sellers retrieve real-time search result data including product rankings, prices, ratings, and more.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool simulates a real user searching on Amazon's storefront. It returns live search result page (SERP) data: product listings with their positions, prices, ratings, review counts, brands, delivery info, sponsored flags, and more. This is **real-time** data directly from the Amazon frontend, not historical analytics.
+查看某个关键词在亚马逊前台当前实际出现的商品及其位置。用户即使只说“找竞品”或“产品调研”，只要目标是查看当前搜索页的商品、价格和评分，即适用本技能。
 
-**Key distinction from ABA data**: ABA data is aggregated historical search term analytics. This tool returns the actual product listings a user would see when searching a keyword on Amazon right now.
+**场景速查**
 
-**Keyword language**: Keywords should be in the language of the target marketplace. For example, use English keywords for amazon.com, German keywords for amazon.de, Japanese keywords for amazon.co.jp, etc.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 在亚马逊搜一下这个产品，看看前排有什么 | 关键词搜索与当前竞品发现。 |
+| 我的 ASIN 在这个词下排在哪里 | 在本次取得的搜索页中核对 ASIN 位置。 |
+| 这个词下的价格区间、评分和评论数如何 | 搜索页商品对比。 |
+| 哪些结果是广告商品 | 区分赞助广告与自然结果。 |
+| 有什么新品，或者畅销商品 | 按新品或畅销顺序查看结果。 |
+| 在德国、日本或英国站搜这个词 | 目标站点的本地语言搜索。 |
+| 手机和电脑搜索结果有什么差别 | 对比不同设备上的搜索页。 |
+| 搜索这些商品，并补充月销量和销售额 | 说明额外费用后，按需启用卖家精灵补全。 |
 
-## 卖家精灵销量数据开关（重要）
+### 边界
 
-`includeSellerSpriteData` 控制是否使用卖家精灵补全竞品数据，每次调用都必须显式传入：
+历史搜索量、历史排名趋势和聚合搜索词分析使用 ABA 等对应历史数据能力。广告管理、完整评论分析、Listing 优化及库存供应链查询不属于本技能范围；搜索结果中的卖家精灵补全也不能替代完整销量趋势研究。
 
-- 默认传 `false`：只返回 Amazon 前台搜索数据，不调用卖家精灵。
-- 当用户需要商品月销量、月销售额、品牌、卖家数量、履约方式或其他卖家精灵竞品字段时，必须向用户说明可启用 `includeSellerSpriteData`，并在调用时传 `true`。
-- 传 `true` 会产生额外的动态积分消耗；启用前应明确提醒用户，费用随成功补全的批次数变化。
-- 不得因为用户只说“找竞品”就自动开启；只有需求包含上述卖家精灵补全数据，或用户明确要求启用时，才传 `true`。
+## 前置条件
 
-需要销量数据的调用示例：
+**先明确搜索目标**：确定关键词或类目范围，并识别用户需要查看的站点、排位、价格、广告或新品信息。完整参数、默认值和站点映射见 `references/api.md`。
 
-```json
-{"keyword": "neck massager", "amazonDomain": "amazon.com", "includeSellerSpriteData": true}
-```
+## 查询流程
 
-## Parameters
+1. 确定目标站点，按目标站点语言准备关键词；未指定站点时采用接口默认值，映射见 `references/api.md`。
+2. 根据用户意图准备排序、类目范围、配送地址和设备；需要翻页或跨设备比较时，先明确请求范围与额外消耗。
+3. 判断是否需要卖家精灵补全：只有用户需要月销量、月销售额、品牌、卖家数量、履约方式等补全信息，或明确要求启用时才开启，并提前说明额外动态费用。仅说“找竞品”不得自动开启。每次请求都按接口定义显式设置补全开关。
+4. 发起本次搜索，优先读取摘要，再从保存的完整响应按需提取字段；失败或空结果时遵守成本约束，不自动连续试探。
+5. 按用户目标展示商品对比、广告标记或指定 ASIN 的本次位置，说明已查询的站点与页码范围；后续检索先说明额外消耗。
 
-| Parameter | Type | Required | Description | Default |
-|-----------|------|----------|-------------|---------|
-| keyword | string | No | Search keyword (translate to the target marketplace's language) | - |
-| amazonDomain | string | No | Amazon marketplace domain | amazon.com |
-| node | string | No | Amazon category node ID for category-scoped searches | - |
-| language | string | No | Language locale code (e.g., en_US, de_DE, ja_JP) | - |
-| sort | string | No | Sort order for results | relevanceblender |
-| page | integer | No | Page number (starting from 1, ~20 results per page) | 1 |
-| deliveryZip | string | No | Postal/zip code for delivery location simulation | - |
-| device | string | No | Device type: desktop, mobile, or tablet | desktop |
-| includeSellerSpriteData | boolean | Yes | 高级参数：每次调用必须显式传入。`true` 时调用卖家精灵补全销量、销售额、品牌、履约等竞品数据，并产生额外动态算力消耗；不需要补全时传 `false` | false（仅服务端兜底） |
+## 执行方式
 
-### Supported Marketplaces
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/amazon_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-| Domain | Country |
-|--------|---------|
-| amazon.com | United States |
-| amazon.co.uk | United Kingdom |
-| amazon.de | Germany |
-| amazon.fr | France |
-| amazon.it | Italy |
-| amazon.es | Spain |
-| amazon.co.jp | Japan |
-| amazon.ca | Canada |
-| amazon.com.au | Australia |
-| amazon.com.br | Brazil |
-| amazon.in | India |
-| amazon.nl | Netherlands |
-| amazon.se | Sweden |
-| amazon.pl | Poland |
-| amazon.sg | Singapore |
-| amazon.sa | Saudi Arabia |
-| amazon.ae | United Arab Emirates |
-| amazon.com.mx | Mexico |
-| amazon.com.tr | Turkey |
-| amazon.com.be | Belgium |
-| amazon.cn | China |
-| amazon.eg | Egypt |
+### 输出策略
 
-Default marketplace is **amazon.com**. Use amazon.com when the user doesn't specify a marketplace.
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Sort Options
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| Value | Description |
-|-------|-------------|
-| relevanceblender | Featured / Relevance (default) |
-| price-asc-rank | Price: Low to High |
-| price-desc-rank | Price: High to Low |
-| review-rank | Average Customer Review |
-| date-desc-rank | Newest Arrivals |
-| exact-aware-popularity-rank | Best Sellers |
+## 执行规则
 
-## 调用方式
+### 算力消耗预估
 
-- **API 端点**：`POST /amazon/search`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/amazon_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+按当前默认网关倍率 1.5 预估，15 算力 / 次起（约 ￥0.15 / 次起）。Amazon 搜索原始基础消耗为 20000 costToken；开启卖家精灵补全后追加成功批次的动态消耗，再按网关倍率结算。逐批计费、算力换算及分页规则见 `references/api.md`，最终倍率和扣费以网关实际结算为准。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 解决认证和算力问题
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## How to Build Queries
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-Construct the request parameters based on the user's intent:
+### 约束与建议
 
-1. **Determine the marketplace**: Map the user's target country to the correct `amazonDomain` value
-2. **Set the keyword**: Translate the search term into the target marketplace's language
-3. **Choose sort order**: If the user wants results sorted by price, reviews, or newness, set the `sort` parameter
-4. **Pagination**: Use the `page` parameter to fetch additional result pages if needed
-5. **Category scope**: If the user wants to search within a specific category, provide the `node` parameter
-6. **Delivery simulation**: Use `deliveryZip` to see location-specific availability and delivery info
-7. **SellerSprite enrichment**: 每次调用必须显式传入 `includeSellerSpriteData`。只有用户明确要求卖家精灵数据、月销量、销售额、品牌、履约等补全字段时才传 `true`，并提前说明会增加动态算力消耗；其他情况必须传 `false`
+- **理解数据含义**：这是模拟真实用户看到的实时搜索结果（SERP），ABA 则是聚合历史搜索词数据；不能从当前结果推断历史趋势。查询限制见 `references/api.md`。
+- **表格展示**：列出位置、ASIN、标题、价格、评分、评论数及可用品牌；明确标记赞助广告与自然结果。价格使用响应币种对应的符号。
+- **说明排名范围**：位置对应本次真实搜索页中的位置，注明站点、设备和已查页码。指定 ASIN 未出现时，仅说明在已查范围未找到，不推断全站没有排名。
+- **说明分页情况**：展示接口返回的结果数和已查范围，按需告知可以继续查询后续页；不要补造未查询页的数据。
+- **解释结果与错误**：依据接口定义和实际错误消息解释原因，并建议核对参数；不把错误当作空商品列表。补全字段未返回时不推算或补造。
+- **图片展示**：有图片链接时可提供链接，只有用户要求时才尝试内联展示。
 
-### Usage Examples
+## 使用示例
 
-**1. Basic keyword search on US marketplace**
-```json
-{"keyword": "wireless earbuds", "amazonDomain": "amazon.com", "includeSellerSpriteData": false}
-```
+### 美国站关键词搜索
 
-**2. Search on German marketplace with German keyword**
-```json
-{"keyword": "kabellose Kopfhoerer", "amazonDomain": "amazon.de", "language": "de_DE", "includeSellerSpriteData": false}
-```
+用户：搜索 wireless earbuds，看看当前前排商品、价格和评分。
 
-**3. Search sorted by price (low to high)**
-```json
-{"keyword": "phone case", "amazonDomain": "amazon.com", "sort": "price-asc-rank", "includeSellerSpriteData": false}
-```
+采用默认站点，不启用卖家精灵补全，展示本次搜索页商品并区分广告。
 
-**4. Search for best sellers in a category**
-```json
-{"keyword": "yoga mat", "amazonDomain": "amazon.com", "sort": "exact-aware-popularity-rank", "includeSellerSpriteData": false}
-```
+### 德国或日本站搜索新品
 
-**5. Search for newest arrivals on Japan marketplace**
-```json
-{"keyword": "USB充電器", "amazonDomain": "amazon.co.jp", "language": "ja_JP", "sort": "date-desc-rank", "includeSellerSpriteData": false}
-```
+用户：看看德国站无线耳机，或者日本站 USB 充电器最近有什么新品。
 
-**6. Multi-page search to analyze deeper results**
-```json
-{"keyword": "laptop stand", "amazonDomain": "amazon.com", "page": 2, "includeSellerSpriteData": false}
-```
+按目标站点准备德语或日语关键词，使用对应语言和新品排序；站点、语言、排序枚举见 `references/api.md`。
 
-**7. Mobile device search simulation**
-```json
-{"keyword": "running shoes", "amazonDomain": "amazon.com", "device": "mobile", "includeSellerSpriteData": false}
-```
+### 价格、畅销和配送条件比较
 
-**8. Category-scoped search with delivery zip**
-```json
-{"keyword": "office chair", "amazonDomain": "amazon.com", "deliveryZip": "10001", "includeSellerSpriteData": false}
-```
+用户：看看手机壳从低到高的价格、瑜伽垫畅销结果，或纽约能配送的办公椅。
 
-**9. 高级查询：启用卖家精灵数据补全**
-```json
-{"keyword": "neck massager", "amazonDomain": "amazon.com", "includeSellerSpriteData": true}
-```
+按具体任务选择排序、类目和配送条件；只有需要类目内搜索时才设置类目范围。
 
-## Display Rules
+### 指定 ASIN 排位及设备比较
 
-1. **Present data clearly**: Show search results in well-structured tables with key fields: position, ASIN, title, price, rating, review count, brand
-2. **Highlight sponsored products**: Clearly mark which results are sponsored ads vs organic listings
-3. **Price formatting**: Display prices with the correct currency symbol for the marketplace
-4. **Position context**: Remind users that position reflects the actual ranking on the search result page
-5. **Pagination notice**: When results span multiple pages, inform the user how many total results were found and suggest fetching additional pages if needed
-6. **Error handling**: When a query fails, explain the reason based on the error response and suggest adjusting parameters
-7. **Image links**: If image URLs are available, mention them but do not attempt to render them inline unless the user requests it
-## Important Limitations
+用户：看看我的 ASIN 在 laptop stand 这个词下的位置，再比较手机和电脑结果。
 
-- **Real-time only**: This tool returns live search results, not historical data. For historical search term analytics, use ABA data instead
-- **Rate awareness**: Each call simulates a real search request; avoid excessive rapid-fire calls
-- **~20 results per page**: Each page returns approximately 20 product listings
-- **Keyword language matters**: Results quality depends on using the correct language for the target marketplace
+明确站点、查询页数与设备比较范围，说明多次查询费用后执行，分设备展示已查范围中的位置。
 
-## User Expression & Scenario Quick Reference
+### 补充卖家精灵竞品指标
 
-**Applicable** -- Real-time Amazon search result queries:
+用户：找 neck massager 的竞品，还要月销量和月销售额。
 
-| User Says | Scenario |
-|-----------|----------|
-| "Search for XX on Amazon" | Basic product search |
-| "What products appear for keyword XX" | Keyword SERP analysis |
-| "Where does my ASIN rank for XX keyword" | Position / ranking check |
-| "Show me the top results for XX" | Competitive landscape |
-| "What's the price range for XX" | Price comparison |
-| "Any sponsored products for XX keyword" | Sponsored ad analysis |
-| "New products for XX keyword" | New arrival monitoring |
-| "Search XX on Amazon Germany/Japan/UK" | Cross-marketplace search |
-| "What are the best sellers for XX" | Best seller discovery |
-| "Compare search results on mobile vs desktop" | Device-specific SERP |
+说明卖家精灵补全增加动态费用，再按接口约定显式启用，展示实际返回的补全指标和总消耗。
 
-**Not applicable** -- Needs beyond real-time search results:
-- Historical search term volume or ranking trends (use ABA data)
-- Advertising campaign management or bid optimization
-- Product review analysis or sentiment analysis
-- Sales estimation or revenue analytics
-- Listing optimization or copywriting suggestions
-- Inventory or supply chain data
+## 使用反馈
 
-**Boundary judgment**: When users say "product research" or "competitor analysis", if it boils down to seeing what currently appears on Amazon search results for a keyword (product positions, prices, ratings), then this skill applies. If they want historical trends, search volume data, or aggregated analytics, ABA data is more appropriate.
-
-## 算力消耗规则
-
-算力动态计算：
-
-```text
-Amazon 搜索基础 costToken（20000）
-+ 实际成功执行的卖家精灵补全批次 costToken 之和
-```
-
-- Skill 调用必须显式传入 `includeSellerSpriteData`；不需要卖家精灵补全时传 `false`，此时仅产生 Amazon 搜索基础消耗。服务端为兼容旧调用仍保留缺省值 `false`。
-- 开启后，搜索结果按批次调用卖家精灵，成功批次返回的 `costToken` 会逐批累加；最终消耗以响应中的顶层 `costToken` 为准。
-- 失败且未返回 `costToken` 的卖家精灵批次不追加算力。
-- 多页搜索中每一页都是独立请求，会分别计算算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

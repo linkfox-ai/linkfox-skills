@@ -28,10 +28,8 @@ from typing import Optional
 from urllib.parse import quote
 
 from _spapi_pricing_common import (
-    developer_proxy_get,
-    emit_result,
+    run_proxy,
     ensure_auth_skill_available,
-        lf_inline_flag,
     resolve_marketplace_id,
 )
 
@@ -97,16 +95,8 @@ def main() -> None:
     path = _path(asin)
     q = _query(marketplace_id, item_condition, ct)
 
-    proxy = developer_proxy_get(region, path, seller_id, q)
-    out: dict = {"developerProxy": proxy, "resolvedPath": path, "queryString": q}
-    if proxy.get("errcode") == 200 and proxy.get("httpStatus") == 200:
-        raw = proxy.get("body") or "{}"
-        try:
-            out["itemOffers"] = json.loads(raw)
-        except json.JSONDecodeError:
-            out["itemOffers"] = None
-            out["itemOffersRaw"] = raw
-    emit_result(out, lf_inline_flag())
+    run_proxy("getItemOffers", "GET", region, path, seller_id, q,
+              result_field="itemOffers")
 
 
 if __name__ == "__main__":

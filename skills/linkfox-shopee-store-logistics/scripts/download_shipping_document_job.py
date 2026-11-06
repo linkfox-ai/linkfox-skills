@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: download_shipping_document_job.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_logistics_api("download_shipping_document_job", params, "download_shipping_document_job.py"), indent=2, ensure_ascii=False))
+    run_logistics_api("download_shipping_document_job", params, "download_shipping_document_job.py")
 
 
 if __name__ == "__main__":

@@ -1,187 +1,118 @@
 ---
 name: linkfox-aigc-textgen
-description: AI生文工具，使用大语言模型根据提示词生成文本内容，支持图/视频/文结合理解。模型可选GEM_3_FLASH（快速）和GEM_3_1_PRO（高质量复杂分析）。用户说"AI生文"、"AI写作"、"文本生成"、"帮我写一段"、"text generation"、"generate text"、"用AI写"、"AI分析图片内容"、"图片识别"、"视频分析"时触发。
+description: 根据提示词生成和分析文本，支持商品标题、五点描述、营销文案、翻译、数据总结，以及结合图片或视频理解内容。适用于 AI 生文、AI 写作、图片识别和视频分析；不适用于图片生成、视频生成或报告文件排版。
+---
+# AI 生文与多模态内容理解
+
+## 适用范围
+
+### 适用
+
+根据用户目标生成文本，或结合用户提供的图片、视频进行理解和分析。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+|---|---|
+| 帮我写商品标题、五点或一段营销文案 | 按目标语言、受众和卖点生成文本。 |
+| 翻译这段文字、总结这些数据 | 翻译、提炼和分析。 |
+| 分析商品图片的构图和卖点 | 图片内容理解。 |
+| 分析视频的节奏和分镜 | 视频内容理解。 |
+| 先写提示词，再做图片或视频 | 生成文本并交给用户要求的下游任务。 |
+
+### 边界
+
+图片生成交给 `linkfox-aigc-imagegen`，视频生成交给 `linkfox-aigc-videogen`，报告文件排版交给 `linkfox-report-generator`。
+
+## 接口清单
+
+| 接口 | 端点 | 接口文档 | 对应脚本 | 说明 |
+|---|---|---|---|---|
+| 创建生文任务（textGenAsync） | POST `/aigc/textGenAsync` | [references/api.md](references/api.md) | `scripts/aigc_textgen.py` | 创建异步任务。 |
+| 查询生文任务（textTaskQuery） | POST `/aigc/textTaskQuery` | [references/api.md](references/api.md) | `scripts/aigc_textgen.py` | 轮询状态并取回生成文本。 |
+| 获取上传凭证（getStsVoucherByAPI） | POST `/oss/getStsVoucherByAPI` | [references/file-upload.md](references/file-upload.md) | `scripts/upload_file.py` | 为本地媒体获取 OSS 临时凭证。 |
+
+以上均为直接端点，无统一转发 path。公共认证引导及 Feedback 不计入业务接口。
+
+## 前置条件
+
+确认文本目标、语言、风格及所需素材。媒体准备和上传前公开确认要求见 [references/file-upload.md](references/file-upload.md)；完整参数和脚本契约见 [references/api.md](references/api.md)。
+
+## 生文与链式调用流程
+
+1. 明确生成或分析目标；按任务选择模型与思考深度，参数要求见接口文档。
+2. 按输入顺序准备素材：已有公开 HTTP(S) URL 直接复用；本地媒体在确认可公开后按上传文档处理。上传失败时停止生文，说明原因并保留成功 URL；生文脚本不会自动上传。
+3. 仅创建一次任务，保存任务标识，再查询同一任务直到完成。结果不确定或会话中断时沿用已有标识查询，恢复方法见接口文档；不要重复创建。
+4. 失败时展示真实原因并保留任务标识；视频不可读或结果为空时，按接口文档评估抽帧兜底及额外费用。
+5. 用户后续任务涉及作图、换模特或视频生成时，自动选择 `--content-only`，捕获文本，用 JSON 编码器构造下游参数并继续用户已要求的流程；仅生文时使用默认输出。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/aigc_textgen.py --stdin [--inline] [--content-only] [--no-cache]`；简单且不含换行的参数可用 `python scripts/aigc_textgen.py '<JSON 参数>'`。
+- **成本约束**：本工具按所选参数动态计费。同一会话、同一参数组合默认只创建一次任务，后续查询沿用任务标识；确需重新创建时，先排除重复任务并向用户说明额外消耗。创建、查询和临时凭证请求均禁用响应缓存。
+
+### 输出策略
+
+- 始终保存完整响应，接口原始响应路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-aigc-textgen-<接口标识>-<timestamp>.json`，最终输出的文件名前缀为 `linkfox-aigc-textgen-`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 默认模式下，UTF-8 序列化后的响应体不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
+- 默认模式下，响应体超过 8000 字节：保存后，标准输出为 JSON 信封，含 `ok`、`truncated`、`savedPath`、`bytes` 和完整 `content`；顶层字段、常见计数、最大列表字段的长度及前 3 条样本等摘要仅写 stderr。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+- 使用 `--content-only` 时，标准输出仅为单行文本，同时仍保存完整响应；失败时不输出文本，错误写 stderr，并以非零状态退出。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+按所选参数动态计费，算力消耗与所选参数相关；具体数值以实际扣除为准，不编造固定单价或计费公式。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **模型选择**：`GEM_3_FLASH` 适合常规文案、简单分析、翻译；`GEM_3_1_PRO` 适合深度分析、长文和复杂推理。提示词越具体越好，速度和推理深度按任务权衡；模型组合限制见接口文档。
+- **直接展示文本**：向用户展示生成内容。脚本为链式传递使用的 `⏎` 是换行占位符，展示时可还原换行；下游 AIGC 脚本会自动解码。
+- **机器输出契约**：生文默认和 `--inline` 的 stdout 为 JSON，大结果为包含完整 content 的 JSON 信封；`--content-only` 为纯文本。诊断、提示和摘要只写 stderr，供链式调用解析，细节见接口文档。
+- **异步查询**：业务封装始终传 `--no-cache`，创建、状态查询、临时凭证均不复用响应缓存；同一任务沿用已有任务标识，避免读取过期状态或重复创建任务。
+- **安全构造下游 JSON**：用 `jq --arg` 或 Python `json.dumps` 处理引号、反斜杠与占位符，不直接拼接未转义内容。下游所需字段和链式调用示例见接口文档。
+- **上传素材**：保留素材顺序与源文件，失败不使用本地路径替代 URL，不重复上传成功项，不展示 STS 凭证。
+
+## 使用示例
+
+### 常规文案与翻译
+
+用户：帮我写无线音箱商品文案，再翻译成德语。
+
+明确卖点和目标语言，选择快速模型生成并直接展示文本。
+
+### 图片或视频分析
+
+用户：分析这个视频的镜头节奏、卖点和可复刻分镜。
+
+准备可读素材，选择适合复杂分析的模型，创建任务后查询结果；失败时解释媒体问题和可行兜底。
+
+### 生文后继续作图
+
+用户：分析这张主图，写场景提示词，再生成图片。
+
+完成素材准备后，以纯文本模式取得提示词，经 JSON 编码传入下游图片任务，保留换行传递机制。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# AI 生文
-
-使用大语言模型根据提示词生成文本内容，支持传入图片, 视频等进行图文结合，视频文本理解和分析。
-
-## 核心特点
-
-- **双模型选择**：快速响应（GEM_3_FLASH）和高质量复杂分析（GEM_3_1_PRO）。
-- **图文/视频内容结合**：`imageUrls` 同时支持图片与视频 URL；图片最多 10 张，视频通常传 1 个。
-- **思考深度可控**：4 级 thinkingLevel 控制推理深度。
-- **异步两步调用**：创建任务后立即返回 taskId，客户端轮询查询结果，避免长耗时同步超时。
-
-## 模型说明
-
-| 模型（model） | 说明 | 适用场景 |
-|------|------|----------|
-| GEM_3_FLASH | 快速响应（默认） | 常规文案、简单分析、翻译 |
-| GEM_3_1_PRO | 高质量复杂分析 | 深度分析、长文写作、复杂推理 |
-
-## 思考等级
-
-| thinkingLevel | 说明 |
-|------|------|
-| minimal | 接近无思考（GEM_3_1_PRO 不支持） |
-| low | 低思考 |
-| medium | 平衡 |
-| high | 最大推理深度 |
-
-## 参数概览
-
-- **必填字段**：`prompt`、`imageUrls`（无图片且无视频时传空数组 `[]`）、`thinkingLevel`（必须显式传入，建议默认 `minimal`）
-- **媒体 URL 约定**：图片与视频 URL **均通过 `imageUrls` 传递**（如视频分析传 `["https://example.com/ref.mp4"]`）；勿使用未文档化字段（如 `videoUrl`、`videoUrls`）
-
-完整参数表、响应字段结构与错误码，见 [`references/api.md`](references/api.md)。
-
-## 图片／视频上传（file-upload）
-
-- `imageUrls` 接收图片或视频 URL，不接收本地文件路径；纯文本请求继续传 `[]`，无需上传。
-- 逐项检查实际使用的媒体，保持原顺序：已有可公开访问的 HTTP(S) URL 直接复用；本地图片、视频或附件先按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 上传，再把成功项的 `url` 填回 `imageUrls`。无需查找或安装额外上传 skill，也不要新增 `videoUrl` 等字段。
-- 上传失败时停止本次生文并说明原因，不传本地路径或失败项。生文脚本不自动上传，须在创建任务或链式调用前完成素材准备；后续步骤复用已取得的 URL。
-
-## 调用方式
-
-采用异步两步模式（与 imagegen 一致）：
-
-1. **创建任务**：`POST /aigc/textGenAsync` → 返回 `taskId`
-2. **轮询查询**：`POST /aigc/textTaskQuery` → 返回 `PROCESSING` / `SUCCESS` / `FAILED`
-
-- **Python 脚本**（内部已封装创建+轮询，传参方式不变）：
-  - `python scripts/aigc_textgen.py --stdin` — **推荐**，从 stdin 读取 JSON 参数，避免 shell 转义问题（如 `python scripts/aigc_textgen.py --stdin < params.json`）
-  - `python scripts/aigc_textgen.py --stdin --content-only` — 只输出 content 文本（同样已是单行）
-  - `python scripts/aigc_textgen.py '<JSON 参数>' [--inline]` — 简单场景直传（**prompt 含换行符时禁用**）
-
-> **轮询策略**：单次 HTTP 超时 150 秒；轮询间隔从 10 秒起递减至 5 秒；总轮询时长最长 600 秒。完整参数/响应/错误码见 `references/api.md`。
-
-> **换行符压平默认开启（无需任何 flag）**：所有输出模式下，content 的换行都会自动替换为单字符 `⏎`（U+23CE），整段 content 变成单行；`--content-only` 只是改变"输出 content 文本 vs 完整 JSON"，不影响该压平行为。
-
-### 输出契约（其他 agent 按此解析）
-
-- **stdout 只放机器数据，始终可 `json.loads`**（`--content-only` 例外，其 stdout 是纯文本 content）：
-  - 默认（小结果）/ `--inline`：stdout = 完整响应 JSON
-  - 大结果：stdout = JSON 信封 `{"ok":bool, "truncated":true, "savedPath":"<路径>", "bytes":int, "content":"<单行文本>"}`
-- **所有提示/摘要/诊断（CHAIN-HINT、Saved full response、summarize）一律走 stderr**，不污染 stdout。
-- **退出码**：成功 `0`；失败（网络错误 / `errcode` 非 200 / `status==FAILED`）非 `0` —— agent 应优先用退出码判错。
-
-**读数据建议**：小结果直接 `json.loads(stdout)` 取 `content`；大结果读 stdout 信封的 `content`（或按 `savedPath` 用 `jq` 抽完整字段），避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## 自动链式调用决策规则
-
-> **Agent 必须遵循以下决策树**，读到规则即自动执行，无需用户逐步指令。
-
-```
-用户需求后续是否涉及 作图 / 生图 / 换模特 / 视频 / imagegen / videogen？
-│
-├─ YES ──→ 使用 --content-only 模式（换行符已压平为单字符 ⏎，可安全内联拼接）
-│           捕获 stdout → 内联拼进下游参数 JSON → 调用下游 Skill
-│
-└─ NO  ──→ 使用默认模式
-            小结果 → json.loads(stdout) 取 content
-            大结果 → 读 stdout JSON 信封的 content，或按 savedPath 用 jq 提取
-```
-
-### 换行符占位符约定（核心机制）
-
-`content` 通常含真实换行符，直接进 shell 变量或拼接 JSON 会断行。脚本**默认**（任何模式，无需 flag）
-把 content 的换行符统一替换为单字符 `⏎`（U+23CE），同时覆盖真实换行控制符与字面量 `\n` 两种形态：
-
-- `⏎` 在 shell 单引号与 JSON 字符串中**均无需转义**，整段 content 变成单行，可被变量安全捕获、内联拼接；
-- 下游 AIGC 脚本（imagegen / videogen / videogen-multi）解析参数后会**自动把 `⏎` 还原为换行符**
-  （各 AIGC 脚本内联的 `decode_nl_in_obj`），因此文本无损传递；
-- 整段 content 变为单行后，可直接捕获进 shell 变量并内联拼接进下游参数 JSON，无需中间文件。
-
-### 标准两步链式调用（imagegen / videogen / 任意 AIGC Skill）
-
-```bash
-# ── Step 1：生文，--content-only 直接拿到单行 content（换行已是 ⏎），捕获进变量 ──────
-PROMPT=$(python scripts/aigc_textgen.py --stdin --content-only < textgen_params.json)
-
-# ── Step 2：内联拼接进下游参数并调用下游 Skill（jq 负责正确的 JSON 转义） ───────────
-PARAMS=$(jq -nc --arg p "$PROMPT" \
-  '{prompt:$p, imageUrls:["https://example.com/ref.jpg"], provider:"BANANA_PRO", outputNum:1, resolution:"1K", aspectRatio:"1:1"}')
-python ../linkfox-aigc-imagegen/scripts/aigc_imagegen.py "$PARAMS"
-# 下游脚本接收后自动把 ⏎ 还原为换行符
-```
-
-> 没有 `jq` 时，可直接把 `$PROMPT` 内联进单引号 JSON：因 `⏎` 无需转义且已无真实换行，
-> 也能安全拼接（前提是 content 内不含双引号；含双引号时优先用 `jq`）。
-
-### 各下游 Skill 的关键参数参考
-
-| 下游 Skill | 关键字段（按需调整，prompt 由上游注入） |
-|---|---|
-| linkfox-aigc-imagegen | `{"imageUrls":[...],"provider":"BANANA_PRO","outputNum":1,"resolution":"1K","aspectRatio":"1:1"}` |
-| linkfox-aigc-videogen | `{"imageUrls":[...],"model":"WAN2_1","outputNum":1,"resolution":"720P","duration":5}` |
-| linkfox-aigc-imagegen-cloth | `{"imageUrls":[...],"outputNum":1,"aspectRatio":"1:1"}` |
-| linkfox-aigc-imagegen-product | `{"imageUrls":[...],"outputNum":1,"aspectRatio":"1:1"}` |
-
-## 使用指引
-
-1. **模型选择**：简单任务用 `GEM_3_FLASH`（默认，响应快）；复杂分析、长文写作用 `GEM_3_1_PRO`。
-2. **提示词**：最大 10 万字符，描述越具体效果越好。
-3. **图片/视频输入**：通过 `imageUrls` 传入媒体 URL。纯文本用 `[]`；图片理解传 1–10 张图；视频理解通常传 1 个视频 URL（如 `.mp4`）。复杂视频分镜/内容分析建议 `GEM_3_1_PRO` + `thinkingLevel: low`。
-4. **思考等级**：需要快速响应选 `minimal`/`low`；需要深度推理选 `high`。
-5. **视频失败兜底**：若返回视频不可读、媒体访问失败、`10005` 或内容为空，应抽帧为图片后再传入 `imageUrls`（参见下游业务 skill 的抽帧流程）。
-
-### 示例
-
-**1. 基础文本生成**
-```json
-{"prompt": "Write a compelling product description for a wireless bluetooth speaker, highlighting portability and sound quality", "imageUrls": [], "thinkingLevel": "minimal"}
-```
-
-**2. 图片 + 文本结合分析**
-```json
-{"prompt": "分析这张商品主图的构图和卖点表达", "imageUrls": ["https://example.com/product-main.jpg"], "model": "GEM_3_1_PRO", "thinkingLevel": "high"}
-```
-
-**3. 视频 + 文本结合分析**
-```json
-{"prompt": "分析该参考视频的镜头节奏、卖点表达与可复刻的分镜结构", "imageUrls": ["https://example.com/reference.mp4"], "model": "GEM_3_1_PRO", "thinkingLevel": "low"}
-```
-
-**4. 快速翻译**
-```json
-{"prompt": "Translate to German: 'Wireless Bluetooth Speaker with LED Light'", "imageUrls": [], "model": "GEM_3_FLASH", "thinkingLevel": "low"}
-```
-
-## 展示规则
-
-- 直接展示生成的文本内容。
-
-## 限制
-
-- 提示词最大 10 万字符。
-- `imageUrls` 最多 10 个 URL；视频分析通常只传 1 个视频 URL，不建议与图片 URL 混传。
-- `GEM_3_1_PRO` 不支持 `minimal` 思考等级。
-- 失败时最多重试 3 次。
-
-## 适用与不适用
-
-**适用**：
-- 商品文案/标题/五点描述生成
-- 图片内容分析和描述
-- 文本翻译
-- 数据分析总结
-- 视频分析
-
-**不适用**：
-- 图片生成 → `linkfox-aigc-imagegen`
-- 视频生成 → `linkfox-aigc-videogen`
-- 报告格式输出 → `linkfox-report-generator`
-
-## 反馈
-
-参见 `references/api.md`。
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

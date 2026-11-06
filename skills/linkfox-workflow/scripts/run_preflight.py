@@ -121,10 +121,8 @@ def _missing_for_node(name: str, data: dict) -> list[str]:
 
     if name == START_NAME:
         mode = str(inputs.get("startInputType") or "chatInput")
-        if mode == "storeAuthorization":
-            if _blank(inputs.get("amazonStore")):
-                missing.append("授权店铺 amazonStore")
-        elif mode == "tableRecordTrigger":
+        # 2026-10-30 起没有 storeAuthorization 触发(那条分支已删除),只认记录触发的表。
+        if mode == "tableRecordTrigger":
             if _blank(inputs.get("tableId")):
                 missing.append("触发数据表 tableId")
     elif name == "agentAgentflow":
@@ -150,8 +148,13 @@ def _missing_for_node(name: str, data: dict) -> list[str]:
         source = str(inputs.get("sourceType") or "")
         if source == "linkfoxTable" and _blank(inputs.get("tableId")):
             missing.append("读取数据表 tableId")
-        elif source == "amazonStore" and _blank(inputs.get("amazonStore")):
-            missing.append("授权店铺 amazonStore")
+        elif source == "amazonStore":
+            if _blank(inputs.get("amazonStore")):
+                missing.append("授权店铺 amazonStore")
+            # 广告表现的两个日期在节点里是必填(保存校验也会拦),手动跑同样会失败。
+            if str(inputs.get("amazonDataType") or "orders") == "ads":
+                if _blank(inputs.get("amazonStartDate")) or _blank(inputs.get("amazonEndDate")):
+                    missing.append("广告开始 / 结束日期")
         elif source == "csv" and _blank(inputs.get("csvFile")):
             missing.append("CSV 文件 csvFile")
         elif source == "excel" and _blank(inputs.get("excelFile")):

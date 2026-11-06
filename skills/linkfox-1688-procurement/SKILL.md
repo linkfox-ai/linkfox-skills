@@ -1,158 +1,139 @@
 ---
 name: linkfox-1688-procurement
-description: 1688采购全流程技能。用于1688授权链接、授权店铺检查、收货地址、商品SKU、下单预览、创建订单、支付链接、订单状态、物流、物流轨迹、取消订单、确认收货、开发票等已授权采购履约场景。用户提到1688采购、1688下单、1688授权、1688订单、1688支付、1688物流、1688开发票、1688开票、1688发票、1688 sourcing procurement或1688 order processing时触发。以图搜图使用linkfox-1688-search-by-image。
+description: 协助用户完成已授权账号的 1688 采购履约，支持账号授权、收货地址与商品规格查询、订单预览、创建订单、支付链接、订单状态、物流、取消订单、确认收货及完成后的开票。适用于 1688 采购、下单、支付、物流与发票处理；不适用于以图找货、关键词选品、退款售后或手工修复令牌。
 ---
+# 1688 采购与订单履约
 
-# 1688 Procurement Workflow
+## 适用范围
 
-This skill helps LinkFox users run authorized 1688 procurement: OAuth status checks, SKU and address lookup, order preview, guarded order creation, payment URL retrieval, order tracking, logistics, cancellation, receipt confirmation, and post-completion invoicing.
+### 适用
 
-Use `linkfox-1688-search-by-image` for image-based product discovery. This skill does not include image search.
+用户希望使用自己的 1688 授权账号完成采购准备、订单履约或开票时，使用本技能。授权有效后各能力可按用户需求独立使用，流程是业务地图，不是一次性自动完成采购闭环的脚本。
 
-## Core Rules
+**场景速查**
 
-- Every script requires LinkFox platform identity from `LINKFOX_AGENT_API_KEY` or `LINKFOXAGENT_API_KEY`.
-- `authorize_url.py` starts 1688 OAuth; `authorized_stores.py` checks the current LinkFox user's 1688 OAuth state.
-- Except those two authorization scripts, every procurement operation runs a script-level `authorizedStores` precheck before calling the target endpoint.
-- If no store has `status=ACTIVE` and `expired=false`, the target endpoint is not called.
-- After authorization is valid, procurement tools may be used independently as the user requests; the workflow is guidance, not a mandatory linear script. Image search remains in `linkfox-1688-search-by-image`.
-- Treat the workflow as a map, not full automation. Do not create orders, get payment URLs, cancel orders, confirm receipt, or apply for invoices based on earlier phrases like "continue".
-- Use exact internal request field names from `references/api.md` when calling scripts. Do not show these field names in normal user-facing text.
-- Treat ordinary 1688 procurement as the only user-facing procurement mode. Apply backend defaults internally per `references/api.md`; do not mention procurement type or ask users to choose one.
-- `cancel_order.py` only attempts to cancel a 1688 order. It is not a refund or after-sales request. For paid orders, including paid-but-unshipped orders, do not call cancellation as a workaround; tell the user this Skill has no refund-application tool and refunds/after-sales must be handled on 1688 unless the backend adds that ability.
-- MCP enable/disable only controls MCP exposure. These scripts call tool-gateway HTTP routes directly; fully disabling a capability requires disabling the route or backend operation.
+| 用户表达 | 查询场景 |
+|---|---|
+| 查我的 1688 授权账号，或生成授权链接 | 授权检查或发起授权。 |
+| 查商品规格和我的收货地址 | 采购准备。 |
+| 预览这批商品的采购费用 | 核对规格、数量、运费和订单总额。 |
+| 确认下单、获取支付链接 | 针对具体订单分别确认并执行。 |
+| 查订单状态、物流或物流轨迹 | 履约跟踪。 |
+| 取消这个订单、确认收货 | 针对具体对象独立确认。 |
+| 这个订单能开票吗、确认开票 | 先查金额与资格，再确认发票申请。 |
 
-Read `references/api.md` for endpoint details and `references/workflow.md` before multi-step procurement.
+### 边界
 
-## Tools
+以图找货交给 `linkfox-1688-search-by-image`；关键词找货交给已安装的对应搜索或榜单技能。本技能没有退款或售后申请能力，已付款订单的退款、退货或售后应在 1688 处理。OAuth 回调及令牌修复由后端完成。
 
-| Script | Risk | OAuth precheck | Purpose |
-|---|---:|---:|---|
-| `authorize_url.py` | Low | No | Generate a 1688 authorization link |
-| `authorized_stores.py` | Low | No | Check current user's authorized 1688 accounts |
-| `receive_address_list.py` | Low | Yes | Query receive addresses |
-| `sku.py` | Low | Yes | Query product SKU/specification data |
-| `order_preview.py` | Medium | Yes | Preview order price, freight, SKU, and address |
-| `create_order.py` | High | Yes | Create a 1688 order |
-| `payment_url.py` | High | Yes | Get payment URL |
-| `order_status.py` | Low | Yes | Query order status |
-| `logistics.py` | Low | Yes | Query logistics summary |
-| `logistics_trace.py` | Low | Yes | Query logistics trace |
-| `confirm_receive.py` | High | Yes | Confirm receipt |
-| `cancel_order.py` | High | Yes | Cancel order |
-| `invoice_amount.py` | Low | Yes | Query invoiceable amount before applying for an invoice |
-| `invoice_apply.py` | High | Yes | Apply for an invoice after order completion |
+## 接口清单
 
-## 调用方式
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 生成授权链接（`authorizeUrl`） | POST `/alibaba1688/authorizeUrl` | `scripts/authorize_url.py` | 授权账号展示名，启动 1688 OAuth。 |
+| 查询已授权账号（`authorizedStores`） | POST `/alibaba1688/authorizedStores` | `scripts/authorized_stores.py` | 检查当前用户授权状态。 |
+| 查询收货地址（`receiveAddressList`） | POST `/alibaba1688/receiveAddressList` | `scripts/receive_address_list.py` | 读取当前用户可用地址。 |
+| 查询商品规格（`sku`） | POST `/alibaba1688/sku` | `scripts/sku.py` | 读取规格、参考价格及库存。 |
+| 下单预览（`orderPreview`） | POST `/alibaba1688/orderPreview` | `scripts/order_preview.py` | 核验商品、数量、地址和费用。 |
+| 创建订单（`createOrder`） | POST `/alibaba1688/createOrder` | `scripts/create_order.py` | 独立确认后创建订单。 |
+| 获取支付链接（`paymentUrl`） | POST `/alibaba1688/paymentUrl` | `scripts/payment_url.py` | 独立确认后获取手动支付链接。 |
+| 查询订单状态（`orderStatus`） | POST `/alibaba1688/orderStatus` | `scripts/order_status.py` | 读取当前履约阶段。 |
+| 查询物流（`logistics`） | POST `/alibaba1688/logistics` | `scripts/logistics.py` | 读取物流单与承运信息。 |
+| 查询物流轨迹（`logisticsTrace`） | POST `/alibaba1688/logisticsTrace` | `scripts/logistics_trace.py` | 读取指定物流单轨迹。 |
+| 确认收货（`confirmReceive`） | POST `/alibaba1688/confirmReceive` | `scripts/confirm_receive.py` | 独立确认后确认收货。 |
+| 取消订单（`cancelOrder`） | POST `/alibaba1688/cancelOrder` | `scripts/cancel_order.py` | 独立确认后尝试取消未付款订单。 |
+| 查询可开票金额（`invoiceAmount`） | POST `/alibaba1688/invoiceAmount` | `scripts/invoice_amount.py` | 逐单查询开票资格和金额。 |
+| 申请开票（`invoiceApply`） | POST `/alibaba1688/invoiceApply` | `scripts/invoice_apply.py` | 独立确认后申请开票。 |
 
-- **API 端点**：`POST /alibaba1688/{authorizeUrl|authorizedStores|receiveAddressList|sku|orderPreview|createOrder|paymentUrl|orderStatus|logistics|logisticsTrace|confirmReceive|cancelOrder|invoiceAmount|invoiceApply}`（完整参数、响应和错误处理见 `references/api.md`）
-- **Python 脚本**：`python scripts/<script_name>.py '<JSON 参数>' [--inline] [--save] [--no-save]`
-- **Windows 推荐**：`$env:PAYLOAD = '<JSON 参数>'` 后运行 `python scripts/<script_name>.py --payload-env PAYLOAD [--inline] [--save]`
-- **成本约束**：本工具会消耗算力。失败、空结果、参数不完整或授权不足时，不得自动连续试探、换参数重试或轮询；需要继续查询时先向用户说明会产生额外消耗。
-- **缓存约束**：本采购 Skill 不做 24h 响应缓存；授权、价格、库存、订单状态和物流以实时返回为准，高风险写操作更不能缓存。
-- **授权约束**：除 `authorize_url.py` 和 `authorized_stores.py` 外，脚本会在调用目标接口前自动检查当前用户的 ACTIVE 1688 授权；没有 ACTIVE 且未过期授权时不会调用目标 endpoint。
-- **授权刷新**：accessToken 临期或已过期时后端会用该用户自己的 refreshToken 自动刷新，调用 `authorizedStores` 或采购接口时都会触发，Skill 与用户无需介入。只有 refreshToken 为空、失效或刷新失败（`authorizedStores` 返回 `expired=true`）时才需要重新走 `authorize_url.py` 授权；不要向用户展示或播报 token 有效期、过期时间、刷新窗口等内部授权细节。
-- **高风险约束**：`create_order.py`、`payment_url.py`、`confirm_receive.py`、`cancel_order.py`、`invoice_apply.py` 必须在用户用中文自然语言单独明确确认后调用。内部确认字段和请求细节只供 Agent 调脚本使用，不要展示给用户。
+## 前置条件
+
+配置 LinkFox 平台身份；采购前通过本技能检查当前用户的 1688 授权。除生成授权链接和查询授权账号外，脚本会在每次采购操作前检查授权，检查不通过时停止目标操作。具体条件与脚本兼容约定见 `references/api.md`。
+
+## 采购流程
+
+1. 检查当前用户授权；不可用时生成授权链接供用户手动打开，完成后重新检查。浏览器跳转本身不能证明授权成功或失败。
+2. 用户从图片找货时先转交图搜技能，再回到本技能查询目标商品规格；已有商品编号则直接查规格。展示实际返回的规格、参考价格、起订量和库存，结合售卖单位及起批量让用户确定规格和数量；价格与库存仅作选择参考。
+3. 查询收货地址。多地址时请用户明确选择，不猜测默认地址；展示足以辨认的信息并减少敏感信息重复。
+4. 进行订单预览，展示商品、规格、数量、单价、商品总价、运费、地址、订单总额、买家留言及异常提示。检查预览明确通过且金额和商品行有效；失败时展示上游提示，停止下单并复核规格、起批量、售卖单位、数量和地址。
+5. 复述本次订单摘要，在用户单独明确确认后创建订单；成功后使用返回的订单号继续用户要求的操作。
+6. 获取支付链接也须单独确认。创建订单成功不能代替获取支付链接的确认；支付链接仅供用户手动打开，不自动打开或支付。
+7. 按用户请求查询订单状态、物流和物流轨迹，不主动连续轮询。用户查看签收信息或询问状态，不等于确认收货。
+8. 取消前优先查询或确认订单状态：未付款订单可进入取消确认；已付款待发货、已发货或已完成订单转到 1688 退款售后；已取消订单无需重复取消。复述订单号、状态、原因及取消不等于退款，用户独立确认后才尝试取消。
+9. 确认收货前，复述具体订单和动作并取得独立确认。
+10. 订单完成后（建议确认收货后）先查可开票金额与资格；跳过不可开票的订单，可开票金额须原样传入申请，不自行计算或换算。复述订单号、发票类型、抬头和金额，取得独立确认后申请开票。逐单报告申请成功、失败或历史已开票；不自动联动多订单批量开票，也不申请红冲，红冲需联系商家。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--save] [--no-save]`。也可使用 `--payload-env ENV_NAME` 或 `--payload-file path.json` 读取 JSON；Windows 推荐这两种方式，避免 shell 转义破坏参数。
+- **请求约束**：本工具每次调用为 0 算力/次 （限时）。避免无目的重复请求；用户要求刷新实时授权、价格、库存、订单状态或物流时，可按需再次查询。失败、空结果、参数不足或授权不足时停止，不自动换参数试探或轮询。需要继续查询时先明确查询目的与范围。
+- **实时数据**：采购业务始终禁用响应缓存，授权、价格、库存、订单状态和物流以实时返回为准；写操作不得缓存或自动重放。`--no-cache` 可传入，但不改变这一行为。
 
 ```powershell
-$env:PAYLOAD = "{}"
+$env:PAYLOAD = '{}'
 python scripts/authorized_stores.py --payload-env PAYLOAD --inline
 ```
 
-**脚本入参方式**：
+### 输出策略
 
-- 直接传 JSON 字符串：`python scripts/sku.py '{"offerId":"..."}'`
-- 从环境变量读取：`python scripts/sku.py --payload-env PAYLOAD`
-- 从文件读取：`python scripts/sku.py --payload-file payload.json`
-- 加 `--inline` 强制全量打印到 stdout
-- 加 `--save` 强制保存对 token 类敏感字段脱敏
-- 加 `--no-save` 禁止保存响应文件
+- 输出和保存的响应均递归脱敏密钥与令牌，并删除令牌过期时间字段。脱敏序列化后不超过 8000 字节：默认直接打印完整 JSON，不保存文件。
+- 超过 8000 字节：默认保存完整脱敏响应，标准输出展示摘要，包含顶层字段、状态、消息、实际返回的消耗字段、常见计数及最大列表的长度和前 3 项。
+- 保存路径为 `<writable-root>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-1688-procurement-<operation>-<timestamp>.json`。根目录依次选择 `ACPX_WORKSPACES` 的第一个工作区、当前工作目录、用户目录；禁止使用 `/tmp` 或系统临时目录，均不可写时报错。`<session>` 优先取 `SESSION_ID`，未提供时在进程内自动生成。
+- `--save` 或 `LINKFOX_SKILL_SAVE_RESPONSE=1` 强制保存；`--no-save` 或 `LINKFOX_SKILL_NO_SAVE=1` 禁止保存，且优先于强制保存与自动保存。环境变量也接受 `true` / `yes`。
+- `--inline` 强制打印完整脱敏 JSON，不隐含保存；保存仍由大小阈值和保存选项决定。
 
-**输出策略（脚本默认行为）**：
+先通过标准输出判断数据是否足够。需要保存小响应时使用 `--save`；需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。完整 CLI 与输出约定见 `references/api.md`。
 
-- 响应体 ≤ 8 KB：默认不落盘，直接把完整脱敏 JSON 打印到 stdout，避免每次查询都在 Skill 目录生成数据文件。
-- 响应体 > 8 KB：默认将完整脱敏响应写入 `<writable-root>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-1688-procurement-<operation>-<timestamp>.json`，stdout 只输出摘要。
-- `<writable-root>` 优先取 `ACPX_WORKSPACES` 的第一个工作区，其次为脚本执行时的当前目录，最后回退到用户目录；`<session>` 取自环境变量 `SESSION_ID`，未提供时自动生成；禁止写入 `/tmp`。
-- 加 `--save` 或设置 `LINKFOX_SKILL_SAVE_RESPONSE=1` 强制保存；加 `--no-save` 或设置 `LINKFOX_SKILL_NO_SAVE=1` 禁止保存；`--inline` 不隐含保存。
+## 执行规则
 
-**读数据建议**：先看 stdout 摘要判断是否足够；需要保存完整响应再加 `--save`，之后优先用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需抽取，避免整份 JSON 进入上下文。
+### 算力消耗预估
+全部 14 个采购接口每次调用为 0 算力/次 （限时）。除生成授权链接和查询已授权账号外，脚本每次采购操作还会发起一次授权检查；该检查也适用此规则。仅在响应实际返回消耗字段时报告其值。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 解决认证和算力问题
 
-## High-Risk Confirmation
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-Ask the user for a separate Chinese natural-language confirmation immediately before each high-risk call, restating the exact order/action summary in business terms only. If the immediately preceding assistant message clearly asks for confirmation of one specific high-risk action, a reply of "确认" is valid. Earlier phrases such as "继续", "可以", or "按上面来" are not valid for later high-risk actions. Do not ask the user to type English parameter names.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-After the user confirms in Chinese, the Agent must add the internal safety field required by `references/api.md` when calling the script. Never mention internal fields, request field names, or backend defaults in user-facing confirmation text unless debugging a tool error.
+### 约束与建议
 
-## Common Workflow
+- **逐次独立确认**：创建订单、获取支付链接、取消订单、确认收货、申请开票均须在调用前取得中文自然语言的单独明确确认。刚刚复述了一个具体动作和对象后，用户紧接着回复“确认”有效；更早的“继续”“可以”“按上面来”不能授权后续动作。内部安全字段由 Agent 组装，不让用户输入英文字段名。
+- **使用业务语言**：普通采购是面向用户的采购模式，不要求用户选择后台采购类型；确认文案只讲具体订单、动作、金额与状态，不展示内部请求字段或默认值。参数、默认值、确认字段及接口限制见 `references/api.md`。
+- **授权展示**：只说明授权可用或需要重新授权，不展示令牌有效期、过期时间或刷新窗口。授权账号仅属于当前 LinkFox 用户，不是后台全库账号；不查数据库发现授权，也不向用户索取令牌、回调码或密钥。
+- **费用展示**：预览是最终可购性、价格、运费与优惠的依据；按接口定义区分元和分，不混算。支付渠道有可读名称时展示名称，只有编码时原样展示，不猜测含义。消耗字段仅在实际返回时报告。
+- **发票展示**：用普通发票、专用发票、个人或企业抬头等业务名称向用户核对资料；企业开票的税号与专票资料要求见接口定义。不可只看批量顶层状态，历史已开票按“已开票”报告；开票成功不可在系统侧回滚。
+- **保护敏感信息**：不展示完整 API Key、JWT、访问令牌、刷新令牌、会话密钥、应用密钥、回调码或认证头。地址和手机号仅展示选择所需信息；反馈不得包含上述秘密、完整地址、手机号或支付链接。
+- **异常处理**：失败、空结果、参数不足或授权不足时停止自动试探，不自动更换参数、重试写入或完整执行采购闭环。额外查询遵循请求约束；采购结果不用动态数据库查询代替。
+- **运行边界**：本技能不提供图搜或 OAuth 回调能力。MCP 停用与 HTTP 能力关闭的差异，以及少见采购异常的诊断见 `references/workflow.md`。
 
-1. Run `authorized_stores.py`; continue only when the current user has an ACTIVE, unexpired 1688 authorization.
-2. If not authorized, run `authorize_url.py`, let the user complete OAuth, then re-check `authorized_stores.py`.
-3. If starting from an image, use `linkfox-1688-search-by-image` to get an `offerId`.
-4. Run `sku.py`, then `receive_address_list.py`, then `order_preview.py`.
-5. Show product, SKU/specification, quantity, price, freight, address, total, and warnings in business terms.
-6. Only after separate Chinese confirmation, run `create_order.py`; add required safety fields internally without showing them to the user.
-7. Only after separate Chinese confirmation, run `payment_url.py`; pass the created order ID internally without showing request field names to the user.
-8. Use `order_status.py`, `logistics.py`, and `logistics_trace.py` for tracking.
-9. Use `cancel_order.py` and `confirm_receive.py` only after separate confirmations for the exact order and action; pass the selected 1688 order ID internally. Do not describe cancellation as refund handling for paid orders.
-10. After receipt confirmation, run `invoice_amount.py` to query the invoiceable amount and whether each order can be invoiced; pass the returned `amount` as-is (do not recompute). Only after separate Chinese confirmation of the invoice type, title, and amount, run `invoice_apply.py`; pass `confirmApplyInvoice=true` and the amount internally. Walk `successList`/`failedList` per order; treat `INVOICE_ALREADY_APPLIED` as already-invoiced, not an error.
+## 使用示例
 
-## Display Rules
+### 准备采购并预览
 
-1. Show authorization status first when procurement depends on OAuth. Do not assume authorization from a browser redirect alone.
-2. `authorizedStores` output is the current LinkFox user's 1688 authorization state. Do not describe it as all stores in the database.
-3. For authorization, only tell the user whether it is available or whether re-authorization is required. Do not display token expiry times, token validity periods, refresh windows, or internal fields such as `tokenExpiresAt`.
-4. Never display full API keys, JWTs, access tokens, refresh tokens, callback codes, app secrets, session keys, or Authorization headers.
-5. Show order preview clearly in business terms: product, SKU/specification, quantity, unit price, product total, freight, receive address, order total, buyer message, and warnings.
-6. Before high-risk calls, summarize the exact operation, key IDs, amount/status when available, then ask the user to confirm in Chinese. Do not show internal boolean fields, request field names, or implementation details.
-7. For receive addresses, show enough to let the user choose safely, but avoid unnecessarily repeating full phone numbers or sensitive address details.
-8. Report `costToken` or equivalent cost fields only when returned.
+用户：帮我看这件商品的规格，并预览采购费用。
 
-## Important Limitations
+检查授权，查询规格与地址，让用户明确数量、售卖单位及地址，展示预览和异常。需要创建订单时另行复述摘要并取得确认。
 
-- Do not create or call image-search scripts here; image search belongs to `linkfox-1688-search-by-image`.
-- Do not expose `/alibaba1688/proxy/callback`, `/alibaba1688/authorizeCallback`, or browser OAuth callback URLs as Skill capabilities.
-- Do not ask users to provide 1688 tokens, refresh tokens, callback codes, or secrets. OAuth token exchange is handled by MyERP and ecom-plat.
-- Do not query backend databases to discover authorization state. Use `authorizedStores`.
-- Do not automatically retry write operations or run the full purchase loop.
-- Do not use `_dataQuery_executeDynamicQuery` for live procurement responses.
+### 查看订单与取消未付款订单
 
-## User Expression & Scenario Quick Reference
+用户：查一下这个订单的状态，我想取消。
 
-**Applicable** -- 1688 procurement scenarios:
+核对状态并按采购流程分流；符合取消场景时复述对象和影响，取得独立确认后执行，说明实际结果。
 
-| User Says | Scenario |
-|-----------|----------|
-| "查询我的1688授权店铺" / "show my authorized 1688 stores" | Authorization check |
-| "生成1688授权链接" / "authorize my 1688 account" | New OAuth authorization |
-| "查这个 offerId 的 SKU" | SKU lookup |
-| "查1688收货地址" | Receive address lookup |
-| "帮我预览1688订单" | Order preview |
-| "确认下单" | High-risk create order gate |
-| "获取支付链接" | High-risk payment URL gate |
-| "查1688订单状态/物流" | Order tracking |
-| "取消这个1688订单" | High-risk cancel gate |
-| "确认收货" | High-risk confirm receive gate |
-| "查1688可开票金额" / "这个订单能开发票吗" | Invoiceable amount query |
-| "给这个1688订单开发票" / "确认开票" | High-risk invoice apply gate |
+### 查询可开票金额与申请开票
 
-**Not applicable** -- use another skill or backend system:
+用户：这个已完成订单能开票吗？
 
-- Image-based 1688 product discovery -> `linkfox-1688-search-by-image`
-- Keyword-based 1688 sourcing/ranking -> use existing 1688 search/ranking skills when available
-- MyERP OAuth callback/proxy callback handling -> backend service, not a Skill
-- Direct token repair or manual 1688 token input -> backend authorization bridge
+先查询资格及金额，说明所需抬头资料；只有用户针对具体发票明确确认后才申请，逐单展示结果。
 
-## Feedback
+## 使用反馈
 
-Auto-detect and report feedback via the Feedback API when actual behavior differs from this skill, results do not match user intent, the user expresses satisfaction/dissatisfaction, or anything could be improved. Call the Feedback API as specified in `references/api.md` without interrupting the user's flow. Do not include API keys, tokens, full addresses, phone numbers, or payment URLs in feedback content.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

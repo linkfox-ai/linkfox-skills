@@ -1,141 +1,120 @@
 ---
 name: linkfox-damai-mercado-market-intelligence
-description: 大麦数据 Mercado Libre（美客多）市场洞察与选品查询，通过 LinkFox 网关查询类目、行业规模、商品与属性聚合、商品销量趋势、相似图片商品和评论，覆盖墨西哥、巴西、阿根廷、智利、哥伦比亚站点。当用户提到大麦数据、大麦 MCP、美客多选品、Mercado Libre 市场调研、类目分析、竞品销量、商品搜索、图搜商品或评论分析时触发此技能。
+description: 使用大麦数据研究 Mercado Libre（美客多）的类目、行业规模、商品与属性聚合、销量趋势、图片相似商品和评论，覆盖墨西哥、巴西、阿根廷、智利、哥伦比亚。适用于美客多选品、市场调研、竞品研究和评论分析；不适用于店铺授权、商品发布、库存修改、订单履约、退款或广告运营。
 ---
+# 大麦数据美客多市场洞察与选品
 
-# Damai Mercado Libre Market Intelligence
+## 适用范围
 
-This skill researches Mercado Libre markets through one LinkFox gateway endpoint. It selects the appropriate operation, validates snake_case arguments, and presents category, industry, product, trend, image-search, or review data.
+### 适用
 
-## Core Concepts
+根据类目、关键词、商品、店铺或图片研究美客多市场，展示真实返回的市场与商品指标。
 
-- Call only `${LINKFOX_TOOL_GATEWAY}/damai/call`. Never call the upstream data provider directly or ask the user for an upstream `X-API-Key`.
-- Send `{"toolName":"...","arguments":{...}}`; preserve documented snake_case field names exactly.
-- Treat `search_categories` and `get_my_quota_status` as free operations. Each successful call to one of the other five operations costs 12 LinkFox points (￥0.12) and consumes one upstream plan request when an active plan exists, or one upstream point when the account is in points billing mode. Plan expiry or exhaustion does not automatically fall back to points; inspect quota status instead of guessing the billing mode.
-- Read `data` first. Use `contentText` only when `data` is textual or ambiguous; do not show `rawResponse` unless diagnostics are requested.
-- Read `references/api.md` before constructing uncommon filters or interpreting provider-specific fields.
+**场景速查**
 
-## Data Fields
-
-| Operation | Main output |
+| 用户表达 | 查询场景 |
 |---|---|
-| Category search | Category IDs, localized paths, level, 30-day orders/GMV, price, merchant and listing counts |
-| Industry overview | Monthly order/price/GMV trends and category summary metrics |
-| Product search | Products, prices, 30/60/90-day and lifetime sales, seller/category data, fulfillment, inventory, attribute aggregation |
-| Sales trend | Monthly and ISO-week order series with coverage metadata |
-| Image search | Similar Mercado Libre product IDs and provider status |
-| Review search | Review text, rating, date, product and buyer fields |
+| 找墨西哥手机类目、美客多类目编号 | 使用 `search_categories` 查找候选类目。 |
+| 这个类目的市场规模和趋势 | 先定位类目，再使用 `industry_overview`。 |
+| 筛选月销高的商品、查这个 SKU | 使用 `search_product_snapshots`。 |
+| 这个商品最近销量如何 | 使用 `product_sales_trend`。 |
+| 用这张图找美客多同款 | 使用 `image_search_products`。 |
+| 分析这个商品的评论 | 使用 `review_search`。 |
 
-## Parameter Guide
+## 接口清单
 
-- Markets: `MLM` Mexico, `MLB` Brazil, `MLA` Argentina, `MLC` Chile, `MCO` Colombia. Default is `MLM` when omitted.
-- Category keywords and product keywords must use the selected market's local language.
-- Resolve a category name with free `search_categories` before using paid category analysis.
-- `search_product_snapshots` requires at least one of `keyword`, `category_id`, `sku_id`, `shop_id`, `shop_query`, or `product_url`.
-- `image_search_products` requires `image_url` or `image_base64`. For a local image, run `python scripts/upload_image.py <path>` and use the returned public URL.
-- `product_sales_trend.days` accepts 1-731. `review_search.limit` and product-search `limit` accept at most 100.
-- Product listing dates accept `YYYYMMDD` or `YYYY-MM-DD`. Product sort fields are `sales_30d`, `historical_total_sales`, `price`, `listing_date`, `rating`, `review_count`, or `title`.
-- `product_status` accepts a string such as `active`/`paused` or an upstream integer status value.
-- Do not pass `uId`, `uid`, `memberId`, undocumented camelCase aliases, or unknown fields.
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 搜索候选类目（`search_categories`） | POST `/damai/call` → `toolName=search_categories`（无上游 path 参数） | `scripts/damai_mercado_market_intelligence.py` | 查找类目与本地化路径，免费。 |
+| 查询行业概览（`industry_overview`） | POST `/damai/call` → `toolName=industry_overview`（无上游 path 参数） | `scripts/damai_mercado_market_intelligence.py` | 读取类目规模与月度趋势。 |
+| 搜索商品快照（`search_product_snapshots`） | POST `/damai/call` → `toolName=search_product_snapshots`（无上游 path 参数） | `scripts/damai_mercado_market_intelligence.py` | 按商品、店铺及指标筛选并返回属性聚合。 |
+| 查询商品销量趋势（`product_sales_trend`） | POST `/damai/call` → `toolName=product_sales_trend`（无上游 path 参数） | `scripts/damai_mercado_market_intelligence.py` | 读取月度与 ISO 周销量和覆盖范围。 |
+| 搜索图片相似商品（`image_search_products`） | POST `/damai/call` → `toolName=image_search_products`（无上游 path 参数） | `scripts/damai_mercado_market_intelligence.py` | 返回外观相似商品编号。 |
+| 查询商品评论（`review_search`） | POST `/damai/call` → `toolName=review_search`（无上游 path 参数） | `scripts/damai_mercado_market_intelligence.py` | 读取评论原文、评分和买家字段。 |
+| 获取图片上传预签名 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 获取上传地址，随后向 OSS 执行 PUT，输出公开图片地址。 |
 
-## 调用方式
+## 前置条件
 
-- **API 端点**：`POST /damai/call`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/damai_mercado_market_intelligence.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+确认用户需要研究的市场与对象。只有类目名称时，先定位类目，类目查询免费；本地图片由上传脚本处理。各接口参数与限制见 `references/api.md`。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-damai-mercado-market-intelligence-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 查询流程
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+1. 根据任务选择类目、行业、商品、趋势、图搜或评论操作；使用目标市场的当地语言准备检索内容，按 `references/api.md` 校验请求。
+2. 类目名称先通过类目查询确定，该操作免费；再进行需要的收费分析；本地图片先运行 `python scripts/upload_image.py <path>`，上传成功后再图搜，上传失败时停止图搜。
+3. 连续调用多个收费操作、高频查询或翻页前，说明预计调用次数与算力消耗，由用户决定是否继续。按任务范围调用，先读摘要，按需提取已保存数据。图搜只得到商品编号时，先说明补充完整商品信息会产生另一笔查询消耗。
+4. 按接口参考判断响应，展示筛选条件与实际数据覆盖。空结果不自动改词、翻页或换市场；超时、限流、5xx 或连接结果不明时不自动重放收费操作，说明不确定性，用户明确同意后再调用。
+5. 大麦上游服务不可用时停止收费调用，提示稍后重试或联系管理员，不查询或展示上游账户信息。参数错误按参考修正，改变用户筛选意图前先询问。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 执行方式
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/damai_mercado_market_intelligence.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：行业概览、商品搜索、销量趋势、图片搜索和评论查询每次成功调用消耗 12 LinkFox 算力（￥0.12）。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## Local Image Upload
+### 输出策略
 
-`image_search_products` requires a public image URL or Base64 content. When the user provides a local image, run `python scripts/upload_image.py <path>` first. The helper requests `${LINKFOX_TOOL_GATEWAY}/oss/file/presignedPut`, uploads the file with the returned presigned PUT URL, and prints a public URL valid for 24 hours. Pass that URL as `arguments.image_url`; never place the presigned query string or image Base64 in user-visible output.
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-damai-mercado-market-intelligence-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Usage Examples
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-```bash
-# Free category lookup
-python scripts/damai_mercado_market_intelligence.py '{"toolName":"search_categories","arguments":{"market_code":"MLM","query":"celulares","limit":10}}'
+## 执行规则
 
-# Product opportunity search
-python scripts/damai_mercado_market_intelligence.py '{"toolName":"search_product_snapshots","arguments":{"market_code":"MLM","category_id":"MLM1055","sort_by":"sales_30d","sort_order":"desc","page":1,"limit":20}}'
+### 算力消耗预估
 
-# Product sales trend
-python scripts/damai_mercado_market_intelligence.py '{"toolName":"product_sales_trend","arguments":{"market_code":"MLM","sku_id":"MLM1602785195","days":90}}'
+类目查询免费；行业概览、商品搜索、销量趋势、图片搜索、评论查询每次成功调用消耗 12 LinkFox 算力（￥0.12）。图片上传预签名的算力价格不确定，不推定免费或套用大麦业务操作的收费标准。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- LinkFox 响应提示算力或余额不足、计费不足或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **数据含义**：类目结果含路径、层级及经营指标；行业结果含月度趋势与汇总；商品结果含销售、卖家、履约、库存及属性聚合；趋势结果含月度、周度序列及覆盖信息；图搜结果以商品编号为主；评论结果保留原文与评分。
+- **据实展示**：只呈现响应支持的字段，不编造需求、利润、竞争或预测结论。注明市场、筛选条件、统计范围、记录数、币种与分页信息。
+- **类目展示**：展示完整本地化路径及是否末级类目。
+- **商品展示**：优先展示商品编号与标题、价格、近 30 天及累计订单、评分与评论数、卖家、类目、上架日期、履约及库存。
+- **趋势展示**：区分请求天数与实际覆盖天数，明确覆盖不足提示。
+- **评论展示**：保留原语言；仅当上游提供译文时标注翻译内容。
+- **读取顺序**：优先读取业务数据；文本内容仅用于业务数据含义不清时辅助理解，原始上游响应仅在诊断时展示。
+- **解释业务结果**：数据可能延迟或不完整，空记录、不可用标记和覆盖提示可能是正常业务结果；收费操作调用成功时，即使没有匹配记录也可能扣费。
+- **认证与脱敏**：只通过 LinkFox 网关访问大麦数据，不直连上游或索要上游密钥。不暴露 LinkFox Key、上游凭证、完整 Base64、预签名查询参数或账号标识。
+- **错误解释**：网关无权访问或托管上游认证失败时联系后端管理员，不能让用户提供上游 Key。按接口参考同时检查 HTTP、网关状态、错误消息与业务数据，不只依赖脚本退出码。
+
+## 使用示例
+
+### 免费查找类目
+
+```json
+{"toolName":"search_categories","arguments":{"market_code":"MLM","query":"celulares","limit":10}}
 ```
 
-## Display Rules
+### 搜索类目商品
 
-1. Present only fields supported by the response; do not invent demand, profit, or competition conclusions.
-2. State the market, filters, time coverage, record count, currency, and pagination when available.
-3. For category results, show the full localized path and whether the category is terminal.
-4. For product results, prioritize product ID/title, price, 30-day orders, lifetime orders, rating/reviews, seller, category, listing date, fulfillment, and inventory.
-5. For trends, distinguish requested days from covered days and surface incomplete-coverage notices.
-6. Image search returns product IDs; explain that fetching full product records requires another potentially paid operation.
-7. Preserve review language and label translations only when the upstream response provides them.
+```json
+{"toolName":"search_product_snapshots","arguments":{"market_code":"MLM","category_id":"MLM1055","sort_by":"sales_30d","sort_order":"desc","page":1,"limit":20}}
+```
 
-## Important Limitations
+### 查询商品销量走势
 
-- Provider data can be delayed or incomplete; `data_available=false`, empty records, and coverage notices are valid business results.
-- Product-search `product_status`, image-search `token`, and some fulfillment values are provider-defined; do not invent undocumented enums.
-- A successful paid operation may consume upstream quota even when no matching business records are found.
-- Do not retry paid operations automatically after timeout, 5xx, or an ambiguous connection failure.
-- Do not expose LinkFox keys, upstream credentials, full Base64 images, or provider account identifiers.
+```json
+{"toolName":"product_sales_trend","arguments":{"market_code":"MLM","sku_id":"MLM1602785195","days":90}}
+```
 
-## 错误处理
+## 使用反馈
 
-| 场景 | 处理 |
-|---|---|
-| 参数错误或 `errcode=1002` | 按 `references/api.md` 修正；如需改变用户筛选意图，先询问用户 |
-| HTTP 401/402 或 LinkFox 算力不足 | 使用 `references/onboarding.md` 引导并停止调用 |
-| HTTP 403 或 `errcode=1005` | 提示联系后端检查路由和托管密钥；不得要求用户提供上游密钥 |
-| 大麦上游套餐、算力或额度异常 | 最多调用一次免费的 `get_my_quota_status` 辅助说明，然后停止收费调用 |
-| HTTP 429/5xx、`errcode=1003` 或超时 | 不自动重试；说明结果不确定，用户明确同意后再调用 |
-| 成功但无数据 | 如实展示空结果和筛选条件，不自动换词、翻页或换市场 |
-| 本地图片上传失败 | 不调用收费图搜，先修正图片输入或上传问题 |
-
-判断结果时同时检查 HTTP 状态、`code` / `errcode`、`error` / `errmsg` 和业务 `data`；不要只依赖脚本退出码，也不要自动重试收费操作。
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Mercado Libre category, market, product, trend, image-similarity, and review research:
-
-| User says | Action |
-|---|---|
-| "找墨西哥手机类目" / "美客多类目 ID" | Use `search_categories` |
-| "这个类目市场规模和趋势" | Resolve category, then use `industry_overview` |
-| "筛选月销高的美客多商品" / "查这个 SKU" | Use `search_product_snapshots` |
-| "这个商品最近销量走势" | Use `product_sales_trend` |
-| "用这张图找美客多同款" | Use `image_search_products` |
-| "分析这个商品的评论" | Use `review_search` |
-
-**Not applicable** -- Store authorization, listing publication, inventory updates, order fulfillment, refunds, advertising operations, or other Mercado Libre official seller APIs.
-
-**Boundary judgment:** Use this skill when the user needs market or product intelligence from the documented data operations. Do not use it for seller-account mutations, official commerce workflows, or unsupported predictive conclusions.
-
-## 算力消耗规则
-
-- `search_categories`、`get_my_quota_status` 免费，不扣 LinkFox 算力。
-- `industry_overview`、`search_product_snapshots`、`product_sales_trend`、`image_search_products`、`review_search` 每次成功调用收取 **12 LinkFox 算力（￥0.12）**。
-
-> 用户会因收费操作支付算力。需要连续调用多个收费操作、高频查询或翻页时，先说明预计调用次数与算力消耗，由用户决定是否继续。
-
-## Feedback
-
-Auto-detect and report feedback through the Feedback API in `references/api.md` when the skill behavior, documentation, or result presentation mismatches the user's intent, or when the user expresses praise or dissatisfaction. Never include credentials, private data, Base64 images, or complete large responses.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

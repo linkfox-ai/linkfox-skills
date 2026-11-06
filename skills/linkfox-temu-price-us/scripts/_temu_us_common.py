@@ -3,16 +3,7 @@
 
 import json
 
-from _temu_common import (
-    FILE_DOWNLOAD_URL,
-    PROXY_URL,
-    call_temu_api,
-    emit_result,
-    lf_inline_flag,
-    load_json_arg,
-    parse_nested_body,
-    resolve_access_token,
-)
+from _temu_common import FILE_DOWNLOAD_URL, PROXY_URL, call_temu_api, emit_result, lf_inline_flag, parse_nested_body, resolve_access_token
 
 DEFAULT_SITE = "us"
 DEFAULT_MANAGEMENT_TYPE = "semi-managed"
@@ -44,11 +35,11 @@ def build_us_proxy_body(params: dict, api_type: str, business=None) -> dict:
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
-    if "tokenPurpose" not in params and params.get("storeKey") and not params.get("accessToken"):
-        params = dict(params)
+    params = dict(params)
+    params["site"] = site
+    params["managementType"] = management_type
+    if params.get("storeKey") and not params.get("accessToken"):
         params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
-        params.setdefault("site", site)
-        params.setdefault("managementType", management_type)
 
     body = {
         "site": site,
@@ -77,6 +68,9 @@ def us_file_download_call(params: dict, timeout: int = 150) -> dict:
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
+    params = dict(params)
+    params["site"] = site
+    params["managementType"] = management_type
     body = {
         "site": site,
         "managementType": management_type,

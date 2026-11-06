@@ -1,17 +1,17 @@
 # `GET_EASYSHIP_DOCUMENTS`
 
-> **分类**：5. Easy Ship Reports  
-> **说明**：Easy Ship shipping documents  
-> **可用范围**：Seller only
+> **分类**：5. Easy Ship 报告  
+> **说明**：Easy Ship 配送文档  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Easy Ship Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-easy-ship#easyship-report)（章节：**EasyShip Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Easy Ship 报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-easy-ship#easyship-report)（章节：**EasyShip Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
-- **Report output type**：PDF
-- **要点**：Contains the invoice, shipping label, and warranty (if available) documents for an Amazon EasyShip order.
+- **角色**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
+- **输出格式**：PDF
+- **要点**：包含 Amazon EasyShip 订单的发票、配送标签和保修文档（若有）。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-easy-ship#easyship-report>
 

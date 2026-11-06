@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-TikTok Creator Detail - LinkFox Skill
+达人详情 - LinkFox 技能
 调用 /chuhaijiang/creators/detail 接口。
 
-Usage:
-  python chuhaijiang_creator_detail.py '<JSON parameters>'           # 自动：小结果全量；大结果写文件+摘要
-  python chuhaijiang_creator_detail.py '<JSON parameters>' --inline  # 强制全量打印到 stdout
+用法:
+  python chuhaijiang_creator_detail.py '<JSON 参数>'           # 自动：小结果全量；大结果写文件+摘要
+  python chuhaijiang_creator_detail.py '<JSON 参数>' --inline  # 强制全量打印到 stdout
 
 输出策略（脚本默认行为）：
-  - **始终**将完整响应写入 `<linkfox-root>/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-creator-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录；`<session>` 取自环境变量 `SESSION_ID`）
+  - **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-creator-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录；`<session>` 取自环境变量 `SESSION_ID`）
   - 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
   - 响应体 > 8 KB：落盘后 stdout 输出请求参数、顶层状态、嵌套计数、业务列表长度和主业务列表前 3 条样本
   - 加 `--inline` 强制全量打印到 stdout（同样落盘）
@@ -20,8 +20,7 @@ import os
 import secrets
 import sys
 import time
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
+from _creator_transport import request, normal_response
 
 _SESSION_CACHE: dict[str, str] = {}
 
@@ -130,10 +129,8 @@ SLUG = "linkfox-chuhaijiang-tiktok-creator"
 # 响应小于等于该字节数时，落盘后额外全量输出到 stdout
 SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
-_LAST_CALL_WAS_HTTP_ERROR = False
+_LAST_HTTP_STATUS = None
 
-def get_api_url():
-    return get_api_base() + API_PATH
 
 
 def get_api_key():
@@ -150,45 +147,10 @@ def get_api_key():
 
 
 def call_api(params):
-    global _LAST_CALL_WAS_HTTP_ERROR
-    _LAST_CALL_WAS_HTTP_ERROR = False
-    api_url = get_api_url()
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": (os.environ.get("SESSION_ID") or "").strip(),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(
-        api_url,
-        data=data,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            raw = response.read().decode("utf-8")
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                return {"error": "Invalid JSON response", "details": raw[:500]}
-    except HTTPError as e:
-        _LAST_CALL_WAS_HTTP_ERROR = True
-        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        try:
-            return json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
-        except json.JSONDecodeError:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": body[:500]}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
-    except TimeoutError:
-        return {"error": "Connection timed out"}
-
+    global _LAST_CALL_WAS_HTTP_ERROR, _LAST_HTTP_STATUS
+    _LAST_HTTP_STATUS, result = request(API_PATH, SLUG, params)
+    _LAST_CALL_WAS_HTTP_ERROR = _LAST_HTTP_STATUS is None or not 200 <= _LAST_HTTP_STATUS < 300
+    return result
 
 
 def _cache_key(params):
@@ -221,7 +183,7 @@ def _load_cache(path):
     try:
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
-        return payload
+        return payload if _is_success_result(payload, http_status=200) else None
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -234,21 +196,17 @@ def _save_cache(path, payload):
         pass
 
 
-def _is_success_result(result):
-    if _LAST_CALL_WAS_HTTP_ERROR:
+def _is_success_result(result, http_status=None):
+    status = _LAST_HTTP_STATUS if http_status is None else http_status
+    if not normal_response(status, result) or result.get("error"):
         return False
-    if not isinstance(result, dict) or result.get("error"):
-        return False
-    has_success_marker = result.get("success") is True
     if result.get("success") is False:
         return False
-    for key in ("errcode", "errorCode", "code"):
-        if key not in result:
-            continue
-        has_success_marker = True
-        if str(result[key]).lower() not in ("0", "200", "ok", "success"):
+    # 检查业务标记，不能将明确的业务失败写入缓存。
+    for key in ("errorCode", "code"):
+        if key in result and str(result[key]).lower() not in ("0", "200", "ok", "success"):
             return False
-    return has_success_marker
+    return True
 
 
 def _business_lists(result):
@@ -336,7 +294,7 @@ def main():
 
     if len(argv) != 1:
         print(
-            "Usage: chuhaijiang_creator_detail.py '<JSON parameters>' [--inline] [--no-cache]",
+            "用法: chuhaijiang_creator_detail.py '<JSON 参数>' [--inline] [--no-cache]",
             file=sys.stderr,
         )
         sys.exit(1)

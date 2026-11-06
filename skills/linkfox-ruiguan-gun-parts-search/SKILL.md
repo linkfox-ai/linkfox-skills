@@ -1,145 +1,112 @@
 ---
 name: linkfox-ruiguan-gun-parts-search
-description: 基于睿观的产品图片政策合规检测，通过视觉相似度匹配识别潜在违规商品。当用户提到政策合规检查、产品图片合规、违规检测、禁售商品筛查、基于图片的合规审查、上架前风险排查、policy compliance detection, product compliance review, violation detection, image compliance check, product image risk screening, Ruiguan时触发此技能。即使用户未明确说"合规"，只要其需求涉及将产品图片与违规数据库进行比对，也应触发此技能。
+description: 基于睿观违规商品库，通过产品图片的视觉相似度匹配筛查潜在政策违规风险，展示匹配图片、相似度及中英文标题。适用于单图检测、多图逐项筛查、禁售商品相似匹配及上架前图片风险预检，支持公开图片和本地图片。不适用于文本或商品元数据合规分析、通用类目分类、商标、专利或版权侵权检测，也不提供法律结论或上架许可保证。
+---
+# 睿观图片政策合规检测
+
+## 适用范围
+
+### 适用
+
+将产品图片与已知政策违规商品库进行视觉比对，识别需要进一步核查的平台政策风险。用户希望检测单张图片、筛查多张商品图或查找相似违规商品时，使用本技能，无需明确提及睿观或合规。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 帮我检测一下这个图片是否违规 | 单张产品图片政策风险检测。 |
+| 扫描这些产品图片有没有违规风险 | 多张图片逐项筛查。 |
+| 这张图会不会被当作禁售商品 | 与违规商品库进行视觉匹配。 |
+| 这个产品能安全上架吗 | 在用户提供图片后做上架前风险预检。 |
+| 找出与这张产品图相似的违规商品 | 展示相似匹配及可比对图片。 |
+
+## 接口清单
+
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 图片政策合规检测 | POST `/ruiguan/gunPartsSearch` | `scripts/ruiguan_image_compliance_search.py` | 返回违规商品视觉匹配结果。 |
+| 获取图片上传预签名 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 获取上传地址，随后向该地址 PUT 本地图片并返回公开链接。 |
+
+两个 LinkFox 接口的定义均见 `references/api.md`；文件 PUT 是向返回的 OSS 地址上传文件，不是额外的 LinkFox 网关接口。
+
+## 前置条件
+
+**先确定待检图片**：准备公开图片链接，或确认用户提供的本地图片文件。参数与图片使用限制见 `references/api.md`。
+
+## 检测流程
+
+1. 确认单图或多图筛查范围，优先复用同一会话、同一参数组合的已有结果。批量任务按图片逐项处理，不擅自扩大范围。
+2. 累计检测调用将超过 5 次时，必须通过 `AskUserQuestion`（不可用时直接询问用户）二次确认，说明已消耗和继续调用预计消耗的算力，由用户决定是否继续。
+3. 公开链接直接用于检测；本地图片先运行 `python scripts/upload_image.py "/path/to/local/image.png"` 获取公开链接，再按接口参考准备请求并运行检测脚本。上传失败时停止，不继续检测。
+4. 先查看保存的响应与摘要，再按需提取匹配结果，保留检测标识和消耗信息供核对。
+5. 逐项展示匹配图、相似度与中英文标题，解释强匹配及待核查风险。失败或空结果按接口参考解释，不自动追加试探请求。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/ruiguan_image_compliance_search.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：图片检测每次消耗 36 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-gun-parts-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+图片检测消耗 36 算力 / 次；上传预签名的独立费用未明确，不将其视为免费。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解匹配结果**：服务在已知政策违规商品库中查找视觉相似项，结果按视觉相似度呈现。`cosine` 在 0–1 之间，越大越相似，接近 1 表示外观近乎一致；它不是违规概率。
+- **清晰展示数据**：用表格列出匹配图片、相似度、英文标题 `pdTitle` 和中文标题 `pdTitleCHNCensored`；有 `pdImgOssUrl` 时展示图片，方便用户比对。可用时附检测标识和实际 `costToken`，不补造未返回字段。
+- **突出强匹配**：`cosine` 超过 0.8 时明确标为需关注的强匹配，并解释分数越高表示与已知违规商品越相似。
+- **解释空结果与错误**：失败时说明具体问题，提示核对图片链接是否有效且可公开访问；空结果仅表示本次未返回匹配项。
+- **核对平台政策**：如实呈现筛查线索，提醒用户结合平台政策核实；视觉相似度不构成最终政策裁定或法律结论，也不保证可以上架。
+- **遵循接口使用范围**：本能力仅做图片筛查，不分析文字描述、商品元数据或判断知识产权侵权；图片与上传限制、缓存及 CLI 细节统一见 `references/api.md`。
+
+## 使用示例
+
+### 单张产品图检测
+
+用户：帮我检查这个产品图片有没有政策违规风险：https://example.com/images/product-123.jpg
+
+对用户指定图片执行一次检测，展示匹配表、图片和相似度解释。
+
+### 多张图片筛查
+
+用户：请扫描我提供的两张商品图片，看看是否有潜在违规风险。
+
+按用户提供的图片逐项检测，分别列出结果与消耗，执行前核对累计调用门槛。
+
+### 本地图片上架前预检
+
+用户：上架前帮我检查本地这张产品图片。
+
+先上传用户提供的本地图片，再使用返回的公开链接检测，标出强匹配，提醒用户结合平台政策核实。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Ruiguan Policy Compliance Image Detection
-
-This skill guides you on how to use the Ruiguan policy compliance detection tool to identify potential policy violations in product images. It performs image-based similarity search against a known database of prohibited products.
-
-## Core Concepts
-
-Ruiguan Policy Compliance Image Detection is an image-based compliance screening service. Given a product image URL, it searches for visually similar products in a database of known policy-violating items. The tool returns matching violations ranked by visual similarity.
-
-**Similarity score (cosine)**: A value between 0 and 1. Higher values indicate stronger visual resemblance to known violating products. A score close to 1.0 means the product image is nearly identical to a flagged violation.
-
-## Parameter Guide
-
-| Parameter | Type | Required | Description | Example |
-|-----------|------|----------|-------------|---------|
-| Image URL | imageUrl | Yes | The URL of the product image to check (max 1000 chars) | https://example.com/product.jpg |
-
-**Key notes:**
-- The image URL must be publicly accessible
-- Supported formats include common image types (JPG, PNG, etc.)
-- The URL must not exceed 1000 characters
-
-## Response Fields
-
-| Field | API Name | Description |
-|-------|----------|-------------|
-| Total Matches | total | Number of matching violation records found |
-| Violation List | data | Array of matched violating products |
-| Violation Image | pdImgOssUrl | Image URL of the matched violating product |
-| Similarity Score | cosine | Similarity between the input image and the violation (0~1) |
-| Product Title (EN) | pdTitle | English title of the matched violating product |
-| Product Title (CN) | pdTitleCHNCensored | Chinese title of the matched violating product |
-| Detection ID | detectId | Unique identifier for this detection session |
-| Token Cost | costToken | Number of tokens consumed by this request |
-
-## 调用方式
-
-- **API 端点**：`POST /ruiguan/gunPartsSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/ruiguan_image_compliance_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-gun-parts-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Local Image Upload
-
-This tool requires a **publicly accessible image URL**. If the user provides a local image file path (e.g., `C:\Users\...\photo.png`, `/home/.../image.jpg`), you must upload it first to obtain a public URL.
-
-Run the upload script:
-```bash
-python scripts/upload_image.py /path/to/local/image.png
-```
-
-The script will return a public URL (valid for 24 hours) that can be used as the image URL parameter.
-
-## Usage Examples
-
-**1. Basic compliance check for a single product image**
-```
-Check this product image for policy compliance: https://example.com/images/product-123.jpg
-```
-
-**2. Batch checking multiple product images**
-```
-Please scan these product images for potential policy violations:
-- https://example.com/images/item-a.jpg
-- https://example.com/images/item-b.jpg
-```
-
-**3. Pre-listing compliance screening**
-```
-Before I list this product, can you check if the image triggers any policy flags?
-Image: https://example.com/new-product.png
-```
-
-## Display Rules
-
-1. **Show results in a clear table**: Present each matched violation with its image, similarity score, and product titles
-2. **Highlight high-similarity matches**: When the cosine score exceeds 0.8, clearly flag the result as a strong match that likely requires attention
-3. **Include violation images**: When results contain `pdImgOssUrl`, display the matched violation image so the user can visually compare
-4. **Score interpretation**: Always explain what the similarity score means -- higher values indicate closer resemblance to known violations
-5. **Error handling**: When a query fails, explain the issue and suggest checking whether the image URL is valid and publicly accessible
-6. **No legal advice**: Present detection results factually without providing legal conclusions; remind users to verify with platform policies
-
-## Important Limitations
-
-- **Image-only detection**: This tool works exclusively with image URLs; it does not analyze text descriptions or product metadata
-- **URL accessibility**: The image URL must be publicly reachable by the detection service
-- **URL length cap**: Image URLs must not exceed 1000 characters
-- **Similarity-based**: Results are based on visual similarity and do not constitute a definitive policy ruling
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Image-based product policy compliance checks:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Check if this product image has compliance risks" | Single image compliance check |
-| "Scan my product images for policy violations" | Batch compliance screening |
-| "Is this image flagged as a prohibited product" | Specific violation inquiry |
-| "Pre-screen my listing images for policy risks" | Pre-listing compliance audit |
-| "Find similar violations for this product image" | Similarity-based violation search |
-| "这个产品能安全上架吗" | 合规风险预检 |
-| "帮我检测一下这个图片是否违规" | 单图合规检测 |
-
-**Not applicable** -- Needs beyond image-based policy compliance detection:
-- Text-based product compliance analysis
-- General product category classification
-- Intellectual property / trademark infringement
-- Patent or copyright detection (use other Ruiguan skills)
-
-## 算力消耗规则
-
-消耗 36 算力。
-
-> **重要**：本技能消耗大量算力，如果调用次数超过5次，必须用`AskUserQuestion` 和用户进行二次确认，要明确告知用户已消耗算力和继续调用的话预计消耗的算力，让用户自行决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
----
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,122 +1,116 @@
 ---
 name: linkfox-amazon-store-catalog
-description: 亚马逊商品目录（Catalog Items）查询。用于按 ASIN 获取目录详情，按关键词、标识符或分类条件搜索商品，以及查询商品类目节点、标题摘要、图片和其他 includedData。用户提到亚马逊商品目录、Catalog Items、ASIN 查商品、关键词搜亚马逊商品、类目节点、商品图片或摘要、searchCatalogItems、getCatalogItem、listCatalogCategories 时触发。即使未明确说“Catalog”，只要希望查询亚马逊全站目录中的商品基础资料而不是卖家自己的 Listing，也应触发此技能；卖家 SKU 的刊登增删改查使用 linkfox-amazon-store-listings。
+description: 查询亚马逊全站商品目录（Catalog Items），支持按 ASIN 获取商品详情、按关键词或商品标识搜索、查询商品类目节点，并查看标题摘要、图片及其他目录资料。适用于目录商品基础信息核对和商品发现；不适用于卖家自己的刊登增删改查、订单查询或前台竞品数据研究。
 ---
+# Amazon 店铺商品目录查询
 
-# Amazon 店铺 Catalog Items
+## 适用范围
 
-本 skill 与 **`linkfox-amazon-store-auth`** 等同属 **Amazon Store** 系列：依赖 **`linkfox-amazon-store-auth`** 选店（`sellerId`+`region`）；直接 **`POST /spApi/developerProxy`** 传入 `sellerId`+`region`，由服务端解析 token（勿传 `amzAccessToken`，除非兼容旧调用）。转发 **GET**。
+### 适用
 
-## 调用方式
+查询已授权店铺所在站点的 Amazon 商品目录资料。
+用户希望按 ASIN 核对商品、按关键词或标识符发现目录商品，或查看商品所属类目时，使用本技能，无需明确提及 Catalog Items。
 
-- **API 端点**：`POST /spApi/developerProxy`（不同操作通过请求体区分；完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文脚本一览）
-- **成本约束**：本工具会消耗算力；失败/空结果不得自动换关键词、翻页或连续试探；需要继续检索时先向用户说明会产生额外消耗。
+**场景速查**
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-catalog-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 查这个 ASIN 的标题、图片和基础资料 | 目录详情：读取指定商品及所需数据集。 |
+| 按关键词找亚马逊目录商品 | 目录搜索：展示本页商品和分页线索。 |
+| 用条码或卖家 SKU 查对应的目录商品 | 标识符搜索：核对标识类型及目标店铺。 |
+| 查看这个商品属于哪些类目节点 | 类目查询：按 ASIN 或卖家 SKU 读取类目。 |
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 边界
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+卖家 SKU 的刊登增删改查使用 `linkfox-amazon-store-listings`；卖家订单查询使用 `linkfox-amazon-store-orders`。本技能提供商品目录数据，前台竞品数据研究使用对应数据技能。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 接口清单
 
-## 官方参考索引
-
-| 能力 | 文档 |
-|------|------|
-| listCatalogCategories | [listCatalogCategories](https://developer-docs.amazon.com/sp-api/reference/listcatalogcategories) |
-| searchCatalogItems | [searchCatalogItems](https://developer-docs.amazon.com/sp-api/reference/searchcatalogitems) |
-| getCatalogItem | [getCatalogItem](https://developer-docs.amazon.com/sp-api/reference/getcatalogitem) |
-
----
-
-## Prerequisites
-
-1. 依赖 **`linkfox-amazon-store-auth`**；`python scripts/check_auth_dependency.py`，exit **42** 时需先安装授权 skill。
-2. 应用需具备 **Catalog Items** 相关角色；`searchCatalogItems` 按 **identifiers+SKU** 检索时 query 须带 **`sellerId`**（脚本在 `identifiersType=SKU` 时自动使用入参 `sellerId`）。
-
----
-
-## Current Capabilities
-
-| 能力 | path | 脚本 |
-|------|------|------|
-| listCatalogCategories | `catalog/v0/categories` | `list_catalog_categories.py` |
-| searchCatalogItems | `catalog/{2022-04-01\|2020-12-01}/items` | `search_catalog_items.py` |
-| getCatalogItem | `catalog/{version}/items/{asin}` | `get_catalog_item.py` |
-
-默认 Catalog Items 版本：**`2022-04-01`**；入参 **`catalogItemsVersion`** 可改为 **`2020-12-01`**。
-
-共享模块：**`_spapi_catalog_common.py`**。
-
----
-
-## Quick Parameters
-
-- **listCatalogCategories**：`marketplaceId` + **`asin`** 或 **`sellerSku`**（二选一）。
-- **searchCatalogItems**：`marketplaceIds` + **`keywords`** 或 **`identifiers` + `identifiersType`**（互斥）；可选 `includedData`、`brandNames`、`classificationIds`、`pageSize`、`pageToken`。
-- **getCatalogItem**：`asin`、`marketplaceIds`；可选 `includedData`、`locale`。
-
----
-
-## Scripts
-
-```bash
-export LINKFOXAGENT_API_KEY="<your-key>"
-
-python scripts/list_catalog_categories.py '{"sellerId":"A1...","region":"NA","marketplaceId":"ATVPDKIKX0DER","asin":"B08N5WRWNW"}'
-
-python scripts/search_catalog_items.py '{"sellerId":"A1...","region":"NA","marketplaceIds":["ATVPDKIKX0DER"],"keywords":["wireless mouse"]}'
-
-python scripts/get_catalog_item.py '{"sellerId":"A1...","region":"NA","asin":"B08N5WRWNW","marketplaceIds":["ATVPDKIKX0DER"],"includedData":["summaries","images"]}'
-```
-
----
-
-## Display Rules
-
-1. 先看 **`developerProxy.errcode` / `httpStatus`**，再读 **`categories`** / **`catalogItems`** / **`catalogItem`**。
-2. **listCatalogCategories** 使用 v0 查询键 **`MarketplaceId`**（单数），与 search/get 的 **`marketplaceIds`** 不同。
-3. 网关 path 白名单需包含 **`catalog/v0/`** 与 **`catalog/2022-04-01/`**（或 `2020-12-01`）。
-
----
-
-## Important Limitations
-
-- 本 skill 读的是 **Amazon 商品目录（Catalog）**，不是卖家订单；订单见 **`linkfox-amazon-store-orders`**。
-- `includedData`、返回字段以 Amazon schema 为准，详见 **`references/api.md`**。
-
-## Amazon SP-API 接口保护与重试指引
-
-同一店铺连续收到 Amazon SP-API 的 400、403、404 或 429 时，网关会返回 450、453、454 或 459 并短暂冷却。这些自定义状态码不是 Amazon 原生状态，也不表示封号；目的是避免持续异常或高频调用扩大店铺风险。
-
-| 状态与 message | 范围 | 触发与冷却 | 处理 |
+| 接口 | 端点 | 对应脚本 | 说明 |
 |---|---|---|---|
-| `450`：`400，请求异常，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：20 分钟 | 停止原参数重试，检查必填字段、marketplace、ID、日期和请求体 |
-| `453`：`403，店铺未授权，请先授权` | 店铺全部接口 | 60 秒内超过 2 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 停止该店铺调用，检查授权、权限、店铺归属和区域 |
-| `454`：`404，资源不存在，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 确认资源 ID、所属店铺/站点、资源状态和接口路径 |
-| `459`：`429限流中，请降低频率` | 店铺+接口 | 首次：15 秒；2 分钟内超过 2 次：30 秒；3 分钟内超过 4 次：2 分钟 | 降低并发、分页和轮询频率并逐级退避 |
+| 查询类目（`listCatalogCategories`） | POST `/spApi/developerProxy` -> GET path：`catalog/v0/categories` | `scripts/list_catalog_categories.py` | 按商品查类目节点。 |
+| 搜索目录商品（`searchCatalogItems`） | POST `/spApi/developerProxy` -> GET path：`catalog/{version}/items` | `scripts/search_catalog_items.py` | 按关键词或标识符搜索目录。 |
+| 获取目录商品（`getCatalogItem`） | POST `/spApi/developerProxy` -> GET path：`catalog/{version}/items/{asin}` | `scripts/get_catalog_item.py` | 获取指定 ASIN 的目录详情。 |
 
-- 立即停止自动或并发重试，不得通过换脚本或重复创建任务绕过保护；优先遵循 `retryAfter`、`blockedUntil`，没有时按表中时长说明。
-- 450/453/454 必须先修正参数、授权或资源标识，冷却后最多谨慎重试一次；再次触发则停止调用。453 期间停止该店铺全部 SP-API。
-- 保留已有 `reportId`、`feedId` 等任务 ID；写操作结果不确定时先查询状态，不直接重放。
-- 向用户先说明店铺保护，再给原因、处理和等待时间。可回复：“为保护您的亚马逊店铺安全，检测到 Amazon SP-API 连续返回{原因}，当前已进入短暂保护。请先{处理动作}，预计{等待时间}后再试；这不代表封号，也不是套餐或算力限制。”不要只说“LinkFox 限流”或“服务器繁忙”。
+路径版本及各操作定义见 `references/api.md`。
 
-## 算力消耗规则
+## 前置条件
 
-不消耗算力。
+**先完成店铺授权并确定查询目标**：依赖 `linkfox-amazon-store-auth` 选店与完成授权。运行 `python scripts/check_auth_dependency.py` 检查依赖；缺失时先安装授权技能，不在本技能内另行实现授权或令牌逻辑。应用需具备 Catalog Items 相关角色。
+确认目标店铺、区域、站点及查询目的；依赖检查约定、认证兼容和各接口所需信息见 `references/api.md`。
 
-**Feedback：** `skillName`：`linkfox-amazon-store-catalog`。
+## 查询流程
+
+1. 检查授权技能，确认已授权店铺、区域和目标站点。
+2. 根据任务选择类目查询、目录搜索或单品详情；先阅读 `references/api.md` 对应接口，准备并校验查询条件。
+3. 通过对应业务脚本查询，由网关根据已选店铺解析令牌；不在本技能内额外获取令牌。
+4. 先判断网关和上游状态，再读取解析后的目录数据；保留完整原始响应，按需提取字段展示。
+5. 展示本次查询范围与分页线索；空结果或失败时停止自动试探，按接口参考处理错误及店铺保护。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：同一会话、同一参数组合默认只调用一次，优先复用已保存的响应文件；业务脚本不读取或写入响应缓存。失败或空结果时，不得自动更换关键词、翻页或连续试探；需要继续检索时，先说明查询范围并按用户任务范围执行。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-catalog-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段及其中实际存在的常见计数（如 `total`、`costToken`）；存在非空列表时，展示最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+不消耗算力 （限时）。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分目录与刊登**：目录数据反映站点商品资料，不代表该店铺自己的刊登、库存、订单或可销售资格。
+- **先判断状态，再展示资料**：结合外层 HTTP、网关和 Amazon 上游状态解释结果，再读取 `categories`、`catalogItems` 或 `catalogItem`；具体判断规则见 `references/api.md`。
+- **清晰展示数据**：注明店铺、站点、目录版本及本次查询范围，用表格展示响应中实际存在的标题摘要、ASIN、图片或类目节点；不补造缺失字段。
+- **按需读取数据集**：目录资料的组成随版本和所选数据集变化，以 Amazon schema 及实际响应为准；数据集约定见 `references/api.md`。
+- **运行约定**：业务封装的实际缓存、兼容配置和落盘约定见 `references/api.md` 对应接口，按接口说明执行。
+- **解释分页、空结果和错误**：先保留已取得的数据；后续查询遵守用户任务范围和调用约束，按 `references/api.md` 的店铺保护与重试指引处理异常。
+
+## 使用示例
+
+### 查看目录商品资料
+
+用户：查看这个 ASIN 在美国站的标题和图片。
+
+确认店铺与站点后查询目录详情，按需读取摘要和图片，展示实际返回资料与目录版本。
+
+### 搜索目录商品
+
+用户：在这个站点按 wireless mouse 找目录商品。
+
+确认店铺与站点，执行本页关键词搜索，展示商品及分页线索；不自动追加翻页或更换关键词。
+
+### 根据标识或类目核对商品
+
+用户：查这个卖家 SKU 对应的目录商品，并查看它的类目节点。
+
+核对店铺、站点和标识类型，先做标识符搜索，再按任务需要查询类目；说明目录资料与店铺刊登的区别。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*更多跨境 skill：[LinkFox Skills](https://skill.linkfox.com/)*
 
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

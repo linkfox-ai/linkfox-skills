@@ -1,57 +1,62 @@
-# 在线下单购标 — `bg.logistics.shipment.create`
+# 在线下单购标 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_buy_shipping_logistics_shipment_create.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=1eadab72ed8041318604b163dd75cdac |
-| **网关** | `POST /temu/proxy`，`type`=`bg.logistics.shipment.create`，业务载荷放在 Body 的 `params` |
+## 公共规则
 
-**Description:** The `bg.logistics.shipment.create` interface is for sellers to place online logistics orders and receive package numbers, which enables sellers to effortlessly place logistics orders with selected carriers online.（卖家在线向 Temu 集成承运商下单购标，创建包裹并获取 **packageSn**；是 Buy-Shipping 购标核心接口。）
+### 调用规范
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 `request`。建议使用 **`tokenPurpose=order-shipping`**。  
-> **前置依赖：** `warehouseId` 来自 **`bg.logistics.warehouse.list.get`**；`channelId` / `shipCompanyId` / `shipLogisticsType` / `signServiceId` 等来自 **`bg.logistics.shippingservices.get`** 或 **`temu.logistics.shiplogisticstype.get`**；`parentOrderSn` / `orderSn` / `quantity` 来自 **`linkfox-temu-order-us`**。  
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：在线下单购标（bg.logistics.shipment.create）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+**操作标识**：`type=bg.logistics.shipment.create`；**对应脚本**：`scripts/us_buy_shipping_logistics_shipment_create.py`。
+
+**Partner 文档**：https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=1eadab72ed8041318604b163dd75cdac
+
+### 请求参数
+
+#### 网关与脚本参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是；美国站脚本默认 | `us`；通用脚本支持 `cn`、`partner`、`us`、`global`、`eu`，本技能业务使用美国站。 |
+| managementType | string | 是；美国站脚本默认 | `semi-managed`；通用脚本还兼容 `full-managed`。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；显式传入时优先于本地存储。 |
+| storeKey | string | 与 accessToken 二选一 | 脚本按店铺、站点、托管类型和用途从本地令牌库读取，不发送给网关。 |
+| tokenPurpose | string | 否 | 美国站脚本本地选令牌默认 `order-shipping`；通用脚本默认 `default`。此字段不进入实际网关 Body。 |
+| type | string | 是；专用脚本固定 | 本节列出的 Temu 操作标识；上游路径为 `https://openapi-b-us.temu.com/openapi/router`，通过 type 区分操作，没有 developerProxy.path 字段。 |
+| params | object | 否 | 业务参数；有显式对象时原样转发，否则美国站脚本将非保留顶层字段收集为 params。 |
+| params.request | OBJECT | 否（Partner 表） | 本接口业务对象；子字段必填与实际使用要求见下文，不因外层选填而省略必要内容。专用脚本也接受顶层 request 并收进 params。 |
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox 密钥兼容别名，按列出顺序优先于环境变量；只用于请求头，不进入业务参数。 |
+| --inline | CLI flag | 否 | 完整打印并保存响应。 |
+| --no-cache | CLI flag | 否 | 保留可传选项；业务封装内部始终禁用缓存，既不读也不写响应缓存。 |
+
+美国站默认值、兼容认证头、参数提取和输出约定详见 [运行约定](../api.md#运行约定)。以下 Partner 字段表的路径均相对于 `params.request`；响应子表路径相对于解析后的 Temu 对象。
+
+#### 业务说明与前置限制
+
+> **前置依赖：** `warehouseId` 来自 **`bg.logistics.warehouse.list.get`**；`channelId` / `shipCompanyId` / `shipLogisticsType` / `signServiceId` 等来自 **`bg.logistics.shippingservices.get`** 或 **`temu.logistics.shiplogisticstype.get`**；`parentOrderSn` / `orderSn` / `quantity` 来自 **`linkfox-temu-order-us`**。
 > **异步说明：** 部分场景下单为异步处理；若返回成功但无运单，请用 [**`bg.logistics.shipment.result.get`**](./bg-logistics-shipment-result-get.md) 按 **`packageSnList`** 查询结果（错误码 `120012013`）。
 
----
+（卖家在线向 Temu 集成承运商下单购标，创建包裹并获取 **packageSn**；是 Buy-Shipping 购标核心接口。）
 
-## Request 结构（官方顶层）
-
-```text
-params
-└── request (OBJECT, 选填)
-    ├── sendType                    ← 必填
-    ├── sendRequestList[]           ← 选填（Package List Information；实际购标须传）
-    │   ├── warehouseId
-    │   ├── weight / weightUnit / extendWeight / extendWeightUnit
-    │   ├── length / width / height / dimensionUnit
-    │   ├── shipCompanyId
-    │   ├── channelId               ← 与 shipLogisticsType 二选一履约方式
-    │   ├── shipLogisticsType       ← 与 channelId 二选一履约方式
-    │   ├── signServiceId
-    │   ├── pickupStartTime / pickupEndTime
-    │   ├── orderSendInfoList[]
-    │   │   ├── parentOrderSn
-    │   │   ├── orderSn
-    │   │   ├── goodsId
-    │   │   ├── skuId
-    │   │   └── quantity
-    │   ├── confirmAcceptance[]
-    │   ├── splitSubPackage
-    │   ├── sendSubRequestList[]    ← splitSubPackage=true 时必填
-    │   │   └── （附属包裹：尺寸/重量/渠道/仓库等，结构见下）
-    │   ├── interlineShipCompanyList[]  ← 联运/分段渠道时必填
-    │   │   ├── shipStageType
-    │   │   ├── shipLogisticsType
-    │   │   ├── shipCompanyId
-    │   │   └── channelId
-    │   ├── cooperativeWarehouseShipment
-    │   ├── uspsMailingDateOffset
-    │   └── autoConfirmAfterPickup
-    ├── shipLater                   ← 选填
-    └── shipLaterLimitTime          ← 选填（shipLater=true 时按订单标签传）
-```
-
-### `request` 内字段
+#### `request` 内字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -62,7 +67,7 @@ params
 
 \* Partner Request 表将 **`sendRequestList`** 标为选填（False），但购标业务**必须**传入有效包裹明细。
 
-#### `sendType`
+##### `sendType`
 
 | 值 | 说明 |
 |----|------|
@@ -70,14 +75,14 @@ params
 | `1` | **Partial** products in one parent order are shipped in **multiple packages** with multiple tracking numbers; **all products in that parent order must be submitted in one API call**（同一父订单部分商品拆多包裹；该父订单下所有待发商品须在一次调用中全部提交） |
 | `2` | All the products in **multiple parent orders** are shipped in **one package** with **one tracking number**（多个父订单合并为一个包裹、一个运单号） |
 
-#### `shipLater`
+##### `shipLater`
 
 | 值 | 说明 |
 |----|------|
 | `true` | Apply to create the package and tracking numbers from Temu-integrated carriers online; mark this package as **「ship later」**（在线购标并创建运单，包裹标记为稍后发货）。带 **「Y2_advance_sale」** 标签的订单购标时**必须**设为 `true`（错误码 `120015534`） |
 | `false` | Apply to create the package and tracking numbers online, **ship the package immediately** and mark as shipped（在线购标、创建运单并立即发货）。**COD 订单**不允许 `shipLater=true`（错误码 `120011053`） |
 
-#### `shipLaterLimitTime`
+##### `shipLaterLimitTime`
 
 | 订单标签 | 可选值（小时，字符串） |
 |----------|------------------------|
@@ -86,7 +91,7 @@ params
 
 > 无效枚举将报错 `120015532`。与 **`shipLater=true`** 配合使用，表示稍后发货的截止时间。
 
-#### `sendRequestList[]` 元素字段
+##### `sendRequestList[]` 元素字段
 
 > Partner Request 表中 `sendRequestList` 子行在导出 HTML 中为折叠状态；下列字段、类型与说明来自 **Request 表**（顶层）、**Request Example**、**Response Example** 关联字段及 Partner **Error Code** 表。
 
@@ -116,7 +121,7 @@ params
 | uspsMailingDateOffset | INTEGER | 条件 | USPS mailing date offset（USPS 邮寄日期偏移；部分 USPS 渠道禁止为 `0`，`120018086`） |
 | autoConfirmAfterPickup | BOOLEAN | 否 | Auto-confirm shipment after pickup（揽收后自动确认发货） |
 
-##### `orderSendInfoList[]` 元素字段
+###### `orderSendInfoList[]` 元素字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -126,7 +131,7 @@ params
 | skuId | LONG | **是** | SKU ID |
 | quantity | INTEGER | **是** | Quantity of the product（本行发货数量；**splitSubPackage=true** 时须为 1） |
 
-##### `confirmAcceptance[]` 枚举值
+###### `confirmAcceptance[]` 枚举值
 
 | 值 | 说明 |
 |----|------|
@@ -138,7 +143,7 @@ params
 
 > 仅当订单存在对应待处理事项且商家选择继续发货时传入。
 
-##### `sendSubRequestList[]` 元素字段
+###### `sendSubRequestList[]` 元素字段
 
 > 单件 SKU 拆多包裹时，主包裹 + 附属包裹共同完成发货；附属包裹**不含** `orderSendInfoList`（商品行在主包裹 **`sendRequestList`** 元素上）。
 
@@ -162,7 +167,7 @@ params
 | interlineShipCompanyList | OBJECT[] | 条件 | Interline legs（结构同主包裹） |
 | confirmAcceptance | STRING[] | 否 | Confirmation matters |
 
-##### `interlineShipCompanyList[]` 元素字段
+###### `interlineShipCompanyList[]` 元素字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -171,97 +176,23 @@ params
 | shipCompanyId | INTEGER / LONG | **是** | Shipping company ID for this stage |
 | channelId | INTEGER / LONG | **是** | Channel ID for this stage |
 
-### 网关 `params` 写法（`sendType=0` 单包裹购标示例）
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "sendType": 0,
-    "shipLater": false,
-    "sendRequestList": [
-      {
-        "warehouseId": "WH-001",
-        "length": "12.00",
-        "width": "8.00",
-        "height": "4.00",
-        "dimensionUnit": "in",
-        "weight": "2",
-        "weightUnit": "lb",
-        "extendWeight": "8",
-        "extendWeightUnit": "oz",
-        "shipCompanyId": 314439762,
-        "channelId": 19409681780736,
-        "orderSendInfoList": [
-          {
-            "parentOrderSn": "PO-20260101001",
-            "orderSn": "O-20260101001-1",
-            "goodsId": 6017592186252451,
-            "skuId": 281474976920151,
-            "quantity": 1
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+#### LinkFox 外层与脚本解析字段
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "sendType": 0,
-    "shipLater": true,
-    "shipLaterLimitTime": "48",
-    "sendRequestList": [
-      {
-        "warehouseId": "WH-001",
-        "shipLogisticsType": "USPS_GROUND_ADVANTAGE",
-        "length": "12.00",
-        "width": "8.00",
-        "height": "4.00",
-        "dimensionUnit": "in",
-        "weight": "2",
-        "weightUnit": "lb",
-        "shipCompanyId": 314439762,
-        "signServiceId": 1001,
-        "pickupStartTime": 1717200000,
-        "pickupEndTime": 1717203600,
-        "orderSendInfoList": [
-          {
-            "parentOrderSn": "PO-20260101001",
-            "orderSn": "O-20260101001-1",
-            "goodsId": 6017592186252451,
-            "skuId": 281474976920151,
-            "quantity": 1
-          }
-        ],
-        "confirmAcceptance": ["DENY_CANCELLATION"]
-      }
-    ]
-  }
-}
-```
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| _http_status | integer / null | 脚本本地诊断字段，记录本次真实 HTTP 状态；连接失败时为 null，不是网关保证字段。先按此判断 HTTP 结果，401/402 转入 onboarding 引导，不以正文中的成功字段覆盖。 |
+| _raw_response | 以实际响应为准 | 仅当响应根不是对象，或上游已有同名 _http_status 时，脚本将完整原响应放在此字段，并在外层记录真实状态；此时从原响应读取业务内容。 |
+| errcode | integer / string / null | 若返回，按公共响应码基本规则判断；不将 `0` 或 `false` 当成空。 |
+| errmsg | string | 若返回，网关消息或错误说明。 |
+| code | integer | 网关业务错误码：`1002` 为参数或 LinkFox Token 问题，`1003` 为转发失败；不能据 HTTP 成功推断履约成功。 |
+| body | string | Temu 原始 JSON 字符串，保留原值。 |
+| temuBody | object / array / scalar | 脚本对可解析的非空 body 增加的解析结果；解析失败时不生成此字段，仍保留原始 body。 |
 
----
+以下为 Temu `body` 解析后的结构；Partner 表中的 `response` 可能是结构标注，实际响应也可能直接以 success 等字段为根，不强行增删层级。
 
-## Response（Temu `body` 解析后）
-
-```text
-response
-├── success
-├── errorCode
-├── errorMsg
-└── result (OBJECT)
-    ├── packageSnList[] (STRING[])
-    ├── warningMessage[] (STRING[])
-    └── shipLaterLimitTime (STRING)
-```
-
-### 顶层字段
+#### 顶层字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -270,7 +201,7 @@ response
 | errorMsg | STRING | error message（错误信息） |
 | result | OBJECT | result（业务结果对象） |
 
-### `result` 内字段
+#### `result` 内字段
 
 > Partner Response 表中 `result` 子行在导出 HTML 中为折叠状态；下列字段来自 **Response Example** 与购标后续流程约定。
 
@@ -282,12 +213,19 @@ response
 
 > 调用成功时先判断 **`response.success === true`**，再使用 **`result.packageSnList`** 走结果查询与面单下载。若 **`warningMessage`** 非空，建议记录并人工确认是否影响发货。
 
----
+### 响应码规则
 
-## 常见业务错误码（Partner Error Code）
+#### 基础规则
 
-| 错误码 | 错误信息（原文摘要） | 处理建议 |
-|--------|----------------------|----------|
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 外层正常响应后，先排除网关 `code=1002/1003`，再解析 `body`；以 Temu 对象的 `success`、`errorCode`、`errorMsg` 和本接口结果字段判断业务结果。`success=true` 不等于异步履约或预约已经完成。
+- `1002`：修正参数与 LinkFox 密钥；`1003`：检查 Temu 令牌、用途、IP 白名单及转发错误。不自动重试写操作。
+
+| 错误码 | 错误信息（Partner） | 处理建议 |
+|---|---|---|
 | 120012013 | Already requested by Temu integrated logistics; check via result.get | 调用 **`bg.logistics.shipment.result.get`** 确认是否已成功 |
 | 120015032 | Choose channelId **or** shipLogisticsType | 二选一履约，勿同时乱填 |
 | 120011111 | Split channel requires **interlineShipCompanyList** | 补全联运分段渠道 |
@@ -296,10 +234,10 @@ response
 | 120011113 | **orderSendInfoList** missing orderSn | 每项商品行须有 **orderSn** |
 | 120013002 | Item quantity does not match | 核对 **quantity** 与订单待发数量 |
 | 120012015 | Combined delivery: addresses differ | 合并发货时地址须一致 |
-| 120015032 | channelId or shipLogisticsType | 见上 |
 | 120011053 | COD: shipLater must be FALSE | COD 勿稍后发货 |
 | 120011051 | COD: no sub-packages | COD 勿拆子包裹 |
-| 120011057 / 120018028 | COD vs PPD cannot mix in one request | 勿混 COD 与预付订单 |
+| 120011057 | COD vs PPD cannot mix in one request | 勿混 COD 与预付订单 |
+| 120018028 | COD vs PPD cannot mix in one request | 勿混 COD 与预付订单 |
 | 120012037 | Before earliestTimeBuyShippingLabel | 未到可购标时间 |
 | 120015534 | Y2_advance_sale: shipLater=true required | 预售标签订单须稍后发货 |
 | 120015532 | shipLaterLimitTime invalid | 按订单标签选合法小时数 |
@@ -309,76 +247,32 @@ response
 | 120011045 | splitSubPackage: quantity must be 1 | 拆包场景数量为 1 |
 | 120018084 | Cooperative warehouse: no split sub package | 合作仓不支持拆子包裹 |
 | 120018086 | USPSMailingDateOffset cannot be 0 | 调整 USPS 偏移 |
-| 120019009 / 120019019 | Invalid pickup time | 按 **pickupRules** 重选时段 |
+| 120019009 | Invalid pickup time | 按 **pickupRules** 重选时段 |
+| 120019019 | Invalid pickup time | 按 **pickupRules** 重选时段 |
 | 120015507 | Wrong package information | 检查重量尺寸单位 |
 | 120015521 | Weight should be integer (US) | 美国 **weight** 用整数磅 |
 | 120011006 | warehouseId invalid | 用 **warehouse.list.get** 有效 ID |
-| 120012007 / 120012016 | parentOrder/order invalid | 核对父子订单 |
+| 120012007 | parentOrder/order invalid | 核对父子订单 |
+| 120012016 | parentOrder/order invalid | 核对父子订单 |
 | 120015528 | COD orders: Temu Label only | COD 仅 Temu 面单 |
 | 120018063 | Funds reserved; Buy shipping disabled | 账户资金受限 |
-| 120012061 / 120012031 | Risk control alert on parent order | 评估是否继续发货 |
+| 120012061 | Risk control alert on parent order | 评估是否继续发货 |
+| 120012031 | Risk control alert on parent order | 评估是否继续发货 |
 
 > 完整错误码以 Partner 文档 **Error Code** 表为准（导出 HTML 含 70+ 条）。
 
----
-
-## 典型用法
-
-```text
-1. bg.logistics.warehouse.list.get          → warehouseId
-2. linkfox-temu-order-us                    → parentOrderSn、orderSn、quantity、earliestTimeBuyShippingLabel
-3. bg.logistics.shippingservices.get        → channelId / shipCompanyId / signServiceId / pickup 时段
-   （或 temu.logistics.shiplogisticstype.get → shipLogisticsType）
-4. bg.logistics.shipment.create              → packageSnList（本接口）
-5. [bg.logistics.shipment.result.get](./bg-logistics-shipment-result-get.md) → 确认异步下单结果
-6. [bg.logistics.shipment.document.get](./bg-logistics-shipment-document-get.md) → 面单 URL
-7. [bg.order.unshipped.package.get](./bg-order-unshipped-package-get.md) → 未发货包裹列表
-7. bg.logistics.shipped.package.confirm      → 确认已发货（待接入）
-```
-
----
-
-## 示例
+### curl 示例
 
 ```bash
-export LINKFOXAGENT_API_KEY="<key>"
-
-python scripts/us_buy_shipping_logistics_shipment_create.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "us",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "sendType": 0,
-    "shipLater": false,
-    "sendRequestList": [
-      {
-        "warehouseId": "WH-001",
-        "length": "12.00",
-        "width": "8.00",
-        "height": "4.00",
-        "dimensionUnit": "in",
-        "weight": "2",
-        "weightUnit": "lb",
-        "shipCompanyId": 314439762,
-        "channelId": 19409681780736,
-        "orderSendInfoList": [
-          {
-            "parentOrderSn": "PO-20260101001",
-            "orderSn": "O-20260101001-1",
-            "goodsId": 6017592186252451,
-            "skuId": 281474976920151,
-            "quantity": 1
-          }
-        ]
-      }
-    ]
-  }
-}'
-```
-
-```bash
-python scripts/temu_us_proxy.py '{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
   "type": "bg.logistics.shipment.create",
   "params": {
     "request": {
@@ -393,12 +287,16 @@ python scripts/temu_us_proxy.py '{
           "dimensionUnit": "in",
           "weight": "2",
           "weightUnit": "lb",
+          "extendWeight": "8",
+          "extendWeightUnit": "oz",
           "shipCompanyId": 314439762,
           "channelId": 19409681780736,
           "orderSendInfoList": [
             {
               "parentOrderSn": "PO-20260101001",
               "orderSn": "O-20260101001-1",
+              "goodsId": 6017592186252451,
+              "skuId": 281474976920151,
               "quantity": 1
             }
           ]
@@ -407,4 +305,20 @@ python scripts/temu_us_proxy.py '{
     }
   }
 }'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-fulfillment-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

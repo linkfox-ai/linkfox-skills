@@ -1,19 +1,19 @@
 # `GET_FBA_INVENTORY_PLANNING_DATA`
 
-> **分类**：6.2 FBA Inventory  
-> **说明**：FBA inventory planning  
-> **可用范围**：Seller only
+> **分类**：6.2 FBA 库存  
+> **说明**：FBA 库存规划  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-manage-inventory-health-report)（章节：**FBA Manage Inventory Health Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **Availability**：FBA sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **要点**：Provides a consolidated view across your sales (7, 30, 60, and 90 days), shipment statuses (working, received, and shipped), estimated storage and long-term storage fees, and aged and excess units. It includes metrics across sales, inbound, estimated fees, and recommended actions. Not available in the NL, PL, SE, or BE marketplaces.
+- **角色**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **可用范围**：FBA 卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：汇总 7、30、60、90 天销量、货件状态（working、received、shipped）、预计仓储和长期仓储费、库龄与超量库存，包含销售、入库、预计费用和建议操作指标。NL、PL、SE、BE 站点不可用。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-manage-inventory-health-report>
 

@@ -1,144 +1,120 @@
 ---
 name: linkfox-amazon-policy-feed
-description: 查询亚马逊最新政策法规与资讯，支持按站点、时间区间分页检索资讯列表（含 AI 中文摘要），并按记录 ID 获取完整正文。当用户提到亚马逊政策法规、卖家合规公告、平台规则变动、政策预警、FBA/费用政策更新、多站点政策动态、政策原文、资讯详情，或 Amazon policy feed, seller compliance, policy changes, regulation alerts 时触发此技能。即使用户未明确提及"政策法规"，只要其需求涉及亚马逊官方面向卖家发布的政策法规与资讯及其原文，也应触发此技能。
+description: 查询亚马逊面向卖家的最新政策法规与资讯，支持按站点和时间范围分页浏览、查看 AI 中文摘要及读取资讯全文。适用于卖家合规公告、平台规则变动、政策预警、FBA 和费用更新、多站点政策动态及政策原文查询，无需明确提及政策法规。不适用于商品、关键词或销量分析、Listing 优化、评论分析、实时前台商品查询、卖家账号专属通知或历史专利商标检索。
 ---
 
-# Amazon Policy & Regulation Feed
+# 亚马逊政策法规与资讯
 
-This skill retrieves Amazon's latest **policy & regulation** feed for cross-border sellers. It is a two-step (list then detail) flow: first list feed items by site / time window, then fetch the full article body by its `id`.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- **Source**: Amazon official policy & regulation updates for sellers, curated by AI to surface items valuable to cross-border operations.
-- **AI summary**: Each feed item includes a `summaryZh` field — an AI-generated 1-3 sentence Chinese summary for quick scanning.
-- **Two coupled tools**:
-  1. `amazon/policyFeed` — paginated **list**; returns structured records with title, AI summary, original URL, and publish time.
-  2. `amazon/policyFeedDetail` — full article **body** (Markdown) for a single record `id` obtained from the list.
-- **Time range**: Defaults to the last 7 days; supports custom time windows via `publishedAtGte` / `publishedAtLte`.
+查看亚马逊官方面向卖家发布的政策、法规和合规资讯及其原文。
+用户希望了解近期政策变化、特定站点或时间范围的公告、FBA 或费用动态，或阅读某条资讯全文时，使用本技能。
 
-## Parameters
+**场景速查**
 
-### List (`amazon/policyFeed`)
+| 用户表达 | 查询场景 |
+|---|---|
+| 最近亚马逊有什么政策变化 | 浏览近期政策资讯。 |
+| 亚马逊美国站近一周的政策新闻 | 按目标站点和时间范围浏览。 |
+| 亚马逊最近有什么政策法规更新 | 查看官方政策与合规动态。 |
+| 亚马逊 FBA 最新政策法规 | 从返回资讯中筛选相关主题。 |
+| 查看这条政策资讯的全文 | 读取指定资讯完整正文。 |
+| Amazon latest policy updates | 查看亚马逊最新政策资讯。 |
 
-| Parameter | Type | Required | Description | Default |
-|-----------|------|----------|-------------|---------|
-| site | string | No | Marketplace code (uppercase); site filtering only applies to some feed item types, others are always returned regardless of site | US |
-| publishedAtGte | string | No | Publish/change time lower bound (incl.), `yyyy-MM-dd HH:mm:ss` | last 7 days |
-| publishedAtLte | string | No | Publish/change time upper bound (incl.), `yyyy-MM-dd HH:mm:ss` | now |
-| page | integer | No | Page number, starting at 1 | 1 |
-| pageSize | integer | No | Items per page, 1-100 | 20 |
+## 接口清单
 
-### Detail (`amazon/policyFeedDetail`)
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 政策法规资讯列表（`policyFeed`） | POST `/amazon/policyFeed` | `scripts/amazon_policy_feed.py` | 分页读取标题、中文摘要、原文链接和发布时间。 |
+| 资讯详情（`policyFeedDetail`） | POST `/amazon/policyFeedDetail` | `scripts/amazon_policy_feed_detail.py` | 根据列表记录读取完整 Markdown 正文。 |
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| id | string | Yes | Record ID (32-char string) from the list response `data[].id` |
+## 前置条件
 
-### Supported Marketplaces (for `site`)
+确定用户关注的站点、时间范围以及希望浏览列表还是阅读全文。需要全文时，先定位对应资讯记录；接口所需信息见 `references/api.md`。
 
-US, JP, UK, AU, BE, BR, CA, EG, FR, DE, IN, IT, MX, NL, PL, SA, SG, ES, SE, TR, AE, ZA, IE. Default is **US** when not specified. Note: `site` filtering only applies to some feed item types; others are always returned regardless of site.
+## 查询流程
 
-## 调用方式
+1. 将用户表达的时间范围转成查询起止时间，按目标国家确定站点；默认行为和参数约定见 `references/api.md`。
+2. 调用资讯列表，浏览标题与中文摘要。用户关注 FBA、费用等主题时，从返回记录中识别相关资讯，不构造接口未提供的主题参数。
+3. 按用户任务范围分页查看更早记录；继续查询遵守成本约束，不因失败或空结果自动翻页试探。
+4. 需要阅读全文时，从列表取得 `data[].id`，再调用资讯详情；保留对应标题与摘要作为上下文。
 
-- **API 端点**：
-  - `POST /amazon/policyFeed`（`amazon_policy_feed.py`，完整参数/响应/错误码见 `references/api.md`）
-  - `POST /amazon/policyFeedDetail`（`amazon_policy_feed_detail.py`，完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 执行方式
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-policy-feed-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 输出策略
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-policy-feed-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`、`costTime`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## How to Build Queries
+## 执行规则
 
-1. **Set the time window**: convert user's time reference into `publishedAtGte` / `publishedAtLte`. Leave empty for the default last 7 days.
-2. **Pick the marketplace**: map user's target country to the `site` code (default US). Note this only filters some feed item types.
-3. **Paginate**: increase `page` to scan deeper; max 100 items per page.
-4. **Drill into a record**: take a record's `id` from the list and call the detail script to read the full body.
+### 算力消耗预估
 
-### Usage Examples
+每次接口调用消耗 15 算力。
 
-**1. Recent feed (last 7 days, US)**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **说明来源**：资讯源自亚马逊官方面向卖家的政策法规更新，由 AI 筛选跨境经营相关内容。`summaryZh` 是 AI 生成的中文摘要，用于快速浏览。
+- **列表展示**：用表格展示标题、中文摘要、发布或变更时间和原文链接，说明本次查询的站点、时间范围与页码。
+- **全文展示**：原样渲染详情响应 `stdout` 中的 Markdown，结合 `title` 和 `summaryZh` 交代背景。
+- **忠实呈现资讯**：只报告返回的政策内容，不附加主观经营建议，不推测未来政策。
+- **说明时效**：数据可能比实时网页略有延迟，以亚马逊原文为准。
+- **解释错误**：依据实际错误消息说明原因，不猜测；记录失效时按接口参考处理，重新查询仍遵守成本约束。具体参数、使用限制和响应判断见 `references/api.md`。
+
+## 使用示例
+
+### 查看美国站近期资讯
+
 ```json
 {"site": "US", "pageSize": 20}
 ```
-**2. Custom date range**
+
+### 查看指定时间范围的资讯
+
 ```json
 {"site": "US", "publishedAtGte": "2026-05-01 00:00:00", "publishedAtLte": "2026-05-31 23:59:59"}
 ```
-**3. Japan site feed, page 2**
+
+### 继续浏览日本站资讯
+
 ```json
 {"site": "JP", "page": 2, "pageSize": 50}
 ```
-**4. Full body of one record**
+
+### 阅读列表中一条资讯的全文
+
+将列表返回的实际记录 ID 传给详情脚本；以下 ID 仅演示格式。
+
 ```json
 {"id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **List view**: present results as a table with title, AI summary (`summaryZh`), publish time, and original URL link.
-2. **Detail view**: render the `stdout` Markdown as-is; the response also includes `title` and `summaryZh` for context.
-3. **Only present data**: report what the feed says; do not add subjective business advice or speculate on future policy.
-4. **Timeliness note**: data may lag the live page by a short period; the Amazon original is authoritative.
-5. **Error handling**: on a failed call, explain the reason from the error response (e.g. invalid `id` -> re-fetch from the list) instead of guessing.
-
-## Important Limitations
-
-- **Default window is 7 days**: without explicit time params, only the last 7 days are returned.
-- **Max 100 items per page**: `pageSize` range is 1-100.
-- **Detail needs a valid list `id`**: `amazon/policyFeedDetail` only accepts an `id` returned by `amazon/policyFeed`; unknown ids return an error.
-- **Not for aggregation**: this skill's output is long-form text and metadata — **not** suited for second-pass statistical/aggregation analysis via `_dataQuery_executeDynamicQuery`.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Amazon official policy & regulation feed:
-
-| User Says | Scenario |
-|-----------|----------|
-| "最近亚马逊有什么政策变化" | Recent policy feed overview |
-| "亚马逊美国站近一周的政策新闻" | Site-filtered policy news |
-| "亚马逊最近有什么政策法规更新" | General policy/regulation updates |
-| "亚马逊 FBA 最新政策法规" | Topic-specific policy lookup |
-| "查看这条政策资讯的全文" | Fetch full article body by id |
-| "Amazon latest policy updates" | English trigger |
-
-**Not applicable** — beyond policy & regulation feed:
-- Product / keyword / sales analytics, listing optimization, review analysis
-- Real-time storefront search results or product detail
-- Account-specific notifications inside an individual seller account
-- Historical patent or trademark searches
-
-**Boundary judgment**: if the user wants Amazon's **officially published policy, regulation, or compliance updates for sellers** (and its full text), this skill applies. If they want product/keyword/sales data, use the corresponding data skills.
-
-## 算力消耗规则
-
-消耗 15 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

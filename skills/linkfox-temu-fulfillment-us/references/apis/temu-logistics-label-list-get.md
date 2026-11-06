@@ -1,36 +1,61 @@
-# 面单列表查询 — `temu.logistics.label.list.get`
+# 面单列表查询 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_buy_shipping_logistics_label_list_get.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=746951536ea1455faaf17ae9d60e5b34&sub_menu_code=df97424d08f641f7adf942aa5accde3b |
-| **网关** | `POST /temu/proxy`，`type`=`temu.logistics.label.list.get`，业务载荷放在 Body 的 `params` |
+## 公共规则
 
-**Description:** You can use this API to retrieve shipping label information fulfilled via Temu's platform. Please note that this API is only available for labels generated through the Temu platform.（查询经 **Temu 平台购标** 生成的物流面单信息列表；**仅适用于**在 Temu 平台下单购标的面单，不支持站外自填运单。）
+### 调用规范
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 **`request`**。建议使用 **`tokenPurpose=order-shipping`**。  
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：面单列表查询（temu.logistics.label.list.get）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+**操作标识**：`type=temu.logistics.label.list.get`；**对应脚本**：`scripts/us_buy_shipping_logistics_label_list_get.py`。
+
+**Partner 文档**：https://partner-us.temu.com/documentation?menu_code=746951536ea1455faaf17ae9d60e5b34&sub_menu_code=df97424d08f641f7adf942aa5accde3b
+
+### 请求参数
+
+#### 网关与脚本参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是；美国站脚本默认 | `us`；通用脚本支持 `cn`、`partner`、`us`、`global`、`eu`，本技能业务使用美国站。 |
+| managementType | string | 是；美国站脚本默认 | `semi-managed`；通用脚本还兼容 `full-managed`。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；显式传入时优先于本地存储。 |
+| storeKey | string | 与 accessToken 二选一 | 脚本按店铺、站点、托管类型和用途从本地令牌库读取，不发送给网关。 |
+| tokenPurpose | string | 否 | 美国站脚本本地选令牌默认 `order-shipping`；通用脚本默认 `default`。此字段不进入实际网关 Body。 |
+| type | string | 是；专用脚本固定 | 本节列出的 Temu 操作标识；上游路径为 `https://openapi-b-us.temu.com/openapi/router`，通过 type 区分操作，没有 developerProxy.path 字段。 |
+| params | object | 否 | 业务参数；有显式对象时原样转发，否则美国站脚本将非保留顶层字段收集为 params。 |
+| params.request | OBJECT | 否（Partner 表） | 本接口业务对象；子字段必填与实际使用要求见下文，不因外层选填而省略必要内容。专用脚本也接受顶层 request 并收进 params。 |
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox 密钥兼容别名，按列出顺序优先于环境变量；只用于请求头，不进入业务参数。 |
+| --inline | CLI flag | 否 | 完整打印并保存响应。 |
+| --no-cache | CLI flag | 否 | 保留可传选项；业务封装内部始终禁用缓存，既不读也不写响应缓存。 |
+
+美国站默认值、兼容认证头、参数提取和输出约定详见 [运行约定](../api.md#运行约定)。以下 Partner 字段表的路径均相对于 `params.request`；响应子表路径相对于解析后的 Temu 对象。
+
+#### 业务说明与前置限制
+
 > **关联能力：** **`packageSnList`** 来自 [**`bg.logistics.shipment.create`**](./bg-logistics-shipment-create.md)；面单文件 URL 见 [**`bg.logistics.shipment.document.get`**](./bg-logistics-shipment-document-get.md)；购标结果状态见 [**`bg.logistics.shipment.result.get`**](./bg-logistics-shipment-result-get.md)。
 
----
+（查询经 **Temu 平台购标** 生成的物流面单信息列表；**仅适用于**在 Temu 平台下单购标的面单，不支持站外自填运单。）
 
-## Request 结构（官方顶层）
-
-```text
-params
-└── request (OBJECT, 选填)
-    ├── pageNumber              ← 必填
-    ├── pageSize                ← 必填
-    ├── packageSnList[]         ← 选填
-    ├── temuLabelStatus         ← 选填
-    ├── printStatus             ← 选填
-    ├── createAtStart           ← 选填
-    ├── createAtEnd             ← 选填
-    ├── trackingNumberList[]    ← 选填
-    ├── shippingCompanyIdList[] ← 选填
-    └── parentOrderSnList[]     ← 选填
-```
-
-### `request` 内字段
+#### `request` 内字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -45,7 +70,7 @@ params
 | shippingCompanyIdList | STRING[] | 否 | shipping company id list（物流公司 ID 列表；与 **`shipCompanyId`** / 承运商 ID 对应，Partner 示例为字符串数组） |
 | parentOrderSnList | STRING[] | 否 | parent order sn list（父订单号列表） |
 
-#### `temuLabelStatus`
+##### `temuLabelStatus`
 
 | 值 | 说明 |
 |----|------|
@@ -56,7 +81,7 @@ params
 
 > 与 [**`bg.logistics.shipment.result.get`**](./bg-logistics-shipment-result-get.md) 中 **`shippingLabelStatus`** 语义一致（0/1/2 等）。
 
-#### `printStatus`
+##### `printStatus`
 
 | 值 | 说明 |
 |----|------|
@@ -67,76 +92,26 @@ params
 
 > 官方 Request 表将顶层 **`request`** 标为选填（False），但 **`pageNumber`**、**`pageSize`** 为必填。筛选字段可组合使用；Partner **Request Example** CURL 将字段写在顶层，经 LinkFox 网关时建议放在 **`params.request`**。
 
-### 网关 `params` 写法
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "pageNumber": 1,
-    "pageSize": 20,
-    "packageSnList": ["PKG-001"],
-    "temuLabelStatus": 1,
-    "printStatus": 0
-  }
-}
-```
+#### LinkFox 外层与脚本解析字段
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "pageNumber": 1,
-    "pageSize": 50,
-    "parentOrderSnList": ["PO-20260101001"],
-    "createAtStart": 1717200000,
-    "createAtEnd": 1717286400,
-    "trackingNumberList": ["1Z999AA10123456784"]
-  }
-}
-```
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| _http_status | integer / null | 脚本本地诊断字段，记录本次真实 HTTP 状态；连接失败时为 null，不是网关保证字段。先按此判断 HTTP 结果，401/402 转入 onboarding 引导，不以正文中的成功字段覆盖。 |
+| _raw_response | 以实际响应为准 | 仅当响应根不是对象，或上游已有同名 _http_status 时，脚本将完整原响应放在此字段，并在外层记录真实状态；此时从原响应读取业务内容。 |
+| errcode | integer / string / null | 若返回，按公共响应码基本规则判断；不将 `0` 或 `false` 当成空。 |
+| errmsg | string | 若返回，网关消息或错误说明。 |
+| code | integer | 网关业务错误码：`1002` 为参数或 LinkFox Token 问题，`1003` 为转发失败；不能据 HTTP 成功推断履约成功。 |
+| body | string | Temu 原始 JSON 字符串，保留原值。 |
+| temuBody | object / array / scalar | 脚本对可解析的非空 body 增加的解析结果；解析失败时不生成此字段，仍保留原始 body。 |
 
----
+以下为 Temu `body` 解析后的结构；Partner 表中的 `response` 可能是结构标注，实际响应也可能直接以 success 等字段为根，不强行增删层级。
 
-## Response（Temu `body` 解析后）
-
-Partner **Response** 表顶层为 **`response`** 对象；**`result`** 说明为 **Specific information**。  
+Partner **Response** 表顶层为 **`response`** 对象；**`result`** 说明为 **Specific information**。
 **`result`** 子行在导出 HTML 中为折叠状态；下列层级按 **Response 表 + Response Example** 全部展开。
 
-```text
-response（或解析后的根对象）
-├── success
-├── errorCode
-├── errorMsg
-└── result (OBJECT)                    ← Specific information
-    ├── totalItemNum (INTEGER)
-    └── shippingLabelInfoList[] (OBJECT[])
-        ├── packageSn
-        ├── cwFulfillNo
-        ├── shippingLabelStatus
-        ├── labelPrintStatus
-        ├── createTime
-        ├── warehouseInfo (OBJECT)
-        │   ├── warehouseId
-        │   └── warehouseName
-        ├── trackingInfoList[] (OBJECT[])
-        │   ├── trackingNumber
-        │   ├── shippingCompanyId
-        │   └── shippingCompanyName
-        ├── orderInfoList[] (OBJECT[])
-        │   ├── orderSn
-        │   ├── parentOrderSn
-        │   └── quantity
-        └── packageDimensionInfo (OBJECT)
-            ├── weight / weightUnit
-            ├── extendWeight / extendWeightUnit
-            ├── length / width / height
-            └── dimensionUnit
-```
-
-### 顶层字段（`response` 内，或根级）
+#### 顶层字段（`response` 内，或根级）
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -145,14 +120,14 @@ response（或解析后的根对象）
 | errorMsg | STRING | error message（错误信息） |
 | result | OBJECT | Specific information（业务结果对象） |
 
-### `result` 内字段
+#### `result` 内字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | totalItemNum | INTEGER | Total item count（符合筛选条件的面单记录总条数，用于分页） |
 | shippingLabelInfoList | OBJECT[] | Shipping label information list（面单信息列表） |
 
-#### `shippingLabelInfoList[]` 元素字段
+##### `shippingLabelInfoList[]` 元素字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -166,7 +141,7 @@ response（或解析后的根对象）
 | orderInfoList | OBJECT[] | Order information list（关联订单商品行） |
 | packageDimensionInfo | OBJECT | Package dimension and weight（包裹尺寸与重量） |
 
-##### `shippingLabelStatus`（出参）
+###### `shippingLabelStatus`（出参）
 
 | 值 | 说明 |
 |----|------|
@@ -177,7 +152,7 @@ response（或解析后的根对象）
 
 > 与入参 **`temuLabelStatus`** 筛选枚举一致。
 
-##### `labelPrintStatus`（出参）
+###### `labelPrintStatus`（出参）
 
 | 值 | 说明 |
 |----|------|
@@ -186,14 +161,14 @@ response（或解析后的根对象）
 
 > 与入参 **`printStatus`** 筛选枚举一致。
 
-##### `warehouseInfo` 内字段
+###### `warehouseInfo` 内字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | warehouseId | STRING | Warehouse ID（仓库 ID） |
 | warehouseName | STRING | Warehouse name（仓库名称） |
 
-##### `trackingInfoList[]` 元素字段
+###### `trackingInfoList[]` 元素字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -201,7 +176,7 @@ response（或解析后的根对象）
 | shippingCompanyId | INTEGER / LONG | Shipping company ID（物流公司 ID） |
 | shippingCompanyName | STRING | Shipping company name（物流公司名称） |
 
-##### `orderInfoList[]` 元素字段
+###### `orderInfoList[]` 元素字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -209,7 +184,7 @@ response（或解析后的根对象）
 | parentOrderSn | STRING | Parent order number（父订单号） |
 | quantity | INTEGER | Quantity（该行商品数量） |
 
-##### `packageDimensionInfo` 内字段
+###### `packageDimensionInfo` 内字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -224,50 +199,56 @@ response（或解析后的根对象）
 
 > 调用成功时先判断 **`success === true`**，按 **`totalItemNum`** 与 **`pageNumber` / `pageSize`** 翻页；对 **`shippingLabelStatus=1`** 的记录可调用 **`bg.logistics.shipment.document.get`** 获取面单 URL。
 
----
+### 响应码规则
 
-## 典型用法
+#### 基础规则
 
-```text
-1. bg.logistics.shipment.create              → 购标，获得 packageSn
-2. bg.logistics.shipment.result.get          → 确认 shippingLabelStatus=1
-3. temu.logistics.label.list.get（本接口）   → 按包裹/订单/时间窗批量查面单摘要
-4. bg.logistics.shipment.document.get        → 拉取面单 PDF/图片 URL
-5. temu_us_file_download                     → 下载面单文件
-```
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
----
+#### 业务规则
 
-## 示例
+- 外层正常响应后，先排除网关 `code=1002/1003`，再解析 `body`；以 Temu 对象的 `success`、`errorCode`、`errorMsg` 和本接口结果字段判断业务结果。`success=true` 不等于异步履约或预约已经完成。
+- `1002`：修正参数与 LinkFox 密钥；`1003`：检查 Temu 令牌、用途、IP 白名单及转发错误。不自动重试写操作。
+
+### curl 示例
 
 ```bash
-export LINKFOXAGENT_API_KEY="<key>"
-
-python scripts/us_buy_shipping_logistics_label_list_get.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "us",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "pageNumber": 1,
-    "pageSize": 20,
-    "packageSnList": ["PKG-001"],
-    "temuLabelStatus": 1,
-    "printStatus": 0
-  }
-}'
-```
-
-```bash
-python scripts/temu_us_proxy.py '{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
   "type": "temu.logistics.label.list.get",
   "params": {
     "request": {
       "pageNumber": 1,
       "pageSize": 20,
-      "parentOrderSnList": ["PO-20260101001"],
-      "shippingCompanyIdList": ["314439762"]
+      "packageSnList": [
+        "PKG-001"
+      ],
+      "temuLabelStatus": 1,
+      "printStatus": 0
     }
   }
 }'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-fulfillment-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

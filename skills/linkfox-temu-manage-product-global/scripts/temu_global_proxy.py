@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Temu Global product API generic proxy (site=global, semi-managed by default).
+Temu 全球区商品管理通用转发入口（默认全球区半托管）。
 
 Usage:
   python temu_global_proxy.py '{
-    "accessToken": "TEMU_US_TOKEN",
-    "type": "temu.goods.list.get",
-    "params": {"page": 1, "pageSize": 20}
+    "accessToken": "TEMU_GLOBAL_TOKEN",
+    "type": "bg.local.goods.list.query",
+    "params": {"request": {"pageNo": 1, "pageSize": 20, "goodsSearchType": 1, "goodsStatusFilterType": 0}}
   }'
 """
 

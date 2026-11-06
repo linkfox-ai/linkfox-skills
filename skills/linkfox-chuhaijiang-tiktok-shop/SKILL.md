@@ -1,138 +1,122 @@
 ---
 name: linkfox-chuhaijiang-tiktok-shop
-description: 使用出海匠（Chuhaijiang）研究 TikTok Shop 公开店铺市场，支持店铺搜索、详情、关联达人/商品/视频、热推榜和销量榜。用户点名出海匠或 Chuhaijiang 且意图涉及店铺搜索、详情、店铺关系或店铺榜单时触发；未指定数据源时，仅在需要按店铺评分、7日销量/GMV筛选，或查看店铺关联达人/商品/视频时触发。通用 TikTok 店铺榜单或详情使用 linkfox-kalodata-tiktok-shop，EchoTik 店铺搜索/详情使用相应 EchoTik skills；卖家后台订单、商品、履约等操作使用 TikTok Shop 官方 skills；点名其他数据源时不触发。
+description: 使用出海匠（Chuhaijiang）研究 TikTok Shop 公开店铺市场，支持店铺搜索、详情、关联达人、商品、视频以及热推榜和销量榜。适用于点名出海匠的店铺研究；未指定数据源时，仅在需要按店铺评分、7 日销量或 GMV 筛选，或查看店铺关联达人、商品、视频时使用。不适用于通用无来源店铺榜单或详情、指定其他数据源的查询，以及卖家后台订单、库存、刊登、履约、广告或授权操作。
 ---
+# 出海匠 TikTok Shop 店铺情报
 
-# TikTok Shop Store Intelligence
+## 适用范围
 
-Use this skill to research public TikTok Shop stores: discover and filter stores, inspect one store, trace its creators/products/videos, or browse most-promoted and top-selling store rankings.
+### 适用
 
-## Core Concepts
+发现和筛选公开店铺、研究单店表现、追踪达人与商品及视频关系，或查询出海匠店铺榜单。
 
-- Normal endpoints require one lowercase marketplace code: `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`.
-- Search and relationship endpoints return at most 10 records per page; ranking endpoints accept 1–20.
-- Store detail may return `data.items`, `data.core.items`, and `data.channel.items`. When `include=core,channel`, read all three branches.
-- Monetary fields are usually `{ "unit": "US", "value": 31 }`. Preserve the returned unit and inspect the runtime type before formatting.
-- Each endpoint call is billed independently. Call only the endpoint needed for the current question; successful calls use a 24-hour local cache keyed by endpoint, gateway, API Key fingerprint, and parameters.
+**场景速查**
 
-## Data Fields
-
-| Field | Meaning |
+| 用户表达 | 查询场景 |
 |---|---|
-| `data.total_count` | Total matching records |
-| `data.items` | Store, creator, product, video, or ranking rows |
-| `data.core.items` | Optional store scale and 30-day core metrics |
-| `data.channel.items` | Optional 30-day video/live/product-card/creator channel metrics |
-| `id` / `seller_id` | Store or related-entity identifier |
-| `shop_name` / `region` | Store identity and marketplace |
-| `shop_rating` | Store rating |
-| `shop_product_count` | Current product count when supplied |
-| `shop_total_sold_count` / `shop_total_gmv` | Lifetime sales and GMV when supplied |
-| `shop_sold_count_for_last_7_days` / `shop_gmv_for_last_7_days` | Recent store performance |
-| `interval_*` | Metrics for the requested ranking window |
+| 用出海匠筛选美国 TikTok 美妆店铺 | 店铺发现与表现筛选。 |
+| 用 Chuhaijiang 看这家店详情 | 单店基础资料及核心、渠道表现。 |
+| 查这家店合作的达人、店内商品或带货视频 | 按所需实体做关联查询。 |
+| 用出海匠看美国店铺热推榜或销量榜 | 指定窗口的店铺榜单。 |
+| 先筛近期 GMV 高的店，再分析达人、商品和视频 | 用户明确要求的组合研究。 |
 
-Relationship rows use endpoint-specific `tiktok_seller_*` fields. Read `references/api.md` for the exact request definitions, production-validated response paths, and observed field catalog. Do not assume one shared row schema.
+### 边界
 
-## Endpoints
+未指定来源的通用 TikTok 店铺榜单或详情使用 `linkfox-kalodata-tiktok-shop`；点名 EchoTik 或需要其多周期店铺资料时使用对应 EchoTik 店铺技能。自己的卖家后台操作交给 TikTok Shop 官方技能；指定其他数据源或非 TikTok 平台时不使用本技能。本技能只提供公开市场情报，不管理订单、库存、刊登、履约、联盟、广告或店铺授权。
 
-| Intent | Endpoint | Script | Points/call |
-|---|---|---|---:|
-| Filter and discover stores | `/chuhaijiang/sellers/search` | `chuhaijiang_seller_search.py` | 18 |
-| Inspect one store | `/chuhaijiang/sellers/detail` | `chuhaijiang_seller_detail.py` | 9 |
-| Find associated creators | `/chuhaijiang/sellers/related-creators` | `chuhaijiang_seller_related_creators.py` | 18 |
-| List store products | `/chuhaijiang/sellers/related-products` | `chuhaijiang_seller_related_products.py` | 18 |
-| Find associated videos | `/chuhaijiang/sellers/related-videos` | `chuhaijiang_seller_related_videos.py` | 18 |
-| Browse most-promoted stores | `/chuhaijiang/sellers/rankings/most-promoted` | `chuhaijiang_seller_rank_most_promoted.py` | 18 |
-| Browse top-selling stores | `/chuhaijiang/sellers/rankings/top-selling` | `chuhaijiang_seller_rank_top_selling.py` | 18 |
+## 接口清单
 
-Route one intent to one endpoint. Use a store `id` from search or ranking results for detail and relationship calls. Ask before making additional paid drill-down calls the user did not request.
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 店铺搜索 | POST `/chuhaijiang/sellers/search` | `scripts/chuhaijiang_seller_search.py` | 按关键词及店铺表现发现候选店铺。 |
+| 店铺详情 | POST `/chuhaijiang/sellers/detail` | `scripts/chuhaijiang_seller_detail.py` | 读取基础资料以及可选核心、渠道指标。 |
+| 关联达人 | POST `/chuhaijiang/sellers/related-creators` | `scripts/chuhaijiang_seller_related_creators.py` | 查看合作达人及受众、互动和带货表现。 |
+| 关联商品 | POST `/chuhaijiang/sellers/related-products` | `scripts/chuhaijiang_seller_related_products.py` | 查看店内商品、销售表现和规格。 |
+| 关联视频 | POST `/chuhaijiang/sellers/related-videos` | `scripts/chuhaijiang_seller_related_videos.py` | 查看店铺相关视频及带货表现。 |
+| 店铺热推榜 | POST `/chuhaijiang/sellers/rankings/most-promoted` | `scripts/chuhaijiang_seller_rank_most_promoted.py` | 查看指定统计窗口的达人推广店铺榜。 |
+| 店铺销量榜 | POST `/chuhaijiang/sellers/rankings/top-selling` | `scripts/chuhaijiang_seller_rank_top_selling.py` | 查看指定统计窗口的店铺销量榜。 |
 
-## Parameter Guide
+## 前置条件
 
-- `country`: required lowercase marketplace code.
-- `id`: required for detail and relationship endpoints; send it as a string to preserve precision.
-- `page`: starts at 1. `pageSize` is optional and must not exceed the endpoint limit.
-- Search accepts `keyword`, `category`, `sellerType`, rating/7-day sales/7-day GMV ranges, and `sort` (`field:asc` or `field:desc`).
-- Detail accepts `include=core`, `include=channel`, or both values in either comma-separated order (`core,channel` / `channel,core`).
-- Both rankings require `date` (`YYYYMMDD`) and `granularity` (`daily`, `weekly`, `monthly`, `0`, `1`, or `2`); optional `shopType` is one of `1,2,3,4`.
-- Use the camelCase request names in `references/api.md`; do not send the upstream snake_case aliases.
+确认目标市场和研究范围。单店研究需要可靠的店铺标识，可由用户提供或从搜索、榜单结果取得；榜单需先确认统计窗口。请求定义与脚本运行约定见 `references/api.md`。
 
-## 调用方式
+## 查询流程
 
-- **API 端点**：`POST /chuhaijiang/sellers/search`、`POST /chuhaijiang/sellers/detail`、`POST /chuhaijiang/sellers/related-creators`、`POST /chuhaijiang/sellers/related-products`、`POST /chuhaijiang/sellers/related-videos`、`POST /chuhaijiang/sellers/rankings/most-promoted`、`POST /chuhaijiang/sellers/rankings/top-selling`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：分别使用 `python scripts/chuhaijiang_seller_search.py '<JSON 参数>' [--inline]`、`chuhaijiang_seller_detail.py`、`chuhaijiang_seller_related_creators.py`、`chuhaijiang_seller_related_products.py`、`chuhaijiang_seller_related_videos.py`、`chuhaijiang_seller_rank_most_promoted.py`、`chuhaijiang_seller_rank_top_selling.py`
-- **成本约束**：店铺详情 9 算力/次；其余六个端点 18 算力/次。业务入口脚本默认只缓存成功响应 24 小时，业务成功的空结果也可缓存；缓存按当前工作目录、调用身份、网关、端点和完整请求参数隔离。相同组合命中时输出 `Cache hit`，不会发起新的付费请求。HTTP 或业务失败不缓存；`--inline` 不绕过缓存；`--no-cache` 会强制真实请求并可能再次消耗算力，仅在用户明确同意额外消耗或调试时使用。
+1. 根据问题选择搜索、详情、关联查询或榜单，每个意图只调用所需接口。
+2. 需要发现店铺时先搜索或查榜；用返回的店铺标识衔接详情和关联查询，保留市场及店铺上下文。
+3. 单店详情按用户需要读取基础资料、核心表现和渠道表现；只钻取用户要求的达人、商品或视频。
+4. 先看响应摘要，按需提取已保存数据并展示结论。用户未要求的额外付费钻取，先说明预计消耗并取得同意，不以反复检索补足不支持的条件。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-shop-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、业务总数、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：店铺详情每次请求消耗 9 算力，其余六个接口每次请求消耗 18 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改筛选条件连续试探；需要继续检索时，先向用户说明额外消耗。
 
-On Windows hosts whose Python stdout still uses GBK, set `PYTHONIOENCODING=utf-8` before printing rows that may contain emoji. This affects console rendering only; the UTF-8 JSON file is already saved first.
+### 输出策略
 
-## 解决认证和算力问题
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-shop-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8000 字节：保存后，标准输出仅展示摘要，包括顶层字段、已返回的顶层状态及计数字段（如 `errcode`、`total`、`count`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
+## 执行规则
 
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”，或类似含义的内容。
+### 算力消耗预估
 
-## Usage Examples
+店铺详情 9 算力 / 次；店铺搜索、关联达人、关联商品、关联视频、店铺热推榜和店铺销量榜均为 18 算力 / 次。各接口独立计费，高频或组合钻取前说明预计调用次数与总消耗。
 
-```bash
-python scripts/chuhaijiang_seller_search.py '{"country":"us","keyword":"beauty","minRating":4,"page":1,"pageSize":3,"sort":"gmv_7d:desc"}'
-python scripts/chuhaijiang_seller_detail.py '{"country":"us","id":"7495205878591949358","include":"core,channel"}'
-python scripts/chuhaijiang_seller_related_creators.py '{"country":"us","id":"7495205878591949358","page":1,"pageSize":10}'
-python scripts/chuhaijiang_seller_related_products.py '{"country":"us","id":"7495205878591949358","page":1,"pageSize":10}'
-python scripts/chuhaijiang_seller_related_videos.py '{"country":"us","id":"7495205878591949358","page":1,"pageSize":10}'
-python scripts/chuhaijiang_seller_rank_most_promoted.py '{"country":"us","date":"20260824","granularity":"daily","pageSize":10}'
-python scripts/chuhaijiang_seller_rank_top_selling.py '{"country":"us","date":"20260824","granularity":"daily","pageSize":10}'
-```
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## Display Rules
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-1. State the marketplace, filters, current page, total count, and ranking date/granularity used.
-2. For store lists, show store name, rating, product count, recent or interval sales/GMV, creator reach, region, and store ID when available.
-3. For detail, group base profile, core metrics, and channel metrics; do not ignore `data.core.items` or `data.channel.items`.
-4. For creators, products, and videos, show the related entity ID plus its returned performance metrics; retain the store ID for context.
-5. Preserve currency units and field time windows. Do not relabel `unit: US` or mix lifetime, 7-day, 30-day, and ranking-window values.
-6. Never expose API keys. Treat URLs as expiring when the response contains signed query parameters.
+### 解决认证和算力问题
 
-## Important Limitations
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-1. This is public market intelligence, not private seller-center data.
-2. It does not manage orders, inventory, listings, fulfillment, affiliates, advertising, or store authorization.
-3. Some fields may be absent or `null`; preserve unknown fields and inspect runtime types before rendering.
-4. Search and rankings change over time. Report the request date and ranking window with results.
-5. `sellerType` belongs to search, while `shopType` belongs to rankings. Do not interchange them.
-6. Do not invent unsupported filters or compensate by repeatedly calling other paid endpoints.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## User Expression & Scenario Quick Reference
+### 约束与建议
 
-**Applicable**:
+- **注明研究背景**：展示市场、筛选条件、当前页、总数、请求日期及榜单统计窗口；搜索与榜单会随时间变化。
+- **店铺列表**：优先展示店铺名称、评分、商品数、近期或区间销量与 GMV、达人覆盖、市场和店铺标识。
+- **详情分组**：分别展示基础资料、核心指标和渠道指标，读取已返回的所有分支，避免遗漏核心与渠道数据。
+- **关联实体**：展示达人、商品或视频标识与实际返回的表现指标，保留关联店铺标识；各接口的实体结构不同，按接口参考解析。
+- **金额与时间口径**：保留原币种单位并检查运行时类型；不要重命名 `unit: US` 或自行换算，不混用累计、近 7 天、近 30 天和榜单区间指标。
+- **保留原始数据**：字段可能缺失、为 null 或新增；未知字段保持原样，不补造指标。详细字段和嵌套路径见 `references/api.md`。
+- **标识精度**：店铺与关联实体 ID 按字符串传递和保存，避免 64 位标识在 JavaScript 或表格工具中丢失精度。
+- **保护凭证与链接**：不展示 API Key；包含签名参数的 URL 按临时链接处理。
+- **控制重复消耗**：使用业务脚本的缓存，命中时不产生新请求；具体隔离与刷新约定见 `references/api.md`。
+- **Windows 输出**：控制台仍用 GBK 时，在打印包含 emoji 的数据前设置 `PYTHONIOENCODING=utf-8`；已先保存的 UTF-8 JSON 不受控制台编码影响。
 
-- **店铺发现与详情**：“用出海匠筛选美国 TikTok 美妆店铺”，“用 Chuhaijiang 看这家店详情”。
-- **关系钻取**：“查这家 TikTok 店合作的达人”，“看店内商品”，“找这家店的带货视频”。
-- **店铺榜单**：“用出海匠看美国 TikTok 店铺热推榜”，“用 Chuhaijiang 查 TikTok 店铺销量榜”。
-- **组合分析**：“先筛 7 日 GMV 高的店，再分析其达人、商品和视频”。
+## 使用示例
 
-**Adjacent**: General TikTok store ranking or detail requests without a source should use `linkfox-kalodata-tiktok-shop`. Use the EchoTik seller skills when the user asks for EchoTik fields or multi-period seller profiles. Use official TikTok Shop skills for the user's authorized seller-center operations.
+### 筛选店铺
 
-**Not applicable**: order handling, stock or listing changes, fulfillment, store authorization, ad campaign changes, non-TikTok marketplaces, or a request naming another data provider.
+用户：用出海匠查美国美妆店铺，优先看近期 GMV 高的店。
 
-## 算力消耗规则
+确认市场与筛选条件，搜索店铺并展示评分、近期销量、GMV 与返回范围。
 
-按端点分别计费：店铺详情 9 算力/次；店铺搜索、关联达人、关联商品、关联视频及两类榜单 18 算力/次。
+### 单店研究与关联钻取
 
-> 用户会因算力消耗而支付费用。高频调用或多端点钻取前，先说明预计调用次数与算力消耗。
+用户：看这家店的核心和渠道表现，再看看合作达人及店内商品。
 
-**Feedback:** Use the Feedback API in `references/api.md` only when the user explicitly asks to submit feedback or explicitly authorizes submission after an issue is identified. Summarize and sanitize the content; never include API keys, phone numbers, raw user messages, or unrelated task context.
+沿用用户提供或前序返回的店铺标识，读取所需详情分支与两类关联数据，分组展示并保留店铺上下文。
+
+### 指定窗口的店铺榜单
+
+用户：用 Chuhaijiang 看美国 TikTok 店铺销量榜。
+
+确认统计窗口，查询销量榜，注明排名窗口及区间销量、GMV 与达人覆盖。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

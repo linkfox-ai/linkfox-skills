@@ -3,7 +3,7 @@ reportTypeId: sbCampaignPlacement
 adProduct: SPONSORED_BRANDS
 officialDocUrl: https://advertising.amazon.com/API/docs/en-us/guides/reporting/v3/report-types/placement
 timeUnit: [SUMMARY, DAILY]
-groupBy: [campaign]
+groupBy: [campaignPlacement, campaign]
 format: [GZIP_JSON]
 filters: []
 dateRange:
@@ -11,30 +11,32 @@ dateRange:
   dataRetentionDays: 60
 ---
 
-# SB Campaign Placement
+# SB 活动广告位
 
-Placement reports contain performance data broken down by ad placement.
+广告位报告按广告展示位置拆分效果。
 
-> **Note**
-> For Sponsored Products, there is not a separate placement report. You can get placement-level data using the 'campaignPlacement' groupBy in a campaign report.
+> **说明**
+> SP 没有独立广告位报告，可在活动报告中使用 `campaignPlacement` 分组获取广告位数据。
 
-> **Note**
-> This report is currently available in preview. During the preview period, data related to Sponsored Brands campaigns with flag isMultiAdGroupsEnabled set to FALSE won't be available. Once version 3 reporting supports all Sponsored Brands campaigns, we will announce general availability in the release notes.
+> **说明**
+> 报告预览期不提供 `isMultiAdGroupsEnabled=False` 的 SB 活动数据。v3 报告支持全部 SB 活动的正式可用状态以 Amazon 版本说明为准，不能假定此限制已解除。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sbCampaignPlacement |
-| Maximum date range | 31 days |
-| Data retention | 60 days |
-| timeUnit | SUMMARY or DAILY |
-| groupBy | campaign |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 60 天 |
+| timeUnit | SUMMARY / DAILY |
+| groupBy | campaignPlacement / campaign |
 | format | GZIP_JSON |
 
-## Base metrics
+按广告位查看效果时，使用 `campaignPlacement` 分组，并在 `columns` 中包含该分组的 `placementClassification`；`campaign` 是活动维度，不能代替广告位拆分。
 
-| Field |
+## 基础指标
+
+| 字段 |
 |------|
 | addToCart |
 | addToCartClicks |
@@ -98,45 +100,42 @@ Placement reports contain performance data broken down by ad placement.
 | viewableImpressions |
 | viewClickThroughRate |
 
-## Group by campaignPlacement
+## 分组：campaignPlacement
 
-**Additional metrics**: placementClassification
+附加指标：
 
-## Group by campaign
+| 字段 |
+|---|
+| placementClassification |
 
-**Additional metrics**: N/A
+## 分组：campaign
 
-## Sample call
+无附加指标。
 
-### Campaign placement summary report
+## 配置示例
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxx' \
---data '{
-    "name": "SB placement report 9/5-9/10",
-    "startDate": "2023-09-05",
-    "endDate": "2023-09-10",
-    "configuration": {
-        "adProduct": "SPONSORED_BRANDS",
-        "groupBy": [
-            "campaignPlacement"
-        ],
-        "columns": [
-            "impressions",
-            "clicks",
-            "cost",
-            "campaignId",
-            "placementClassification",
-            "startDate",
-            "endDate"
-        ],
-        "reportTypeId": "sbCampaignPlacement",
-        "timeUnit": "SUMMARY",
-        "format": "GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SB placement report 9/5-9/10",
+  "startDate": "2023-09-05",
+  "endDate": "2023-09-10",
+  "configuration": {
+    "adProduct": "SPONSORED_BRANDS",
+    "groupBy": [
+      "campaignPlacement"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "placementClassification",
+      "startDate",
+      "endDate"
+    ],
+    "reportTypeId": "sbCampaignPlacement",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

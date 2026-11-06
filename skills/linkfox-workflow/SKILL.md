@@ -1,6 +1,6 @@
 ---
 name: linkfox-workflow
-description: 用自然语言设计、修改、解释、校验 linkfox-workflow agentflow v2 工作流；用户确认生成或修改方案后，将合法 JSON 落盘并幂等上传到 linkfox-workflow 系统，返回 workflowId；用户明确要求时还能执行一次该工作流并查看它的执行记录。适用于“生成工作流”“修改 flow”“校验 agentflow”“上传/部署到 linkfox-workflow 系统”“跑一下这个流程”“看下执行记录/上次为什么失败”等请求；不发布、不删除 flow，不删改执行记录。
+description: 用自然语言设计、修改、解释、校验 linkfox-workflow agentflow v2 工作流；用户确认生成或修改方案后，将合法 JSON 落盘并幂等上传到 linkfox-workflow 系统，返回 workflowId；用户明确要求时还能执行一次该工作流、查看它的执行记录、管理流程引用的平台变量与凭据（认证信息）。适用于“生成工作流”“修改 flow”“校验 agentflow”“上传/部署到 linkfox-workflow 系统”“跑一下这个流程”“看下执行记录/上次为什么失败”“建个变量/凭据”“这个值放哪”“用哪个认证”等请求；不发布、不删除 flow，不删改执行记录，不查看凭据明文。
 ---
 
 # linkfox-workflow Agentflow v2 生成器
@@ -13,6 +13,7 @@ description: 用自然语言设计、修改、解释、校验 linkfox-workflow a
 - **节点级 refine(标签带 `nodeId`)通常 4-5 次**:fetch → 在基线里定位该节点并搜一次 `{{<nodeId>.output`(一次 Grep,**不能省**,漏了下游引用是该场景最常见的错)→ `rm -f` + Write fragment → save → upload。不重读节点分类 references(除非换节点类型),不通读整份基线 JSON。
 - **`run` / `runs` 预算 ≤ 2 次**:Read `references/runtime-execution.md`(如未读)→ 跑一次 `run_workflow.py` 或 `list_executions.py`,拿到 stdout 直接回复。不读节点契约、不写 fragment、不跑 save/upload。
 - **`history` 预算 ≤ 3 次**:Read `references/version-history.md`(如未读)→ `workflow_history.py`(查看 1 次;还原是预览 + `--confirm` 两次)。不 fetch、不写 fragment、不跑 save/upload。
+- **`variables` / `credentials` 预算 ≤ 3 次**:Read `references/variables-and-credentials.md`(如未读)→ 一次 `workflow_config.py`。list 纯读随时可跑;set / create / update / delete 只在用户明确要求时跑,delete 必须带 `--confirm`。不读节点契约、不写 fragment、不跑 save/upload。
 - **上面的预算只管"拼 JSON + 落盘上传"和单次查看**。用户明确要求**调试 / 端到端验证 / 多轮迭代**时换一套规则:每一轮(改 → 存 → 传 → 跑 → 查)最多 15 次调用,而且每一轮都要得出一个可验证的结论,比如"断言 PASS"、"定位到某节点输入里缺某字段"。然后再决定要不要开下一轮。别为了凑预算省掉验证,也别在一轮里漫无目的地反复试。临时测试版的恢复(fetch + 恢复 + 上传)不计入这一轮。
 - **同一 pattern 的 Glob / Grep 一轮内只出现一次**。
 - **禁止读 linkfox-workflow 系统源码来推断字段**:节点 `data.name` / `data.type` / `inputs` / credential 字段名一律以本 skill 的 `references/` 为准;references 缺就补 references,不去猜源码。
@@ -22,7 +23,7 @@ description: 用自然语言设计、修改、解释、校验 linkfox-workflow a
 
 ## 目标
 
-把自然语言需求归一为一份**合法 linkfox-workflow agentflow v2 JSON**(顶层 `{description, usecases, nodes, edges}`)。只用 24 个节点(原生 15 + LinkFox 自定义 9;原生 Start 已弃用,开始节点一律用 BusinessStart);运行时对象(模型、凭据、Document Store、Vector Store、Tool credential、目标 flowId)一律留占位。用户确认后把 JSON 落盘并幂等上传到 linkfox-workflow 系统,由用户随后在 linkfox-workflow 系统中绑定运行时对象(`linkfoxAgentApi` 凭据除外——后台自动绑定,不要提示用户去页面上绑)。
+把自然语言需求归一为一份**合法 linkfox-workflow agentflow v2 JSON**(顶层 `{description, usecases, nodes, edges}`)。只用 24 个节点(原生 15 + LinkFox 自定义 9;原生 Start 已弃用,开始节点一律用 BusinessStart);运行时对象(模型、凭据、Document Store、Vector Store、Tool credential、目标 flowId)一律留占位(用户点名要绑的已有凭据例外,见「执行流程」第 12 步)。用户确认后把 JSON 落盘并幂等上传到 linkfox-workflow 系统,由用户随后在 linkfox-workflow 系统中绑定运行时对象(`linkfoxAgentApi` 凭据除外——后台自动绑定,不要提示用户去页面上绑)。
 
 ## 按需读取参考(严格按需,未用到的分类禁读)
 
@@ -43,19 +44,19 @@ description: 用自然语言设计、修改、解释、校验 linkfox-workflow a
 
 按需读:意图分类模糊读 `references/intent-routing.md`;不清楚 lifecycle 动作读 `references/lifecycle-actions.md`;不清楚"要不要单独求确认"读 `references/confirmation-policy.md`;不清楚回复格式读 `references/response-contract.md`;不清楚会话边界读 `references/chat-runtime-contract.md`。**已经知道就不重复 Read。**
 
-`run` / `runs` 固定读 `references/runtime-execution.md`,**且只读它**,上面三个固定项一个字都不用读。`history`(查看 / 对比 / 还原历史版本)同理,只读 `references/version-history.md`;`automation`(启停 / 查看多维表自动化)只读 `references/table-automation.md`。flow 含记录触发(`tableRecordTrigger`)的 generate / refine 追加读 `references/table-automation.md` §1–§2(上传后怎么回报关联结果、字段 ID 怎么写);含**挂在多维表下的定时启动**(`scheduleInput` + `linkfoxTableAutomationContext`)的追加读 §1–§1.5。
+`run` / `runs` 固定读 `references/runtime-execution.md`,**且只读它**,上面三个固定项一个字都不用读。`history`(查看 / 对比 / 还原历史版本)同理,只读 `references/version-history.md`;`automation`(启停 / 查看多维表自动化)只读 `references/table-automation.md`;**`variables` / `credentials`(平台变量 / 凭据)只读 `references/variables-and-credentials.md`**。flow 含记录触发(`tableRecordTrigger`)的 generate / refine 追加读 `references/table-automation.md` §1–§2(上传后怎么回报关联结果、字段 ID 怎么写);含**挂在多维表下的定时启动**(`scheduleInput` + `linkfoxTableAutomationContext`)的追加读 §1–§1.5。
 
 **一轮 generate 追加的 references 上限 4 个**(不含 SKILL.md 与三个固定项);超过就说明选错了参考,回头判断意图。
 
 ## 执行流程
 
-1. **识别意图**:按 `intent-routing.md` 分类为 `generate` / `refine` / `explain` / `validate` / `export` / `run` / `runs` / `history` / `automation` / `not_workflow`,看完整语义不只靠关键词。**`run` / `runs` / `history` / `automation` 不生成 JSON**,识别到就直接跳到第 7 / 第 8 / 第 9 / 第 10 步,不读节点契约、不写 fragment、不跑 save/upload。
+1. **识别意图**:按 `intent-routing.md` 分类为 `generate` / `refine` / `explain` / `validate` / `export` / `run` / `runs` / `history` / `automation` / `variables` / `credentials` / `not_workflow`,看完整语义不只靠关键词。**`run` / `runs` / `history` / `automation` / `variables` / `credentials` 不生成 JSON**,识别到就直接跳到第 7 / 第 8 / 第 9 / 第 10 / 第 11 / 第 12 步,不读节点契约、不写 fragment、不跑 save/upload。
 2. **`not_workflow`**:走普通对话,不强行生成 flow。
 3. **`explain` / `validate`**:直接执行,不需要确认。validate 把 JSON 写成临时文件后跑 `save_workflow.py --content-file <临时文件> --dry-run`。它做完整的补齐和校验,但不写文件、不动门禁。按退出码和 `ERROR:` / `warnings` 分 error / warning 输出,再按 `lifecycle-actions.md` 的清单补充脚本查不到的语义问题。不修改用户贴来的 JSON。**dry-run 只给 validate 用**,generate / refine 直接正式保存。
 4. **`generate`**:先判断需求是否足够明确,参考 `confirmation-policy.md`。
-   - **需求明确**(用户点出具体节点组合、"最简"流程、"不用 AI/API"、明确输入输出,或已在催"立即生成/不要再问"):**当轮直接执行**。用 1-3 句自然语言宣布方案(起点、主线、结束、关键 prompt 简述),按 `flow-structure.md` 生成 JSON、自修、走"落盘与上传流程"、回复结果。不再问"是否确认"。
-   - **需求含糊**(触发方式、AI/知识库/外部 API 都没说,或只有模糊目标):按 `needs_input` 一次问 1-2 个具体问题,或展示自然语言方案并请求确认;确认前不输出 JSON、不落盘。
-   - 挑节点原则:业务动作 → 匹配 24 个节点之一 → 决定分支/循环/迭代结构;涉及店铺事件/业务定时/邮件飞书钉钉通知/跨境专家/多维表/CSV/Excel 时**优先用 LinkFox 自定义节点**,不用 HTTP + CustomFunction 手工模拟。**涉及模型/AI 推理优先用 `CrossBorderExpert`,不默认生成原生 `Agent`/`LLM`/`ConditionAgent`**;只有确实依赖 Tool 调用、RAG 知识库检索、Structured Output,或需要节点内动态语言分支判断时才用这三个原生节点兜底,并在方案里点出兜底原因(`Tool`/`Retriever` 不受此限)。先按 `node-catalog.md` 路由,再读已选节点分类说明。
+   - **需求明确**(用户点出具体节点组合、"最简"流程、"不用 AI/API"、明确输入输出,或已在催"立即生成/不要再问"):**当轮直接执行**。用 1-3 句自然语言宣布方案(起点、主线、结束、关键 prompt 简述),按 `flow-structure.md` 生成 JSON、自修、走"落盘与上传流程"、回复结果。不再问"是否确认"。**但"没说触发方式"不算需求明确**:方案清楚、触发方式只字未提且用户没在催时,先只问那一句"要不要关联到多维表",答完当轮直接落盘上传,不再额外要确认。
+   - **需求含糊**(触发方式、AI/知识库/外部 API 都没说,或只有模糊目标):按 `needs_input` 一次问 1-2 个具体问题,或展示自然语言方案并请求确认;确认前不输出 JSON、不落盘。**触发方式没说时,其中一问必须是"要不要关联到多维表"**(记录触发 / 定时挂在表下 / 手动不关联,三选一,见 `intent-routing.md` §触发方式识别),不要静默默认成手动;用户在催或只要最小骨架时跳过这一问,按手动出并在回复里留一句"要改成关联多维表随时说"。
+   - 挑节点原则:业务动作 → 匹配 24 个节点之一 → 决定分支/循环/迭代结构;涉及授权店铺数据读取/业务定时/邮件飞书钉钉通知/跨境专家/多维表/CSV/Excel 时**优先用 LinkFox 自定义节点**,不用 HTTP + CustomFunction 手工模拟。**涉及模型/AI 推理优先用 `CrossBorderExpert`,不默认生成原生 `Agent`/`LLM`/`ConditionAgent`**;只有确实依赖 Tool 调用、RAG 知识库检索、Structured Output,或需要节点内动态语言分支判断时才用这三个原生节点兜底,并在方案里点出兜底原因(`Tool`/`Retriever` 不受此限)。先按 `node-catalog.md` 路由,再读已选节点分类说明。
    - 生成 JSON 前自查(节点选型、连线拓扑、`{{ }}` 引用路径、prompt 内容),样板字段交给脚本补;然后按"落盘与上传流程"执行,`save_workflow.py` 报 error 就照 stderr 逐条修后重跑。
 5. **`refine`**:
    - **唯一身份是 `workflowId`,不是文件名**。拿到 workflowId 后,所有落盘/上传都用它定位,不必记本地路径。
@@ -98,6 +99,18 @@ description: 用自然语言设计、修改、解释、校验 linkfox-workflow a
    - **定时任务不经 `set`**:它的启停在画布顶部排期开关,订阅的 `enabled` 管不了排期,脚本退出 66;回复里引导用户去关开关,或 refine 改成手动启动。
    - 按退出码回报:0 看 `tableSync.status`;66 推不出订阅 / 是定时任务;68 被拒(别的成员绑定 / 无表权限);70 已保存但没生效。不输出 flow info 标签(画布没变)。
    - 预算 ≤ 2 次:Read `references/table-automation.md`(如未读)→ 一次脚本。
+11. **`variables`**(平台变量;细节见 `references/variables-and-credentials.md`):
+   - "存个配置 / 改个变量 / 这个值放哪" → `python scripts/workflow_config.py vars list|set|delete ...`。
+   - **先判断放哪**:非敏感的全局配置才进变量;密钥 / token / 机器人地址放**凭据**(第 12 步)。拿不准就问一句。
+   - **变量已按租户隔离**:运行时按 flow 属主的 `groupId`/`memberId` 查找,跨成员 / 跨租户同名互不干扰(名字不用再为防撞加前缀,通用名仍建议加业务前缀以便阅读);**同一作用域内同名**会 409 / 中止执行,`set` 遇多条退出 65,让用户用 `--id` 决定。往变量里写密钥时脚本仍会给 warning(明文存库 + 组 OWNER 可见),**回复里必须转述并建议改用凭据**。
+   - 值只走 `--value-file -`(stdin),命令行里不留明文;`list` 默认脱敏,用户没明确要看就别加 `--reveal`;`delete` 必须 `--confirm`。
+   - 不输出 flow info 标签(画布没变)。
+12. **`credentials`**(凭据 / 认证信息;细节见同一份 reference):
+   - "建个凭据 / 换个 token / 这个节点用哪套认证" → `python scripts/workflow_config.py creds list|create|update|delete ...`。
+   - `list` 纯读随时可跑;要绑已有凭据时先 `list` 拿到 id,再写进节点 `data.credential`(不是类型名)。**不凭显示名猜 id。**
+   - **创建只在用户明确要求、且值是他本轮亲手给的时候跑**;值走 `--data-file -`,脚本不回显,也不要把值写进 workspace 文件或 memory。`linkfoxAgentApi` 由后台自动绑定,不手工建(除非用户明确说自动绑定不好使)。
+   - 不 reveal、不调 `GET /credentials/:id`;`delete` 必须 `--confirm`,并在回复里说明引用它的流会取不到认证。
+   - 不输出 flow info 标签。
 
 ## 从 `<linkfox-flow-info>` 恢复已有 flow(refine 前置)
 
@@ -374,13 +387,13 @@ Bash(
 - **执行只在用户明确要求时**:`scripts/run_workflow.py` 执行一次,`scripts/list_executions.py` 读取执行记录;**禁止**在上传成功后顺手跑一次"验证"。
 - **历史版本只经 `scripts/workflow_history.py`**:上传时自动打开历史记录开关(只开不关);还原只在用户明确要求、预览之后才带 `--confirm`。
 - **多维表自动化启停只经 `scripts/table_automation.py set`**:只在用户明确要求启用 / 停用时跑;不用 `linkfox-smart-table` 的 `registerWorkflow` / `updateWorkflowTriggerTable` / `unregisterWorkflow` 改关联(只改多维表侧,订阅行对不上)。
-- **其他后端动作仍禁止**:不发布、不删除 flow,不删除也不修改执行记录,不查询 model / credential / documentStore 目录。
-- **只用 LinkFox 认证**:不得获取、读取或使用系统内部 API Key。
-- **密钥不出上下文**:LinkFox API Key 只由脚本从环境读取,不得写进命令参数、JSON、日志或用户回复。
+- **其他后端动作仍禁止**:不发布、不删除 flow,不删除也不修改执行记录;**不查询 model / documentStore 目录**。凭据只做 `creds list|create|update|delete`,不 reveal、不读 `GET /credentials/:id`(会回解密后的内容);变量只做 `vars list|set|delete`。
+- **只用 LinkFox 认证**:不得获取、读取或使用系统内部 API Key;不碰登录态 JWT / cookie;不调黑名单接口(`/api/v1/workspace*`、`/organizationuser*`、`/files*`、`/nvidia-nim*`)。
+- **密钥不出上下文**:LinkFox API Key 只由脚本从环境读取,不得写进命令参数、JSON、日志或用户回复。凭据值与变量明文同理:值只从 `--value-file -` / `--data-file -` 进,不落 workspace 文件、不写 memory、不回显。
 - **一个文件对应一个 flow**:已有 workflow 的后续修改必须原地覆盖原 JSON,文件名和 sourceKey 保持不变;只有用户明确要求新流程才允许新文件。
 - **只支持 agentflow v2**:不生成老 chatflow 结构,不生成 v1 multiagent。
 - **只用 24 个节点**。原生 15:Start(**已弃用,禁止生成**)/ Agent / LLM / Tool / Retriever / Condition / ConditionAgent / Loop / Iteration / HumanInput / HTTP / CustomFunction / ExecuteFlow / DirectReply / StickyNote;LinkFox 自定义 9:BusinessStart / CrossBorderExpert / DataReader / FillForm / SendNotification / WriteFile / LinkfoxHTTP / End / CustomPythonFunction。开始节点一律 BusinessStart。不自造节点类型;`chatOpenAI` 是 Agent/LLM 节点里 `agentModel` 字段的选项值,不是独立节点。未注册的 `data.name` 会被 `save_workflow.py` 拒绝落盘。
-- **运行时对象留占位**:`FLOWISE_CREDENTIAL_ID`、`documentStore` UUID、`executeFlowSelectedFlow`、Vector Store id 全写空字符串。
+- **运行时对象留占位**:`FLOWISE_CREDENTIAL_ID`、`documentStore` UUID、`executeFlowSelectedFlow`、Vector Store id 全写空字符串。唯一例外是用户明确点名"用已有凭据 X"时:该节点 `data.credential`(以及 `inputs` 里若有的 `FLOWISE_CREDENTIAL_ID`)写 `creds list` 拿到的实例 id,见 `variables-and-credentials.md`。
 - **机器人地址 / 加签密钥只来自用户**(缺陷 #7130761097):`SendNotification` 的 `feishuWebhook` / `feishuSignSecret` / `dingtalkWebhook` / `dingtalkSignSecret`(以及任何 `type=password` 字段)新建时留 `""`,refine 时从 fetch 基线原样保留。**不得**从本会话里别的流程、上一轮生成、遗留的 `workflow.fragment.json` 或 memory 里沿用——那会把 B 的通知发进 A 的群;也不得把这些值写进 memory。`save_workflow.py` 对不是来自基线的值 exit 65;只有用户本轮在对话里亲手给了**这个流程**的地址 / 密钥时才带 `--secrets-from-user`,stdout 的 `secretsFromUser` 回显放行的字段(不含值)。
 - **不做二次抽象**:不发明"子流程"、"变量声明块"、"错误处理块"这类 linkfox-workflow 系统里不存在的构造。
 
@@ -395,11 +408,12 @@ Bash(
 - **代码节点默认用 JS 的 `CustomFunction`**:两者都能实现时不用 `CustomPythonFunction`。只有下游要按字段取 `result`、要 pandas / 解析 HTML·PDF·Word·Excel·PPT、或用户明确要 Python 时才用 Python(用户指定时在节点 `description` 写「用户指定用 Python」)。`save_workflow.py` 对不满足这几条的 Python 节点给 warning,见 `references/nodes-integration-and-output.md`「选择规则」。
 - `$flow.state` 相关:只有 9 个节点有 `<name>UpdateState[]`(Agent / LLM / Tool / Retriever / CustomFunction / CustomPythonFunction / ExecuteFlow / Loop / CrossBorderExpert),别给别的节点造这个字段;`UpdateState` 里的 `{{ output }}` 指当前节点;**BusinessStart 没有 `startState`**,不能预声明初始 state,能用精确 Node Output 就别绕 state。
 - `inputParams` 该省的省、该写的写:脚本代填的节点整个字段没出现;其余节点写了完整定义,用到 `{{ }}` 的字段带 `acceptVariable: true`。**任何节点都没有出现 `inputParams: []`**。
-- 运行时字段全为占位,不写死具体 UUID(模型 / 凭据 / 知识库 / 店铺 / 专家 / 子流程)。**多维表例外**:见下一条。
+- 运行时字段全为占位,不写死具体 UUID(模型 / 凭据 / 知识库 / 店铺 / 专家 / 子流程)。**例外**:多维表两级 id(见下一条),以及用户点名要绑的已有凭据实例 id。
 - 通知机器人地址 / 加签密钥:新建为空、refine 与基线一致;没有从别的流程或记忆里抄值。带了 `--secrets-from-user` 的,用户本轮确实给过这个流程的地址。
 - **选多维表的地方都写了两级、且是用户挑的真实表**:`DataReader`(`sourceType=linkfoxTable`)、`WriteFile`(`writeDestination=linkfoxTable` 或 `updateLinkfoxTable`)、`BusinessStart`(`startInputType=tableRecordTrigger`)都给了 `notebookId`(`nbk…` / `__loose__`)+ `tableId`(`tbl…`),来自智能表格 skill 查出的列表并经用户确认(见「选表」一节);只有用户明确说以后再选时才留 `""` 并带 `--table-later`。`WriteFile` 新建分支用 `newTableNotebookId`(默认 `__new__`)+ `newTableName`。
 - **`WriteFile` 的 `writeDestination` 从三个值里选**:`linkfoxTable`(往已有表新增行)/ `newLinkfoxTable`(新建表)/ `updateLinkfoxTable`(改已有行,一次只改一行)。"改已有行"不要用"先删后加"或"写一条新记录"表达。
 - **挂在多维表下的定时流**(`scheduleInput` + `linkfoxTableAutomationContext`):上下文至少有 `notebookId`、`tableId` 是真实 `tbl…`;回报时 `UNBOUND` 当正常成功说;没有说"表一改就会跑"(记录变更不触发定时流)。
+- **从零 generate 时反问过是否关联多维表**:用户没说触发方式、没在催、不是最小骨架时,问过"要不要关联到多维表"(记录触发 / 定时挂表下 / 手动不关联),没有静默默认成 `chatInput`;用户答"关联"后触发表已按「选表」查好并让用户挑。refine 不受此条约束(触发由基线决定)。
 - **含 `tableRecordTrigger` 的 flow**:① 触发表是用户挑好的真实表(`tableId` 留空时服务端保存会拒绝);② 监听 / 条件字段名字和 ID(`recordWatchFieldIds` / `recordConditionFieldId`,取自 `listFields`)都写了;③ 回复按上传 stdout 的 `tableAutomation` 说了关联结果,`effective` 不是 `true` 时第一段就说了"已保存但自动化没生效"和补救办法,没有说"已生效";从记录触发切走时提醒了原表的自动触发一起停了。取"这次变的那一行"用**节点引用** `{{businessStartAgentflow_0.output.recordEvent.recordId}}` / `.output.recordEvent.recordByName.<字段名>`(字段名来自 `list-fields` 的真表头),**不用** `{{$webhook.*}}`,也不是 `BusinessStart.output.tableRecordTrigger`(那是订阅配置的静态回显)。要写表时直接把 `BusinessStart` 接 `WriteFile`,用 `output.rows`(name-keyed),中间**不需要** `CustomFunction` 搬数据;回写触发的那一行用 `writeDestination=updateLinkfoxTable` 且 `updateRecordId` 留空。
 - **refine 时开始节点原样保留**:BusinessStart 的 `id` / `inputs` / `credential` 与 fetch 基线一致;只有用户本轮明确要求换触发时才带过 `--allow-trigger-change`,且回复里逐条转述了 `triggerChanges`。记录触发流的下游用到了触发的那一行,没有读 `output.question`、没有插 FillForm 顶替。
 - BusinessStart 唯一且无入边;其余执行节点都有入边(Iteration 子节点、Loop 回跳目标除外 —— 漏一条边运行时就报 `Multiple starting nodes are not allowed`);Loop / DirectReply / End 无出边;分支节点(Condition / ConditionAgent / HumanInput)每个都至少接一条下游;Iteration 子节点带 `parentNode` + `extent: "parent"`。
@@ -407,6 +421,8 @@ Bash(
 - 模型/AI 推理场景用了 `CrossBorderExpert`,没有默认落到原生 `Agent`/`LLM`/`ConditionAgent`;出现这三个节点时方案里已点出具体兜底原因(Tool 调用 / RAG 检索 / Structured Output / 节点内动态分支判断之一)。
 - **每个 `LinkfoxHTTP` 节点的 `path`/`body` 都不是占位或抄用户原文的 endpoint_path 字面量**:已按 `nodes-linkfox-custom.md` 的流程用 `query_tools_matrix.py` 查过对应端点,`path` 是文档给的真实相对路径,`body` 是按文档参数表组好的字段(不是 `"{}"`)。查不到才允许留空占位,并在补配置指引里逐个点名哪些节点没查到、要用户自己补。
 - **异步任务接口(创建只回 `taskId`,如 `/aigc/*Async`)都配了轮询环**:`CustomFunction(await sleep(<毫秒>))` → 查询接口 → `Condition(status equal SUCCESS)` → Else 接 `Loop` 回跳 **sleep 节点**(不是创建节点);副作用节点在 SUCCESS 分支、不在回跳路径;`maxLoopCount` 生图/生文 20、生视频 40;延时用 `await sleep()` 而**不是 `Atomics.wait`**。没有"只放一个创建节点就直接引用 `resultList[0].url`"。生视频这类 flow 已在方案里点明耗时很长、试跑可能先遇到 504(504 不代表失败,用 `list_executions.py` 查、不要重跑)。见 `nodes-linkfox-custom.md` 的「异步任务接口」。
+- **亚马逊店铺数据默认 `DataReader`**:Listing / 订单 / 广告表现一律 `sourceType=amazonStore`,不要用 `LinkfoxHTTP` 重写 `/store-assistant/v1/{listings,orders}/search` 或 `/ads/performance`。只有节点不透传的五项(`storeName` / `countryCode` / `orderId` / 订单侧 `keyword` / `title`)才直调,并在方案里说清原因;`save_workflow.py` 对没有这五项却直调查询接口的写法报 warning。
+- **亚马逊数据要全量时分批了**:`orders` / `listing` 单次最多 `maxRows`(≤2000,内部自动翻页),`ads` **只取一页 200 条且不报截断**。用户要全量、或数据量明显超限(>2000 条)时,按 `nodes-linkfox-custom.md`「逐页读取 → 处理 → 落盘 → 下一页」搭:`DataReader`(探测 maxRows=1 拿 `total`)→ `CustomPythonFunction`(算 `[1..ceil(total/200)]`)→ `Iteration` → 子节点 `DataReader`(`amazonStartPage="{{$iteration}}"`、`amazonPageSize=200`、`maxRows=200`)→ `CustomFunction`(映射成 `{rows}`)→ `WriteFile`(每页立刻落盘)。三条硬约束别破:`maxRows` 必须等于 `amazonPageSize`、`onTruncate` 保持默认 `truncate`(否则每页都判截断失败)、`amazonStartPage` 的 `inputParams` 必须标 `acceptVariable: true`。**不要**用 `LinkfoxHTTP` 自己拼 `page`,也不要把亚马逊 `DataReader` 直连 `WriteFile`(没有 `rows`,会写成一条聚合记录、脚本报 error)。没用 `Loop`(循环体不能写)。只是"看最近的订单 / 广告"就单个 `DataReader`,没硬加循环;要全量时方案里说清"分 N 页、耗时约 N 倍"。
 - **同类节点全扫**:收到一条节点报错(或自己发现一处写错)时,先把 flow 里**所有同 `data.name` 的节点**过一遍同一项检查,一次全修。**例外**:标签带 `nodeId` 的节点级 refine 不做全扫,同类问题写在回复里问一句(见「节点级 refine」);脚本报 error 而必须返工时仍全扫。
 - **`save_workflow.py` 报的 error 要按它给的修法改**,尤其 `outputAnchors` 这类样板字段:提示"删掉整个字段交给脚本代填"就照做,不要对着"应为 X"逐字段手改。
 - **没跑通不许说"改好了"**:改动的证据是 `upload_workflow.py` 退出码 0;**流程能跑通的证据是一次真实执行:`runStatus=FINISHED`,并且带了 `--expect-*` 时 `businessCheck=PASS`**。两者不能互相顶替,也不能用"与已验证的那个改法相同"类比代替验证。这条与"上传后不许顺手跑"不冲突:需要验证时,先问用户要不要跑一次**验证型执行**(见 `references/runtime-execution.md`「两类执行」),用户同意才跑。没同意,或确实跑不了(服务端排队、含人工节点),就如实说"已上传但本次未验证"及原因。
@@ -451,3 +467,13 @@ Bash(
 - 没有为了"再确认一次"重复调用脚本、没有临场拼 curl 或写内联 python。
 - 遇到 504 / 超时**没有立刻重跑** `run_workflow.py`,而是先 `list_executions.py` 查最近执行、确认没有 `INPROGRESS` 堆积(细节见 `references/runtime-execution.md`)。
 - flow 含 `FillForm` / `HumanInput` 时,已如实说明"脚本无法提交人工节点、`Submit` 要在界面上点",没有反复尝试 `--form-file` / `--session-id` 各种参数组合;若为验证下游做过硬编码临时替换,**已恢复原始设计并再次上传**。
+
+`variables` / `credentials` 的检查:
+
+- 只在用户明确要求时跑了 `set` / `create` / `update` / `delete`;`list` 没有因此带出写操作。
+- 值走的是 `--value-file -` / `--data-file -`;回复、stdout 摘要、memory 里都没有出现明文或凭据内容。
+- 往变量里写了密钥类值时,转述了 stdout 的 warning(明文存库、组 OWNER 可见),并建议改用凭据;没有把变量说成"安全的地方"。
+- 变量名可读(通用名建议加业务前缀);同名多条时先 `delete --id` / `vars list` 看清作用域,而不是硬覆盖别人的行。
+- 绑凭据时写的是 `creds list` 拿到的实例 id(不是类型名、不是猜的);没有让用户去绑 `linkfoxAgentApi`。
+- 删除带了 `--confirm`,并说明引用它的流运行时会取不到认证 / 读到字面量变量。
+- 没有输出 `<linkfox-flow-info>` 标签。

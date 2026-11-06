@@ -1,124 +1,109 @@
 ---
 name: linkfox-amazon-store-customer-feedback
-description: 亚马逊商品与类目买家反馈洞察。用于按 ASIN 或 browse node 查询评论主题、主题提及量、星级影响、评价趋势、退货主题和退货趋势，帮助分析产品口碑及类目问题。用户提到亚马逊评论分析、评价主题、差评原因、评论趋势、退货原因、退货趋势、ASIN 口碑洞察、类目反馈、MENTIONS、STAR_RATING_IMPACT、Customer Feedback API 时触发。即使未明确提及 API，只要希望从聚合反馈中判断某个亚马逊商品或类目的常见好评、差评或退货问题，也应触发此技能。
+description: 亚马逊商品与类目买家反馈洞察，支持查询评论主题、主题提及量、星级影响、评论趋势、退货主题及退货趋势，用于产品口碑、差评原因和类目问题分析。适用于按 ASIN 或类目查看聚合好评、差评和退货问题；不适用于逐条评论抓取、订单查询或退货订单处理。
+---
+# Amazon 店铺买家反馈洞察
+
+## 适用范围
+
+### 适用
+
+查看已授权亚马逊店铺可访问的商品与类目聚合买家反馈。
+用户希望判断商品口碑、评论主题、星级影响、类目反馈或退货问题时，使用本技能，无需明确提及 Customer Feedback。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+|---|---|
+| 这个 ASIN 的好评、差评集中在哪里 | 商品评论主题：比较提及量与星级影响。 |
+| 这个商品口碑最近有什么变化 | 商品评论趋势：展示返回的时间区间与变化。 |
+| 查这个商品所属类目普遍遇到的问题 | 先确定类目，再读取类目评论主题与趋势。 |
+| 这个类目有哪些退货原因，最近是否变化 | 类目退货主题及退货趋势。 |
+
+### 边界
+
+本技能使用 Customer Feedback 聚合洞察，不属于 Orders 订单查询；订单任务转交 `linkfox-amazon-store-orders`。逐条买家评论抓取不属于本技能范围。
+
+## 接口清单
+
+| 接口 | 端点 | 接口文档 | 对应脚本 | 说明 |
+|---|---|---|---|---|
+| 商品评论主题（`getItemReviewTopics`） | POST `/spApi/developerProxy` → GET path：`customerFeedback/2024-06-01/items/{asin}/reviews/topics` | `references/api.md` | `scripts/get_item_review_topics.py` | 查询商品评论主题。 |
+| 商品所属类目（`getItemBrowseNode`） | POST `/spApi/developerProxy` → GET path：`customerFeedback/2024-06-01/items/{asin}/browseNode` | `references/api.md` | `scripts/get_item_browse_node.py` | 查询商品所属类目。 |
+| 商品评论趋势（`getItemReviewTrends`） | POST `/spApi/developerProxy` → GET path：`customerFeedback/2024-06-01/items/{asin}/reviews/trends` | `references/api.md` | `scripts/get_item_review_trends.py` | 查询商品评论趋势。 |
+| 类目评论主题（`getBrowseNodeReviewTopics`） | POST `/spApi/developerProxy` → GET path：`customerFeedback/2024-06-01/browseNodes/{browseNodeId}/reviews/topics` | `references/api.md` | `scripts/get_browse_node_review_topics.py` | 查询类目评论主题。 |
+| 类目评论趋势（`getBrowseNodeReviewTrends`） | POST `/spApi/developerProxy` → GET path：`customerFeedback/2024-06-01/browseNodes/{browseNodeId}/reviews/trends` | `references/api.md` | `scripts/get_browse_node_review_trends.py` | 查询类目评论趋势。 |
+| 类目退货主题（`getBrowseNodeReturnTopics`） | POST `/spApi/developerProxy` → GET path：`customerFeedback/2024-06-01/browseNodes/{browseNodeId}/returns/topics` | `references/api.md` | `scripts/get_browse_node_return_topics.py` | 查询类目退货主题。 |
+| 类目退货趋势（`getBrowseNodeReturnTrends`） | POST `/spApi/developerProxy` → GET path：`customerFeedback/2024-06-01/browseNodes/{browseNodeId}/returns/trends` | `references/api.md` | `scripts/get_browse_node_return_trends.py` | 查询类目退货趋势。 |
+
+## 前置条件
+
+**先完成店铺授权并确定操作目标**：依赖 `linkfox-amazon-store-auth` 选店与完成授权。运行 `python scripts/check_auth_dependency.py` 检查依赖；缺失时先安装依赖，不在本技能内另行实现授权或令牌逻辑。确认目标店铺、站点和商品或类目；角色、站点支持及依赖检测约定见 `references/api.md`。
+
+## 查询流程
+
+1. 确认用户要分析商品还是类目，以及需要主题、趋势或二者对照；按任务范围选择操作，避免自动执行整套查询。
+2. 用户需要商品评论主题时，查询商品评论主题；需要比较主题提及量与星级影响时，分别获取两种排序结果。
+3. 用户需要时间变化时，再查询商品评论趋势。
+4. 需要类目对照且尚无类目编号时，查询商品所属类目，从实际响应取得类目编号。
+5. 按用户范围查询该类目的评论主题、评论趋势、退货主题和退货趋势，整合已有数据展示；失败或空结果时遵守调用约束，不自动换目标试探。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：同一会话、同一参数组合默认只调用一次，优先读取已保存的响应；脚本不读取或保存响应缓存。失败或空结果时，不得自动换目标或连续试探；需要继续查询时，先向用户说明原因和查询范围。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-customer-feedback-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、响应中可用的计数或状态字段（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+不消耗算力 （限时）。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分反馈概念**：评论主题、星级影响与退货主题是不同的聚合视角；类目数据不能直接当作某个 ASIN 的实际退货记录。
+- **清晰展示数据**：注明店铺、站点、ASIN 或类目及统计区间，用表格呈现响应中可用的主题、提及量、星级影响和趋势，不补造未返回指标。
+- **先检查状态**：先检查外层响应与 `developerProxy.errcode`、`httpStatus`，再读各脚本解析字段。响应与店铺保护规则见 `references/api.md`，完整冷却及恢复指引见 `references/spapi-protection.md`。
+- **说明数据时效**：注明 Amazon 返回的统计时间；刷新频率以 Amazon 为准，通常按周，不能按实时评论理解。
+
+## 使用示例
+
+### 分析商品口碑
+
+用户：看看这个 ASIN 的主要好评、差评，以及近期变化。
+
+确认店铺、站点与商品，按需比较评论主题的提及量和星级影响，再结合评论趋势说明变化，标明统计区间。
+
+### 对照类目评论与退货问题
+
+用户：这个商品所在类目普遍有哪些问题，退货原因有什么变化？
+
+先取得商品所属类目，按范围查询类目评论与退货洞察，区分类目问题和商品证据，不将类目聚合数据解释为单品退货记录。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Amazon 店铺 Customer Feedback
-
-本 skill 与 **`linkfox-amazon-store-auth`** 等同属 **Amazon Store** 系列：依赖 **`linkfox-amazon-store-auth`** 选店（`sellerId`+`region`）；直接 **`POST /spApi/developerProxy`** 传入 `sellerId`+`region`，由服务端解析 token（勿传 `amzAccessToken`，除非兼容旧调用）。转发 **GET**。
-
-> 说明：接口属于 **Customer Feedback（买家评论/退货洞察）**，不是 Orders 订单 API。订单见 **`linkfox-amazon-store-orders`**。
-
-## 调用方式
-
-- **API 端点**：`POST /spApi/developerProxy`（不同操作通过请求体区分；完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文脚本一览）
-- **成本约束**：本工具会消耗算力；失败/空结果不得自动换关键词、翻页或连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-customer-feedback-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## 官方参考索引
-
-| 能力 | 文档 |
-|------|------|
-| getItemReviewTopics | [getItemReviewTopics](https://developer-docs.amazon.com/sp-api/reference/getitemreviewtopics) |
-| getItemBrowseNode | [getItemBrowseNode](https://developer-docs.amazon.com/sp-api/reference/getitembrowsenode) |
-| getBrowseNodeReviewTopics | [getBrowseNodeReviewTopics](https://developer-docs.amazon.com/sp-api/reference/getbrowsenodereviewtopics) |
-| getItemReviewTrends | [getItemReviewTrends](https://developer-docs.amazon.com/sp-api/reference/getitemreviewtrends) |
-| getBrowseNodeReviewTrends | [getBrowseNodeReviewTrends](https://developer-docs.amazon.com/sp-api/reference/getbrowsenodereviewtrends) |
-| getBrowseNodeReturnTopics | [getBrowseNodeReturnTopics](https://developer-docs.amazon.com/sp-api/reference/getbrowsenodereturntopics) |
-| getBrowseNodeReturnTrends | [getBrowseNodeReturnTrends](https://developer-docs.amazon.com/sp-api/reference/getbrowsenodereturntrends) |
-
----
-
-## Prerequisites
-
-1. 依赖 **`linkfox-amazon-store-auth`**。
-2. 通常需 **Brand Analytics** 或 **Selling Partner Insights** 等角色；站点以官方为准（常见 US/UK/DE 等）。
-3. **ASIN** 一般为**子体 ASIN**；topics 类接口需 **`sortBy`**：`MENTIONS` 或 `STAR_RATING_IMPACT`（常各调一次对比）。
-
----
-
-## Current Capabilities
-
-| 脚本 | path 要点 |
-|------|-----------|
-| `get_item_review_topics.py` | `.../items/{asin}/reviews/topics` |
-| `get_item_browse_node.py` | `.../items/{asin}/browseNode` |
-| `get_item_review_trends.py` | `.../items/{asin}/reviews/trends` |
-| `get_browse_node_review_topics.py` | `.../browseNodes/{browseNodeId}/reviews/topics` |
-| `get_browse_node_review_trends.py` | `.../browseNodes/{browseNodeId}/reviews/trends` |
-| `get_browse_node_return_topics.py` | `.../browseNodes/{browseNodeId}/returns/topics` |
-| `get_browse_node_return_trends.py` | `.../browseNodes/{browseNodeId}/returns/trends` |
-
-前缀均为 **`customerFeedback/2024-06-01/`**。共享模块：**`_spapi_customer_feedback_common.py`**。
-
----
-
-## Quick Parameters
-
-- 公共：`sellerId`、`region`、`marketplaceId`（或 `marketplaceIds` 取首项）。
-- ASIN 类：`asin`；topics 类另需 **`sortBy`**。
-- Browse node 类：`browseNodeId`（可先 `get_item_browse_node` 取得）。
-
----
-
-## Scripts
-
-```bash
-export LINKFOXAGENT_API_KEY="<your-key>"
-
-python scripts/get_item_review_topics.py '{"sellerId":"A1...","region":"NA","asin":"B0...","marketplaceId":"ATVPDKIKX0DER","sortBy":"MENTIONS"}'
-
-python scripts/get_item_browse_node.py '{"sellerId":"A1...","region":"NA","asin":"B0...","marketplaceId":"ATVPDKIKX0DER"}'
-
-python scripts/get_browse_node_review_topics.py '{"sellerId":"A1...","region":"NA","browseNodeId":"123456","marketplaceId":"ATVPDKIKX0DER","sortBy":"STAR_RATING_IMPACT"}'
-```
-
----
-
-## Display Rules
-
-1. 先看 **`developerProxy.errcode` / `httpStatus`**，再读各脚本解析字段（如 **`itemReviewTopics`**）。
-2. 网关白名单需包含 **`customerFeedback/2024-06-01/`**。
-3. 数据刷新频率以 Amazon 为准（通常按周）。
-
-## Amazon SP-API 接口保护与重试指引
-
-同一店铺连续收到 Amazon SP-API 的 400、403、404 或 429 时，网关会返回 450、453、454 或 459 并短暂冷却。这些自定义状态码不是 Amazon 原生状态，也不表示封号；目的是避免持续异常或高频调用扩大店铺风险。
-
-| 状态与 message | 范围 | 触发与冷却 | 处理 |
-|---|---|---|---|
-| `450`：`400，请求异常，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：20 分钟 | 停止原参数重试，检查必填字段、marketplace、ID、日期和请求体 |
-| `453`：`403，店铺未授权，请先授权` | 店铺全部接口 | 60 秒内超过 2 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 停止该店铺调用，检查授权、权限、店铺归属和区域 |
-| `454`：`404，资源不存在，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 确认资源 ID、所属店铺/站点、资源状态和接口路径 |
-| `459`：`429限流中，请降低频率` | 店铺+接口 | 首次：15 秒；2 分钟内超过 2 次：30 秒；3 分钟内超过 4 次：2 分钟 | 降低并发、分页和轮询频率并逐级退避 |
-
-- 立即停止自动或并发重试，不得通过换脚本或重复创建任务绕过保护；优先遵循 `retryAfter`、`blockedUntil`，没有时按表中时长说明。
-- 450/453/454 必须先修正参数、授权或资源标识，冷却后最多谨慎重试一次；再次触发则停止调用。453 期间停止该店铺全部 SP-API。
-- 保留已有 `reportId`、`feedId` 等任务 ID；写操作结果不确定时先查询状态，不直接重放。
-- 向用户先说明店铺保护，再给原因、处理和等待时间。可回复：“为保护您的亚马逊店铺安全，检测到 Amazon SP-API 连续返回{原因}，当前已进入短暂保护。请先{处理动作}，预计{等待时间}后再试；这不代表封号，也不是套餐或算力限制。”不要只说“LinkFox 限流”或“服务器繁忙”。
-
-## 算力消耗规则
-
-不消耗算力。
-
-**Feedback：** `skillName`：`linkfox-amazon-store-customer-feedback`。
-
----
-*更多跨境 skill：[LinkFox Skills](https://skill.linkfox.com/)*
-
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Factory for thin US price API CLI scripts."""
+"""EU 价格接口 CLI 入口复用。"""
 
 import sys
 

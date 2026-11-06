@@ -1,93 +1,119 @@
 ---
 name: linkfox-aigc-video-translate
-description: 将原视频语音翻译到目标语言，可同步口型。用于视频翻译、视频本地化、口型同步、video translation。
+description: 将已有视频中的语音翻译为目标语言，可同步口型，支持素材准备、异步任务跟进和翻译视频交付。适用于视频翻译、跨语言视频本地化和口型同步；不适用于通用图片生成、无源视频创作或其他视频编辑。
+---
+# 视频翻译与口型同步
+
+## 适用范围
+
+### 适用
+
+将用户提供的视频翻译成目标语言，按需同步口型，并跟进已有翻译任务、下载交付视频。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 把这段视频翻译成英语 | 准备源视频，创建视频翻译任务并跟进结果。 |
+| 翻译视频，同时让人物口型匹配 | 按用户要求启用口型同步。 |
+| 继续查看刚才的视频翻译任务 | 使用已保存的任务编号恢复查询。 |
+| 翻译完成了，但视频没下载下来 | 从终态查询文件重试下载。 |
+
+## 接口清单
+
+| 接口 | 端点 | 接口文档 | 对应脚本 | 说明 |
+|---|---|---|---|---|
+| 查询模型枚举 | GET `${LINKFOX_AI_API_URL}/image/video/model/config/list?bizType=96` | [references/api.md](references/api.md#接口查询模型枚举) | `scripts/video_translation_async.py --list-models --inline` | 获取当前可用模型枚举及能力。 |
+| 视频翻译 | POST `/aigc/videoTranslation` | [references/api.md](references/api.md#接口视频翻译) | `scripts/video_translation_async.py` | 创建异步翻译任务。 |
+| 查询任务 | POST `/aigc/taskQuery` | [references/api.md](references/api.md#接口查询任务) | `scripts/query_task.py` | 查询翻译任务及已有图像、视频任务。 |
+| Base64 素材上传 | POST `/aigc/uploadByBase64` | [references/file-upload.md](references/file-upload.md#接口base64-素材上传) | `scripts/upload_by_base64.py`；`scripts/upload_file.py` | 上传本地或外部来源素材，取得可供生成使用的地址。 |
+
+## 模型选择
+
+先通过[查询模型枚举](references/api.md#接口查询模型枚举)获取当前可用模型及能力，并遵循用户选择；仅查询失败时使用文档中的静态列表兜底。
+
+## 前置条件
+
+确定用户的源视频、目标语言和口型同步需求。按需读取 [视频翻译与查询定义](references/api.md) 和 [上传定义](references/file-upload.md)。从可写的任务目录运行；输出必须位于当前工作目录时，清除指向其他目录的 `ACPX_WORKSPACES`。Windows 使用 `python -X utf8` 或设置 `PYTHONUTF8=1`。
+
+## 视频翻译流程
+
+1. 读取接口定义，按用户需求准备参数；向用户解释模型选择时使用文档中的公开名称，请求中的模型值和默认行为以本接口定义为准。
+2. 完整流程运行 `python <skill-root>/scripts/run_task.py '<JSON 参数>'`。可使用参数文件或标准输入，CLI 约定见 [接口定义](references/api.md#工作流-cli)。流程对每个不同的源视频先下载或读取，再调用内置 Base64 上传；全部成功后才创建翻译任务。
+3. 只创建一次，保存任务编号及原始响应。视频默认先等待 120 秒，再每 10 秒查询，最多等待 20 分钟；查询不使用缓存。超时保留原任务，使用 `python <skill-root>/scripts/run_task.py --task-id <已保存编号>` 恢复，不能重新上传或创建。
+4. 成功后保存完整查询 JSON，将视频下载到会话 `media/`，资产清单保存到 `data/`。清单保留资源编号、类型、下载失败项和查询实际费用；创建时的零费用不能覆盖最终费用。下载失败运行 `python <skill-root>/scripts/download_results.py <终态查询JSON>`，只重试下载。
+5. 根据本地媒体路径展示成品，结合清单说明下载失败与实际费用。低层入口仅保存 JSON；单独查询成功后仍应运行下载脚本完成交付。
+6. 缺少凭证、认证或用量出错时停止生成链，按下方认证引导处理；不要自动换模型、重建任务、扩大数量或连续试探收费能力。模板的固定成本说明用于一般调用；本工作流的必要轮询按上述节奏执行，查询及上传的缓存例外见接口定义。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：视频翻译按模型单价与计费时长消耗算力，详见“算力消耗预估”。同一会话、同一参数组合默认只创建一次，创建入口提供 24 小时本地缓存，上传和查询不使用响应缓存。生成失败或超时不得自动更换模型、重建任务或扩大生成数量；下载失败只重试下载，继续生成前说明额外消耗。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-aigc-video-translate-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+翻译按模型与原视频计费时长计费，单价和换算规则见 [接口定义](references/api.md#模型与计费限制)。上传免费 （限时）；创建返回零费用仅表示受理，最终消耗以查询及响应头实报为准。没有返回费用时标为未知。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- requestId 为可选兼容字段；提供时原样转发，缺失时不自动生成。超时使用已接受的 taskId 恢复查询，不自动重新创建。
+
+- **受理与完成分开**：取得任务编号表示任务被接受，尚未获得最终视频；具体成功判断和状态见接口定义。若提供 requestId，新任务使用唯一值，同一任务的重试保留原值；查询使用 taskId，超时不自动重提。
+- **素材准备**：始终使用本技能内置上传流程；查询过程中复用原任务，不重复上传。不使用 STS、OSS 或额外技能替代上传。只上传本次需要的视频，不附带无关图片；同一来源复用上传映射，多素材保持原顺序。素材成为公开地址的行为沿用当前任务授权。
+- **清晰展示成品**：解析 `Saved full response: ["<absolute media path>", ...]` 取得生成文件；视频用本地链接或播放器展示，图片用 `![label](<absolute-path>)` 内嵌展示。不要读取二进制媒体，不把 JSON 响应文件当成成品，也不向用户原样复述内部输出协议。
+- **如实解释结果**：展示本地媒体、任务状态、下载失败和实际费用；后端未透出的单项生成状态或错误不推断补造。使用友好的模型名称，不暴露内部工具标识、请求编码或带签名的源地址。
+- **保护认证信息**：不展示或保存 API Key、Authorization、Base64、登录令牌或短信验证码到任务 JSON、缓存或源码；凭证从环境变量读取。手机号登录和短信仅在用户选择后进行，充值仅在用户选择套餐和支付方式后下单，不自动轮询支付。403 归属或权限问题不能通过充值解决。
+- **脱敏反馈线索**：反馈参数类型错误、异常响应或持续查询失败时，记录接口路径、请求或任务编号及脱敏错误摘要，不包含私密素材内容。
+- **保持输出位置**：业务封装在请求前检查当前任务目录可写并固定输出位置，失败即停止，不依赖公共模板的家目录或临时目录回退。
+
+## 使用示例
+
+### 翻译源视频
+
+用户：将我提供的视频翻译为英语，保留口型同步。
+
+确认源视频及目标语言，运行完整流程完成上传、创建、查询和下载；展示本地视频及实际返回的费用。
+
+### 恢复等待中的任务
+
+用户：刚才的视频还没完成，继续查看。
+
+读取已保存的任务编号并恢复查询，成功后下载视频；等待超时保留任务，不再次创建。
+
+### 重试成品下载
+
+用户：翻译成功了，但文件没下载下来。
+
+使用终态查询 JSON 运行下载脚本，说明成功文件和失败项，不创建新翻译任务。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Video Translation and Lip Sync
-
-Translate speech in an existing video into a target language with optional lip synchronization.
-
-## Core Concepts
-
-- This endpoint creates one asynchronous task. A returned taskId is acceptance, not a finished asset.
-- requestId is optional: forward it unchanged when supplied and omit it when absent. Do not generate one or automatically resubmit after a timeout; resume with the accepted taskId.
-- All source images/videos, including external HTTP(S) URLs, must use the **bundled Base64 upload** workflow in [references/file-upload.md](references/file-upload.md): run this skill's bundled `scripts/upload_file.py`, obtain `viewUrl`, then populate the generation media fields. Upload must finish before creating a task; do not use STS/OSS upload or upload again while polling.
-- Put all business fields inside the required `params` object. Keep requestId/chatId/messageId/title at the top level; do not send a top-level memberId. Read [references/api.md](references/api.md) and do not substitute legacy model aliases.
-- Poll /aigc/taskQuery, which serves both these new tasks and existing image/video tasks. There is no separate makeTaskQuery endpoint in this backend branch.
-
-## Parameter Guide
-
-Required business fields inside `params`: `sourceVideoUrl`, `targetLanguage`
-
-Read [references/api.md](references/api.md) for the complete request schema, conditional requirements and model-specific rules before constructing parameters.
-
-## 调用方式
-
-- **API 端点**：`POST /aigc/videoTranslation`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/video_translation_async.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗积分；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。生成失败或超时不得自动更换模型、重建任务或扩大生成数量；下载失败只重试下载，继续生成前说明额外消耗。
-
-以下固定输出策略适用于官方 API 入口。完整生成流程使用 run_task.py，其媒体输出见 Execution Workflow。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-aigc-video-translate-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## Runtime Output Preconditions
-
-Run from a writable task working directory and unset ACPX_WORKSPACES for this invocation if output must stay under cwd. Verify the output directory is writable before execution; if not, stop rather than relying on a fallback. The unchanged official template can otherwise choose ACPX_WORKSPACES, home or a temporary-directory fallback: the fixed output policy above is a workflow requirement, not an OS restriction enforced by the script. On Windows use PYTHONUTF8=1 or `python -X utf8` so saved JSON and console output remain UTF-8.
-
-## Execution Workflow
-
-1. Read references/api.md and choose parameters supported by this endpoint. Use user-facing model names from the documented model table when explaining choices; keep provider/videoType codes inside requests. Do not import defaults or legacy aliases from old generation APIs.
-2. For a full generation request, run `python <skill-root>/scripts/run_task.py '<JSON parameters>'`. Business fields must be nested inside `params`. Media fields inside `params` may contain local file paths or external URLs: the workflow uploads every distinct source through uploadByBase64 before creation, preserves list order and reuses only its own uploaded-source mapping. Use `--params-file <path>` or `-` for stdin when parameters are long.
-3. The workflow creates once, saves the accepted taskId, and polls taskQuery without cache. Image tasks wait up to 10 minutes; video tasks wait 120 seconds initially and up to 20 minutes total. Default polling is 5–10 seconds for images and 10 seconds for videos. A timeout retains the task: resume with `python <skill-root>/scripts/run_task.py --task-id <saved-id>`, never restart creation or uploads.
-4. SUCCESS saves successful result files to the session media directory and keeps the original query JSON plus an asset manifest under data. The manifest retains resource IDs/types, download failures and actual query costToken/costCredit; creation costToken=0 never overwrites final cost. A media download failure is retried with `python <skill-root>/scripts/download_results.py <saved-query-json>`, not by creating another task.
-5. Parse the `Saved full response: ["<absolute media path>", ...]` line for generated files. Render successful images with Markdown `![label](<absolute-path>)`; for videos show the local file link/player. Read the manifest to report download failures and cost. This backend does not expose per-item generation status/errors. Do not Read binary media or repeat the raw protocol line in the user-facing reply.
-6. The official creation and query scripts remain available for explicit low-level use. Creation accepts uploaded viewUrl values only; `query_task.py` must always use `--no-cache`. Finish a low-level successful query by running download_results.py on its saved JSON. Authentication or billing failures follow references/onboarding.md.
-
-## Example
-
-The JSON below uses the required params wrapper and illustrates low-level creation; media values must be viewUrl values from uploadByBase64. For run_task.py, supply the actual source file paths or source URLs in the media fields; it uploads them first. Example taskId values must not be reused for unrelated tasks.
-
-```json
-{
-  "params": {
-    "sourceVideoUrl": "https://example.com/source.mp4",
-    "targetLanguage": "en",
-    "lipSync": true
-  }
-}
-```
-
-## Display Rules
-
-- Present generated local media, task status, download failures and actual reported cost. Use friendly model names; do not expose request codes or signed source URLs.
-- Do not show API keys, Base64 media, authorization headers or internal tool identifiers.
-- The official API entries save JSON; run_task.py additionally downloads media and emits the local-path array used for rendering. Never present a JSON file as the generated image/video.
-
-## 解决认证和算力问题
-
-For missing API keys, authentication errors (401 or equivalent auth messages), or insufficient balance (402 or equivalent billing messages), read [references/onboarding.md](references/onboarding.md) and use this skill's `scripts/onboarding.py`. Resolve its absolute path from this SKILL.md. A 403 ownership/permission error is not a recharge problem.
-
-Follow the existing onboarding flow: let the user choose self-service or phone login; send SMS only after that choice, and create a recharge order only after the user selects a plan and payment method. Do not poll payment automatically. Do not save login tokens, SMS codes or API keys into task JSON, cache or source files; the user's API environment variable is the credential configuration.
-
-## Important Limitations
-
-- API keys are read only from LINKFOX_AGENT_API_KEY or LINKFOXAGENT_API_KEY. The gateway is LINKFOX_TOOL_GATEWAY, defaulting to https://tool-gateway.linkfox.com.
-- On missing credentials, authentication failure or insufficient balance, stop the generation workflow and follow references/onboarding.md. Do not automatically probe other models or start more chargeable tasks.
-- Model-specific media limits and generation defaults are enforced by the API. Do not invent unsupported capabilities.
-
-## User Expression
-
-- **Direct:** 视频翻译。
-- **Contextual:** Use this capability when the user's requested operation matches the documented inputs and outputs.
-- **Boundary:** Existing generic image generation, old video-generation tasks and unrelated creative operations keep their original workflows.
-
-## Feedback
-
-See [references/api.md](references/api.md#feedback) for error reporting.
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

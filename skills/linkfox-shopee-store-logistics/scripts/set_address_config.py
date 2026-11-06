@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: set_address_config.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_logistics_api("set_address_config", params, "set_address_config.py"), indent=2, ensure_ascii=False))
+    run_logistics_api("set_address_config", params, "set_address_config.py")
 
 
 if __name__ == "__main__":

@@ -1,21 +1,21 @@
 # `GET_ORDER_REPORT_DATA_TAX`
 
-> **分类**：9. Order Reports  
-> **说明**：Order tax data  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：订单税务数据  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#scheduled-xml-order-report-tax)（章节：**Scheduled XML Order Report (Tax)**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#scheduled-xml-order-report-tax)（章节：**Scheduled XML Order Report (Tax)**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
+- **角色**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
 - **Order Fulfillment Channel**：MFN
-- **Availability**：Seller Central sellers
-- **Marketplace availability**：NA
-- **Requested/scheduled**：Scheduled
-- **Report output type**：XML
-- **要点**：This report is for calculating and remitting taxes in the NA region. The report includes all new orders since the last report. For new reports, it contains order reports from the past 38 days. You can only schedule one GET_ORDER_REPORT_DATA_TAX or GET_FLAT_FILE_ORDER_REPORT_DATA_TAX report at a time. If you have one of these reports scheduled and you schedule a new report, the existing report is canceled.
+- **可用范围**：Seller Central 卖家
+- **站点范围**：NA
+- **按需/计划**：Scheduled
+- **输出格式**：XML
+- **要点**：用于 NA 税款计算和缴纳，包含自上份报告以来的全部新订单；首次报告回溯 38 天。同时仅可计划一份 GET_ORDER_REPORT_DATA_TAX 或 GET_FLAT_FILE_ORDER_REPORT_DATA_TAX；新增计划会取消已有计划。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#scheduled-xml-order-report-tax>
 

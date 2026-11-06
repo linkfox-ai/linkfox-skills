@@ -1,253 +1,127 @@
 ---
 name: linkfox-sellersprite-competitor-lookup
-description: 使用卖家精灵数据在亚马逊上查找和分析竞品，覆盖12个站点，包含销量、BSR、定价、评分和增长趋势等商品指标。当用户提到竞品查询、竞品分析、ASIN反查、竞争商品研究、查找相似商品、市场竞品发现、商品对标、竞品销量估算、分析竞争Listing、competitor analysis, ASIN reverse lookup, competitor sales, competitor research, SellerSprite, market competitor discovery, competitor trends时触发此技能。即使用户未明确提及"卖家精灵"或"竞品查询"，只要其需求涉及通过ASIN、关键词、卖家名称、品牌或品类发现和分析亚马逊竞品，也应触发此技能。
+description: 使用卖家精灵数据，按 ASIN、关键词、卖家名称、品牌或类目发现和分析亚马逊竞品商品，覆盖多个站点，提供销量、销售额、BSR、价格、评分、配送方式、增长趋势和历史快照。适用于竞品发现、商品对标、卖家或品牌产品线研究及季节性比较，无需明确提及卖家精灵。不适用于流量关键词反查、ABA 搜索词或关键词排名、广告管理、评论内容分析、Listing 文案优化、供应商采购或账号合规查询。
 ---
 
-# SellerSprite Competitor Lookup
+# 卖家精灵竞品查询
 
-This skill guides you on how to query and analyze Amazon competitor product data, helping Amazon sellers discover competing products, benchmark performance, and extract actionable competitive intelligence.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-The SellerSprite Competitor Lookup tool provides comprehensive Amazon product data across 12 marketplaces. It allows querying products by ASIN, keyword, seller name, brand, or category, and returns detailed metrics including monthly sales volume, revenue, BSR ranking, pricing, ratings, and growth trends.
+通过商品标识或市场条件查找亚马逊竞品，比较商品表现。返回的是商品列表，可用于销量估算、市场竞品发现、品牌对标、增长趋势观察及配送方式比较。
 
-**Data snapshots**: The tool supports both real-time data (last 30 days) and historical monthly snapshots. Use `nearly` (default) for current data or a `yyyyMM` format (e.g., `202501`) for historical snapshots. Historical snapshots capture all active listings for that month, enabling year-over-year and seasonal comparisons.
+**场景速查**
 
-**Category hierarchy**: Amazon category names support multi-level paths separated by colons (`:`). For example, `Electronics:Computers & Accessories:Monitors`. Convert user-provided category descriptions into the proper colon-separated format.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查这些 ASIN 的竞品数据或月销量 | 按 ASIN 查询商品并对标表现。 |
+| 无线耳机有哪些畅销商品 | 按关键词发现竞品。 |
+| 这个卖家在卖什么 | 查看卖家产品线。 |
+| 对比不同品牌在这个类目的表现 | 结合品牌和类目查询。 |
+| 最近哪些新品增长快 | 按上架时间或增长指标观察商品。 |
+| 这个细分市场去年十二月怎么样 | 通过历史月份快照进行比较。 |
+| 看评分较高的畅销商品，比较 FBA 和 FBM | 根据返回的销量、评分和配送方式分析。 |
 
-## Supported Marketplaces
+## 前置条件
 
-US (United States), UK (United Kingdom), DE (Germany), FR (France), JP (Japan), CA (Canada), IT (Italy), ES (Spain), MX (Mexico), AU (Australia), TR (Turkey), IN (India)
+明确用户的目标站点、查询对象及比较目的；未指定站点时按接口默认值处理。调用前阅读 `references/api.md`，核对参数、快照月份及分页范围。
 
-Default marketplace is **US**. Use US when the user does not specify a marketplace.
+## 查询与分析流程
 
-## Parameter Guide
+1. 根据用户任务选择 ASIN、关键词、卖家、品牌或类目查询入口，明确排序与当前或历史数据需求，按接口文档准备请求。
+2. 使用脚本发起查询；已有相同参数结果时优先复用缓存，继续检索遵守成本约束。
+3. 先根据接口文档判断响应，再检查商品列表、总数与消息；失败或空结果时说明原因，不自动调整条件连续试探。
+4. 以表格展示竞品数据，说明站点、币种和数据时间范围。按需比较品牌、卖家、配送方式或增长趋势，并交代本次返回范围；季节性研究可建议与去年同期快照比较。
 
-### Search Filters
+## 执行方式
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| marketplace | Amazon marketplace code | `US`, `UK`, `DE`, `JP` |
-| keyword | Search keyword (translate to the marketplace language) | `wireless earbuds` |
-| asinList | One or more ASINs, comma-separated (max 40) | `B072MQ5BRX,B08N5WRWNW` |
-| sellerName | Seller name to filter by | `Anker Direct` |
-| brand | Brand name to filter by | `Anker` |
-| nodeLabel | Amazon category name (colon-separated levels) | `Electronics:Headphones` |
-| nodeIdPath | Amazon category ID path | `172282` |
-| matchType | Keyword match mode: 1 = phrase, 2 = fuzzy, 3 = exact (default 1) | `1` |
-| showVariation | Show product variations: `Y` or `N` (default `N`) | `N` |
-| dataSnapshotMonth | Data snapshot month (`nearly` for real-time, or `yyyyMM`) | `nearly` |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sellersprite_competitor_lookup.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 15 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### Pagination & Sorting
+### 输出策略
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| page | Page number, starting from 1; pagination can access only the first 2,000 records | `1` |
-| size | Results per page, 10-100 (default 50); `page * size` must not exceed 2,000 | `50` |
-| order.field | Sort field (see sort options below) | `total_units` |
-| order.desc | Sort direction: `true` = descending, `false` = ascending | `true` |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sellersprite-competitor-lookup-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。在非 Windows 系统中，禁止于 `/tmp` 及其子目录运行；当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Sort Field Options
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| Field | Description |
-|-------|-------------|
-| total_units | Monthly sales units |
-| total_amount | Monthly sales revenue |
-| bsr_rank | BSR ranking |
-| price | Price |
-| rating | Rating score |
-| reviews | Number of reviews |
-| profit | Gross margin |
-| reviews_rate | Review rate |
-| available_date | Listing date |
-| questions | Q&A count |
-| total_units_growth | Monthly sales unit growth rate |
-| total_amount_growth | Monthly revenue growth rate |
-| reviews_increasement | Monthly new reviews |
-| bsr_rank_cv | 7-day BSR growth count |
-| bsr_rank_cr | 7-day BSR growth rate |
-| amz_unit | Variant sales units |
+## 执行规则
 
-### Key Response Fields
+### 算力消耗预估
 
-| Field | Description |
-|-------|-------------|
-| asin | Product ASIN |
-| title | Product title |
-| price | Current price |
-| monthlySalesUnits | Monthly sales volume |
-| monthlySalesRevenue | Monthly sales revenue |
-| bsr | BSR ranking |
-| bsrGrowthRate | BSR growth rate |
-| bsrGrowthCount | BSR growth count |
-| rating | Rating score |
-| ratings | Number of ratings |
-| ratingsGrowth | Monthly new ratings |
-| ratingsRate | Review rate |
-| brand | Brand name |
-| sellerName | BuyBox seller |
-| sellerNation | BuyBox seller nationality |
-| fulfillment | Fulfillment type (AMZ/FBA/FBM) |
-| availableDateString | Listing date |
-| profit | Gross margin |
-| nodeLabelPath | Category path |
-| imageUrl | Product image URL |
-| monthlySalesUnitsGrowthRate | Monthly sales growth rate |
-| listingQualityScore | Listing quality score |
-| variationNum | Number of variations |
-| parent | Parent ASIN |
-| badgeBestSeller | Best Seller badge (Y/N) |
-| badgeAmazonChoice | Amazon's Choice badge (Y/N) |
-| badgeEbc | A+ Content (Y/N) |
-| badgeVideo | Video present (Y/N) |
+15 算力 / 次
 
-## 调用方式
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- **API 端点**：`POST /sellersprite/competitor-lookup`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sellersprite_competitor_lookup.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sellersprite-competitor-lookup-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 解决认证和算力问题
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 约束与建议
 
-## Usage Examples
+- **区分商品查询与关键词反查**：本技能返回竞品商品指标；不要将结果解释为流量词、自然流量或广告流量报告。
+- **快照概念**：当前数据反映最近一段时间的商品表现；历史月快照覆盖该月活跃 Listing，可用于同比和季节性比较。具体时间格式与可用范围见 `references/api.md`。
+- **类目层级**：把用户提供的多层类目描述转换为接口要求的类目路径，格式见接口文档。
+- **关键词语言**：使用目标站点语言。用户关键词语言不匹配时先提示并翻译，例如美国和英国用英语、德国用德语、日本用日语。
+- **清晰展示数据**：表格优先列出 ASIN、标题、价格、月销量、月销售额、BSR、评分和品牌，按任务补充卖家、配送方式、变体及毛利率等实际返回指标。除非用户要求，不附加主观经营建议。
+- **解释 BSR 与增长**：BSR 数值越低通常表示销量表现越强；展示增长率时说明正负方向。BSR 增长数为正表示排名数值上升，即排名变差，不应误读为改善。
+- **说明分页情况**：总数超过本页条数时展示总数与本次返回范围，提示可继续查询；超过可访问范围时说明接口上限并建议收紧筛选，具体限制见接口文档。
+- **突出竞争信号**：商品带有 Best Seller、Amazon's Choice、New Release、A+ 页面或视频标识时予以展示，避免将缺失标识补写为已具备。
+- **解释错误原因**：依据实际响应的 `message`、`errmsg` 等消息说明失败原因并建议核对参数，响应判断遵循接口文档。后续调用遵守成本约束。
+- **CLI 与缓存**：支持 JSON 入参、`--inline` 与 `--no-cache`；缓存目录和参数键由公共调用器统一管理，运行细节见 `references/api.md`。
 
-**1. Look up competitors by ASIN**
+## 使用示例
+
+### 按 ASIN 查询竞品商品
+
 ```json
-{
-  "marketplace": "US",
-  "asinList": "B072MQ5BRX,B08N5WRWNW"
-}
+{"marketplace": "US", "asinList": "B072MQ5BRX,B08N5WRWNW"}
 ```
-Use case: Analyze specific competing products by their ASINs.
 
-**2. Search competitors by keyword**
+### 按关键词发现畅销商品
+
 ```json
-{
-  "marketplace": "US",
-  "keyword": "wireless earbuds",
-  "matchType": 1,
-  "order": {"field": "total_units", "desc": "true"},
-  "size": 20
-}
+{"marketplace": "US", "keyword": "wireless earbuds", "matchType": 1, "order": {"field": "total_units", "desc": "true"}, "size": 20}
 ```
-Use case: Discover top-selling products for a keyword, sorted by monthly sales.
 
-**3. Filter by brand and category**
+### 结合品牌与类目研究产品线
+
 ```json
-{
-  "marketplace": "US",
-  "brand": "Anker",
-  "nodeLabel": "Electronics:Headphones",
-  "order": {"field": "total_amount", "desc": "true"}
-}
+{"marketplace": "US", "brand": "Anker", "nodeLabel": "Electronics:Headphones", "order": {"field": "total_amount", "desc": "true"}}
 ```
-Use case: Analyze a specific brand's product lineup within a category.
 
-**4. Find products by seller name**
+### 按卖家查询并按 BSR 升序排列
+
 ```json
-{
-  "marketplace": "DE",
-  "sellerName": "Anker Direct",
-  "order": {"field": "bsr_rank", "desc": "false"}
-}
+{"marketplace": "DE", "sellerName": "Anker Direct", "order": {"field": "bsr_rank", "desc": "false"}}
 ```
-Use case: View all products from a particular seller sorted by BSR.
 
-**5. Historical snapshot comparison**
+### 通过历史快照比较季节性表现
+
 ```json
-{
-  "marketplace": "US",
-  "keyword": "space heater",
-  "dataSnapshotMonth": "202412",
-  "order": {"field": "total_units", "desc": "true"},
-  "size": 20
-}
+{"marketplace": "US", "keyword": "space heater", "dataSnapshotMonth": "202412", "order": {"field": "total_units", "desc": "true"}, "size": 20}
 ```
-Use case: Analyze seasonal product performance using historical data snapshots.
 
-**6. Show product variations**
+### 查看变体数据
+
 ```json
-{
-  "marketplace": "JP",
-  "asinList": "B0XXXXXXXXX",
-  "showVariation": "Y"
-}
+{"marketplace": "JP", "asinList": "B0XXXXXXXXX", "showVariation": "Y"}
 ```
-Use case: Examine all variation-level data for a product family.
 
-## Display Rules
+## 使用反馈
 
-1. **Present data clearly**: Show query results in well-formatted tables. Include key metrics such as ASIN, title, price, monthly sales, BSR, rating, and brand. Do not provide subjective business advice unless the user asks for it.
-2. **Keyword language**: When searching by keyword, always translate the keyword to the target marketplace language (e.g., English for US/UK, German for DE, Japanese for JP). Remind the user of this if they provide keywords in the wrong language.
-3. **BSR clarification**: When displaying BSR data, remind users that a lower BSR value indicates stronger sales performance.
-4. **Growth metrics**: When showing growth rates, clarify whether positive values mean improvement or decline (positive BSR growth count means BSR increased, which means worsened ranking).
-5. **Pagination notice**: When the total result count exceeds the returned page size, inform the user of the total count and offer to fetch additional pages only within the first 2,000 records. If `total` exceeds 2,000, clearly state that records after the first 2,000 cannot be queried and suggest narrowing the filters.
-6. **Badge highlights**: When products carry badges (Best Seller, Amazon's Choice, A+ Content, Video), highlight these in the results as they are important competitive signals.
-7. **Error handling**: When a query fails, explain the reason based on the `message` field and suggest adjusting query parameters.
-8. **Snapshot guidance**: When users want to do seasonal or trend analysis, proactively suggest using historical snapshots (e.g., last year's same month) for comparison.
-## Important Limitations
-
-- **Result cap**: Each page returns 10-100 records (controlled by `size`), and pagination can query only the first 2,000 records in the sorted result set (`page * size` must not exceed 2,000). Narrow the filters to reach records outside that window.
-- **ASIN limit**: A maximum of 40 ASINs can be queried at once via `asinList`.
-- **Historical snapshots**: Only existing monthly snapshots can be queried; future dates are not supported.
-- **Keyword language**: Keywords should match the marketplace language for best results.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Amazon competitor product data queries:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Find competitors for this ASIN" | ASIN-based competitor lookup |
-| "Top sellers for wireless earbuds" | Keyword-based product discovery |
-| "What is this seller selling" | Seller product portfolio analysis |
-| "Show me products in Electronics category" | Category-based browsing |
-| "Monthly sales for these ASINs" | Sales estimation for specific products |
-| "New products gaining traction" | Growth trend detection |
-| "Compare products across brands" | Brand benchmarking |
-| "How was this niche last December" | Historical snapshot analysis |
-| "Best sellers with high ratings" | Multi-metric filtering |
-| "FBA vs FBM in this category" | Fulfillment type analysis |
-
-**Not applicable** -- Needs beyond competitor product data:
-
-- ABA search term data or keyword ranking (use ABA Data Explorer instead)
-- Advertising / PPC campaign management
-- Product reviews content or sentiment analysis
-- Listing copywriting or optimization suggestions
-- Supplier sourcing or manufacturing costs
-- Account health or policy compliance
-
-## 算力消耗规则
-
-消耗 15 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

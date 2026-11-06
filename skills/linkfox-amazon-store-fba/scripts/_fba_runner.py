@@ -1,4 +1,4 @@
-"""Execute one FBA operation via developerProxy."""
+"""构造 FBA 单操作请求并交给统一调用器执行。"""
 
 from __future__ import annotations
 
@@ -11,10 +11,8 @@ from _fba_endpoints import OPERATIONS, resolve_op
 from _spapi_fba_common import (
     build_query,
     developer_proxy_call,
-    emit_result,
     enc_path_seg,
     ensure_auth_skill_available,
-    lf_inline_flag,
     merge_json_body,
 )
 
@@ -58,7 +56,9 @@ def _normalize_marketplace_ids(params: dict) -> None:
         params["marketplaceIds"] = mid if isinstance(mid, list) else [mid]
 
 
-def run_operation(op_name: str, params: dict) -> dict:
+def run_operation(op_name: str, params: dict, *, emit_output: bool = False) -> dict:
+    if not isinstance(params, dict):
+        raise ValueError("JSON parameters must be an object")
     op = resolve_op(op_name)
     amazon_op = op.get("amazonOp") or op["id"]
 
@@ -119,25 +119,31 @@ def run_operation(op_name: str, params: dict) -> dict:
                 raise ValueError("requestBody must be object or array")
             body_str = json.dumps(rb, ensure_ascii=False)
 
-    proxy = developer_proxy_call(
+    def build_result(proxy, transport_status):
+        out: dict[str, Any] = {
+            "api": amazon_op,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "method": op["method"],
+            "queryString": qs,
+            "transportHttpStatus": transport_status,
+        }
+        if rb is not None:
+            out["requestBody"] = rb
+        merge_json_body(out, proxy, "payload")
+        return out
+
+    return developer_proxy_call(
         str(params["region"]),
         path,
         op["method"],
         str(params["sellerId"]),
         query_string=qs,
         body=body_str,
+        result_builder=build_result,
+        operation=op["id"],
+        emit_output=emit_output,
     )
-    out: dict[str, Any] = {
-        "api": amazon_op,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-        "method": op["method"],
-        "queryString": qs,
-    }
-    if rb is not None:
-        out["requestBody"] = rb
-    merge_json_body(out, proxy, "payload")
-    return out
 
 
 def main_for(op_name: str) -> None:
@@ -147,7 +153,7 @@ def main_for(op_name: str) -> None:
             f"Usage: {op['script']} '<JSON>'\n"
             f"Required: sellerId, region"
             + (f", {', '.join(op.get('required') or [])}" if op.get("required") else "")
-            + "\nOptional: requestBody, query, skipDepCheck, --inline",
+            + "\nOptional: requestBody, query, skipDepCheck, --inline, --no-cache",
             file=sys.stderr,
         )
         # list hint
@@ -158,11 +164,10 @@ def main_for(op_name: str) -> None:
         print(f"Invalid JSON: {e}", file=sys.stderr)
         sys.exit(1)
     try:
-        out = run_operation(op_name, params)
+        run_operation(op_name, params, emit_output=True)
     except (ValueError, KeyError) as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)
-    emit_result(out, inline=lf_inline_flag())
 
 
 def main_dispatch() -> None:
@@ -179,13 +184,15 @@ def main_dispatch() -> None:
     except json.JSONDecodeError as e:
         print(f"Invalid JSON: {e}", file=sys.stderr)
         sys.exit(1)
+    if not isinstance(params, dict):
+        print("JSON parameters must be an object", file=sys.stderr)
+        sys.exit(1)
     op_name = params.get("api") or params.get("operation")
     if not op_name:
         print("Missing api or operation field", file=sys.stderr)
         sys.exit(1)
     try:
-        out = run_operation(str(op_name), params)
+        run_operation(str(op_name), params, emit_output=True)
     except (ValueError, KeyError) as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)
-    emit_result(out, inline=lf_inline_flag())

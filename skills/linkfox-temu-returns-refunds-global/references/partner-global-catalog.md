@@ -61,4 +61,4 @@ Partner Platform for **Global** 菜单：**Return and Refund / 退货与退款**
 
 ## Token 说明
 
-建议使用 **`tokenPurpose=order-shipping`**（半托管 Global 订单/售后，见 `references/access-token.md`）。
+建议使用 **`tokenPurpose=order-shipping`**（半托管 Global 订单/售后，见 [access-token.md](access-token.md)）。

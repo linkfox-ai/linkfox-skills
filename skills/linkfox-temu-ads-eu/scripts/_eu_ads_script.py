@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Factory for thin US Ads API CLI scripts."""
+"""Temu EU 广告 CLI 入口的公共封装。"""
 
 import sys
 

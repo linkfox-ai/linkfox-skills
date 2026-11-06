@@ -1,19 +1,19 @@
 # `END_USER_DATA_REPORT`
 
-> **分类**：12. Regulatory Compliance Reports  
-> **说明**：End user data report  
-> **可用范围**：Seller only
+> **分类**：12. 监管合规报告  
+> **说明**：终端用户数据报告  
+> **可用范围**：仅卖家
 
 ## 官方索引（Report type values）
 
 - **Schema 专页（请求体、`reportOptions`、结果 JSON）**：[`endUserDataReport.md`](../endUserDataReport.md)
-- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[Regulatory Compliance Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-regulatory-compliance#end-user-data-report)（章节：**End User Data Report**）
+- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[监管合规报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-regulatory-compliance#end-user-data-report)（章节：**End User Data Report**）
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Buyer Communication](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#buyer-communication)
-- **Availability**：Sellers
-- **Marketplace availability**：IE, ES, FR, BE, NL, DE, IT, SE, and PL.
-- **Requested/scheduled**：This report can be requested or scheduled.
+- **角色**：[Buyer Communication](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#buyer-communication)
+- **可用范围**：卖家
+- **站点范围**：IE, ES, FR, BE, NL, DE, IT, SE, and PL.
+- **按需/计划**：本报告可按需请求或计划生成。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-regulatory-compliance#end-user-data-report>
 

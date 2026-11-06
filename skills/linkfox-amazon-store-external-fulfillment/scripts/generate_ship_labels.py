@@ -17,13 +17,10 @@ import sys
 from _spapi_ef_common import (
     PATH_SHIPMENTS,
     build_query,
-    developer_proxy_call,
-    emit_result,
+    run_proxy,
     enc_path_seg,
     ensure_auth_skill_available,
-    lf_inline_flag,
     load_params_or_exit,
-    merge_json_body,
     require_fields,
 )
 
@@ -66,22 +63,7 @@ def main() -> None:
             rb = None
 
     body_str = json.dumps(rb, ensure_ascii=False) if rb is not None else None
-    proxy = developer_proxy_call(
-        str(params["region"]),
-        path,
-        "PUT",
-        str(params["sellerId"]),
-        query_string=qs,
-        body=body_str,
-    )
-    out = {
-        "developerProxy": proxy,
-        "resolvedPath": path,
-        "queryString": qs,
-        "requestBody": rb,
-    }
-    merge_json_body(out, proxy, "shipLabels")
-    emit_result(out, inline=lf_inline_flag())
+    run_proxy(str(params['region']), path, 'PUT', str(params['sellerId']), query_string=qs, body=body_str, result_field='shipLabels', operation='generate_ship_labels', output_fields={'queryString': qs, 'requestBody': rb})
 
 
 if __name__ == "__main__":

@@ -1,22 +1,26 @@
 # `GET_FLAT_FILE_ORDER_REPORT_DATA_SHIPPING`
 
-> **分类**：9. Order Reports  
-> **说明**：Order shipping (flat file)  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：订单配送（平面文件）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#requested-or-scheduled-flat-file-order-report-shipping)（章节：**Requested or Scheduled Flat File Order Report (Shipping)**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#requested-or-scheduled-flat-file-order-report-shipping)（章节：**Requested or Scheduled Flat File Order Report (Shipping)**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
+- **角色**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
 - **Order Fulfillment Channel**：MFN
-- **Availability**：Seller Central sellers
-- **Requested/scheduled**：Requested or scheduled
-- **Report output type**：Tab-delimited flat file
-- **要点**：Contains orders from the previous 60 days. This report can be used to ship Amazon orders. Seller Central sellers can only schedule one GET_ORDER_REPORT_DATA_SHIPPING or GET_FLAT_FILE_ORDER_REPORT_DATA_SHIPPING report at a time. If you have one of these reports scheduled and you schedule a new report, the existing report is canceled. 📘NoteThe format of this report will differ slightly depending on whether it is scheduled or requested. This report accepts the following reportOptions values:
-- **reportOptions（摘录）**：
-  - ShowSalesChannel: A Boolean value that indicates whether an additional column is added to the report that shows the sales channel. Default: false. Example: "reportOptions":{"ShowSalesChannel":"true"}
+- **可用范围**：Seller Central 卖家
+- **按需/计划**：Requested or scheduled
+- **输出格式**：制表符分隔的平面文件
+- **要点**：包含过去 60 天的订单，可用于 Amazon 订单发货。Seller Central 卖家同时仅可计划一份 GET_ORDER_REPORT_DATA_SHIPPING 或 GET_FLAT_FILE_ORDER_REPORT_DATA_SHIPPING；新增计划会取消已有计划。按需请求与计划生成的文件格式略有不同；接受下列 reportOptions。
+
+#### reportOptions 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| ShowSalesChannel | boolean / string | 布尔值，控制是否增加销售渠道列。默认 false；示例："reportOptions":{"ShowSalesChannel":"true"}。 |
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#requested-or-scheduled-flat-file-order-report-shipping>
 

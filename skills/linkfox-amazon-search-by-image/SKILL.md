@@ -1,175 +1,127 @@
 ---
 name: linkfox-amazon-search-by-image
-description: 基于图片的亚马逊跨站点视觉商品搜索，支持8个站点的以图搜图和视觉相似商品发现。当用户提到以图搜图、图片搜索、视觉搜索、找同款、外观相似商品、图片找货、竞品图片搜索、相似商品发现、image search, Amazon visual search, find similar products, reverse image lookup, visual search, similar items, competitor image search, product image match时触发此技能。即使用户未明确提及"图片搜索"，只要用户提供了图片URL并希望在亚马逊上查找匹配或相似的商品，也应触发此技能。
+description: 基于商品图片在亚马逊八个站点查找同款或外观相似商品，返回标题、ASIN、图片、价格、评分、评论数和品牌，支持价格、评分与评论数排序及跨境收货场景。适用于图片找品、视觉竞品发现和跨站点外观比较；可先上传本地图片再检索。不适用于纯关键词搜索、ABA 分析、评论分析、Listing 优化、无图片的销量估算或图片编辑生成。
+---
+# Amazon 以图搜图
+
+## 适用范围
+
+### 适用
+
+用户提供图片链接或本地商品图片，希望在亚马逊查找同款、外观相似商品、竞品或更便宜的相似替代品时，使用本技能。无需明确说出“以图搜图”。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 找出与这张图相似的亚马逊商品 | 图片检索与商品发现。 |
+| 找竞品同款或同风格产品 | 按外观发现竞品。 |
+| 看看德国、日本或英国站有没有同款 | 跨站点视觉检索。 |
+| 找外观相似但更便宜的商品 | 结合价格排序比较。 |
+| 按评分或评论数查看相似商品 | 排序后的视觉比较。 |
+| 这张本地图片能找到哪些商品 | 上传图片后检索。 |
+| 再查这些相似商品的 Keepa 数据 | 先图搜，用户选定 ASIN 后另查 Keepa。 |
+
+### 边界
+
+纯文字关键词搜索、ABA 分析、评论分析、Listing 优化和图片编辑生成不属于本技能。判断“找相似产品”是否适用，应看用户是否提供图片并希望发现外观相似的亚马逊商品。
+
+月销量、BSR、FBA 费用、尺寸和当前商品详情转交 `linkfox-keepa-product-request`；只有用户需要价格或 BSR 历史时才使用 `linkfox-keepa-product-series`。
+
+## 接口清单
+
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 亚马逊以图搜图 | POST `/amazon/searchByImage` | `scripts/amazon_search_by_image.py` | 查找外观相似的亚马逊商品。 |
+| 获取图片上传预签名地址 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 获取上传地址；脚本随后向返回的 OSS 地址 PUT 本地图片并输出公开链接。 |
+
+## 前置条件
+
+准备商品图片、目标站点及比较目的。图片输入、站点、排序、收货方式及上传格式约定见 `references/api.md`。
+
+## 检索流程
+
+1. 确定用户的源图片、目标站点及比较目的。未指定站点时按接口定义采用默认站点。
+2. 已有公开图片链接时直接准备图搜；本地图片先运行 `python scripts/upload_image.py <本地图片路径>`，取得公开链接后再图搜。上传失败时停止后续搜索并解释原因。
+3. 按 `references/api.md` 核对排序和收货方式，调用图搜，先看摘要，需要具体字段时从保存文件提取。
+4. 用表格展示相似商品、图片及结果数量，保留接口的数据边界提示；失败或空结果遵守成本约束。
+5. 用户确认需要具体 ASIN 的销量、费用或趋势后，再按对应 Keepa 技能的规则独立查询，不将 Keepa 失败或配额等待并入图搜请求。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/amazon_search_by_image.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：图搜每次消耗 15 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-search-by-image-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8000 UTF-8 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8000 UTF-8 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+图搜本身消耗 15 算力 / 次。Keepa 查询与图搜分离计费；只在用户确认需要查询具体 ASIN 时，再按对应 Keepa 技能的算力规则执行。上传预签名费用以实际扣除为准，不推定免费。
+
+本技能服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解视觉相似**：结果用于外观竞品比较、货源替代、疑似仿品线索和市场机会发现；相似外观本身不能证实侵权或完全同款。
+- **清晰展示数据**：用表格优先展示商品图片、标题、ASIN、价格、评分、评论数和品牌。有商品图片链接时内联展示，便于视觉对比。
+- **标明币种**：价格同时注明响应币种，例如 $29.99 USD、24.99 EUR。
+- **说明数据边界**：展示顶层 `message`；图搜返回亚马逊前台数据，Keepa 增强数据独立获取。
+- **说明数量**：展示 `total` / `totalCount`，区分本次结果与推测的市场规模。
+- **解释错误**：说明接口返回原因，建议检查源图片链接是否有效、公开可访问；具体限制与支持的排序见 `references/api.md`。
+- **按需读取**：结果不存入数据库，不支持二次 SQL 加工；保留原始文件用于字段提取。
+
+## 使用示例
+
+### 美国站基础图搜
+
+用户：在亚马逊美国站找与这张图相似的商品：https://m.media-amazon.com/images/I/61pAlIX8SZL._AC_SY575_.jpg
+
+准备图片链接，检索后展示图片、价格与币种、评分、评论数和品牌。
+
+### 德国站同款与低价比较
+
+用户：在德国站找这张产品图的同款，并按价格从低到高排列：https://example.com/product-photo.jpg
+
+按用户指定的站点与排序检索，比较外观及价格。
+
+### 日本站跨境收货
+
+用户：查日本站这张图的相似商品，收货地为中国：https://example.com/item.jpg
+
+按接口定义准备跨境收货信息，展示结果与数据边界提示。
+
+### 英国站竞品与本地图片
+
+用户：用我提供的本地竞品图片找英国站同风格商品，再看我选中的 ASIN 的月销量。
+
+先上传本地图片，再图搜；展示后由用户选定 ASIN，后续通过对应 Keepa 技能独立查询。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Amazon Image-Based Search
-
-This skill guides you on how to perform visual product searches on Amazon using an image URL, helping Amazon sellers and researchers find visually similar products across multiple marketplaces.
-
-## Core Concepts
-
-Amazon Image-Based Search (visual search) allows you to submit a product image URL and retrieve Amazon listings that are visually similar. This is invaluable for competitive analysis, sourcing alternatives, identifying counterfeits, and discovering market opportunities based on product appearance.
-
-The tool searches across **8 Amazon marketplaces** and returns Amazon storefront data including ASIN, title, image, price, rating, review count, and brand. Keepa data is intentionally queried separately by ASIN so a Keepa outage or quota wait cannot fail the image-search request.
-
-## Supported Marketplaces
-
-| Marketplace | Domain | Default Zip Code |
-|-------------|--------|-------------------|
-| United States | amazon.com | 10001 |
-| United Kingdom | amazon.co.uk | EC1A 1BB |
-| Germany | amazon.de | 10115 |
-| France | amazon.fr | 75001 |
-| Italy | amazon.it | 00100 |
-| Spain | amazon.es | 28001 |
-| Japan | amazon.co.jp | 100-0001 |
-| India | amazon.in | 110034 |
-
-Default marketplace is **amazon.com** (US). Use amazon.com when the user does not specify a marketplace.
-
-## Parameter Guide
-
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| imageUrl | Yes | A valid, publicly accessible image URL to search with |
-| amazonDomain | Yes | Amazon marketplace domain (e.g., `amazon.com`, `amazon.de`). Defaults to `amazon.com` |
-| sort | No | Sort order for results. Supported values: `default`, `price-asc-rank`, `price-desc-rank`, `rating-asc-rank`, `rating-desc-rank`, `ratings-asc-rank`, `ratings-desc-rank` |
-| deliveryZip | No | Delivery address zip code within the marketplace country. Uses the marketplace default if not specified |
-| countryOrAreaCode | No | Country/region code for cross-border delivery (e.g., `CN`, `JP`, `KR`). Cannot be used together with `deliveryZip`. Note: India marketplace does not support cross-border delivery |
-
-`aggregateByKeepaData` is deprecated. Do not send it. If the user needs monthly sales, BSR, FBA fees, dimensions, or current product details, use `linkfox-keepa-product-request` after image search with the selected ASINs. For price or BSR history, use `linkfox-keepa-product-series`.
-
-### Sort Options
-
-| Value | Description |
-|-------|-------------|
-| `default` | Default relevance sorting |
-| `price-asc-rank` | Price: low to high |
-| `price-desc-rank` | Price: high to low |
-| `rating-asc-rank` | Rating: low to high |
-| `rating-desc-rank` | Rating: high to low |
-| `ratings-asc-rank` | Review count: low to high |
-| `ratings-desc-rank` | Review count: high to low |
-
-**Important**: If the requested sort order is not in the supported list above, do NOT attempt to use any other tool or workaround to compensate. Inform the user of the supported sort options.
-
-## 调用方式
-
-- **API 端点**：`POST /amazon/searchByImage`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/amazon_search_by_image.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-search-by-image-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Local Image Upload
-
-This tool requires a **publicly accessible image URL**. If the user provides a local image file path (e.g., `C:\Users\...\photo.png`, `/home/.../image.jpg`), you must upload it first to obtain a public URL.
-
-Run the upload script:
-```bash
-python scripts/upload_image.py /path/to/local/image.png
-```
-
-The script will return a public URL (valid for 24 hours) that can be used as the image URL parameter.
-
-## Usage Examples
-
-**1. Basic image search on the US marketplace**
-```
-Search Amazon US for products that look similar to this image:
-https://m.media-amazon.com/images/I/61pAlIX8SZL._AC_SY575_.jpg
-```
-
-**2. Find similar products on a specific marketplace**
-```
-Search Amazon Germany (amazon.de) for products visually similar to this image:
-https://example.com/product-photo.jpg
-```
-
-**3. Image search sorted by price (low to high)**
-```
-Find similar products on Amazon US for this image, sorted by price from low to high:
-https://example.com/my-product.jpg
-```
-
-**4. Cross-border delivery search**
-```
-Search Amazon Japan for similar products to this image, with delivery to China:
-https://example.com/item.jpg
-```
-
-**5. Competitor lookalike discovery**
-```
-I found this product image on a competitor's listing. Find me all similar-looking products on Amazon UK:
-https://example.com/competitor.jpg
-```
-
-## Display Rules
-
-1. **Present data clearly**: Show search results in a well-structured table. Key columns to prioritize: product image, title, ASIN, price, rating, review count, and brand
-2. **Image display**: When the response includes `imageUrl` for products, display them inline so users can visually compare results
-3. **Price and currency**: Always show price alongside the currency code (e.g., $29.99 USD, 24.99 EUR)
-4. **Keepa handoff**: Honor the top-level `message`. For monthly sales, BSR, FBA fees, dimensions, or current product details, offer `linkfox-keepa-product-request` for selected ASINs. Mention `linkfox-keepa-product-series` only when the user requests price or BSR history. Do not pass `aggregateByKeepaData`
-5. **Result count**: Always inform the user of the total number of results found (`total` / `totalCount`)
-6. **Error handling**: When a query fails, explain the issue and suggest checking that the image URL is valid and publicly accessible
-7. **Sort limitation**: If the user requests a sort order not in the supported list, clearly explain which sort options are available rather than attempting unsupported workarounds
-8. **No secondary processing**: Results from this tool are not stored in a database, so secondary SQL processing is not available
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Visual product search scenarios on Amazon:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Find similar products to this image" | Basic image search |
-| "Search by image", "reverse image search on Amazon" | Visual search |
-| "Find competitor lookalikes", "find same-style products" | Competitor analysis by appearance |
-| "What products on Amazon look like this" | Product discovery |
-| "Find cheaper alternatives that look the same" | Price-based visual comparison |
-| "Search Amazon JP/DE/UK for this product image" | Cross-marketplace visual search |
-| "Show me Keepa data for similar products" | Run image search first, then use the appropriate Keepa skill for user-selected ASINs |
-| "Find products similar to this photo, sorted by rating" | Sorted visual search |
-
-**Not applicable** -- Needs beyond image-based product search:
-
-- Text-based keyword search on Amazon (use keyword search tools instead)
-- ABA search term data analysis
-- Product review analysis or listing optimization
-- Sales estimation without a source image
-- Image editing or image generation
-- Searching with a local image file (the tool requires a publicly accessible URL)
-
-**Boundary judgment**: When users say "find similar products" or "competitor analysis", if they provide an image URL and the intent is to find visually similar Amazon listings, this skill applies. If they are asking for keyword-based search, sales data analysis, or product research without an image, it does not apply.
-
-## 算力消耗规则
-
-图搜本身消耗 15 算力。Keepa 查询与图搜分离计费；只在用户确认需要查询具体 ASIN 时，再按对应 Keepa skill 的算力规则执行。
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
----
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

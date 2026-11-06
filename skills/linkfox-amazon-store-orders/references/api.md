@@ -1,151 +1,694 @@
-# linkfox-amazon-store-orders — API 与网关调用说明
+# Amazon 店铺订单查询与履约管理 接口说明
 
-## 1. 调用链
+## 公共规则
 
-1. **`POST ${LINKFOX_TOOL_GATEWAY}/spApi/storeTokens`**  
-   Body: `{"sellerId":"<卖家ID>","region":"NA|EU|FE|..."}`  
-   响应需含 **`accessToken`**。
+### 调用规范
 
-2. **`POST ${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`**  
-   Body 字段（与 listings / pricing 系列一致）：
-   - **`region`**：与 storeTokens 相同。
-   - **`path`**：Amazon SP-API 相对 path，**无**前导 `/`。
-   - **`method`**：`GET` | `POST` | `PATCH`。
-   - **`amzAccessToken`**：上一步的 access token。
-   - **`queryString`**（可选）：URL 查询串，不含 `?`。
-   - **`body`**（POST/PATCH）：JSON 字符串。
-   - **`contentType`**：如 `application/json`。
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-环境变量：
+### 响应码基本规则
 
-- **`LINKFOX_AGENT_API_KEY`**（或 **`LINKFOXAGENT_API_KEY`**，必填）：网关鉴权。（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
-- **`LINKFOX_TOOL_GATEWAY`**（或 `STORE_API_BASE_URL` / `SPAPI_BASE_URL`，可选）：默认 `https://tool-gateway.linkfox.com`。
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
----
+### 网关错误响应
 
-## 2. 脚本与 path / method 对照
+接口成功对象与错误对象分别处理。统一错误模型仅包含以下字段；本地脚本补充字段见脚本参考。
 
-| 脚本 | method | path 模板 |
-|------|--------|-----------|
-| `search_orders.py` | GET | `orders/2026-01-01/orders` |
-| `get_order.py` | GET | `orders/2026-01-01/orders/{orderId}` |
-| `get_order_buyer_info.py` | GET | `orders/v0/orders/{orderId}/buyerInfo` |
-| `get_order_address.py` | GET | `orders/v0/orders/{orderId}/address` |
-| `get_order_items.py` | GET | `orders/v0/orders/{orderId}/orderItems` |
-| `get_order_items_buyer_info.py` | GET | `orders/v0/orders/{orderId}/orderItems/buyerInfo` |
-| `update_shipment_status.py` | POST | `orders/v0/orders/{orderId}/shipment` |
-| `get_order_regulated_info.py` | GET | `orders/v0/orders/{orderId}/regulatedInfo` |
-| `update_verification_status.py` | PATCH | `orders/v0/orders/{orderId}/regulatedInfo` |
-| `confirm_shipment.py` | POST | `orders/v0/orders/{orderId}/shipmentConfirmation` |
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| errcode | integer | 网关错误码；HTTP 200 仍可能包含业务错误。 |
+| errmsg | string | 网关错误说明，保留原文。 |
 
-`orderId` 在 path 中经 **percent-encoding**（与 listings SKU 处理一致）。
+参数异常可返回 HTTP 400、errcode=400；上游连接异常可返回 HTTP 200、errcode=1503。代理定位授权时，1002 表示缺少身份或店铺参数，1004 表示未找到当前成员绑定的授权，1005 也可能表示授权失效；路径白名单拒绝同样使用 1005，须结合 errmsg 区分。不得把本地 error、details、transportHttpStatus、outputError 或解析后的业务对象视为网关 DTO 字段。
 
----
 
-## 3. 各脚本 JSON 入参
 
-### 3.1 公共字段
+## 接口：搜索订单（searchOrders）
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| sellerId | string | 是 | 卖家 ID |
-| region | string | 是 | NA / EU / FE 等与 auth 一致 |
-| skipDepCheck | boolean | 否 | 为 true 时跳过本地依赖探测 |
+> 官方：[searchOrders](https://developer-docs.amazon.com/sp-api/reference/searchorders)
 
-### 3.2 `search_orders.py`
+### 调用规范
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| marketplaceIds | string[] | 是 | 站点 ID 列表，长度 ≤ 50（以 Amazon 为准） |
-| createdAfter | string | 条件 | ISO 8601；与 `lastUpdatedAfter` **二选一** |
-| createdBefore | string | 否 | 与 `createdAfter` 同组使用 |
-| lastUpdatedAfter | string | 条件 | ISO 8601；与 `createdAfter` **二选一** |
-| lastUpdatedBefore | string | 否 | 与 `lastUpdatedAfter` 同组使用 |
-| fulfillmentStatuses | string[] | 否 | 如 PENDING、UNSHIPPED、SHIPPED、CANCELLED 等 |
-| fulfilledBy | string[] | 否 | MERCHANT、AMAZON |
-| maxResultsPerPage | number | 否 | 1～100，默认 100 |
-| paginationToken | string | 否 | 上一页响应 **`nextToken`** |
-| includedData | string[] | 否 | BUYER、RECIPIENT、PROCEEDS、FULFILLMENT、PACKAGES 等（见 [searchOrders](https://developer-docs.amazon.com/sp-api/reference/searchorders)） |
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
 
-脚本会在 stdout 的 JSON 中解析 **`searchOrders`**（当 `developerProxy.errcode==200` 且 `httpStatus==200` 时由 `body` JSON 解析）。
+### 请求参数
 
-### 3.3 `get_order.py`
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/2026-01-01/orders`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `GET`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| orderId | string | 是 | 亚马逊订单号 |
-| includedData | string[] | 否 | 同官方 `includedData` |
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
 
-解析字段：**`order`**。
+### 响应结构
 
-### 3.4 `get_order_buyer_info.py` / `get_order_address.py`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
 
-| 字段 | 类型 | 必填 |
-|------|------|------|
-| orderId | string | 是 |
+### 响应码规则
 
-解析字段：**`buyerInfo`** / **`shippingAddress`**（以实际 JSON 为准）。
+#### 基础规则
 
-### 3.5 `get_order_items.py` / `get_order_items_buyer_info.py`
+基本规则参考 `公共规则` -> `响应码基本规则`。
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| orderId | string | 是 | |
-| nextToken | string | 否 | 映射为查询参数 **`NextToken`** |
+#### 业务规则
 
-解析字段：**`orderItems`** / **`orderItemsBuyerInfo`**。
+- 读取操作上游 httpStatus 为 200 时解析业务对象；非 200 时保留 developerProxy 与错误 body，不认定为成功。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
 
-### 3.6 `update_shipment_status.py`
+### curl 示例
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| orderId | string | 是 | |
-| marketplaceId | string | 是 | |
-| shipmentStatus | string | 是 | ReadyForPickup、PickedUp、RefusedPickup |
-| orderItems | object[] | 否 | 部分更新时的行项目 |
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/2026-01-01/orders",
+  "method": "GET",
+  "queryString": "marketplaceIds=ATVPDKIKX0DER&lastUpdatedAfter=2026-05-01T00%3A00%3A00Z"
+}'
+```
 
-成功时 Amazon 常返回 **HTTP 204**，stdout 中 **`developerProxy`** 含状态即可，未必有 JSON body。
 
-### 3.7 `get_order_regulated_info.py`
+## 接口：获取订单详情（getOrder）
 
-仅需 **`orderId`**。解析字段：**`regulatedOrder`**。
+> 官方：[getOrder](https://developer-docs.amazon.com/sp-api/reference/getorder-3)
 
-### 3.8 `update_verification_status.py`
+### 调用规范
 
-| 方式 | 说明 |
-|------|------|
-| `regulatedOrderVerificationStatus` | 对象，脚本包装为 `{ "regulatedOrderVerificationStatus": ... }` |
-| `requestBody` | 整包 PATCH body 对象 |
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
 
-成功可能为 **204**。
+### 请求参数
 
-### 3.9 `confirm_shipment.py`
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/2026-01-01/orders/{orderId}`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `GET`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| requestBody | object | 是 | 与官方 **confirmShipment** schema 一致 |
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
 
-成功可能为 **204**。
+### 响应结构
 
----
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
 
-## 4. 响应与错误
+### 响应码规则
 
-- 脚本统一输出 JSON：`developerProxy` 为网关原样；部分脚本增加 **`resolvedPath`**、**`queryString`**、**`requestBody`**。
-- 优先阅读 **`developerProxy.errcode`**、**`developerProxy.httpStatus`**，再读 **`developerProxy.body`**（常为 Amazon 错误 JSON）。
-- **429**：需降频重试；searchOrders 默认速率较低。
-- HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-- HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。
+#### 基础规则
 
----
+基本规则参考 `公共规则` -> `响应码基本规则`。
 
-## 5. 受限数据与 deprecated
+#### 业务规则
 
-- **getOrderBuyerInfo / getOrderAddress / getOrderItems / getOrderItemsBuyerInfo** 在官方文档中标记为 **deprecated**；敏感数据需 **RDT** 与数据保护策略，见 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken) 与 Orders 文档说明。
-- **getOrderRegulatedInfo** 的 `Accept` 等头若需特化，取决于网关是否支持透传；当前脚本未附加额外 Amazon 请求头。
+- 读取操作上游 httpStatus 为 200 时解析业务对象；非 200 时保留 developerProxy 与错误 body，不认定为成功。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
 
----
+### curl 示例
 
-## 6. Feedback
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/2026-01-01/orders/123-1234567-1234567",
+  "method": "GET",
+  "queryString": "includedData=FULFILLMENT&includedData=PACKAGES"
+}'
+```
 
-若需反馈本 skill 问题，请在工单或内部渠道注明 **`skillName`: `linkfox-amazon-store-orders`**，并附上 `developerProxy` 完整 JSON（注意脱敏）。
+
+## 接口：获取订单买家信息（getOrderBuyerInfo）
+
+> 官方：[getOrderBuyerInfo](https://developer-docs.amazon.com/sp-api/reference/getorderbuyerinfo)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/v0/orders/{orderId}/buyerInfo`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `GET`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
+
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 读取操作上游 httpStatus 为 200 时解析业务对象；非 200 时保留 developerProxy 与错误 body，不认定为成功。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- 本 v0 接口标记为 deprecated；新集成优先采用 v2026-01-01 searchOrders / getOrder 与 includedData 补齐业务字段。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/v0/orders/123-1234567-1234567/buyerInfo",
+  "method": "GET"
+}'
+```
+
+
+## 接口：获取收货地址（getOrderAddress）
+
+> 官方：[getOrderAddress](https://developer-docs.amazon.com/sp-api/reference/getorderaddress)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/v0/orders/{orderId}/address`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `GET`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
+
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 读取操作上游 httpStatus 为 200 时解析业务对象；非 200 时保留 developerProxy 与错误 body，不认定为成功。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- 本 v0 接口标记为 deprecated；新集成优先采用 v2026-01-01 searchOrders / getOrder 与 includedData 补齐业务字段。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/v0/orders/123-1234567-1234567/address",
+  "method": "GET"
+}'
+```
+
+
+## 接口：获取订单商品（getOrderItems）
+
+> 官方：[getOrderItems](https://developer-docs.amazon.com/sp-api/reference/getorderitems)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/v0/orders/{orderId}/orderItems`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `GET`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
+
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 读取操作上游 httpStatus 为 200 时解析业务对象；非 200 时保留 developerProxy 与错误 body，不认定为成功。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- 本 v0 接口标记为 deprecated；新集成优先采用 v2026-01-01 searchOrders / getOrder 与 includedData 补齐业务字段。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/v0/orders/123-1234567-1234567/orderItems",
+  "method": "GET"
+}'
+```
+
+
+## 接口：获取订单商品买家信息（getOrderItemsBuyerInfo）
+
+> 官方：[getOrderItemsBuyerInfo](https://developer-docs.amazon.com/sp-api/reference/getorderitemsbuyerinfo)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/v0/orders/{orderId}/orderItems/buyerInfo`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `GET`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
+
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 读取操作上游 httpStatus 为 200 时解析业务对象；非 200 时保留 developerProxy 与错误 body，不认定为成功。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- 本 v0 接口标记为 deprecated；新集成优先采用 v2026-01-01 searchOrders / getOrder 与 includedData 补齐业务字段。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/v0/orders/123-1234567-1234567/orderItems/buyerInfo",
+  "method": "GET"
+}'
+```
+
+
+## 接口：更新配送状态（updateShipmentStatus）
+
+> 官方：[updateShipmentStatus](https://developer-docs.amazon.com/sp-api/reference/updateshipmentstatus)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/v0/orders/{orderId}/shipment`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `POST`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
+
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 本操作成功时可能为上游 HTTP 204 且没有 JSON body；按网关及上游状态解释结果，不要求出现业务 JSON。写入结果不确定时先查询订单状态，不直接重放。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/v0/orders/123-1234567-1234567/shipment",
+  "method": "POST",
+  "body": "{\"marketplaceId\": \"ATVPDKIKX0DER\", \"shipmentStatus\": \"ReadyForPickup\"}",
+  "contentType": "application/json"
+}'
+```
+
+
+## 接口：获取管制订单信息（getOrderRegulatedInfo）
+
+> 官方：[getOrderRegulatedInfo](https://developer-docs.amazon.com/sp-api/reference/getorderregulatedinfo)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/v0/orders/{orderId}/regulatedInfo`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `GET`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
+
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 读取操作上游 httpStatus 为 200 时解析业务对象；非 200 时保留 developerProxy 与错误 body，不认定为成功。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- Accept 等头若需特化，取决于网关是否支持透传；当前脚本不附加额外 Amazon 请求头。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/v0/orders/123-1234567-1234567/regulatedInfo",
+  "method": "GET"
+}'
+```
+
+
+## 接口：更新买家核验状态（updateVerificationStatus）
+
+> 官方：[updateVerificationStatus](https://developer-docs.amazon.com/sp-api/reference/updateverificationstatus)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/v0/orders/{orderId}/regulatedInfo`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `PATCH`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
+
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 本操作成功时可能为上游 HTTP 204 且没有 JSON body；按网关及上游状态解释结果，不要求出现业务 JSON。写入结果不确定时先查询订单状态，不直接重放。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
+
+### curl 示例
+
+以下仅演示网关包装，嵌套对象须替换为满足 Amazon schema 的实际核验或包裹资料，不可按空对象提交。
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/v0/orders/123-1234567-1234567/regulatedInfo",
+  "method": "PATCH",
+  "body": "{\"regulatedOrderVerificationStatus\": {}}",
+  "contentType": "application/json"
+}'
+```
+
+
+## 接口：确认发货（confirmShipment）
+
+> 官方：[confirmShipment](https://developer-docs.amazon.com/sp-api/reference/confirmshipment)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/spApi/developerProxy`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE；也支持小写，须与授权记录匹配。 |
+| sellerId | string | 是 | 已授权 Seller ID，最长 64 字符；服务端要求非空，并按当前成员、sellerId 与 region 解析令牌。 |
+| path | string | 是 | `orders/v0/orders/{orderId}/shipmentConfirmation`；相对资源路径，占位段分别做百分号编码，最长 2048 字符。 |
+| method | string | 是 | 本操作上游方法为 `POST`；LinkFox 外层始终 POST。 |
+| queryString | string | 否 | 不含 ? 的查询字符串，最长 4096 字符；键值按 RFC 3986 百分号编码，+ 按字面加号处理。 |
+| body | string | 否 | 上游请求正文字符串，最长 1,048,576 字符；网关不定义内部业务字段。 |
+| contentType | string | 否 | 上游正文类型，最长 128 字符；有正文时默认 application/json。 |
+
+操作所需的脚本输入、路径、查询串与正文构造见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| httpStatus | integer | Amazon 上游 HTTP 状态，与 LinkFox 外层 HTTP 状态分别判断。 |
+| contentType | string | 上游 Content-Type；响应头缺失时可为空。 |
+| body | string | 上游原始响应正文；可为空字符串。网关不定义其内部业务字段。 |
+| xAmznRequestId | string | 上游 x-amzn-requestid 响应头原值，可为空。 |
+| retryAfter | string | 上游 Retry-After 响应头原值，可为空；不限定为数字。 |
+| xAmznRateLimitLimit | string | 上游 x-amzn-RateLimit-Limit 响应头原值，可为空。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 本操作成功时可能为上游 HTTP 204 且没有 JSON body；按网关及上游状态解释结果，不要求出现业务 JSON。写入结果不确定时先查询订单状态，不直接重放。
+- errcode=1005 等拒绝转发时，需要后端检查 `orders/v0/...` 与 `orders/2026-01-01/...` 前缀白名单及本操作上游方法支持。
+- Orders 及相关角色权限必须有效；部分读取需要 Restricted Data Token（RDT），本技能不实现 RDT，以 Amazon 数据保护政策为准。参考 [Tokens API](https://developer-docs.amazon.com/sp-api/reference/createrestricteddatatoken)。
+- 收到 450 / 453 / 454 / 459 时遵循 [店铺保护与重试](spapi-protection.md)；453 期间停止该店铺全部 SP-API。
+
+### curl 示例
+
+以下仅演示网关包装，嵌套对象须替换为满足 Amazon schema 的实际核验或包裹资料，不可按空对象提交。
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/spApi/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "sellerId": "A1BCDEFGHIJK2",
+  "region": "NA",
+  "path": "orders/v0/orders/123-1234567-1234567/shipmentConfirmation",
+  "method": "POST",
+  "body": "{\"packageDetail\": {}}",
+  "contentType": "application/json"
+}'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-amazon-store-orders",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

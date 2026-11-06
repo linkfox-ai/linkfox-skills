@@ -33,7 +33,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _common import (  # noqa: E402
     build_filter_body,
     ensure_auth_skill_available,
-    get_access_token,
     list_sp_entities,
     parse_argv_params,
     require_fields,
@@ -68,11 +67,9 @@ def main() -> None:
     fetch_all = bool(params.get("fetchAll", True))
     request_body = build_filter_body(params, FILTER_KEYS)
 
-    access_token = get_access_token(profile_id)
     result = list_sp_entities(
         region=region,
         profile_id=profile_id,
-        access_token=access_token,
         entity_path=ENTITY_PATH,
         entity_content_type=ENTITY_CONTENT_TYPE,
         response_key=RESPONSE_KEY,
@@ -81,7 +78,7 @@ def main() -> None:
     )
 
     if "error" in result:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        emit_result(result, inline=lf_inline_flag())
         sys.exit(1)
 
     items = result.get("items", [])
@@ -93,7 +90,7 @@ def main() -> None:
         "truncated": result.get("truncated", False),
     }
     inline = lf_inline_flag()
-    emit_result(output, inline)
+    emit_result(output, inline=inline)
     print(
         f"\n✓ Fetched {len(items)} targeting clauses across {output['pagesFetched']} page(s)"
         f"{' (truncated at maxPages)' if output['truncated'] else ''}",

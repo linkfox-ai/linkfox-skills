@@ -1,17 +1,17 @@
 # `GET_EASYSHIP_PICKEDUP`
 
-> **分类**：5. Easy Ship Reports  
-> **说明**：Easy Ship picked up orders  
-> **可用范围**：Seller only
+> **分类**：5. Easy Ship 报告  
+> **说明**：Easy Ship 已揽收订单  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Easy Ship Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-easy-ship#easyship-picked-up-report)（章节：**EasyShip Picked Up Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Easy Ship 报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-easy-ship#easyship-picked-up-report)（章节：**EasyShip Picked Up Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
-- **受限报告**：未在相邻 Note 中写明，但 **Role** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
-- **Role**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
-- **Report output type**：Tab-delimited file
-- **要点**：Contains all the seller-fulfilled orders that were picked up on the specified dates.
+- **受限报告**：未在相邻 Note 中写明，但 **角色** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
+- **角色**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
+- **输出格式**：Tab-delimited file
+- **要点**：包含在指定日期已揽收的全部卖家自配送订单。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-easy-ship#easyship-picked-up-report>
 

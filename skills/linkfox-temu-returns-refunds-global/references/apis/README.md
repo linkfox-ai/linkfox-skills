@@ -6,24 +6,24 @@
 
 | type | 说明 | 文档 |
 |------|------|------|
-| `bg.aftersales.parentaftersales.list.get` | 父售后单列表查询 | [bg-aftersales-parentaftersales-list-get.md](./apis/bg-aftersales-parentaftersales-list-get.md) |
-| `bg.aftersales.aftersales.list.get` | 子售后单列表查询 | [bg-aftersales-aftersales-list-get.md](./apis/bg-aftersales-aftersales-list-get.md) |
-| `temu.aftersales.parentaftersales.detail.get` | 父售后单详情 | [temu-aftersales-parentaftersales-detail-get.md](./apis/temu-aftersales-parentaftersales-detail-get.md) |
+| `bg.aftersales.parentaftersales.list.get` | 父售后单列表查询 | [bg-aftersales-parentaftersales-list-get.md](./bg-aftersales-parentaftersales-list-get.md) |
+| `bg.aftersales.aftersales.list.get` | 子售后单列表查询 | [bg-aftersales-aftersales-list-get.md](./bg-aftersales-aftersales-list-get.md) |
+| `temu.aftersales.parentaftersales.detail.get` | 父售后单详情 | [temu-aftersales-parentaftersales-detail-get.md](./temu-aftersales-parentaftersales-detail-get.md) |
 
 ## 退货物流 / 地址 / 面单
 
 | type | 说明 | 文档 |
 |------|------|------|
-| `bg.aftersales.parentreturnorder.get` | 父退货物流信息 | [bg-aftersales-parentreturnorder-get.md](./apis/bg-aftersales-parentreturnorder-get.md) |
-| `temu.aftersales.returnaddress.get` | 退货地址查询 | [temu-aftersales-returnaddress-get.md](./apis/temu-aftersales-returnaddress-get.md) |
-| `temu.aftersales.returnlabel.prepare.get` | 退货面单准备信息 | [temu-aftersales-returnlabel-prepare-get.md](./apis/temu-aftersales-returnlabel-prepare-get.md) |
-| `temu.aftersales.upload.returnlabel` | 上传退货面单 | [temu-aftersales-upload-returnlabel.md](./apis/temu-aftersales-upload-returnlabel.md) |
+| `bg.aftersales.parentreturnorder.get` | 父退货物流信息 | [bg-aftersales-parentreturnorder-get.md](./bg-aftersales-parentreturnorder-get.md) |
+| `temu.aftersales.returnaddress.get` | 退货地址查询 | [temu-aftersales-returnaddress-get.md](./temu-aftersales-returnaddress-get.md) |
+| `temu.aftersales.returnlabel.prepare.get` | 退货面单准备信息 | [temu-aftersales-returnlabel-prepare-get.md](./temu-aftersales-returnlabel-prepare-get.md) |
+| `temu.aftersales.upload.returnlabel` | 上传退货面单 | [temu-aftersales-upload-returnlabel.md](./temu-aftersales-upload-returnlabel.md) |
 
 ## 承运商与签名
 
 | type | 说明 | 文档 |
 |------|------|------|
-| `temu.aftersales.signature.get` | 售后签名获取 | [temu-aftersales-signature-get.md](./apis/temu-aftersales-signature-get.md) |
-| `temu.aftersales.carrier.get` | 承运商列表 | [temu-aftersales-carrier-get.md](./apis/temu-aftersales-carrier-get.md) |
+| `temu.aftersales.signature.get` | 售后签名获取 | [temu-aftersales-signature-get.md](./temu-aftersales-signature-get.md) |
+| `temu.aftersales.carrier.get` | 承运商列表 | [temu-aftersales-carrier-get.md](./temu-aftersales-carrier-get.md) |
 
 > 买家/卖家**取消订单**见 `linkfox-temu-cancel-order-global`。

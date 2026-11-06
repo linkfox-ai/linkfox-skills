@@ -6,7 +6,7 @@ import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(SCRIPT_DIR)
-sys.path.insert(0, SCRIPT_DIR)  # 本地 collection_pipeline 包，不再外引 _shared
+sys.path.insert(0, SCRIPT_DIR)  # 使用本地自包含的 collection_pipeline 包
 
 from collection_pipeline.runner import main  # noqa: E402
 

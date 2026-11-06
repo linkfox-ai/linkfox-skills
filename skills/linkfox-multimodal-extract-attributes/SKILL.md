@@ -1,130 +1,97 @@
 ---
 name: linkfox-multimodal-extract-attributes
-description: 利用多模态AI分析商品主图，提取视觉特征和提示词。当用户提到分析产品图片、从商品图中提取视觉属性、识别产品Listing中的颜色/形状/材质/风格、反推图片提示词、批量视觉特征提取、将产品图信息转化为结构化数据、视觉属性统计、基于图片的商品分类、main image analysis, image feature extraction, visual attribute recognition, product image analysis, image classification, batch image analysis时触发此技能。即使用户未明确提及"图片分析"，只要其需求涉及从商品主图或附图中提取结构化信息，也应触发此技能。
+description: 使用多模态 AI 分析商品主图和附图，提取颜色、形状、表观材质、风格、卖点元素或可复现画面的提示词，生成结构化视觉属性与分组统计。适用于已有商品图片的批量特征提取、视觉分类和外观分布比较；不适用于纯文本商品查询、Listing 文案撰写、评论分析、价格或销量研究，以及不涉及商品图片的任务。
 ---
 
-# Product Main Image Prompt Extractor
+# 商品图片视觉属性与提示词提取
 
-This skill guides you on how to extract visual features and prompts from product main images using multimodal AI, helping e-commerce sellers turn unstructured image data into structured, actionable insights.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool performs deep visual analysis on product main images (and optionally additional images) from a product list. It uses a multimodal AI model to identify specific visual dimensions based on a natural language instruction, such as color, shape, style, material, or specific selling-point elements.
+从已有商品列表的主图或附图中提取用户指定的视觉特征，或反推画面的描述与生成提示词。用户只说“看看这些商品是什么颜色”“按外观分组”，但目标是图片中的结构化信息时，也使用本技能。
 
-**How it works**: You provide a list of products (with image URLs) and a natural language prompt describing what to extract. The tool automatically iterates over all products, analyzes each image, and returns structured attribute data (`attributeName` + `attributeValue`) appended to each product record.
+**场景速查**
 
-**Row expansion**: When extracting multiple dimensions in a single request (e.g., both color and shape), each original product row is duplicated per dimension, resulting in one row per product per attribute.
+| 用户表达 | 分析场景 |
+|----------|----------|
+| 看看这些商品是什么颜色 | 提取主色。 |
+| 分析商品主图，提取照片中的特征 | 将图片信息转为结构化属性。 |
+| 看起来是什么材质 | 识别表观材质。 |
+| 这些商品有什么形状或风格 | 形状、款式与风格分类。 |
+| 反推这张图的提示词 | 推断可复现画面的描述。 |
+| 按视觉外观给商品分组，统计各组占比 | 展示视觉属性分布。 |
 
-## Parameter Guide
+## 前置条件
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| productImageAnalysisPrompt | Yes | Natural language instruction describing what visual information to extract from the images. Be specific about the dimensions you want (color, material, shape, style, pendant type, etc.). |
-| analyzeAdditionalImages | No | Whether to also analyze additional product images beyond the main image. Defaults to `false`. |
-| refResultData | No | Reference data from a previous step, containing the product list to analyze. Must be a JSON string with a `products` array. |
-| userInput | No | Supplementary user input for additional context. |
+**先取得待分析的商品数据**：从当前流程的上游步骤或用户明确提供的数据中确定商品列表与图片资源。具体输入格式、图片条件和限制见 `references/api.md`。
 
-### Writing Effective Prompts
+## 分析流程
 
-1. **Be dimension-specific**: Clearly state what visual attribute(s) to extract. "Extract the dominant color of each product" is better than "Analyze the images."
-2. **One or few dimensions per call**: For cleaner results, focus on one or two dimensions at a time.
-3. **Use concrete terms**: "Identify the pendant/charm shape on the product" is clearer than "Look at the decorations."
-4. **No need to specify individual products**: The tool automatically iterates over all products in the input list.
-5. **Data flow dependency**: The tool requires upstream product data. It cannot reference "products from the previous conversation round" -- the data must be explicitly provided via the current step's input or resource references.
+1. 确定用户要提取的视觉维度及是否需要查看附图，并核对当前步骤已显式取得商品数据；缺少数据时先补齐，按 `references/api.md` 检查输入条件。
+2. 将需求写成具体的自然语言提示词；通常一次聚焦一到两个维度。工具会自动遍历商品列表，无需逐个商品重复发起请求。
+3. 在调用前说明动态算力消耗及可能的大额费用，由用户决定是否继续；按已确定的分析范围执行，后续调用遵守成本约束。
+4. 先读取保存结果的摘要，再按需提取完整数据，以商品标识与属性值组成表格；有分组时展示分布，多维分析时说明逐维展开关系。
 
-### Prompt Examples
+## 执行方式
 
-| Goal | Example Prompt |
-|------|---------------|
-| Extract dominant color | "Analyze each product's main image and extract the primary color of the product" |
-| Identify material | "From each product's main image, identify the apparent material (plastic, metal, wood, fabric, etc.)" |
-| Classify pendant shape | "Analyze each product's main image and identify the shape of the pendant/charm (round, heart, star, etc.)" |
-| Detect style | "Extract the overall style of each product from its main image (minimalist, vintage, bohemian, industrial, etc.)" |
-| Reverse-engineer image prompt | "Based on the main image, infer the likely AI-generation prompt or visual description that could reproduce this image" |
-| Multi-dimension extraction | "From each main image, extract both the dominant color and the overall product shape" |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/multimodal_extract_attributes.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 调用方式
+### 输出策略
 
-- **API 端点**：`POST /multimodal/extractPromptsFromMainImage`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/multimodal_extract_attributes.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-multimodal-extract-attributes-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-multimodal-extract-attributes-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行规则
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Response Structure
-
-The response enriches the original product list with extracted attributes:
-
-- **products**: An array of product records, each augmented with `attributeName` (the dimension extracted, e.g., "color") and `attributeValue` (the extracted value, e.g., "red"). One record per product per attribute dimension.
-- **attributeGroups**: Products grouped by attribute name and value for easy comparison. Each group includes the attribute value, the count of products, and the list of ASINs.
-- **columns**: Column definitions for rendering the result table.
-- **costToken**: Total tokens consumed by the multimodal AI model.
-
-## Display Rules
-
-1. **Present data in tables**: Show extracted attributes in clear, well-formatted tables with product identifiers (ASIN, title) alongside the extracted attribute values.
-2. **Highlight distribution**: When attribute groups are returned, summarize the distribution (e.g., "60% of products are red, 25% blue, 15% green") to give the user a quick overview.
-3. **Row expansion notice**: If multiple dimensions were extracted, inform the user that each product appears once per dimension in the results.
-4. **Error handling**: When analysis fails, explain the reason based on the response message and suggest adjustments (e.g., ensuring the product list contains valid image URLs).
-5. **Data dependency reminder**: If the user tries to reference products from a previous conversation round without explicit data flow, remind them that the product data must come from an upstream step in the current pipeline.
-6. **No subjective advice**: Present the extracted visual features factually. Let the user draw their own business conclusions.
-## Important Limitations
-
-- **Requires product data input**: The tool cannot operate without a `products` array containing image URLs. It depends on upstream data from a prior step.
-- **No fuzzy references**: Cannot analyze "products from the last conversation" -- data must be explicitly piped in via `refResultData` or resource references.
-- **Row multiplication**: Extracting N dimensions from M products produces up to M x N rows in the output.
-- **Image accessibility**: Product image URLs must be publicly accessible for the analysis to succeed.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Visual feature extraction and image analysis for product listings:
-
-| User Says | Scenario |
-|-----------|----------|
-| "What colors are these products" | Dominant color extraction |
-| "Analyze the product images", "Look at the main photos" | General visual feature extraction |
-| "What material does it look like" | Material identification |
-| "What shapes/styles are popular" | Shape or style classification |
-| "Reverse the image prompt", "What prompt made this image" | Image prompt reverse-engineering |
-| "Group products by visual appearance" | Visual attribute grouping & statistics |
-| "Extract features from the product photos" | Structured attribute extraction |
-
-**Not applicable** -- Needs beyond image-based visual analysis:
-
-- Text-based product data queries (use appropriate data query tools)
-- Listing copywriting or review analysis
-- Price or sales data analysis
-- Tasks that do not involve product images
-
-## 算力消耗规则
+### 算力消耗预估
 
 按动态规则计费：消耗算力 = sum(每张被分析图片的(输入消耗的算力 + 输出结果消耗的算力))。
 
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+本服务按倍数动态计算，可能一次性消耗大量算力，必须在调用前提醒用户，由用户决定是否继续。
 
-**Feedback:**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **明确视觉维度**：使用具体术语，例如“提取主色”或“识别吊坠形状”，避免只有“分析图片”的笼统要求；不必在提示词中逐个指定商品。
+- **理解属性展开**：每个商品的每个视觉维度对应一行；多维分析会重复显示同一商品，应提醒用户这是逐维结果，不能把行数当作独立商品数。
+- **清晰展示结果**：用表格呈现 ASIN、标题与提取的属性名称、属性值；按响应的列定义组织展示。字段定义见 `references/api.md`。
+- **突出分布**：有属性分组时，按维度展示各属性值的数量、占比与对应商品，帮助用户比较外观差异。
+- **客观描述**：如实展示提取结果，表观材质与反推提示词属于视觉推断，不添加主观经营建议，让用户自行判断商业价值。
+- **解释缺失数据与失败**：用户只提到“上一轮那些商品”时，按接口参考说明数据依赖并补齐当前流程的显式输入；分析失败时依据响应消息说明原因，建议核对商品列表和图片可访问性，遵守成本约束。
+
+## 使用示例
+
+| 目标 | 提示词示例 |
+|------|------------|
+| 提取主色 | 分析每个商品的主图，提取商品的主要颜色。 |
+| 识别表观材质 | 从每个商品主图识别看起来使用的材质，如塑料、金属、木材或织物。 |
+| 分类吊坠形状 | 分析每个商品主图，识别吊坠或挂饰形状，如圆形、心形或星形。 |
+| 识别风格 | 从每个商品主图提取整体风格，如极简、复古、波西米亚或工业风。 |
+| 反推画面提示词 | 根据主图推断能够复现该画面的 AI 生成提示词或视觉描述。 |
+| 提取多个维度 | 从每个商品主图提取主要颜色和整体形状。 |
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

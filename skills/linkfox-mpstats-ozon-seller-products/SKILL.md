@@ -1,176 +1,123 @@
 ---
 name: linkfox-mpstats-ozon-seller-products
-description: MPSTATS Ozon 俄罗斯站按卖家 ID 下钻商品列表。返回该卖家下全部 SKU 的销量、销售额、价格、评分、库存、周转、损失销售额等完整指标，支持多维数值筛选、排序、货币换算。用于店铺结构分析、卖家爆款拆解、竞争对手店铺对标。当用户提到 Ozon 卖家商品、Ozon 店铺分析、Ozon 卖家下钻、Ozon 卖家 SKU、Ozon 店铺爆款、Ozon 竞争店铺、MPSTATS seller, Ozon seller drill-down, Ozon shop audit, Russian marketplace seller SKUs, Ozon store structure 时触发此技能。即使用户未明确说"MPSTATS"，只要意图是按 Ozon 卖家 ID 看该店铺下全部商品的销售表现，也应触发此技能。
+description: 按卖家 ID 查看 MPSTATS Ozon 俄罗斯站店铺商品，返回各 SKU 的销量、销售额、价格、评分、库存、周转和损失销售额，支持数值筛选、排序与货币换算。适用于店铺结构分析、店内畅销商品拆解及竞争店铺对标，无需明确提及 MPSTATS。品牌或类目商品查询、单品趋势及其他平台数据不在本技能范围，也不提供采购或跟卖建议。
 ---
 
-# MPSTATS Ozon Seller Products
+# MPSTATS Ozon 卖家商品
 
-This skill drills into all Ozon (Russia) products sold by a given seller, returning per-SKU sales, revenue, price, rating, stock, turnover, lost profit, and more. Designed for store-structure audits, bestseller dissection within a shop, and head-to-head competitor-store comparison.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Seller ID, not name**: `sellerId` must be a **numeric string** — the `sellerId` field Ozon / MPSTATS uses to identify a shop. Do **not** pass a brand name, category path, or human-readable seller name. If you only have the seller name, resolve the ID via `mpstats-ozon-product-search` (seller-filtered) and read `sellerId` from the result.
+查看指定 Ozon 卖家下各 SKU 的销售表现，用于店铺结构、畅销商品、库存周转、缺货损失及竞争店铺对比。
 
-**Filters & ops**: Same AND-combined numeric filter model as `brand-products` and `category-products`. See Filter Reference.
+**场景速查**
 
-**Currency**: Default `RUB`; override with `currency` / `currencyRate` for USD / EUR / CNY views.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 看卖家 3628678 的商品，按销量排 | 店铺 SKU 分布与销量排行。 |
+| 这家 Ozon 店铺哪些商品销售额最高 | 店内高销售额商品。 |
+| 店里周转低于 20 天的商品有多少 | 按周转指标筛选商品。 |
+| 这家店哪些商品因缺货损失销售额 | 缺货损失扫描。 |
+| 比较两家 Ozon 店铺的 SKU 数和销量 | 分别查询两名卖家，按相同口径对比。 |
 
-**FBO / FBS**: `includeFbs: true` folds FBS into the numbers; `false` keeps FBO-only.
+### 边界
 
-## Parameters
+只有卖家名称时，先用 MPSTATS Ozon 商品搜索（`mpstats-ozon-product-search`）按卖家筛选并读取 `sellerId`。品牌维度使用 `mpstats-ozon-brand-products`，类目维度使用 `mpstats-ozon-category-products`，单 SKU 时间序列使用 `mpstats-ozon-product-trend`。这些名称表示对应数据源能力，使用前确认当前环境可用。
+“某类目有哪些头部卖家”应查询类目商品后在本地按卖家汇总。Wildberries 及其他市场不属于本技能。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| sellerId | string | yes | Ozon seller ID as numeric string, e.g. `"3628678"` |
-| startDate | string | no | Stats window start, `YYYY-MM-DD`; latest = yesterday |
-| endDate | string | no | Stats window end, `YYYY-MM-DD`; latest = yesterday |
-| page | integer | no | Page number, starts at 1 |
-| pageSize | integer | no | Rows per page, 1-100, default 100 |
-| sortField | string | no | snake_case column (`sales`, `revenue`, ...) |
-| sortDirection | string | no | `asc` / `desc` |
-| currency | string | no | Currency code, default `RUB` |
-| currencyRate | integer | no | Custom rate for non-default currency |
-| includeFbs | boolean | no | Include FBS data |
-| filters | array | no | Numeric filter list |
+## 前置条件
 
-## Filter Reference
+先确定目标卖家编号与统计口径；名称、品牌名及类目路径不能替代卖家编号。具体参数约定见 `references/api.md`。
 
-Each `filters` entry: `{"field": "<snake_case>", "op": "<OP>", "value": <num>, "value2": <num?>}`.
+## 查询流程
 
-**Common fields**: `sales`, `final_price`, `rating`, `comments`, `balance`, `revenue`, `days_in_stock`, `turnover_days`, `lost_profit`, `category_position`.
+1. 确认卖家及任务：查看店铺商品分布、销量或销售额排行、周转表现、缺货损失，或比较两家店铺。
+2. 根据任务准备排序、筛选、统计区间和货币口径，按 `references/api.md` 核对请求；比较店铺时统一口径，并说明每名卖家需要单独查询。
+3. 按下方算力预估提醒用户，由用户决定是否继续；取得结果后先看摘要，按需读取已保存的完整响应。失败或空结果时遵守成本约束。
+4. 展示本次返回的商品和查询范围；大型店铺优先收紧筛选，再考虑继续翻页。
 
-**Operators**: `GTE`, `LTE`, `GT`, `LT`, `EQ`, `NOT_EQ`, `BETWEEN` (requires `value2`).
+## 执行方式
 
-## 调用方式
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/mpstats_ozon_seller_products.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按下方算力规则计费。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **API 端点**：`POST /mpstats/ozon/sellerProducts`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/mpstats_ozon_seller_products.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 输出策略
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-seller-products-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-mpstats-ozon-seller-products-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8000 个 UTF-8 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8000 个 UTF-8 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-**1. Seller's top-100 by sales**
+按动态规则计费：消耗算力 = 12；列表为空返回 0 算力 （限时）。本服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分查询维度**：卖家编号代表店铺；本技能返回该店铺下商品的指标，不把卖家、品牌和类目混为同一维度。
+- **说明统计口径**：FBO 表示平台仓配，FBS 表示卖家自发货；展示时说明是否纳入 FBS、统计区间和币种，参数语义见 `references/api.md`。
+- **紧凑展示店铺商品**：表格优先列出 `productId`、`title`、`brand`、`price`、`monthlySalesUnits`、`monthlySalesRevenue`、`rating`、`balance`、`turnoverDays`、`lostProfit`、`position`。销量和销售额按实际统计期解释，不能仅根据字段名认定为自然月数据。
+- **明确占比分母**：`revenueSharePercent` 是本次卖家查询维度内的销售额占比，不是全市场份额；只展示实际返回值。
+- **保留俄语标题**：按响应保留标题，用户要求时再翻译。
+- **标注货币换算**：使用响应中的币种；换算后注明“已按 USD 换算”等实际目标币种。
+- **说明覆盖范围**：区分命中总数和当前页商品数，不把单页当作店铺全部 SKU；大型店铺先收紧筛选再深翻页。
+- **仅呈现数据**：可以解释店铺指标及对比结果，不作采购、选品开发或跟卖推荐，不据此判断某 SKU 是否值得复制。
+- **处理异常**：按 `references/api.md` 的公共响应规则和业务说明解释错误或空结果，保留已取得的数据，不自动改参数连续试探。
+
+## 使用示例
+
+### 店铺销量前 100 个商品
+
 ```json
-{
-  "sellerId": "3628678",
-  "sortField": "sales",
-  "sortDirection": "desc",
-  "pageSize": 100
-}
+{"sellerId":"3628678","sortField":"sales","sortDirection":"desc","pageSize":100}
 ```
 
-**2. Store's revenue top-20**
+### 店铺销售额前 20 个商品
+
 ```json
-{
-  "sellerId": "3628678",
-  "sortField": "revenue",
-  "sortDirection": "desc",
-  "pageSize": 20
-}
+{"sellerId":"3628678","sortField":"revenue","sortDirection":"desc","pageSize":20}
 ```
 
-**3. High-turnover star products**
+### 筛选销量与周转符合要求的商品
+
 ```json
-{
-  "sellerId": "3628678",
-  "filters": [
-    {"field": "sales", "op": "GTE", "value": 30},
-    {"field": "turnover_days", "op": "LTE", "value": 20}
-  ],
-  "sortField": "revenue",
-  "sortDirection": "desc"
-}
+{"sellerId":"3628678","filters":[{"field":"sales","op":"GTE","value":30},{"field":"turnover_days","op":"LTE","value":20}],"sortField":"revenue","sortDirection":"desc"}
 ```
 
-**4. Stockout pain points for the store**
+### 查看缺货损失较高的商品
+
 ```json
-{
-  "sellerId": "3628678",
-  "filters": [{"field": "lost_profit", "op": "GTE", "value": 100000}],
-  "sortField": "lost_profit",
-  "sortDirection": "desc"
-}
+{"sellerId":"3628678","filters":[{"field":"lost_profit","op":"GTE","value":100000}],"sortField":"lost_profit","sortDirection":"desc"}
 ```
 
-**5. USD-converted store audit**
+### 按美元查看店铺商品
+
 ```json
-{
-  "sellerId": "3628678",
-  "currency": "USD",
-  "sortField": "revenue",
-  "sortDirection": "desc"
-}
+{"sellerId":"3628678","currency":"USD","sortField":"revenue","sortDirection":"desc"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Compact store table** — key columns: `productId`, `title`, `brand`, `price`, `monthlySalesUnits`, `monthlySalesRevenue`, `rating`, `balance`, `turnoverDays`, `lostProfit`, `position`.
-2. **Revenue share = within this seller query** — 0-100%; clarify the base.
-3. **Russian titles** — preserve; translate on user request.
-4. **Currency labeling** — if converted, note `"已按 USD 换算"`.
-5. **Pagination** — for stores with thousands of SKUs, suggest tighter filters before paging deep.
-6. **No buying advice** — the skill shows the store's book, not whether their SKUs are worth copying.
-
-## Important Limitations
-
-- **Numeric seller ID only** — passing a seller **name** will not resolve; go through `mpstats-ozon-product-search` first.
-- **Page cap** — max 100 rows per page.
-- **T-1 data** — `endDate` cannot be today or a future date.
-- **No business advice** — data-only.
-- **Ozon-only** — Wildberries / other Russian marketplaces are separate.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Seller-scoped Ozon product metrics:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Show me everything seller 3628678 sells, by sales" | Store SKU map |
-| "What are this Ozon store's top revenue products" | Store bestseller drill |
-| "How many SKUs does the store have with turnover <20 days" | Operational health filter |
-| "Where is this store losing money to stockouts" | Lost-profit scan |
-| "Compare two Ozon stores' SKU counts and sales" | Store-vs-store benchmarking (call twice) |
-
-**Not applicable** — Needs beyond seller drill-down:
-
-- Only seller **name** known → use `mpstats-ozon-product-search` to resolve the ID
-- Brand-scoped drill → `mpstats-ozon-brand-products`
-- Category-scoped drill → `mpstats-ozon-category-products`
-- Single-SKU time-series → `mpstats-ozon-product-trend`
-- Wildberries / other Russian marketplaces → not covered
-
-**Boundary judgment**: Use this skill when the **dimension is a specific seller** and you want the per-SKU table under that shop. For "who are the top sellers in category X" you'd use category drill-down and group by seller client-side.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 12。列表为空返回 0
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

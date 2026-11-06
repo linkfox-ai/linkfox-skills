@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Save successful media from a saved query response without another API call."""
+"""从已保存的成功查询响应下载媒体，不再调用 LinkFox 接口。"""
 import argparse
 import json
 from pathlib import Path

@@ -1,147 +1,188 @@
-# 父售后单列表查询 — `bg.aftersales.parentaftersales.list.get`
+# 父售后单列表查询 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/eu_returns_refunds_aftersales_parentaftersales_list_get.py` |
-| **Partner 文档** | https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896（按 `type` 在 Partner EU 后台打开） ||
-| **网关** | `POST /temu/proxy`，`type`=`bg.aftersales.parentaftersales.list.get`，业务载荷放在 Body 的 `params` |
+## 公共规则
 
-**Description:** Query parent after-sales order list.
+### 调用规范
 
-> 入参 **`createAtStart`/`createAtEnd`** 与 **`updateAtStart`/`updateAtEnd`** 至少提供一组时间范围（Partner Request 表说明）。
-> 入参分页为 **`pageNo`**，出参当前页为 **`pageNumber`**，勿混用。
-> 列表项中的 **`afterSalesStatusGroup`** 与入参筛选枚举一致（见下表）。
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 **`request`**。建议使用 **`tokenPurpose=order-shipping`**，**`managementType=semi-managed`**。
+### 响应码基本规则
 
----
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-## Request 结构（官方顶层）
 
-```text
-params
-└── request (OBJECT, 选填)
-    ├── pageSize (INTEGER, 否)
-    ├── pageNo (INTEGER, 否)
-    ├── parentOrderSnList (STRING[], 否)
-    ├── parentAfterSalesSnList (STRING[], 否)
-    ├── createAtStart (INTEGER, 否)
-    ├── createAtEnd (INTEGER, 否)
-    ├── updateAtStart (INTEGER, 否)
-    ├── updateAtEnd (INTEGER, 否)
-    └── afterSalesStatusGroup (INTEGER, 否)
-```
+## 接口：父售后单列表查询（bg.aftersales.parentaftersales.list.get）
 
-### `request` 内字段
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| pageSize | INTEGER | 否 | Page size for pagination, default is 10, max is 200. |
-| pageNo | INTEGER | 否 | Page number for pagination, default is 1. |
-| parentOrderSnList | STRING[] | 否 | The list of parent order numbers to limit the query. |
-| parentAfterSalesSnList | STRING[] | 否 | The list of parent after-sales order numbers to limit the query. |
-| createAtStart | INTEGER | 否 | The start time for querying the status change time of parent after-sales orders, in seconds (timestamp). Defines the starting range of the status change time when querying parent after-sales orders. |
-| createAtEnd | INTEGER | 否 | The end time for querying the creation time of parent after-sales orders, in seconds (timestamp). Defines the ending range (closed interval) of the creation time when querying parent after-sales orders. -Must be used in conjunction with createAtStart. -- At least one set of creation or update times must be provided as required input parameters. |
-| updateAtStart | INTEGER | 否 | The start time for querying the status change time of parent after-sales orders, in seconds (timestamp). Defines the starting range of the status change time when querying parent after-sales orders. |
-| updateAtEnd | INTEGER | 否 | The end time for querying the status change time of parent after-sales orders, in seconds (timestamp). Defines the ending range (closed interval) of the status change time when querying parent after-sales orders. - Must be used in conjunction with updateAtStart. - At least one set of creation or update times must be provided as required input parameters. |
-| afterSalesStatusGroup | INTEGER | 否 | The after-sales order status group, enumerated as follows: 1: Pending, 2: Requested, 3: Package Shipped, 4: Platform Reviewing, 5: Refunded, 6: Rejected, 7: Cancelled. |
+| site | string | 是 | EU 包装脚本默认 `eu`；通用脚本显式传入。兼容枚举：`cn` / `partner` / `us` / `global` / `eu`。 |
+| managementType | string | 是 | EU 包装脚本默认 `semi-managed`；通用脚本显式传入。兼容枚举：`full-managed` / `semi-managed`。 |
+| accessToken | string | 是 | Temu 店铺令牌；脚本也可用本地 `storeKey` 解析后填入，不能把 LinkFox 密钥放入此字段。 |
+| type | string | 是 | 本接口的 Temu 操作标识，见接口标题；是 Body 字段，不是 URL path。 |
+| params | object | 否 | 业务载荷，本接口使用下方 `request` 对象。 |
 
-> 官方 Request 表将顶层 **`request`** 标为选填（False）；标 **必填** 的字段须在 **`params.request`** 中提供。Partner **Request Example** CURL 将业务字段写在 JSON 顶层；经 LinkFox 网关时建议放在 **`params.request`**。
+#### 脚本参数与选项
 
-### 网关 `params` 写法
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| token / linkfoxToken / linkfox_token | string | 否 | 按此顺序选首个非空值，优先于 `LINKFOX_AGENT_API_KEY`，再回退 `LINKFOXAGENT_API_KEY`；仅用于网关请求头，不转发为业务字段。 |
+| storeKey | string | 与 accessToken 二选一 | 从本地令牌库解析店铺令牌；同时提供时优先 accessToken。 |
+| tokenPurpose | string | 否 | EU 包装脚本用 storeKey 时默认 `order-shipping`，通用脚本默认 `default`；必须与保存令牌时的用途一致，不是网关 Body 字段。 |
+| request | OBJECT | 否 | 可放在脚本 JSON 顶层，或嵌套在 `params.request`；存在对象类型的 params 时优先使用该对象，其他顶层业务字段不合并。 |
+| --inline | CLI flag | 否 | 全量打印，仍保存完整响应。 |
+| --no-cache | CLI flag | 否 | 业务封装调用公共 run 时始终加入此项，不读写响应缓存，不因 CLI 未提供此项而开启缓存。 |
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "pageNo": 1,
-    "pageSize": 20,
-    "afterSalesStatusGroup": 1,
-    "createAtStart": 1714521600,
-    "createAtEnd": 1714608000
-  }
-}
-```
+`storeKey`、`tokenPurpose` 和 LinkFox 密钥只由脚本处理，不发送到 Temu 业务参数中。令牌库路径由 `TEMU_TOKEN_STORE_PATH` 覆盖，默认 `~/.linkfox/temu-access-tokens.json`。通用入口 `temu_eu_proxy.py` 显式传 type；各专用脚本固定 type。
 
----
+#### 业务参数
 
-## Response（Temu `body` 解析后）
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| params.request | OBJECT | 否 | Partner 顶层 request 标记为选填；下列必填业务字段仍须放在此对象中。 |
 
-Partner **Response** 表顶层为 **`response`** 对象；嵌套子行在导出 HTML 中多为折叠状态，下列层级按 **Response 表 + Response Example** 全部展开。
+#### params.request 子字段
 
-```text
-response（或解析后的根对象）
-├── success
-├── errorCode
-├── errorMsg
-└── result
-    ├── total (LONG)
-    ├── pageNumber (INTEGER)
-    └── data[]
-        ├── parentAfterSalesSn (STRING)
-        ├── afterSalesStatusGroup (INTEGER)
-        ├── operateExpireTimeMs (LONG)
-        ├── availableOperateList[] (INTEGER)
-        ├── returnDeliveryType (INTEGER)
-        ├── parentAfterSalesStatus (INTEGER)
-        ├── parentOrderSn (STRING)
-        ├── updateAt (INTEGER)
-        ├── afterSalesType (INTEGER)
-        └── createAt (INTEGER)
-```
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| pageSize | INTEGER | 否 | 分页条数，默认 10，最大 200。 |
+| pageNo | INTEGER | 否 | 请求页码，默认 1；响应页码字段为 pageNumber。 |
+| parentOrderSnList | STRING[] | 否 | 限定查询的父订单号列表。 |
+| parentAfterSalesSnList | STRING[] | 否 | 限定查询的父售后单号列表。 |
+| createAtStart | INTEGER | 否 | 查询起点，单位秒（时间戳）；Partner 字段描述为父售后状态变更时间，但字段名及 createAtEnd 描述指向创建时间，实际筛选口径待 Partner 确认，不将其等同于 updateAtStart。 |
+| createAtEnd | INTEGER | 否 | 查询父售后创建时间的终点，单位秒，闭区间；必须配合 createAtStart，创建时间或更新时间范围至少提供一组。 |
+| updateAtStart | INTEGER | 否 | 查询父售后状态变更时间的起点，单位秒（时间戳）。 |
+| updateAtEnd | INTEGER | 否 | 查询父售后状态变更时间的终点，单位秒，闭区间；必须配合 updateAtStart，创建时间或更新时间范围至少提供一组。 |
+| afterSalesStatusGroup | INTEGER | 否 | 售后状态组，入参和出参使用相同枚举，见下方 afterSalesStatusGroup 枚举表。 |
 
-### 顶层字段（`response` 内，或根级）
+经网关时业务字段位于 `params.request`；Partner 原始请求示例的顶层业务写法不能直接作为网关 Body。
+
+### 响应结构
+
+#### 网关响应与脚本加工
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 若返回，按公共响应码基本规则判断，不用 Temu 的 success 替代网关判断。 |
+| errmsg | string | 若返回，保留网关消息。 |
+| body | string | Temu 原始 JSON 字符串；先检查网关状态，再解析业务结果。 |
+| code | integer | 网关业务错误字段，1002 表示参数或 LinkFox Token 无效，1003 表示转发失败；这些错误不能当作业务成功。 |
+| transportHttpStatus | integer / null | 脚本记录的 LinkFox 外层 HTTP 状态码，连接失败时为 null；不与 Temu errorCode 混淆。 |
+| temuBody | object / array / scalar / null | 仅脚本加工字段：body 是可解析的非空 JSON 字符串时加入；保留原始 body，解析失败时不补造此字段。 |
+
+Temu 文档中的顶层是 `response` 对象，也可能直接位于解析后的根级；依实际层级读取下方字段。应先确认 LinkFox 外层 HTTP 与 errcode，再检查 code、解析 body，最后判断 Temu `success`、`errorCode`、`errorMsg` 与 `result`。
+
+#### Temu 顶层字段（`response` 内，或根级）
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| success | BOOLEAN | success（当前请求是否成功） |
-| errorCode | INTEGER | error code（错误码） |
-| errorMsg | STRING | error message（错误信息） |
-| result | OBJECT | 业务结果对象（见下表） |
+| success | BOOLEAN | 当前 Temu 请求是否成功。 |
+| errorCode | INTEGER | Temu 业务错误码，见下方业务规则。 |
+| errorMsg | STRING | Temu 业务错误信息，保留实际返回值。 |
+| result | OBJECT | 业务结果对象，结构见下方。 |
 
-### `data[]`
+#### `result.data[]`
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| parentAfterSalesSn | STRING | Parent after-sales order number（父售后单号） |
-| afterSalesStatusGroup | INTEGER | The after-sales order status group（售后状态组），见下表 |
-| operateExpireTimeMs | LONG | Operation expiration time in milliseconds（可操作截止时间，毫秒时间戳） |
-| availableOperateList | INTEGER[] | List of available operations for the seller（卖家可执行操作列表，元素为操作码） |
-| returnDeliveryType | INTEGER | Return delivery type（退货配送/交付方式类型） |
-| parentAfterSalesStatus | INTEGER | Current parent after-sales status（父售后单当前状态码） |
-| parentOrderSn | STRING | Parent order number（父订单号） |
-| updateAt | INTEGER | Last update time in seconds（最后更新时间，秒级 UNIX 时间戳） |
-| afterSalesType | INTEGER | After-sales type（售后类型） |
-| createAt | INTEGER | Creation time in seconds（创建时间，秒级 UNIX 时间戳） |
+| parentAfterSalesSn | STRING | 父售后单号。 |
+| afterSalesStatusGroup | INTEGER | 售后状态组，入参和出参使用相同枚举，见下方 afterSalesStatusGroup 枚举表。 |
+| operateExpireTimeMs | LONG | 卖家可操作截止时间，毫秒时间戳。 |
+| availableOperateList | INTEGER[] | 卖家可执行操作码列表。 |
+| returnDeliveryType | INTEGER | 退货配送或交付方式类型。 |
+| parentAfterSalesStatus | INTEGER | 父售后单当前状态码。 |
+| parentOrderSn | STRING | 父订单号。 |
+| updateAt | INTEGER | 最后更新时间，秒级 UNIX 时间戳。 |
+| afterSalesType | INTEGER | 售后类型。 |
+| createAt | INTEGER | 创建时间，秒级 UNIX 时间戳。 |
 
-#### `afterSalesStatusGroup`（入参筛选 / 出参）
+##### `afterSalesStatusGroup`（入参筛选 / 出参）
 
 | 值 | 说明 |
 |----|------|
-| `1` | Pending |
-| `2` | Requested |
-| `3` | Package Shipped |
-| `4` | Platform Reviewing |
-| `5` | Refunded |
-| `6` | Rejected |
-| `7` | Cancelled |
+| `1` | Pending（待处理） |
+| `2` | Requested（已申请） |
+| `3` | Package Shipped（包裹已寄出） |
+| `4` | Platform Reviewing（平台审核中） |
+| `5` | Refunded（已退款） |
+| `6` | Rejected（已拒绝） |
+| `7` | Cancelled（已取消） |
 
----
+#### result 分页结构
 
-## Error Code（Partner 表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| total | LONG | 符合查询的记录总数。 |
+| pageNumber | INTEGER | 响应当前页码，对应请求 pageNo。 |
+| data | OBJECT[] | 当前页售后单行，元素结构见上方 data[] 表。 |
 
-| errorCode | errorMsg | Error SOP / 处理建议 |
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+依据 Temu success、errorCode、errorMsg 与业务结果解释当前售后状态；修正参数或状态后是否再请求，遵守成本约束。
+
+| errorCode | errorMsg | 处理建议 |
 |-----------|----------|----------------------|
 | 130010001 | The parameter is illegal. Please check if the input parameter meets the regulations. | 见 Partner 文档；修正入参或售后状态后重试 |
 
----
-
-## 脚本
+### curl 示例
 
 ```bash
-export LINKFOXAGENT_API_KEY="<key>"
-python scripts/eu_returns_refunds_aftersales_parentaftersales_list_get.py '{"accessToken": "TOKEN", "tokenPurpose": "order-shipping", "request": {"pageNo": 1, "pageSize": 20, "afterSalesStatusGroup": 1, "createAtStart": 1714521600, "createAtEnd": 1714608000}}'
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "eu",
+  "managementType": "semi-managed",
+  "accessToken": "TOKEN",
+  "type": "bg.aftersales.parentaftersales.list.get",
+  "params": {
+    "request": {
+      "pageNo": 1,
+      "pageSize": 20,
+      "afterSalesStatusGroup": 1,
+      "createAtStart": 1714521600,
+      "createAtEnd": 1714608000
+    }
+  }
+}'
 ```
 
-**典型流程：** 退货退款流程入口：按时间窗与 **`afterSalesStatusGroup`** 分页拉取父售后单 → 用 **`parentAfterSalesSn`** 调详情/子单列表/退货物流等接口。
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-returns-refunds-eu",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

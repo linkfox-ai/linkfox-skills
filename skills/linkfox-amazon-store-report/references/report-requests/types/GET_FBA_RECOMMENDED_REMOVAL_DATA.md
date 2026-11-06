@@ -1,19 +1,19 @@
 # `GET_FBA_RECOMMENDED_REMOVAL_DATA`
 
-> **分类**：6.5 FBA Removals  
-> **说明**：Recommended removal inventory  
-> **可用范围**：Seller only
+> **分类**：6.5 FBA 移除  
+> **说明**：建议移除的库存  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-recommended-removal-report)（章节：**FBA Recommended Removal Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Availability**：FBA sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **要点**：Identifies sellable items that will be 365 days old or older during the next Long-Term Storage cleanup event, if the report is generated within six weeks of the cleanup event date. This report includes both sellable and unsellable items. Content updated daily.
+- **可用范围**：FBA 卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **要点**：若在长期仓储清理日前六周内生成，识别下一次清理时库龄将达到 365 天或以上的可售商品；报告同时包含可售与不可售商品，每日更新。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-recommended-removal-report>
 

@@ -1,155 +1,122 @@
 ---
 name: linkfox-amazon-store-external-fulfillment
-description: 亚马逊 External Fulfillment 外部履约管理。用于 Seller Flex、FBA Onsite、Easy Ship、Self Ship、MFN Self Delivery 等项目中的按 location 库存查询或更新、履约货件处理、包裹与状态更新、配送选项、面单、发票和退货查询。用户提到 External Fulfillment、SmartConnect、Seller Flex、FBA Onsite、Easy Ship、Self Ship、batchInventory、location 库存、外部履约 shipment、EF 面单、EF 发票或 EF 退货时触发。即使未明确说“External Fulfillment API”，只要需求围绕这些外部履约项目的库存、货件、包裹或退货，也应触发此技能；普通卖家订单使用 linkfox-amazon-store-orders，FBA/MCF 使用对应 fulfillment 技能。
+description: 管理亚马逊 External Fulfillment 外部履约，支持按 location 查询或发布库存、处理货件、维护包裹和状态、查询配送选项、生成面单与发票及查询退货。适用于 Seller Flex、FBA Onsite、Multi Seller Flex、Easy Ship、Self Ship、MFN Self Delivery、Amazon Pharmacy 等已开通项目及 SmartConnect 场景；不适用于普通卖家订单、FBA 或 MCF 履约。
 ---
+# Amazon 店铺外部履约管理
 
-# Amazon 店铺 External Fulfillment
+## 适用范围
 
-本 skill 与 **`linkfox-amazon-store-auth`** 等同属 **Amazon Store** 系列：依赖 **`linkfox-amazon-store-auth`** 选店（`sellerId`+`region`）；直接 **`POST /spApi/developerProxy`** 传入 `sellerId`+`region`，由服务端解析 token（勿传 `amzAccessToken`，除非兼容旧调用）。转发上游 **`GET` / `POST` / `PUT` / `PATCH`**。
+### 适用
 
-适用渠道：Seller Flex / FBA Onsite、Multi Seller Flex、Easy Ship、Self Ship、MFN Self Delivery、Amazon Pharmacy 等（以商家 allowlist 与角色为准）。
+管理已授权亚马逊店铺 External Fulfillment 项目的库存查询与绝对库存发布、货件处理、包裹维护、配送选项、面单、发票及退货查询。
 
-## 调用方式
+**场景速查**
 
-- **API 端点**：`POST /spApi/developerProxy`（完整参数/响应见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；失败/空结果不得自动翻页或连续试探；需要继续时先向用户说明会产生额外消耗。
+| 用户表达 | 查询场景 |
+|---|---|
+| 查仓库 SKU 库存，或同步库存 | 按 location 查询或发布库存。 |
+| 查看并确认外部履约货件 | 查询货件列表、单件详情并按需求确认或拒绝。 |
+| 为货件创建包裹、更新配送状态 | 创建或修改包裹及 Self Delivery 状态。 |
+| 查询配送方案、生成面单和发票 | 按渠道准备配送与单据。 |
+| 查看 EF 退货 | 查询退货列表或单个退货详情。 |
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-external-fulfillment-<timestamp>.json`
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要
-- 加 `--inline` 强制全量打印（同样落盘）
+### 边界
 
-**读数据建议**：先看摘要；需要具体字段时用 `jq` / `ConvertFrom-Json` 从落盘文件抽取。
+普通卖家订单使用 `linkfox-amazon-store-orders`；Feed 改库存使用 `linkfox-amazon-store-feeds`，库存报告使用 `linkfox-amazon-store-report`；FBA / MCF 使用对应履约技能。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 接口清单
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## 官方参考索引
-
-| 模块 | 能力 | 文档 |
-|------|------|------|
-| Inventory | batchInventory | [batchInventory](https://developer-docs.amazon.com/sp-api/reference/batchinventory) |
-| Shipping | getShipments | [getShipments](https://developer-docs.amazon.com/sp-api/reference/getshipments-1) |
-| Shipping | getShipment | [getShipment](https://developer-docs.amazon.com/sp-api/reference/getshipment-1) |
-| Shipping | processShipment | [processShipment](https://developer-docs.amazon.com/sp-api/reference/processshipment) |
-| Shipping | createPackages | [createPackages](https://developer-docs.amazon.com/sp-api/reference/createpackages) |
-| Shipping | updatePackage | [updatePackage](https://developer-docs.amazon.com/sp-api/reference/updatepackage) |
-| Shipping | updatePackageStatus | [updatePackageStatus](https://developer-docs.amazon.com/sp-api/reference/updatepackagestatus) |
-| Shipping | retrieveShippingOptions | [retrieveShippingOptions](https://developer-docs.amazon.com/sp-api/reference/retrieveshippingoptions) |
-| Shipping | generateInvoice | [generateInvoice](https://developer-docs.amazon.com/sp-api/reference/generateinvoice) |
-| Shipping | retrieveInvoice | [retrieveInvoice](https://developer-docs.amazon.com/sp-api/reference/retrieveinvoice) |
-| Shipping | generateShipLabels | [generateShipLabels](https://developer-docs.amazon.com/sp-api/reference/generateshiplabels) |
-| Returns | listReturns | [listReturns](https://developer-docs.amazon.com/sp-api/reference/listreturns) |
-| Returns | getReturn | [getReturn](https://developer-docs.amazon.com/sp-api/reference/getreturn) |
-
----
-
-## Prerequisites（必须先读）
-
-本 skill **依赖** **`linkfox-amazon-store-auth`**。
-
-1. 运行 `python scripts/check_auth_dependency.py`；若 exit code **42** 且 stderr 含 `DEPENDENCY_MISSING:`，请先安装 **`linkfox-amazon-store-auth`**。
-2. **不要**在本 skill 内绕过依赖实现授权或令牌逻辑。
-3. 商家需 **External Fulfillment allowlist**，应用需 **Direct-to-Consumer Shipping (Restricted)** 角色。
-
----
-
-## Current Capabilities（脚本一览）
-
-| 能力 | developerProxy `path`（要点） | 脚本 |
-|------|------------------------------|------|
-| batchInventory | `externalFulfillment/inventory/2024-09-11/inventories`，POST | `post_batch_inventory.py` |
-| getShipments | `externalFulfillment/2024-09-11/shipments` + Query | `get_shipments.py` |
-| getShipment | `.../shipments/{shipmentId}` | `get_shipment.py` |
-| processShipment | `.../shipments/{shipmentId}?operation=`，POST | `process_shipment.py` |
-| createPackages | `.../shipments/{shipmentId}/packages`，POST | `create_packages.py` |
-| updatePackage | `.../shipments/{shipmentId}/packages/{packageId}`，PUT | `update_package.py` |
-| updatePackageStatus | 同上 path，PATCH | `update_package_status.py` |
-| retrieveShippingOptions | `.../shipments/{shipmentId}/shippingOptions` + packageId | `retrieve_shipping_options.py` |
-| generateInvoice | `.../shipments/{shipmentId}/invoice`，POST | `generate_invoice.py` |
-| retrieveInvoice | 同上 path，GET | `retrieve_invoice.py` |
-| generateShipLabels | `.../shipments/{shipmentId}/shipLabels?operation=`，PUT | `generate_ship_labels.py` |
-| listReturns | `externalFulfillment/2024-09-11/returns` + Query | `list_returns.py` |
-| getReturn | `.../returns/{returnId}` | `get_return.py` |
-
-共享逻辑见 **`scripts/_spapi_ef_common.py`**（仅供同目录脚本 import）。
-
----
-
-## Quick Parameters（摘要）
-
-- **batchInventory**：`requests` 1～10 条。简化项：`action`=`fetch`|`update`、`locationId`、`skuId`；update 必填 `quantity`。MFN 单仓常用 `locationId=DEFAULT`；Seller Flex 用 4 位仓码。高级：`useAmazonRequestShape:true` 直传官方 `requests`。
-- **getShipments**：必填 `status`（如 `ACCEPTED`/`CREATED`）；可选 `locationId`、`marketplaceId`、`channelName`、`lastUpdatedAfter/Before`、`maxResults`、`paginationToken`。
-- **processShipment**：`operation`=`CONFIRM`|`REJECT`；REJECT 时可传 `referenceId`/`lineItems` 或 `requestBody`。
-- **createPackages / updatePackage**：包裹尺寸重量与 `packageLineItems` 按官方 schema 放在 `packages` 或 `requestBody`。
-- **updatePackageStatus**：主要用于 Self Delivery；传 `status`/`subStatus`/`reason`。
-- **generateShipLabels**：`operation`=`GENERATE`|`REGENERATE`；可选 `shippingOptionId`、`packageIds`。
-- **listReturns**：可选 `status`（新退货常用 `CREATED`）、`returnLocationId`、时间窗、`nextToken`。
-
-典型履约流程：`getShipments` → `processShipment(CONFIRM)` → `createPackages` → `retrieveShippingOptions` → `generateInvoice` → `generateShipLabels` →（Self Delivery）`updatePackageStatus`。
-
----
-
-## Scripts
-
-```bash
-export LINKFOXAGENT_API_KEY="<your-key>"
-
-python scripts/post_batch_inventory.py '{"sellerId":"A1...","region":"NA","requests":[{"action":"fetch","locationId":"DEFAULT","skuId":"SKU-1","marketplaceAttributes":{"marketplaceId":"ATVPDKIKX0DER","channelName":"MFN"}}]}'
-
-python scripts/get_shipments.py '{"sellerId":"A1...","region":"NA","status":"ACCEPTED","locationId":"ABCD"}'
-
-python scripts/process_shipment.py '{"sellerId":"A1...","region":"NA","shipmentId":"...","operation":"CONFIRM"}'
-```
-
----
-
-## Display Rules
-
-1. 先看网关 **`developerProxy.errcode` / `httpStatus`**，再解析脚本附加字段（如 **`batchInventory`**、**`shipments`**、**`invoice`**）。
-2. **batchInventory** 成功时常为 **207** Multi-Status；逐条看 `responses[].status`。
-3. 多数写操作成功可能为 **204**（无 body）；stdout 会标 `success: true`。
-4. 发票/面单文档多为 Base64 或预签名 URL，勿把整段大 base64 反复贴进上下文。
-5. **路径白名单**：若返回 **1005**，需后端放行 **`externalFulfillment/`** 前缀。
-
----
-
-## Important Limitations
-
-- 权限：**Direct-to-Consumer Shipping (Restricted)**；商家需 allowlist。
-- **写库存为绝对值发布**，非增量；只同步有变化的 SKU；SKU 特殊字符需 URL 编码（脚本已处理简化入参）。
-- 与 **`linkfox-amazon-store-orders`**（普通 Orders）、**`linkfox-amazon-store-feeds`**（Feed 改库存）、**`linkfox-amazon-store-report`**（库存报告）边界不同，勿混用。
-- Seller Flex 上 `retrieveShippingOptions` 常返回空；Easy Ship 全球多数站点可能不支持 `generateInvoice`（印度除外）。
-- 返回结构以 Amazon schema 为准；详见 **`references/api.md`**。
-
-## Amazon SP-API 接口保护与重试指引
-
-同一店铺连续收到 Amazon SP-API 的 400、403、404 或 429 时，网关会返回 450、453、454 或 459 并短暂冷却。这些自定义状态码不是 Amazon 原生状态，也不表示封号；目的是避免持续异常或高频调用扩大店铺风险。
-
-| 状态与 message | 范围 | 触发与冷却 | 处理 |
+| 接口 | 端点 | 对应脚本 | 说明 |
 |---|---|---|---|
-| `450`：`400，请求异常，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：20 分钟 | 停止原参数重试，检查必填字段、marketplace、ID、日期和请求体 |
-| `453`：`403，店铺未授权，请先授权` | 店铺全部接口 | 60 秒内超过 2 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 停止该店铺调用，检查授权、权限、店铺归属和区域 |
-| `454`：`404，资源不存在，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 确认资源 ID、所属店铺/站点、资源状态和接口路径 |
-| `459`：`429限流中，请降低频率` | 店铺+接口 | 首次：15 秒；2 分钟内超过 2 次：30 秒；3 分钟内超过 4 次：2 分钟 | 降低并发、分页和轮询频率并逐级退避 |
+| 按 location 查询或发布库存（`batchInventory`） | POST `/spApi/developerProxy` -> POST path：`externalFulfillment/inventory/2024-09-11/inventories` | `scripts/post_batch_inventory.py` | 按 location 查询或发布库存。 |
+| 查询货件列表（`getShipments`） | POST `/spApi/developerProxy` -> GET path：`externalFulfillment/2024-09-11/shipments` | `scripts/get_shipments.py` | 查询货件列表。 |
+| 查询单个货件（`getShipment`） | POST `/spApi/developerProxy` -> GET path：`externalFulfillment/2024-09-11/shipments/{shipmentId}` | `scripts/get_shipment.py` | 查询单个货件。 |
+| 确认或拒绝货件（`processShipment`） | POST `/spApi/developerProxy` -> POST path：`externalFulfillment/2024-09-11/shipments/{shipmentId}?operation={operation}` | `scripts/process_shipment.py` | 确认或拒绝货件。 |
+| 创建包裹（`createPackages`） | POST `/spApi/developerProxy` -> POST path：`externalFulfillment/2024-09-11/shipments/{shipmentId}/packages` | `scripts/create_packages.py` | 创建包裹。 |
+| 更新包裹（`updatePackage`） | POST `/spApi/developerProxy` -> PUT path：`externalFulfillment/2024-09-11/shipments/{shipmentId}/packages/{packageId}` | `scripts/update_package.py` | 更新包裹。 |
+| 更新包裹状态（`updatePackageStatus`） | POST `/spApi/developerProxy` -> PATCH path：`externalFulfillment/2024-09-11/shipments/{shipmentId}/packages/{packageId}` | `scripts/update_package_status.py` | 更新包裹状态。 |
+| 查询配送选项（`retrieveShippingOptions`） | POST `/spApi/developerProxy` -> GET path：`externalFulfillment/2024-09-11/shipments/{shipmentId}/shippingOptions?packageId={packageId}` | `scripts/retrieve_shipping_options.py` | 查询配送选项。 |
+| 生成发票（`generateInvoice`） | POST `/spApi/developerProxy` -> POST path：`externalFulfillment/2024-09-11/shipments/{shipmentId}/invoice` | `scripts/generate_invoice.py` | 生成发票。 |
+| 读取发票（`retrieveInvoice`） | POST `/spApi/developerProxy` -> GET path：`externalFulfillment/2024-09-11/shipments/{shipmentId}/invoice` | `scripts/retrieve_invoice.py` | 读取发票。 |
+| 生成或重新生成面单（`generateShipLabels`） | POST `/spApi/developerProxy` -> PUT path：`externalFulfillment/2024-09-11/shipments/{shipmentId}/shipLabels?operation={operation}` | `scripts/generate_ship_labels.py` | 生成或重新生成面单。 |
+| 查询退货列表（`listReturns`） | POST `/spApi/developerProxy` -> GET path：`externalFulfillment/2024-09-11/returns` | `scripts/list_returns.py` | 查询退货列表。 |
+| 查询单个退货（`getReturn`） | POST `/spApi/developerProxy` -> GET path：`externalFulfillment/2024-09-11/returns/{returnId}` | `scripts/get_return.py` | 查询单个退货。 |
 
-- 立即停止自动或并发重试，不得通过换脚本或重复创建任务绕过保护；优先遵循 `retryAfter`、`blockedUntil`，没有时按表中时长说明。
-- 450/453/454 必须先修正参数、授权或资源标识，冷却后最多谨慎重试一次；再次触发则停止调用。453 期间停止该店铺全部 SP-API。
-- 保留已有 `reportId`、`feedId` 等任务 ID；写操作结果不确定时先查询状态，不直接重放。
-- 向用户先说明店铺保护，再给原因、处理和等待时间。可回复：“为保护您的亚马逊店铺安全，检测到 Amazon SP-API 连续返回{原因}，当前已进入短暂保护。请先{处理动作}，预计{等待时间}后再试；这不代表封号，也不是套餐或算力限制。”不要只说“LinkFox 限流”或“服务器繁忙”。
+## 前置条件
 
-## 算力消耗规则
+**先完成店铺授权并确定操作目标**：依赖 `linkfox-amazon-store-auth` 选店与授权。先运行 `python scripts/check_auth_dependency.py`；依赖缺失时先安装，不在本技能内另行实现授权或令牌逻辑。确认用户指定的店铺、渠道、仓库及货件或退货；角色、allowlist 和依赖检测约定见 `references/api.md`。
 
-不消耗算力（以网关实际计费为准；若网关计费则按算力规则处理）。
+## 履约流程
 
-**Feedback：** 见 `references/api.md`，`skillName`：`linkfox-amazon-store-external-fulfillment`。
+1. 检查授权依赖并选定店铺，明确本次是库存、货件、包裹、单据还是退货任务。
+2. 典型履约顺序：查询货件 → 确认货件 → 创建包裹 → 查询配送选项 → 生成发票 → 生成面单 → 更新 Self Delivery 包裹状态；按用户任务与渠道能力选择所需步骤。
+3. 查询当前状态后再处理拒绝、修改或重新生成；写入结果不确定时先查状态，不直接重放请求。保留已取得的任务和资源标识。
+4. 按接口参考判定网关与上游结果，展示本次完成内容和分页范围；失败或空结果停止连续试探。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：同一会话、同一参数组合默认只调用一次；本技能业务脚本不读取或写入响应缓存，相同参数再次运行仍会发起请求。失败或空结果时，不得自动翻页或修改参数连续试探；需要继续时，先说明原因和后续查询范围。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-external-fulfillment-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、可用的顶层计数或状态、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+不消耗算力 （限时）（以网关实际计费为准；若网关计费则按算力规则处理）。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **响应缓存**：本技能所有业务脚本始终使用 `--no-cache`，不读取或写入响应缓存。相同参数再次运行仍会发起请求，执行前按调用约束判断是否必要。
+- **渠道概念**：External Fulfillment 覆盖 Seller Flex / FBA Onsite、Multi Seller Flex、Easy Ship、Self Ship、MFN Self Delivery、Amazon Pharmacy 等；具体可用能力见接口参考。
+- **展示结果**：先说明店铺和渠道，用表格展示库存、货件、包裹或退货及操作结果，保留单据位置与可用标识。
+- **区分多项结果**：批次请求逐条展示成功与失败；无正文成功也应说明完成的动作，判断依据见 `references/api.md`。
+- **控制大文档输出**：发票和面单可能包含 Base64 或预签名 URL，避免反复把整段 Base64 粘贴到上下文；按需从落盘文件提取。
+- **解释店铺保护**：先说明正在保护店铺，再说明原因、处理动作和等待时间，避免只说服务器繁忙；具体冷却规则见 `references/spapi-protection.md`。
+
+## 使用示例
+
+### 查询仓库库存
+
+用户：查这个 location 下指定 SKU 的库存。
+
+确认店铺与渠道，按接口参考准备库存查询，展示每个 SKU 的返回结果。
+
+### 处理货件与包裹
+
+用户：确认这些 EF 货件并按我提供的包裹资料生成面单。
+
+读取货件当前状态，按用户指定范围依次处理确认、包裹、配送及面单；按渠道能力判断是否需要发票。
+
+### 查看退货
+
+用户：查看新退货，并展开其中一个退货详情。
+
+查询列表，再读取用户指定的退货，展示状态和逆向物流信息。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*更多跨境 skill：[LinkFox Skills](https://skill.linkfox.com/)*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,19 +1,19 @@
 # `GET_FBA_STORAGE_FEE_CHARGES_DATA`
 
-> **分类**：6.3 FBA Fees & Charges  
-> **说明**：FBA storage fee charges  
-> **可用范围**：Seller only
+> **分类**：6.3 FBA 费用  
+> **说明**：FBA 仓储收费  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-storage-fees-report)（章节：**FBA Storage Fees Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Availability**：FBA sellers
-- **Requested/scheduled**：This report can be requested or scheduled.
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **要点**：Contains estimated monthly inventory storage fees for each ASIN of a seller's inventory in Amazon fulfillment centers.
+- **可用范围**：FBA 卖家
+- **按需/计划**：本报告可按需请求或计划生成。
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **要点**：按卖家仓库库存的每个 ASIN 提供预计月度仓储费用。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-storage-fees-report>
 

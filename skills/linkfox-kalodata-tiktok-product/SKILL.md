@@ -1,189 +1,110 @@
 ---
 name: linkfox-kalodata-tiktok-product
-description: 通过kalodata数据查询TikTok电商商品排行榜并查询指定商品的详细数据，支持按地区、货币、语言与日期范围查看高排名/热销商品，并可用productId获取价格区间、销量、销售额、佣金率、上下架时间及所属店铺。当用户提到TikTok商品榜单、TikTok商品排行、TikTok热销榜、TikTok爆品排行、TikTok选品榜单、kalodata商品榜、TikTok商品详情、TikTok商品资料、商品价格、商品销量、TikTok product ranking, TikTok bestseller chart, TikTok top products, kalodata product rank, TikTok product detail, kalodata product detail, product analytics时触发此技能。即使用户未明确提及"kalodata"，只要其需求涉及查看TikTok平台的商品排行榜或某个TikTok商品的详细数据，也应触发此技能。
+description: 通过 Kalodata 浏览 TikTok Shop 商品榜单并查询单个商品详情，支持按市场、货币、语言和时间范围研究热销商品、价格、销量、销售额、佣金率及所属店铺。适用于 TikTok 商品排行、爆品发现和指定商品分析；不适用于关键词找品、视频或达人或店铺或直播榜单、其他电商平台、广告管理或内容创作。
 ---
+# Kalodata TikTok 商品榜单与详情
 
-# Kalodata - TikTok Product Search & Detail
+## 适用范围
 
-This skill supports a two-step TikTok Shop product workflow via the Kalodata data source:
+### 适用
 
-1. Browse TikTok Shop product leaderboards to discover top-ranked and best-selling products.
-2. Fetch one product's full detail by `productId`.
+浏览 TikTok Shop 热销商品榜单，或查询已经选定的单个商品资料与经营指标。用户未明确提及 Kalodata，但需要 TikTok 商品榜单或详情时同样适用。
 
-Use the ranking endpoint when the user wants best-seller rankings, hot products, or product discovery. Use the detail endpoint when the user already has a `productId` or has selected one product from a ranking result.
+**场景速查**
 
-## Core Concepts
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| TikTok 商品榜单、商品排行、热销榜、爆品排行、选品榜单 | 浏览商品榜单并发现候选。 |
+| kalodata 商品榜、kaloda 排行、TikTok product ranking、bestseller chart、top products | 查看指定市场和统计区间的排行。 |
+| TikTok 商品详情、商品资料、商品价格、商品销量 | 查询已选商品的价格与经营表现。 |
+| kalodata product rank/detail、product analytics | 按商品目标选择榜单或单品详情。 |
 
-The product ranking endpoint returns a paginated leaderboard filtered by `region`, `dateRange`, `currency`, `language`, and optional `sortField`. Each product row includes identity, price, sales volume, revenue (split across video, live, and showcase channels), revenue growth rate, commission rate, and launch date. Results are paginated with `pageNumber` (1-5) and `pageSize` (5-100).
+### 边界
 
-The product detail endpoint fetches **one** TikTok Shop product by `productId`. It returns the product's price range, sales, revenue (with channel split), commission rate, launch date, review count, category hierarchy, owning shop, and associated video/live/creator counts. The `productId` usually comes from the ranking response field `product_id`.
+视频、达人、店铺和直播的榜单或详情使用对应 Kalodata 实体技能。关键词找品、Amazon / Shopify / 1688 调研、广告活动管理和内容创作不属于本技能范围。
 
-Both endpoints may reflect a statistical delay (T+1). See `references/api.md` for full request and response details.
+## 接口清单
 
-## Data Fields
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 商品榜单 | POST `/kalodata/product/rank` | `scripts/kalodata_product_search.py` | 浏览指定市场与区间的商品排行。 |
+| 商品详情 | POST `/kalodata/product/detail` | `scripts/kalodata_product_detail.py` | 查询指定商品的资料和经营指标。 |
 
-**Ranking rows** include:
+## 前置条件
 
-| Field | Description |
-|-------|-------------|
-| product_id | Product unique ID; pass this as `productId` for detail lookup |
-| product_name | Product title |
-| unit_price | Price per unit (currency follows region, e.g. USD for US) |
-| sales_volumn | Units sold (field is spelled `volumn`) |
-| revenue | Total revenue / GMV; equals video + live + showcase revenue |
-| video_revenue | Revenue from the video channel |
-| live_revenue | Revenue from the live-stream channel |
-| showcase_revenue | Revenue from the showcase / 橱窗 channel |
-| revenue_growth_rate | Revenue growth rate (%) |
-| commission_rate | Commission rate as a direct percentage (25.0 = 25%) |
-| launch_date | Product launch date (YYYY-MM-DD) |
+明确用户要浏览榜单还是查询单品。市场和统计区间按用户需求传入，未指定时可省略并沿用服务端默认，不要求为可选参数额外确认。查询详情前准备商品编号；完整参数与限制见 `references/api.md`。
 
-**Detail rows** additionally include:
+## 商品发现与详情流程
 
-| Field | Description |
-|-------|-------------|
-| product_region | Product market region (e.g. `us`) |
-| product_shop_id | ID of the shop this product belongs to |
-| pri_cate_id / sec_cate_id / ter_cate_id | Primary / secondary / tertiary category IDs |
-| min_price / max_price | Minimum / maximum price in the requested currency |
-| product_review_count | Number of product reviews |
-| delivery_type | Delivery type (e.g. `local`) |
-| video_number / live_number / creator_number | Associated video / live / creator counts |
-| shopping_mall_revenue | Revenue from the shopping mall (商城) channel |
+1. 用户需要热销榜、爆品排行或商品发现时，先浏览商品榜单。
+2. 用户已有商品编号或从榜单选定商品时，查询该商品详情；从榜单到详情沿用相同市场、统计区间和货币口径。具体字段映射见 `references/api.md`。
+3. 先展示已取得的结果，再按用户要求继续深查。分页、空结果及有限重试按接口定义执行，并遵守成本约束。
 
-> Detail revenue channel split: `revenue` = `video_revenue` + `live_revenue` + `shopping_mall_revenue`.
+## 执行方式
 
-## Parameter Guide
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：商品榜单与商品详情每次接口调用各消耗 7.0 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**Product ranking (`/kalodata/product/rank`)**
+### 输出策略
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| region | string | No | TikTok Shop market region code, e.g. `US`. Default `US` when unspecified |
-| dateRange | string | No | Relative time window, e.g. `last7Day`, `last30Day` |
-| currency | string | No | Currency for monetary metrics, e.g. `USD` |
-| language | string | No | Response language, e.g. `zh-CN`, `en-US` |
-| category_ids | array<string> | No | Category ID list filter |
-| shop_id | string | No | Shop ID filter |
-| creator_id | string | No | Creator ID filter |
-| video_id | string | No | Return products associated with the specified video |
-| livestream_id | string | No | Return products associated with the specified livestream |
-| revenue_range | string | No | Revenue / GMV range filter |
-| is_affiliate | string | No | Affiliate filter: `PUBLIC_PLAN` or `NON_AFFILIATE` |
-| commission_rate | number | No | Affiliate commission rate, e.g. `0.15` |
-| is_tts_product | integer | No | Fully managed product filter: `1` or `0` |
-| unit_price_range | string | No | Product unit-price range filter |
-| sortField | object | No | Sorting specification; omit for default ranking |
-| pageNumber | integer | No | Page number, 1-5 |
-| pageSize | integer | No | Page size, 5-100 |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-product-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 格式化后的响应 JSON 不超过 8000 个 UTF-8 字节：保存后，将完整 JSON 打印到标准输出。
+- 格式化后的响应 JSON 超过 8000 个 UTF-8 字节：保存后，标准输出仅展示摘要，包括顶层字段、状态与计费字段（如 `errcode`、`errmsg`、`costToken`）、最大列表字段的长度和前 3 条样本（有数据时）。榜单返回条数按 `data.length` 判断，不返回 `total` 或总页数。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**Product detail (`/kalodata/product/detail`)**
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| productId | string | Yes | TikTok product ID from ranking field `product_id` (string to preserve precision) |
-| region | string | No | Market region code, e.g. `US` |
-| dateRange | string | No | Time window, e.g. `last7Day`, `last30Day` |
-| language | string | No | Response language, e.g. `zh-CN`, `en-US` |
-| currency | string | No | Currency for monetary metrics, e.g. `USD` |
+## 执行规则
 
-## 调用方式
+### 算力消耗预估
 
-- **API 端点**：`POST /kalodata/product/rank` 或 `POST /kalodata/product/detail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/kalodata_product_search.py '<JSON 参数>' [--inline]` 或 `python scripts/kalodata_product_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+商品榜单与商品详情各 7.0 算力 / 次；先查榜单再查一个商品详情，预估共 14.0 算力。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-product-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## 解决认证和算力问题
+### 解决认证和算力问题
 
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### 异常情况
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 约束与建议
 
-## Usage Examples
+- **理解榜单与详情**：榜单用于发现商品，详情用于观察选定商品；数据可能有 T+1 统计延迟。
+- **展示榜单**：用表格展示商品名称、编号、价格、销量、销售额及渠道拆分、增长率、佣金率和上架日期；除用户明确要求受支持排序外，保留返回顺序。
+- **展示详情**：按商品身份、价格区间、销量、销售额及渠道拆分、佣金、评论数、上架日期、配送方式、类目层级、所属店铺和关联视频 / 直播 / 达人数分组展示。
+- **注明统计口径**：展示货币指标时同时标明 `dateRange`、`region`、`currency`；准确保留商品编号，避免大整数精度丢失。
+- **解释百分比与收入**：佣金率和增长率加 `%`；佣金率为直接百分比而非基点。榜单与详情的第三个收入渠道不同，按 `references/api.md` 的字段定义展示，不混用。
+- **按原字段取值**：销量使用 `sales_volumn`，不要改写接口字段名。返回数量、空结果和错误按 `references/api.md` 解释，不补造缺失指标。
+- **脚本行为**：详情使用 `scripts/kalodata_product_detail.py`，命令格式与榜单一致。两脚本提供缓存、会话归档和摘要输出，CLI 及缓存约定见接口定义。
 
-**1. Browse top TikTok products in the US (last 7 days)**
+## 使用示例
+
+### 浏览美国近七天热销榜
+
 ```json
 {"region":"US","dateRange":"last7Day","pageSize":20,"pageNumber":1,"currency":"USD"}
 ```
 
-**2. Fetch one product's detail**
+### 查询选定商品详情
+
 ```json
 {"productId":"1729508370969629931","region":"US","dateRange":"last7Day","currency":"USD"}
 ```
 
-**3. Discovery-to-detail workflow**
-```text
-Run kalodata_product_search.py first, choose a row's product_id, then pass that value as productId to kalodata_product_detail.py.
-```
+### 从榜单继续深查
 
-## Display Rules
+先运行商品榜单脚本，展示候选；用户选定商品后，将该行的 `product_id` 作为详情的 `productId`，沿用统计口径并展示单品档案。
 
-1. Present ranking results in a table with product name, product ID, price, sales volume, revenue (with channel split), growth rate, commission rate, and launch date.
-2. Present detail results as one grouped profile: identity, price range, sales, revenue (channel split), commission, category hierarchy, owning shop, and associated video/live/creator counts.
-3. Always label `dateRange`, `region`, and `currency` when showing monetary metrics.
-4. Use the exact field name `sales_volumn`.
-5. `commission_rate` is a direct percentage (25.0 = 25%), not basis points — show with a % sign.
-6. `revenue_growth_rate` is a percentage — show with a % sign.
-7. Revenue channel split: ranking `revenue` = `video_revenue` + `live_revenue` + `showcase_revenue`; detail `revenue` = `video_revenue` + `live_revenue` + `shopping_mall_revenue`. Present the split when useful.
-8. Preserve ranking order unless the user explicitly requests a supported `sortField`.
+## 使用反馈
 
-## Important Limitations
-
-- Ranking is not keyword search; it browses leaderboards by region and time window.
-- Detail requires `productId`; it cannot find a product by name alone. Obtain `productId` from the ranking `product_id` first.
-- The ranking response does not include `total` or page count; result count is `data.length`.
-- `pageNumber` is limited to 1-5 and `pageSize` is limited to 5-100.
-- A valid-but-empty request (e.g. an unsupported `region`) may return `errcode 200` with no `data` field and still be billed.
-- Transient upstream errors may appear as `errcode 501` with a Kalodata HTTP 5xx message (e.g. 522/554). Retry the same parameters once or twice; do not change parameters automatically.
-- Use the matching Kalodata video/creator/shop/livestream skills for non-product entities.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- TikTok product ranking or product detail lookup:
-
-| User Says | Scenario |
-|-----------|----------|
-| "TikTok商品榜单", "TikTok商品排行" | Product ranking lookup |
-| "TikTok热销榜", "TikTok爆品排行", "TikTok选品榜单" | Best-seller / hot product ranking |
-| "kalodata商品榜", "kaloda排行" | Direct data source reference |
-| "TikTok商品详情", "TikTok商品资料" | Single product detail lookup |
-| "商品价格", "商品销量" | Product price / sales |
-| "kalodata product rank/detail", "product analytics" | Direct product detail reference |
-
-**Not applicable** -- Needs beyond TikTok products:
-
-- TikTok video / creator / shop / livestream rankings or details
-- Keyword-based product search
-- Amazon / Shopify / 1688 product research (use the platform-specific skills)
-- TikTok advertising / ad campaign management or content creation
-
-## 算力消耗规则
-
-每次调用消耗 7.0 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

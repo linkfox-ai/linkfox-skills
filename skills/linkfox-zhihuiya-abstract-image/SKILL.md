@@ -1,126 +1,100 @@
 ---
 name: linkfox-zhihuiya-abstract-image
-description: 通过专利ID或公开号从智慧芽专利数据库获取专利摘要附图。当用户提到专利摘要附图、专利图纸、专利示意图、专利图片、摘要附图检索、专利图片查询、patent abstract images, patent drawings, patent illustrations, PatSnap, abstract image lookup时触发此技能。即使用户未明确说"摘要附图"，只要其需要查看专利文件中的图纸或示意图，也应触发此技能。
+description: 通过专利 ID 或公开公告号从智慧芽（PatSnap）获取单件或批量专利摘要附图，展示代表性图纸、示意图及图片下载路径。适用于专利摘要附图检索、专利图片查询和已知专利的图示查看；不适用于全文或权利要求分析、关键词或分类检索、法律状态、专利族、引用、现有技术、估值或侵权分析。
 ---
 
-# Zhihuiya Patent Abstract Image
+# 智慧芽专利摘要附图
 
-This skill guides you on how to retrieve abstract images (drawings) from the Zhihuiya patent database, helping users quickly obtain the illustrative figures associated with specific patents.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Abstract images (abstract drawings) are the representative figures attached to a patent document's abstract section. They provide a quick visual overview of the invention. This tool queries the Zhihuiya patent database and returns download paths for these images.
+用户已有专利标识，希望查看对应的专利摘要附图或获取图片下载路径时，使用本技能，无需明确提及智慧芽。
 
-**Lookup logic**: You must provide at least one of two identifiers -- a patent ID or a publication number. If both are provided, patent ID takes priority. You can query up to 100 patents in a single request by separating values with commas.
+**场景速查**
 
-## Parameter Guide
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 看看这件专利的摘要附图 | 单件专利图片查询。 |
+| 获取这些专利的图纸或示意图 | 批量获取代表性摘要附图。 |
+| 这件专利的图长什么样 | 展示已知专利的摘要附图。 |
+| 给我这个公开号的专利图片下载路径 | 按公开公告号查询。 |
+| 我有专利 ID，帮我找附图 | 按内部专利标识查询。 |
 
-| Parameter | API Name | Required | Description | Example |
-|-----------|----------|----------|-------------|---------|
-| Patent ID | patentId | Conditionally (one of the two must be provided) | Internal patent identifier; multiple values separated by commas, max 100 | 5e6f7a8b9c |
-| Publication Number | patentNumber | Conditionally (one of the two must be provided) | Patent publication/announcement number; multiple values separated by commas, max 100 | CN115059423A, US11234567B2 |
+## 前置条件
 
-- At least one of `patentId` or `patentNumber` must be supplied.
-- If both are supplied, `patentId` takes precedence.
-- Multiple values are separated by commas (English commas), with an upper limit of 100.
+先取得用户要查询的专利标识。具体标识选择、批量格式和限制见 `references/api.md`；不通过关键词在本技能内发现专利。
 
-## Response Fields
+## 查询流程
 
-| Field | API Name | Description |
-|-------|----------|-------------|
-| Patent ID | patentId | The internal patent identifier |
-| Publication Number | pn | The publication/announcement number |
-| Abstract Drawing Path | abstractDrawingPath | URL path to the abstract image file |
-| Total | total | Total number of records returned |
-| Cost Token | costToken | Tokens consumed by the query |
+1. 确认用户需要的是摘要附图，并收集目标专利标识，按 `references/api.md` 核对请求。
+2. 说明本次按请求次数估算的费用；按用户授权及已确定范围执行查询，同一参数优先复用缓存。
+3. 按接口参考判断响应，展示附图及所属专利；缺图或查询失败时明确说明原因，不自动发起额外查询。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /zhihuiya/abstractImage`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_abstract_image.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_abstract_image.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换专利标识或请求选项连续试探；需要再次请求时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-abstract-image-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-abstract-image-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-**1. Single patent lookup by publication number**
-```
-Retrieve the abstract image for patent CN115059423A.
-```
+预计每次接口请求消耗 3 算力，按请求次数估算；批量返回的记录条数不作为该预估的乘数。拆分成多个请求或额外重新查询时，按新增请求次数累计预估，最终以实际扣除为准。
 
-**2. Multiple patents lookup by publication number**
-```
-Get abstract drawings for patents US11234567B2, EP3456789A1, and CN115059423A.
-```
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**3. Lookup by patent ID**
-```
-Fetch the abstract image for patent ID 5e6f7a8b9c.
-```
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**4. Batch lookup with mixed identifiers**
-```
-I have the following patent IDs: abc123, def456. Please get their abstract images.
-```
+### 解决认证和算力问题
 
-## Display Rules
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-1. **Show the image**: When the response includes an `abstractDrawingPath`, display the image directly using Markdown image syntax so the user can see the drawing inline.
-2. **Patent identification**: Always show the publication number (`pn`) alongside each image so the user knows which patent each drawing belongs to.
-3. **Missing images**: If a patent has no abstract drawing (empty `abstractDrawingPath`), explicitly inform the user that no abstract image is available for that patent.
-4. **Batch results**: When multiple patents are queried, present results in a clear, organized list or table format.
-5. **Error handling**: When a query fails, explain the reason based on the response and suggest the user verify their patent IDs or publication numbers.
-6. **No subjective analysis**: Present the retrieved images and metadata without adding subjective patent analysis or legal interpretations.
-## User Expression & Scenario Quick Reference
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**Applicable** -- Patent abstract image retrieval:
+### 约束与建议
 
-| User Says | Scenario |
-|-----------|----------|
-| "Show me the abstract image for patent XX" | Single patent image lookup |
-| "Get the drawings for these patents" | Batch patent image lookup |
-| "What does the patent figure look like" | Abstract drawing retrieval |
-| "Retrieve patent illustrations for XX" | Image download path retrieval |
-| "I need the abstract drawing for publication number XX" | Lookup by publication number |
+- **摘要附图含义**：摘要附图是专利摘要部分所附的代表性图示，便于快速了解发明的视觉概况；本技能返回这些图像的下载路径，不将其等同于专利全文的全部图纸。
+- **直接展示图像**：有可用附图时，用 Markdown 图片语法展示，例如 `![专利公开公告号](图片下载路径)`，同时提供对应专利公开公告号，避免图片与专利混淆。
+- **明确缺图**：没有可用摘要附图时，明确告知该专利暂无摘要附图，不补造图片或图片地址。
+- **组织批量结果**：用清晰的列表或表格呈现多件专利及其附图，并标注本次返回数量与消耗。
+- **解释查询失败**：根据实际响应解释原因，建议用户核对专利 ID 或公开公告号；后续调用遵守成本约束。
+- **客观呈现**：展示取得的图片和元数据，不附加主观专利分析或法律解读。
 
-**Not applicable** -- Needs beyond abstract image retrieval:
-- Full patent text or claims analysis
-- Patent search by keyword or classification
-- Patent legal status or family information
-- Patent citation or prior art analysis
-- Patent valuation or infringement analysis
+## 使用示例
 
-## 算力消耗规则
+### 按公开公告号查询单件专利
 
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利摘要附图结果
+用户：获取专利 CN115059423A 的摘要附图。
 
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+### 查询多件专利
 
-**Feedback:**
+用户：获取 US11234567B2、EP3456789A1 和 CN115059423A 的摘要附图。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+### 按专利 ID 查询
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+用户：获取专利 ID 为 5e6f7a8b9c 的摘要附图。
 
+### 批量使用专利 ID
+
+用户：这些专利 ID 是 abc123、def456，帮我获取对应摘要附图。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

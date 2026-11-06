@@ -1,26 +1,11 @@
 #!/usr/bin/env python3
-"""
-Shopee Store — get_token_by_resend_code
+"""使用 resend code 获取 token；入参见 references/apis/get-token-by-resend-code.md。"""
 
-官方: https://open.shopee.com/documents/v2/v2.public.get_token_by_resend_code?module=104&type=1
-
-入参说明见 references/apis/get-token-by-resend-code.md。
-"""
-
-from __future__ import annotations
-
-import json
-import sys
-
-from _public_api_runner import run_public_api
+from _public_api_runner import invoke_public_cli
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: get_token_by_resend_code.py '<JSON>'", file=sys.stderr)
-        sys.exit(1)
-    params = json.loads(sys.argv[1])
-    print(json.dumps(run_public_api("get_token_by_resend_code", params, "get_token_by_resend_code.py"), indent=2, ensure_ascii=False))
+    invoke_public_cli("get_token_by_resend_code")
 
 
 if __name__ == "__main__":

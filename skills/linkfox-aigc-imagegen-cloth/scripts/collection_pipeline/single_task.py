@@ -24,7 +24,7 @@ import time
 from typing import Any, Callable
 
 from .config import get_variant
-from .utils import normalize_brand_key, write_task_result
+from .utils import normalize_brand_key, task_recovery_hint, write_task_result
 
 SAVED_RE = re.compile(r"Saved full response:\s*(.+)\s*$", re.M)
 TEXTGEN_TIMEOUT = 360
@@ -72,12 +72,19 @@ def _is_transient(msg: str) -> bool:
     return bool(TRANSIENT_RE.search(msg or ""))
 
 
+class DownstreamError(RuntimeError):
+    def __init__(self, message: str, *, retryable: bool):
+        super().__init__(message)
+        self.retryable = retryable
+
+
 def _with_retry(label: str, fn: Callable[[], Any]) -> Any:
     """瞬时错误自动重试 1 次（退避 RETRY_BACKOFF_SEC）；业务失败直接抛出不重试。"""
     try:
         return fn()
-    except RuntimeError as e:
-        if _is_transient(str(e)):
+    except (RuntimeError, subprocess.TimeoutExpired) as e:
+        retryable = isinstance(e, subprocess.TimeoutExpired) or getattr(e, "retryable", _is_transient(str(e)))
+        if retryable:
             _log(f"[{label}] 瞬时错误，{RETRY_BACKOFF_SEC:.0f}s 后自动重试 1 次：{e}")
             time.sleep(RETRY_BACKOFF_SEC)
             return fn()
@@ -86,14 +93,23 @@ def _with_retry(label: str, fn: Callable[[], Any]) -> Any:
 
 def _run_textgen(textgen_script: str, params: dict, task_id: str) -> str:
     """调官方 aigc_textgen.py --stdin --content-only，返回单行 content（换行为 ⏎ 占位符）。"""
-    proc = subprocess.run(
-        [sys.executable, textgen_script, "--stdin", "--content-only"],
-        input=json.dumps(params, ensure_ascii=False),
-        text=True,
-        capture_output=True,
-        timeout=TEXTGEN_TIMEOUT,
-    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, textgen_script, "--stdin", "--content-only"],
+            input=json.dumps(params, ensure_ascii=False),
+            text=True,
+            capture_output=True,
+            timeout=TEXTGEN_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        recovery = task_recovery_hint(exc.stderr)
+        if recovery:
+            raise DownstreamError(recovery, retryable=False) from exc
+        raise
     if proc.returncode != 0:
+        recovery = task_recovery_hint(proc.stderr)
+        if recovery:
+            raise DownstreamError(recovery, retryable=False)
         tail = (proc.stderr or "").strip().splitlines()[-3:]
         raise RuntimeError(f"textgen 失败(exit={proc.returncode}): {' | '.join(tail)}")
     content = proc.stdout.rstrip("\n")
@@ -104,14 +120,23 @@ def _run_textgen(textgen_script: str, params: dict, task_id: str) -> str:
 
 def _run_imagegen(imagegen_script: str, params: dict, task_id: str) -> list[str]:
     """调官方 aigc_imagegen.py '<json>'，解析 'Saved full response:' 判定成败。"""
-    proc = subprocess.run(
-        [sys.executable, imagegen_script, json.dumps(params, ensure_ascii=False)],
-        text=True,
-        capture_output=True,
-        timeout=IMAGEGEN_TIMEOUT,
-    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, imagegen_script, json.dumps(params, ensure_ascii=False)],
+            text=True,
+            capture_output=True,
+            timeout=IMAGEGEN_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        recovery = task_recovery_hint(exc.stderr)
+        if recovery:
+            raise DownstreamError(recovery, retryable=False) from exc
+        raise
     m = SAVED_RE.search(proc.stdout or "")
     if not m:
+        recovery = task_recovery_hint(proc.stderr)
+        if recovery:
+            raise DownstreamError(recovery, retryable=False)
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
         raise RuntimeError(f"imagegen 无 'Saved full response' 输出: {' | '.join(tail)}")
     payload = m.group(1).strip()
@@ -120,10 +145,41 @@ def _run_imagegen(imagegen_script: str, params: dict, task_id: str) -> list[str]
             images = json.loads(payload)
         except json.JSONDecodeError:
             raise RuntimeError(f"imagegen 图片路径数组解析失败: {payload[:120]}")
-        if not images:
-            raise RuntimeError("imagegen 返回空图片数组")
+        if not isinstance(images, list) or not images or not all(isinstance(p, str) and p for p in images):
+            raise RuntimeError("imagegen 返回无效或空图片路径数组")
+        if proc.returncode != 0:
+            raise RuntimeError(f"imagegen 异常退出(exit={proc.returncode})，不认定成功")
         return images
-    raise RuntimeError(f"imagegen 业务失败，错误详情见: {payload}")
+    # 下游业务失败也可能 exit 0；读取真实错误而非根据路径文字决定重试。
+    error_path = re.sub(r"\s+\(\d+ bytes\)$", "", payload)
+    try:
+        with open(error_path, encoding="utf-8") as f:
+            error = json.load(f)
+    except (OSError, ValueError):
+        raise DownstreamError(f"imagegen 失败，错误详情见: {payload}", retryable=False)
+    if not isinstance(error, dict):
+        raise DownstreamError(f"imagegen 错误响应格式异常: {payload}", retryable=False)
+    if error.get("taskId") or error.get("canQuery") or error.get("pollTimedOut") or error.get("errorCode") == "POLL_TIMEOUT":
+        task_id = error.get("taskId")
+        identity = f"taskId={task_id}" if task_id else "请核对已保存创建响应中的任务编号"
+        raise DownstreamError(f"{identity}；保留原任务恢复查询，不重新提交；错误详情见: {error_path}", retryable=False)
+    details = "；".join(str(error[k]) for k in ("errcode", "code", "errorCode", "errmsg", "error", "errorMsg", "message", "details") if error.get(k) is not None)
+    statuses = {str(error.get(k, "")).strip() for k in ("errcode", "httpStatus", "statusCode")}
+    code = error.get("errcode")
+    if isinstance(code, str):
+        value = code.strip()
+        normal_code = not value or (len(value) == 3 and value.isascii() and value.isdigit() and 200 <= int(value) < 300)
+    else:
+        normal_code = code is None or (type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0)
+    # 沿用下游对仅有 code 的响应的兼容规则，不把明确业务失败当连接错误。
+    legacy_code = error.get("code") if "errcode" not in error else None
+    normal_legacy = legacy_code is None or str(legacy_code) in ("0", "200")
+    transport_category = error.get("errorCode") in (None, "CONNECTION_ERROR", "REQUEST_TIMEOUT", "HTTP_READ_ERROR", "HTTP_ERROR")
+    http_statuses = {str(error.get(k, "")).strip() for k in ("httpStatus", "statusCode")}
+    server_failure = any(value.isdigit() and 500 <= int(value) <= 599 for value in http_statuses)
+    # 业务码/业务文案不是传输错误；例如 errcode=503 或拒绝原因含 timeout 均不重试。
+    retryable = normal_code and normal_legacy and transport_category and not statuses.intersection({"401", "402"}) and (_is_transient(str(error.get("error") or "")) or server_failure)
+    raise DownstreamError(f"imagegen 失败: {details}；错误详情见: {error_path}", retryable=retryable)
 
 
 def _resolve_brand_gene_text(spec: dict) -> str:
@@ -207,8 +263,9 @@ def build_spec_from_plan(
         "label": label,
         "image_urls": image_urls,
         "ratio": entry.get("ratio") or "1:1",
-        "provider": state.get("provider") or "BANANA_PRO",
-        "resolution": state.get("resolution") or "2K",
+        "provider": state.get("provider") or "GPT_2_5_IMAGE",
+        "resolution": state.get("resolution") or "1K",
+        "quality": state.get("quality") or "low",
         "textgen_script": state.get("textgen_script") or "",
         "imagegen_script": state.get("imagegen_script") or "",
         "brand_gene_file": state.get("brand_gene_file") or "",
@@ -255,8 +312,9 @@ def _process_task(spec: dict, variant: str, skill_root: str) -> dict:
 
         textgen_script = spec.get("textgen_script") or ""
         imagegen_script = spec.get("imagegen_script") or ""
-        provider = spec.get("provider") or "BANANA_PRO"
-        resolution = spec.get("resolution") or "2K"
+        provider = spec.get("provider") or "GPT_2_5_IMAGE"
+        resolution = spec.get("resolution") or "1K"
+        quality = spec.get("quality") or "low"
         if not os.path.isfile(imagegen_script):
             raise RuntimeError(f"imagegen_script 路径不存在: {imagegen_script}")
 
@@ -300,6 +358,7 @@ def _process_task(spec: dict, variant: str, skill_root: str) -> dict:
                 "outputNum": 1,
                 "aspectRatio": ratio,
                 "resolution": resolution,
+                "quality": quality,
             }
             _log(f"[{tid}] 出图中…")
             result["images"] = _with_retry(
@@ -330,7 +389,7 @@ def _process_task(spec: dict, variant: str, skill_root: str) -> dict:
             )
             ig_params.update(
                 provider=provider, outputNum=1,
-                aspectRatio=ratio, resolution=resolution,
+                aspectRatio=ratio, resolution=resolution, quality=quality,
             )
             _log(f"[{tid}] 尺码图阶段2 出图中…")
             result["images"] = _with_retry(
@@ -350,7 +409,7 @@ def _process_task(spec: dict, variant: str, skill_root: str) -> dict:
                 ig_params = bi_module.build_params(ttype, image_urls)
             ig_params.update(
                 provider=provider, outputNum=1,
-                aspectRatio=ratio, resolution=resolution,
+                aspectRatio=ratio, resolution=resolution, quality=quality,
             )
             _log(f"[{tid}] 出图中…")
             result["images"] = _with_retry(

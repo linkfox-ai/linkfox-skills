@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
-"""EU / Partner product API helpers; local gateway helpers."""
+"""欧洲站商品参数映射、令牌解析与工作流入口。"""
 
 import json
 
-from _temu_common import (
-    FILE_DOWNLOAD_URL,
-    PROXY_URL,
-    call_temu_api,
-    emit_result,
-    lf_inline_flag,
-    load_json_arg,
-    parse_nested_body,
-    resolve_access_token,
-)
+from _temu_common import FILE_DOWNLOAD_URL, PROXY_URL, call_temu_api, resolve_access_token
 
 # Partner EU 商品接口：默认欧洲站半托管；部分半托发品亦可用 cn/partner（见 SKILL.md）
 DEFAULT_SITE = "eu"
@@ -54,7 +45,7 @@ def build_eu_proxy_body(params: dict, api_type: str, business=None) -> dict:
     body = {
         "site": site,
         "managementType": management_type,
-        "accessToken": resolve_access_token(params),
+        "accessToken": resolve_access_token(dict(params, site=site, managementType=management_type)),
         "type": api_type,
     }
     biz = business if business is not None else extract_business_params(params)
@@ -62,11 +53,11 @@ def build_eu_proxy_body(params: dict, api_type: str, business=None) -> dict:
         body["params"] = biz
     return body
 
-def eu_proxy_call(params: dict, api_type: str, business=None, timeout: int = 150) -> dict:
+def eu_proxy_call(params: dict, api_type: str, business=None, timeout: int = 150, *, emit=False) -> dict:
     body = build_eu_proxy_body(params, api_type, business)
-    return call_temu_api(PROXY_URL, body, timeout=timeout, linkfox_params=params)
+    return call_temu_api(PROXY_URL, body, timeout=timeout, linkfox_params=params, emit=emit)
 
-def eu_file_download_call(params: dict, timeout: int = 150) -> dict:
+def eu_file_download_call(params: dict, timeout: int = 150, *, emit=False) -> dict:
     if "tokenPurpose" not in params and params.get("storeKey") and not params.get("accessToken"):
         params = dict(params)
         params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
@@ -81,11 +72,10 @@ def eu_file_download_call(params: dict, timeout: int = 150) -> dict:
     body = {
         "site": site,
         "managementType": management_type,
-        "accessToken": resolve_access_token(params),
+        "accessToken": resolve_access_token(dict(params, site=site, managementType=management_type)),
         "url": require_text(params, "url"),
     }
-    return call_temu_api(FILE_DOWNLOAD_URL, body, timeout=timeout, linkfox_params=params)
+    return call_temu_api(FILE_DOWNLOAD_URL, body, timeout=timeout, linkfox_params=params, emit=emit)
 
 def run_and_print(params: dict, api_type: str, business=None) -> None:
-    result = parse_nested_body(eu_proxy_call(params, api_type, business))
-    emit_result(result, inline=lf_inline_flag())
+    eu_proxy_call(params, api_type, business, emit=True)

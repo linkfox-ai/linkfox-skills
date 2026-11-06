@@ -1,186 +1,112 @@
 ---
 name: linkfox-echotik-batch-video-detail
-description: 批量查询TikTok视频详情数据，包括视频描述、播放量（总量及近1天/7天/30天增量）、点赞（总量及增量）、评论、分享、收藏、视频销量与GMV、视频时长与分辨率、发布日期、达人信息（ID/账号/头像）、是否带货/投流/AI视频、关联商品与类目，支持通过视频ID或TikTok视频URL批量获取。当用户提到TikTok视频详情、批量查询TikTok视频、TikTok视频播放量详情、TikTok视频销量详情、TikTok视频数据分析、批量获取TikTok视频信息、EchoTik视频详情、TikTok video detail, batch video lookup, TikTok video analytics detail, TikTok video views detail, TikTok video sales detail时触发此技能。即使用户未明确提及"EchoTik"，只要其需求涉及根据视频ID或视频URL批量获取TikTok视频的详细播放与营销数据，也应触发此技能。
+description: 批量查询已知 TikTok 视频的详情和表现，支持视频 ID 或视频链接，返回视频文案、播放与点赞总量及近 1/7/30 天增量、评论、分享、收藏、估算销量与 GMV、视频规格、发布日期、达人、带货/投流/AI 标记及关联商品。适用于 TikTok 视频详情查询、批量视频表现比较和营销分析，无需明确提及 EchoTik。不适用于发现热门视频、商品详情、下载链接解析、店铺分析或其他平台视频数据。
 ---
 
-# EchoTik TikTok Batch Video Detail
+# EchoTik TikTok 批量视频详情
 
-This skill batch-fetches detailed performance metrics for TikTok videos you already have IDs or URLs for, helping sellers and marketers compare videos side-by-side using views, likes, comments, shares, video sales/GMV, and creator data.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool retrieves full detail metrics for a batch of TikTok videos in a single call. You identify videos by ID and/or by TikTok video URL; the backend extracts the `videoId` from each URL and merges it with any IDs you supplied, then returns per-video analytics.
+用户已有具体 TikTok 视频 ID 或视频链接，希望批量查看详情、比较播放互动和带货表现时使用本技能。
 
-**Input options** (at least one is needed; both can be combined):
-- `videoIds` — array of TikTok video IDs (up to 1000)
-- `videoUrls` — array of TikTok video URLs (e.g. `https://www.tiktok.com/@<unique_id>/video/<videoId>` or `https://www.tiktok.com/video/<videoId>`); the trailing `videoId` is extracted from each URL and merged with `videoIds` (up to 1000)
+**场景速查**
 
-**Multi-period metrics**: views and likes are each reported as a cumulative total plus `1d / 7d / 30d` increments, so you can read both lifetime performance and recent momentum.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查询这些 TikTok 视频的详情 | 批量读取已知视频的资料。 |
+| 拉这些视频链接的播放量和销量 | 按链接读取表现与带货数据。 |
+| 批量分析这些 TikTok 视频 | 比较播放、互动、销量和 GMV。 |
+| 这些视频哪个播放量或销量最高 | 比较返回的指标，说明近期变化。 |
+| 这些视频是不是带货、投流或 AI 视频 | 展示视频类型标记。 |
 
-**Engagement & attribution**: comments, shares, favorites, estimated video sales (units), and estimated video sales GMV (amount) are returned per video.
+### 边界
 
-**Flag fields** (`salesFlagText` / `isAdText` / `createdByAiText`): human-readable 是/否 (AI: 是/否/未知) labels for selling / ad / AI-generated videos.
+- 按地区或筛选条件发现视频、找热门视频：使用 `linkfox-echotik-list-video`。
+- TikTok 商品详情：使用 `linkfox-echotik-batch-product-detail`。
+- 视频下载链接解析：使用 `linkfox-echotik-get-video-download-url`。
+- 达人或卖家（店铺）分析：使用 `linkfox-echotik-seller-detail` / `linkfox-echotik-list-seller`。
+- 非 TikTok 平台视频数据不属于本技能范围。
 
-**vs. search**: This is detail **lookup for known videos** (you already have IDs/URLs). To *discover* videos by region/filter (no IDs needed), use `linkfox-echotik-list-video`.
+## 前置条件
 
-## Data Fields
+**先确定待查视频**：用户说“分析这些 TikTok 视频”时，先判断是否已有具体视频标识；需要先发现视频时转交视频列表技能。参数格式及批量上限见 `references/api.md`。
 
-| Field | Type | Description |
-|-------|------|-------------|
-| videoId | string | 视频ID |
-| videoDesc | string | 视频描述/文案 |
-| officialUrl | string | TikTok官方视频地址 |
-| coverUrl | string | 视频封面URL |
-| duration | integer | 视频时长(秒) |
-| width | string | 视频宽度(px) |
-| height | string | 视频高度(px) |
-| ratio | string | 视频清晰度(如 540p/720p) |
-| dataSize | string | 视频文件大小 |
-| createDate | string | 视频发布日期(yyyy-MM-dd HH:mm:ss) |
-| userId | string | 达人ID |
-| uniqueId | string | TikTok账号ID(unique_id) |
-| avatar | string | 达人头像URL |
-| totalViewsCnt | integer | 总播放量 |
-| totalViews1dCnt | integer | 近1天播放量增量 |
-| totalViews7dCnt | integer | 近7天播放量增量 |
-| totalViews30dCnt | integer | 近30天播放量增量 |
-| totalDiggCnt | integer | 总点赞数 |
-| totalDigg1dCnt | integer | 近1天点赞增量 |
-| totalDigg7dCnt | integer | 近7天点赞增量 |
-| totalDigg30dCnt | integer | 近30天点赞增量 |
-| totalCommentsCnt | integer | 总评论数 |
-| totalSharesCnt | integer | 总分享数 |
-| totalFavoritesCnt | integer | 总收藏数 |
-| totalVideoSaleCnt | integer | 视频销量(件,估算) |
-| totalVideoSaleGmvAmt | integer | 视频销售GMV(估算金额) |
-| salesFlagText | string | 是否带货视频(是/否) |
-| isAdText | string | 是否投流视频(是/否) |
-| createdByAiText | string | 是否AI视频(是/否/未知) |
-| productCategoryList | string | 关联商品分类(JSON字符串,空为`[]`) |
-| videoProducts | string | 视频带货商品(JSON字符串,空为`[]`) |
-| region | string | 视频所在区域代码 |
-| sourceType | string | 数据来源(如 Tiktok) |
-| sourceTool | string | 来源工具(如 EchoTik-视频列表) |
+## 查询流程
 
-## Parameter Guide
+1. 收集用户指定的视频 ID 或链接，确认本次查询与比较目标，按 `references/api.md` 核对输入。
+2. 批量查询已确定的视频，优先复用相同参数的缓存；失败或空结果按接口参考解释，继续查询遵守成本约束。
+3. 先看摘要，按需从落盘文件提取字段，整理视频对比表、近期变化和估算带货表现。
+4. 告知返回记录数，列出未返回数据的视频 ID 或链接，供用户核对。
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| videoIds | array&lt;string&gt; | No* | - | TikTok视频ID列表，最多1000个 |
-| videoUrls | array&lt;string&gt; | No* | - | TikTok视频URL列表（形如 `https://www.tiktok.com/@<unique_id>/video/<videoId>` 或 `https://www.tiktok.com/video/<videoId>`）；从每个URL提取末尾videoId并合并到videoIds，与videoIds不互斥，最多1000个 |
+## 执行方式
 
-\* 至少提供 `videoIds` / `videoUrls` 中的一个；两者可同时传入，服务端合并去重后查询。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_batch_video_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 5 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 调用方式
+### 输出策略
 
-- **API 端点**：`POST /echotik/batchVideoDetail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_batch_video_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-batch-video-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-batch-video-detail-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行规则
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 算力消耗预估
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+5 算力 / 次
 
-## Usage Examples
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**1. Batch lookup by video IDs**
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解指标周期**：区分累计表现和近 1/7/30 天的增量，结合用户问题展示播放与点赞的近期变化。
+- **展示对比表**：每个视频一行，列出文案（过长时截断）、播放、点赞、评论、分享、销量、GMV、发布日期和达人；按需补充收藏和关联商品。
+- **保留查看入口**：有官方视频链接时提供链接；有封面时告知可查看缩略图。时长转为易读格式，例如 165 秒展示为 `2:45`。
+- **标明估算性质**：销量、GMV 和归因数据为分析估算，不能视作平台精确业绩；不自行补造缺失币种或数值。
+- **展示视频类型**：分别标明带货、投流和 AI 标签；保留 AI 的“未知”，不改成“否”。
+- **说明缺失与范围**：始终告知实际返回记录数；无记录的输入逐一列出，不将缺失值当作零。
+- **处理关联信息**：需要展示关联商品或类目时，按接口参考解析返回的 JSON 字符串；解析失败保留原值并说明，避免编造结构。
+
+## 使用示例
+
+### 按视频 ID 批量查询
+
 ```json
-{
-  "videoIds": ["7030893014180531462", "6768504823336815877", "7425631540178160939"]
-}
+{"videoIds": ["7030893014180531462", "6768504823336815877", "7425631540178160939"]}
 ```
 
-**2. Batch lookup by video URLs**
+### 按视频链接批量查询
+
 ```json
-{
-  "videoUrls": [
-    "https://www.tiktok.com/@sageandintuition/video/7030893014180531462",
-    "https://www.tiktok.com/@<unique_id>/video/6768504823336815877"
-  ]
-}
+{"videoUrls": ["https://www.tiktok.com/@sageandintuition/video/7030893014180531462", "https://www.tiktok.com/video/6768504823336815877"]}
 ```
 
-**3. Mixed IDs and URLs (merged server-side)**
+### 混合提供 ID 和链接
+
 ```json
-{
-  "videoIds": ["7030893014180531462"],
-  "videoUrls": ["https://www.tiktok.com/@<unique_id>/video/6768504823336815877"]
-}
+{"videoIds": ["7030893014180531462"], "videoUrls": ["https://www.tiktok.com/video/6768504823336815877"]}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present a comparison table**: Show one row per video with video description (truncated if long), views, likes, comments, shares, video sales, video GMV, publish date, and creator
-2. **Link to original**: When `officialUrl` is available, provide it so users can view the video on TikTok
-3. **Cover image**: If `coverUrl` is present, mention that video thumbnails are available
-4. **Duration formatting**: Convert `duration` (seconds) to a readable format (e.g. "2:45" for 165 seconds)
-5. **Multi-period metrics**: When relevant, surface the 1d/7d/30d views/likes breakdowns alongside the lifetime totals
-6. **Estimation notice**: Video sales and GMV are estimated values — remind users these are approximations
-7. **Flag badges**: Render `salesFlagText` (带货), `isAdText` (投流), and `createdByAiText` (AI) so users can scan video types at a glance
-8. **Missing video handling**: If a requested video returns no record, list which IDs/URLs had no data so the user can verify them
-9. **Result count**: Always inform the user of `total` records returned
-
-## Important Limitations
-
-- **Batch cap**: Up to 1000 videos per request
-- **Lookup only**: This tool does not search/discover videos by region or filter — it resolves specific IDs/URLs you already have. To discover videos, use `linkfox-echotik-list-video`
-- **URL extraction**: For `videoUrls`, only the trailing `videoId` is extracted — ensure each URL ends with the video ID
-- **Estimated data**: Sales, GMV, and attribution figures are analytics estimates, not exact platform figures
-- **JSON-string fields**: `productCategoryList` / `videoProducts` are returned as JSON strings (empty when none, e.g. `[]`) — parse before display if needed
-- **No secondary processing**: Results are live queries, not stored in a database; secondary SQL/data processing is not available
-
-## User Expression & Scenario Quick Reference
-
-### Applicable Scenarios
-
-| User Says | Scenario |
-|-----------|----------|
-| "查询这些TikTok视频的详情" | Batch detail by video IDs |
-| "拉这些TikTok视频链接的播放量/销量" | Batch detail by video URLs |
-| "批量分析这些TikTok视频的表现" | Batch lookup, surface metrics |
-| "这些TikTok视频哪个播放量/销量最高" | Batch lookup, compare columns |
-| "这些TikTok视频是不是带货/投流/AI" | Batch lookup, read flag fields |
-
-### Not Applicable Scenarios
-
-- Discovering videos by region/filter (use `linkfox-echotik-list-video`)
-- TikTok product detail lookup (use `linkfox-echotik-batch-product-detail`)
-- Resolving a TikTok video download link (use `linkfox-echotik-get-video-download-url`)
-- TikTok creator/seller (store) analytics (use `linkfox-echotik-seller-detail` / `linkfox-echotik-list-seller`)
-- Non-TikTok platform video data
-
-### Boundary Judgment
-
-When users say "分析这些TikTok视频", check whether they already have specific video IDs or TikTok video URLs (this skill) or want to *find* videos by region/filter (the list-video skill). If they paste a list of IDs/URLs and want views/likes/sales/GMV details, this skill applies. If they ask "找热门TikTok视频" or "按区域搜视频", it does not — use `linkfox-echotik-list-video` to discover first.
-
-## 算力消耗规则
-
-消耗 5 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

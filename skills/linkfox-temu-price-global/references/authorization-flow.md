@@ -18,6 +18,7 @@ temu_proxy.py / temu_file_download.py
 
 | 用户需求 | shopType | tokenPurpose | site |
 |----------|----------|--------------|------|
+| 本技能全球站价格管理 | semi-managed | product-inventory | global |
 | 半托管查商品/库存 | semi-managed | product-inventory | cn / partner |
 | 半托管查订单/发货 | semi-managed | order-shipping | us / global / eu |
 | 全托管任意接口 | full-managed | full-managed | cn / partner |

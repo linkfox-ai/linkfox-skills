@@ -10,17 +10,10 @@ GET `orders/v0/orders/{orderId}/buyerInfo`。官方标注 deprecated；买家 PI
 
 from __future__ import annotations
 
-import json
 import sys
 from urllib.parse import quote
 
-from _spapi_orders_common import (
-    developer_proxy_call,
-    emit_result,
-    ensure_auth_skill_available,
-        lf_inline_flag,
-    merge_json_body,
-)
+from _spapi_orders_common import run_proxy, ensure_auth_skill_available, load_cli_params, require_fields
 
 
 def _path(order_id: str) -> str:
@@ -35,26 +28,16 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-    try:
-        params = json.loads(sys.argv[1])
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON: {e}", file=sys.stderr)
-        sys.exit(1)
+    params = load_cli_params()
 
     if not params.get("skipDepCheck"):
         ensure_auth_skill_available("get_order_buyer_info.py")
 
-    for f in ("sellerId", "region", "orderId"):
-        if f not in params:
-            print(f"Missing required field: {f}", file=sys.stderr)
-            sys.exit(1)
+    require_fields(params, ("sellerId", "region", "orderId"))
 
     path = _path(params["orderId"])
-    proxy = developer_proxy_call(str(params["region"]), path, "GET", seller_id)
-    out: dict = {"developerProxy": proxy, "resolvedPath": path}
-    merge_json_body(out, proxy, "buyerInfo")
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy("getOrderBuyerInfo", str(params["region"]), path, "GET", str(params["sellerId"]),
+              result_field="buyerInfo")
 
 
 if __name__ == "__main__":

@@ -23,7 +23,8 @@ stderr 结构化信号:
     这是一个**不联网**的本地探测脚本。它只检查文件系统上常见的
     skill 安装路径（含 **OpenClaw**、**Hermes Agent** 的常见布局）；
     真正的"能不能调授权接口"取决于依赖 skill 的脚本是否可执行——
-    这一点由各业务脚本在运行时通过调用 `/spApi/storeTokens` 再做校验。
+    这一点由网关在业务请求中按 sellerId + region 解析授权后校验；
+    当前 A+ 业务脚本不会另行调用 `/spApi/storeTokens`。
 
     OpenClaw 参考: workspace 下 `<workspace>/skills`、`<workspace>/.agents/skills`，
     以及 `~/.openclaw/skills`、`~/.agents/skills`（与官方文档优先级一致）。
@@ -44,7 +45,7 @@ import sys
 from pathlib import Path
 
 REQUIRED_SKILL = "linkfox-amazon-store-auth"
-# 仍兼容本机未重命名时的旧目录名（历史安装 linkfox-amazon-spapi-auth）
+# 依赖目录同时支持 linkfox-amazon-store-auth 与 linkfox-amazon-spapi-auth。
 _AUTH_SKILL_DIR_ALIASES = ("linkfox-amazon-store-auth", "linkfox-amazon-spapi-auth")
 DEPENDENCY_EXIT_CODE = 42
 

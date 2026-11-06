@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Factory for thin US Promotion API CLI scripts."""
+"""Factory for thin EU Promotion API CLI scripts."""
 
 import sys
 

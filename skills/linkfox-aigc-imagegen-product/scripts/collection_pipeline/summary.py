@@ -90,7 +90,7 @@ def _write_asset_manifest(
 def run_summary_phase(state_file: str) -> dict[str, Any]:
     """summary phase 主流程，stdout 直接打印末尾 markdown + status JSON。
 
-    返回值用于上层 runner 兜底（如校验目录、日志记录），不再额外 print。
+    返回值用于上层 runner 兜底（如校验目录、日志记录），不额外 print。
     """
     state = _load_state(state_file)
     variant = (state.get("variant") or "cloth").strip().lower()

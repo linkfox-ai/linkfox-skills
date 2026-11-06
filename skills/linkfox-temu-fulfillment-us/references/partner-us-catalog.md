@@ -59,30 +59,22 @@ Partner Platform for US **Fulfillment / 电商履行**：**Buy-Shipping**、**Co
 | `temu.logistics.shipment.pickup.reservation.create` | https://partner-us.temu.com/documentation?menu_code=cf516cfc49364acba34be29c2600ec20&sub_menu_code=aff85d40b1364572a8383bcf5171f75b |
 | `temu.logistics.shipment.pickup.reservation.result.get` | https://partner-us.temu.com/documentation?menu_code=cf516cfc49364acba34be29c2600ec20&sub_menu_code=5cfaf127fdea4d419c6c9aa9c1b2536a |
 | `temu.logistics.shipment.pickup.reservation.cancel` | https://partner-us.temu.com/documentation?menu_code=cf516cfc49364acba34be29c2600ec20&sub_menu_code=eed978adf76e473e8d7239b0bbc19c9e |
-| `temu_us_proxy.py` | 任意 `type` + `params` |
-| `temu_us_file_download.py` | 加签文件下载 |
 | `bg.cooperativewarehouse.provider.list` | https://partner-us.temu.com/documentation?menu_code=fd19c5c9a430407a8c587d7f3e492c4a&sub_menu_code=e77d444a60b540039bfa1fc64e3cada7 |
 | `bg.cooperativewarehouse.token.authorization` | https://partner-us.temu.com/documentation?menu_code=fd19c5c9a430407a8c587d7f3e492c4a&sub_menu_code=607fb76a2ef943d78e97dadbeca71aad |
 | `bg.cooperativewarehouse.fulfill.submit` | https://partner-us.temu.com/documentation?menu_code=fd19c5c9a430407a8c587d7f3e492c4a&sub_menu_code=d2d218ed9b8c4356aec5033744abe90b |
 | `bg.cooperativewarehouse.fulfill.cancel` | https://partner-us.temu.com/documentation?menu_code=fd19c5c9a430407a8c587d7f3e492c4a&sub_menu_code=085d46b8a6604228b371e0706ac4af7d |
-| `temu_us_proxy.py` | 任意 `type` + `params` |
-| `temu_us_file_download.py` | 加签文件下载 |
 | `bg.logistics.companies.get` | https://partner-us.temu.com/documentation?menu_code=38e79b35d2cb463d85619c1c786dd303&sub_menu_code=97bf9f5f4f454a589fb3192725bfeb7a |
 | `bg.logistics.shipment.v2.confirm` | https://partner-us.temu.com/documentation?menu_code=38e79b35d2cb463d85619c1c786dd303（`sub_menu_code` 待补） |
 | `bg.logistics.shipment.v2.get` | https://partner-us.temu.com/documentation?menu_code=38e79b35d2cb463d85619c1c786dd303（`sub_menu_code` 待补） |
 | `bg.logistics.shipment.sub.confirm` | https://partner-us.temu.com/documentation（`menu_code` / `sub_menu_code` 待补） |
 | `bg.logistics.shipment.shippingtype.update` | https://partner-us.temu.com/documentation（`menu_code` / `sub_menu_code` 待补） |
-| `temu_us_proxy.py` | 任意 `type` + `params` |
-| `temu_us_file_download.py` | 加签文件下载 |
 | `temu.track.trackinginfo.get` | https://partner-us.temu.com/documentation?menu_code=e8a433cf16604acf82e20af25672cec0&sub_menu_code=e4ec6bc629bf42e38346de78b297d349 |
-| `temu_us_proxy.py` | 任意 `type` + `params` |
-| `temu_us_file_download.py` | 加签文件下载 |
 
 ## 通用脚本
 
 | 脚本 | 说明 |
 |------|------|
-| `temu_us_proxy.py` | 任意 `type` + `params` |
+| `temu_us_proxy.py` | 任意已确认 type + params 的通用入口 |
 | `temu_us_file_download.py` | 加签文件下载 |
 
 ## 与其他 Temu skill 的关系

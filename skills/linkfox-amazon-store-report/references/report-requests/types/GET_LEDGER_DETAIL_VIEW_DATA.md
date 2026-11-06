@@ -1,23 +1,27 @@
 # `GET_LEDGER_DETAIL_VIEW_DATA`
 
-> **分类**：6.2 FBA Inventory  
-> **说明**：Inventory ledger detail  
-> **可用范围**：Seller only
+> **分类**：6.2 FBA 库存  
+> **说明**：库存分类账明细  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#inventory-ledger-report---detailed-view)（章节：**Inventory Ledger Report - Detailed View**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **要点**：Use the Inventory Ledger Report - Detailed View to analyze your inventory movements to and from Amazon fulfillment centers, including products that are sold, returned, removed/disposed, damaged, lost, and found. You can view all historical movements of your inventory for 18 months in this report. This report accepts the following reportOptions values: You can pass multiple parameters to ReportOptions as shown in the following example: "reportOptions":{"eventType":"Adjustments", "FNSKU" : "X00001", "MSKU" : "Test"}
-- **reportOptions（摘录）**：
-  - eventType: Filters report data for a particular warehouse event. Default is the empty string, which returns all events. Other possible values are as follows: Adjustments CustomerReturns Receipts Shipments VendorReturns WhseTransfers Examples: "reportOptions":{"eventType":""} "reportOptions":{"eventType":"Adjustments"}
-  - FNSKU: Include FNSKU value to view report data for that particular FNSKU.
-  - MSKU: Include MSKU value to view report data for all active FNSKU mappings of that MSKU.
-  - ASIN: Include ASIN value to view report data for all active FNSKU mappings of that ASIN.
+- **角色**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：库存分类账明细用于分析亚马逊仓库的出入库变化，包括销售、退货、移除/弃置、损坏、丢失和找回。可查看 18 个月历史记录。接受下列 reportOptions，并可同时传入多个，例如 "reportOptions":{"eventType":"Adjustments", "FNSKU" : "X00001", "MSKU" : "Test"}。
+
+#### reportOptions 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| eventType | string | 按仓库事件筛选，默认空字符串返回全部事件。其他值：Adjustments、CustomerReturns、Receipts、Shipments、VendorReturns、WhseTransfers。示例："reportOptions":{"eventType":""} 或 "reportOptions":{"eventType":"Adjustments"}。 |
+| FNSKU | string | 提供 FNSKU 可查看该 FNSKU 的报告数据。 |
+| MSKU | string | 提供 MSKU 可查看映射到该 MSKU 的全部有效 FNSKU 数据。 |
+| ASIN | string | 提供 ASIN 可查看映射到该 ASIN 的全部有效 FNSKU 数据。 |
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#inventory-ledger-report---detailed-view>
 

@@ -1,58 +1,79 @@
-# EchoTik-TikTok视频排行 API 参考
+# EchoTik TikTok 视频排行 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：视频排行（listVideoRank）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/echotik/listVideoRank`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 优先从环境变量 `LINKFOX_AGENT_API_KEY` 读取，回退 `LINKFOXAGENT_API_KEY`（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
-- **User-Agent**：`LinkFox-Skill/2.0`
-- **超时**：150s
 
-## 请求参数
+### 请求参数
 
-POST Body（JSON）：
+网关 POST Body（JSON）：
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
 | date | string | 是 | - | 榜单查询日期，格式 `YYYY-MM-DD` |
 | rankType | integer | 是 | - | 榜单类型：`1` = 日榜，`2` = 周榜，`3` = 月榜 |
 | region | string | 是 | - | 区域码。可选值：US（美国）、ID（印度尼西亚）、TH（泰国）、PH（菲律宾）、MY（马来西亚）、VN（越南）、GB（英国）、MX（墨西哥）、SG（新加坡）、SA（沙特阿拉伯）、BR（巴西）、ES（西班牙）、JP（日本）、DE（德国）、IT（意大利）、FR（法国） |
-| videoRankField | integer | 是 | - | 视频排名指标：`1` = 按播放量排名，`2` = 按视频销量排名 |
+| videoRankField | integer | 是 | - | 视频排名指标：`1` = 按播放量（`totalViewsCnt`）排名，`2` = 按视频销量（`totalVideoSaleCnt`）排名；两种取值分别获取高播放量和高销量视频，成功时返回 `errcode:200` |
 | productCategoryId | string | 否 | - | 商品一级类目 ID，用于带货视频榜单的商品分类筛选 |
 | createdByAi | string | 否 | - | 是否 AI 视频，可选字符串 `true` / `false` |
 | pageNum | integer | 否 | 1 | 分页页码，从1开始 |
 | pageSize | integer | 否 | 50 | 每页条数。**须为10的倍数，最大100**；官方接口单页上限10，内部按10每页多次拉取后合并 |
 
-### rankType 枚举
+#### 参数约定与使用限制
 
-| 值 | 含义 |
-|----|------|
-| 1 | 日榜（day） |
-| 2 | 周榜（week） |
-| 3 | 月榜（month） |
+- `date`、`rankType`、`region`、`videoRankField` 均为必填，接口和脚本不自动补默认值。用户未指定站点时，助手可询问，或明确说明采用美国站 `US` 后传入请求。
+- 数据通常滞后 1–2 天，过近日期可能没有可用榜单。可建议较早日期，后续查询须遵守 SKILL.md 的成本约束，不自动改日期重试。
+- 本接口查询指定周期的实时榜单，不提供服务端二次 SQL 或数据加工能力；不影响从本地保存的 JSON 中提取字段用于展示。
+- `pageSize` 的上游分页合并由服务端完成，脚本不额外实现循环抓取。
 
-### videoRankField 枚举
+#### 脚本选项与运行约定
 
-| 值 | 含义 | 实测 |
-|----|------|------|
-| 1 | 按播放量排名（`totalViewsCnt`） | ✓ 200，返回高播放量视频 |
-| 2 | 按视频销量排名（`totalVideoSaleCnt`） | ✓ 200，返回高销量视频 |
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| JSON 参数 | string | 是 | 命令行首个位置参数，内容为上述请求体。 |
+| --inline | CLI flag | 否 | 强制完整打印，同时保存完整响应。 |
+| --no-cache | CLI flag | 否 | 跳过本地缓存读取与响应缓存保存；不影响会话数据落盘。 |
 
-> **指标稀疏现象**：按某 `videoRankField` 排序时，非该指标的计数字段可能返回 0（按销量排名时播放/点赞/评论等可能为 0；按播放量排名时销量/GMV 可能为 0）。
+- 脚本调用公共 `call_api.run`，仅使用公共调用器的一层 24 小时本地缓存；缓存目录为 `<cwd>/linkfox/.cache/linkfox-echotik-list-video-rank/`，缓存键为按参数排序后计算的 SHA-256 前 16 位，缓存文件名为 `linkfox-echotik-list-video-rank-<缓存键>.json`；过期或损坏的缓存视为未命中。
+- 缓存完整响应，错误及空结果也可能被缓存；复用时解释缓存内容，不自动绕过缓存连续试探。命中缓存时标注 `_cache.hit` 并输出缓存路径。
+- 认证优先使用 `LINKFOX_AGENT_API_KEY`，回退 `LINKFOXAGENT_API_KEY`；网关优先使用 `LINKFOX_TOOL_GATEWAY`，省略时采用公共规则的基础地址。透传 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME` 请求头。
+- 完整数据、会话元信息与索引写入当前工作目录的 `linkfox/`；业务包装在请求前拒绝 `/tmp` 及其子目录，以真实文件名长度检查会话数据目录可写（包括 Windows 完整路径长度），并固定公共调用器的输出根目录，不使用其家目录或临时目录回退，也不被 `ACPX_WORKSPACES` 改写输出位置。无法保存完整响应时直接报错，不发出业务请求。缓存文件写入失败时忽略该缓存写入错误，不影响已读取的有效缓存或完整响应落盘。
+- 会话优先采用 `SESSION_ID`，缺省按时间与随机后缀生成；生成 `_meta.json`、`index.jsonl`，登记调用的技能和数据文件。小响应完整打印，大响应显示摘要与最大列表的前 3 条样本，阈值为 8000 字节。
 
-## 响应结构
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| errcode | integer | 业务状态码，200 表示成功（详见下方错误码） |
+| errcode | integer | 业务状态码，200 表示成功；完整判断见下方响应码规则 |
 | errmsg | string | 业务状态描述 |
 | total | integer | 记录数 |
 | data | array | 视频列表（已按 `videoRankField` 排序，详见下方视频字段） |
 | columns | array | 渲染的列（前端渲染元数据，长度可能大于 `data`，取数据请以 `data` 为准） |
 | type | string | 渲染的样式 |
-| costToken | integer | 消耗token |
+| costToken | integer | 消耗 Token 数量 |
 
-### 视频对象字段
+#### data[*] 视频对象字段
 
 > 以下 25 个字段为 `data[*]` 返回字段，与 `columns` 定义对应。指标字段名虽以 `total` 开头，但表示**所选排行周期内**的累计值（`columns` 列标题为"周期…"）。
 
@@ -84,41 +105,28 @@ POST Body（JSON）：
 | sourceTool | string | 来源工具 |
 | sourceType | string | 商品来源 |
 
-## 错误码
+指标稀疏约定：按 `videoRankField` 排序时，其他指标可能返回 0；按销量排名时播放、点赞、评论等可能为 0，按播放量排名时销量与 GMV 可能为 0。以 `data` 为业务数据依据，不因 `columns` 更长就推断有更多视频。当前字段表不包含画面宽高、比例、1/7/30 日拆分或 `isAdText`，不要套用自由筛选视频列表的结构。
 
-正常情况下，接口的 HTTP 状态码均为 200，业务的成功与否通过响应体中的 errcode 字段区分（errcode = 200 表示成功，其他值表示业务错误）。当遇到未授权等情况时，HTTP 状态码为 401，且对应的 errcode 也是 401。
+### 响应码规则
 
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析业务字段 |
-| 400 | 参数校验错误 | 缺少必填参数（如 `date`/`rankType`/`region`/`videoRankField` 为必填参数）或取值非法。参考 `errmsg` 获取具体字段与合法值集合 |
-| 401 | 认证失败 | HTTP 401 或 `authorized error`：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 402 | 算力不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
+#### 基础规则
 
-错误响应示例：
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-```json
-{
-    "errcode": 400,
-    "errmsg": "date 为必填参数"
-}
-```
+#### 业务规则
 
-```json
-{
-    "errcode": 401,
-    "errmsg": "authorized error"
-}
-```
+| errcode / 现象 | 含义 | 处理建议 |
+|------|------|------|
+| 400 | 参数校验错误 | 检查四个必填参数以及取值范围，依据 `errmsg` 补充或修正参数。 |
+| 10000 / no matching data | 无匹配榜单 | 可能与数据滞后有关，解释日期与筛选范围；如需查询更早日期，先说明额外消耗。 |
 
-## curl 示例
+### curl 示例
 
-### 指定日期的美国视频播放量排行
+指定日期的美国视频播放量日榜：
 
 ```bash
-curl -X POST ${LINKFOX_TOOL_GATEWAY}/echotik/listVideoRank \
-  -H "Authorization: $LINKFOX_AGENT_API_KEY" \
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/echotik/listVideoRank" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
   -H "Content-Type: application/json" \
   -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{
@@ -131,60 +139,18 @@ curl -X POST ${LINKFOX_TOOL_GATEWAY}/echotik/listVideoRank \
   }'
 ```
 
-### 英国视频排行
+## Feedback
 
-```bash
-curl -X POST ${LINKFOX_TOOL_GATEWAY}/echotik/listVideoRank \
-  -H "Authorization: $LINKFOX_AGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/2.0" \
-  -d '{
-    "date": "2026-08-10",
-    "rankType": 2,
-    "region": "GB",
-    "videoRankField": 1
-  }'
-```
-
-### 美国月度 AI 带货视频销量排行
-
-```bash
-curl -X POST ${LINKFOX_TOOL_GATEWAY}/echotik/listVideoRank \
-  -H "Authorization: $LINKFOX_AGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/2.0" \
-  -d '{
-    "date": "2026-08-01",
-    "rankType": 3,
-    "region": "US",
-    "videoRankField": 2,
-    "createdByAi": "true",
-    "productCategoryId": "601450",
-    "pageNum": 1,
-    "pageSize": 10
-  }'
-```
-
----
-
-## Feedback API
-
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
   "skillName": "linkfox-echotik-list-video-rank",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter (`linkfox-echotik-list-video-rank`)
-- `sentiment`: Choose ONE — `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE — `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

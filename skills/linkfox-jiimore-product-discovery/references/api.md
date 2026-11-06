@@ -1,22 +1,41 @@
-# 极目-亚马逊-产品挖掘 API 参考
+# 极目亚马逊商品发掘 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：商品发掘（productDiscovery）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/jiimore/productDiscovery`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
 
-## 请求参数
+### 请求参数
 
 POST Body（JSON）：
 
-### 必填参数
+#### 必填参数
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| keyword | string | 是 | 关键词（必填，并根据所选国家，翻译关键词为对应国家的语言） |
+| keyword | string | 是 | 关键词；必填，不支持无关键词浏览。按目标站点语言翻译：US 用英语、JP 用日语、DE 用德语 |
 
-### 筛选参数
+#### 筛选参数
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -41,8 +60,8 @@ POST Body（JSON）：
 | clickCountGrowthT30Max | number | 否 | 最高月点击增长率，数值范围为0-1，0.1表示10% |
 | salesVolumeT360Min | integer | 否 | 最低年销售量 |
 | salesVolumeT360Max | integer | 否 | 最高年销售量 |
-| grossProfitMarginMin | number | 否 | 最低毛利率 |
-| grossProfitMarginMax | number | 否 | 最高毛利率 |
+| grossProfitMarginMin | number | 否 | 最低毛利率；比例参数使用 0–1 小数，如 0.3 表示 30% |
+| grossProfitMarginMax | number | 否 | 最高毛利率；比例参数使用 0–1 小数，如 0.3 表示 30% |
 | fbaFeeMin | number | 否 | 最低FBA佣金 |
 | fbaFeeMax | number | 否 | 最高FBA佣金 |
 | launchDateMin | string | 否 | 最小上架时间，格式为：`yyyyMMdd000000` |
@@ -51,7 +70,7 @@ POST Body（JSON）：
 | nicheCountMax | integer | 否 | 最高细分市场数量 |
 | sellerCountry | string | 否 | 卖家国家地区编码，选择多个的情况下用逗号隔开，如：`CN,US` |
 
-### 排序与分页
+#### 排序与分页
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -61,7 +80,18 @@ POST Body（JSON）：
 | pageSize | integer | 否 | 每页数量（10-100）。默认 `50` |
 
 
-## 响应结构
+#### 脚本选项与运行约定
+
+| 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| --inline | 命令行开关 | 否 | 强制完整打印，同时保存响应。 |
+| --no-cache | 命令行开关 | 否 | 跳过响应缓存的读取与写入；默认启用 24 小时缓存。 |
+
+缓存仅由 `scripts/call_api.py` 管理，缓存键为参数排序后的 SHA-256 前 16 位，有效期为 24 小时，路径为 `<cwd>/linkfox/.cache/linkfox-jiimore-product-discovery/linkfox-jiimore-product-discovery-<hash>.json`，可复用该路径下键匹配且未过期的缓存，使用单层缓存。失败或空结果也会缓存；命中缓存时仍保存完整响应并附加 `_cache.hit`，不重复请求。缓存过期、文件损坏或未命中时才按本次显式调用请求，不自动重试或扩大检索范围。
+
+输出以当前工作目录为准，不因 `ACPX_WORKSPACES` 改写业务数据目录；请求前检查根目录、会话元数据和实际 `data` 目录能否保存，路径被文件占用或不可写时立即报错，不回退到家目录或临时目录。
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -74,7 +104,7 @@ POST Body（JSON）：
 | columns | array | 渲染的列 |
 | products | array | 产品列表（详见下方） |
 
-### 产品对象字段
+#### products[*] 产品对象字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -102,32 +132,35 @@ POST Body（JSON）：
 | sourceTool | string | 工具类型：`jiimore` |
 | sourceType | string | 来源类型：`amazon` |
 
-## 错误码
+#### 状态与脚本本地字段
 
-正常情况下，接口的 HTTP 状态码均为 200，业务的成功与否通过响应体中的 errorCode 字段区分（errorCode = 200 表示成功，其他值表示业务错误）。当遇到未授权等情况时，HTTP 状态码为 401，且对应的 errorCode 也是 401。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer | 错误响应中的业务码；统一判断见下方基础规则。 |
+| errmsg | string | 错误响应中的原因，如 `authorized error`。 |
+| errorCode | 类型未限定 | 可能返回的业务状态字段，以实际响应为准；含义见下方业务规则，不替代公共响应判定。 |
+| error | string | 脚本遇到网络错误或无法解析的 HTTP 错误时返回的本地说明。 |
+| details | string | 无法解析为 JSON 的 HTTP 错误响应正文；有正文时可能返回。 |
+| _cache | object | 本地缓存命中时附加的信息，不属于远端业务字段。 |
+| _cache.hit | boolean | 缓存命中时为 true。 |
 
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析业务字段 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 402 | 余额不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
+### 响应码规则
 
-错误响应示例：
+#### 基础规则
 
-```json
-{
-    "errcode": 401,
-    "errmsg": "authorized error"
-}
-```
+基本规则参考 `公共规则` -> `响应码基本规则`。
 
-## curl 示例
+#### 业务规则
+
+`errorCode` 为 200 表示成功，其他值表示业务错误，未授权时可能为 401；错误响应也可能使用 `errcode`（如 `errcode: 401`、`errmsg: "authorized error"`）。保留实际返回的字段，若出现 `errorCode`，结合错误消息说明其业务含义；统一正常响应判定仍遵循公共规则。
+
+### curl 示例
 
 ```bash
 curl -X POST https://tool-gateway.linkfox.com/jiimore/productDiscovery \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{
     "keyword": "wireless charger",
     "countryCode": "US",
@@ -141,26 +174,18 @@ curl -X POST https://tool-gateway.linkfox.com/jiimore/productDiscovery \
   }'
 ```
 
----
+## Feedback
 
-## Feedback API
-
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "skillName": "linkfox-xxx-xxx",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "skillName": "linkfox-jiimore-product-discovery",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter
-- `sentiment`: Choose ONE — `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE — `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

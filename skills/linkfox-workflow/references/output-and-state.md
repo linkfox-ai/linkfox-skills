@@ -34,7 +34,7 @@ edge 只决定执行顺序、谁是上游、变量选择器能列出哪些节点
 
 | 节点 | 固定 output 字段 | 常用引用 |
 | --- | --- | --- |
-| `BusinessStart` | `question`（手动启动恒为 `""`）；`storeAuthorization`（仅店铺授权，含 `sellerId` / `region` / `marketplaceIds` / `changeType` / `checkIntervalMinutes`）；`tableRecordTrigger`（仅记录触发，含 `notebookId` / `tableId` / `eventType` / `checkIntervalMinutes`，按事件多带 `watchFieldNames` 或 `condition`）；**`recordEvent` / `rows` / `recordRows`**（仅记录触发**且真收到变更载荷**时才存在，见 2.4） | `{{businessStartAgentflow_0.output.recordEvent.recordId}}` |
+| `BusinessStart` | `question`（手动启动恒为 `""`）；`tableRecordTrigger`（仅记录触发，含 `notebookId` / `tableId` / `eventType` / `checkIntervalMinutes`，按事件多带 `watchFieldNames` 或 `condition`）；**`recordEvent` / `rows` / `recordRows`**（仅记录触发**且真收到变更载荷**时才存在，见 2.4）。**没有** `storeAuthorization`——店铺事件触发 2026-10-30 已删除 | `{{businessStartAgentflow_0.output.recordEvent.recordId}}` |
 | `CrossBorderExpert` | `content` / `expertId` / `status` / `messageId?` / `stopReason?` / `expertResult` | `{{crossBorderExpertAgentflow_0.output.expertResult}}` |
 | `DataReader` | `content` / `status` / `rowCount` / `truncated` / **`<outputVariableName>`**（默认 `tableData`） | `{{dataReaderAgentflow_0.output.tableData.rows}}` |
 | `FillForm` | `content` / `filledForm` | `{{fillFormAgentflow_0.output.filledForm.<字段名>}}` |
@@ -72,15 +72,23 @@ $flow.state.<outputVariableName>     # 自动写入共享状态，无需 Update 
 }
 ```
 
-`amazonStore` 是例外：直接返回解析后的对象，**没有 `columns` / `pageInfo`**，形状随 `amazonDataType` 变化：
+`amazonStore` 是例外：直接透出店铺助手接口的结构，**没有 `columns` / `pageInfo`**，形状随 `amazonDataType` 变化（节点 1.1，2026-11-02 补文本筛选与分页参数）：
 
-| `amazonDataType` | `output.<变量名>` 形状 | 取数组的路径（变量名按实填） |
+| `amazonDataType` | `output.<变量名>` 形状 | 取记录的路径（变量名按实填） |
 | --- | --- | --- |
-| `orderList` | `{ orders: [] }` | `.output.tableData.orders` |
-| `listing` | `{ listings: [] }` | `.output.tableData.listings` |
-| `fbaInventory` | `{ inventorySummaries: [] }` | `.output.tableData.inventorySummaries` |
-| `afterSalesOrder` | `{ reportType, reportId, rows: [] }` | `.output.tableData.rows` |
-| `removalOrder` | `{ reportType, reportId, rows: [] }` | `.output.tableData.rows` |
+| `orders` | `{ dataType, storeId, marketplaceId, startDate, endDate, asin, sku, startPage, pageSize, returned, total, hasMore, sync, scopes, orders: [] }` | `.output.tableData.orders` |
+| `listing` | `{ dataType, storeId, marketplaceId, keyword, title, asin, sku, startPage, pageSize, returned, total, hasMore, sync, scopes, listings: [] }` | `.output.tableData.listings` |
+| `ads` | `{ dataType, storeId, storeName, marketplaceId, startDate, endDate, startPage, pageSize, dataStatus, reason, sync, scopes, portfolios: [], unmappedMetrics: [] }` | `.output.tableData.unmappedMetrics` |
+
+几个要点：
+
+- **回显的实际筛选**：接口不回显文本筛选，节点把生效的值（`keyword` / `title` / `asin` / `sku`、`startPage` / `pageSize`）放进输出，排查「为什么只查到这几条」「为什么从第 201 条开始」看这里；未填的项为 `null`。
+- **`sync` / `scopes` 只在第一页取一次**。单站点查询时顶层有 `storeId` / `marketplaceId` / `sync`；多站点（站点留空 / `__ALL__`）时这些顶层字段为 `null`（`storeId` 仍回填所选店铺），站点与各自的同步状态在 `scopes[]` 里。
+- `total` 是接口给的**真实匹配总数**（Listing 按条、订单按单）——这是亚马逊分支第一次拿到真实总数，`rowCount` / `truncated` / `onTruncate: "error"` 在这一支才可靠。广告接口的 `pagination.total` 恒为 `null`，所以广告分支的 `total` 恒 `null`、永不判截断。
+- **`ads` 没有 `orders` / `listings`**，也**没有** `rows` / `columns`。`portfolios: []` 不等于"该店铺没有广告数据"，要看 `dataStatus`（`NOT_READY` / `PORTFOLIO_MAPPING_NOT_SYNCED`）与 `reason`。
+- 已删除的数据类型（`orderList` / `afterSalesOrder` / `fbaInventory` / `removalOrder`）节点直接报「不支持的数据类型」，不会有输出。
+- **这一支没有 `rows`**：`WriteFile` 只认 `{rows}` / `{records}`，亚马逊 DataReader **不能直连** `WriteFile`（会写成一条 `dataType / storeId / orders…` 的聚合记录），中间必须用 `CustomFunction` 把 `orders` / `listings` 映射成 `{rows: [...]}`。`save_workflow.py` 对直连报 error。
+- **数据量**（详见 `nodes-linkfox-custom.md` 的「逐页读取 → 处理 → 落盘 → 下一页」）：`orders` / `listing` 从 `amazonStartPage` 起内部翻页到 `maxRows`（≤2000）；要超过 2000 条就用 `Iteration` 把页号喂进 `amazonStartPage`、每次只读一页（`maxRows` = `amazonPageSize`）并立刻落盘；**`ads` 只请求一页**，`total` 恒 `null`、`truncated` 恒 `false`，超过就是**静默丢数据**，只能切日期区间。
 
 **变量名规则**：推荐 `^[A-Za-z_][A-Za-z0-9_]*$` 的 camelCase。**禁止**用 `content` / `status` / `rowCount` / `truncated`（同名会覆盖固定字段），也避免 `output` / `state` / `question` / `$flow` / `$vars` / `__proto__` / `prototype` / `constructor`。别用点号、方括号、空格、连字符、中文。留空则用默认 `tableData`。
 
@@ -216,6 +224,12 @@ Key: previousSummary      Value: {{$flow.state.summary}}
 | FillForm | `{{$flow.state.filledForm.<字段名>}}` |
 
 记录触发里 `$webhook` 虽仍能解析，但不要这么写（理由与限制见 2.4）。
+
+**`{{$vars.<name>}}` 的三条边界**（细则见 `variables-and-credentials.md`）：
+
+1. **它不是 `$flow.state`**：变量是平台级键值对，`Update Flow State` 改不了它，flow 里也声明不了；改值只能经 `workflow_config.py vars set`（或界面上改）。
+2. **引用不存在的变量不报错**：模板原样保留，用户看到字面量 `{{$vars.X}}`。所以"变量没建 / 名字拼错"是静默故障。
+3. **变量按租户作用域隔离**：运行时按 flow 属主的 `groupId`/`memberId` 查找，跨成员 / 跨租户同名互不影响，同一作用域内同名会被中止。但值仍是**明文存库**、组 OWNER 可见，所以**只放非敏感的全局配置**；密钥 / token / 机器人地址放凭据，不放变量。
 
 `BusinessStart` 手动启动时 `question` 恒为 `""`，`{{question}}` 拿不到用户文本，依赖用户输入的场景不要设计成手动启动。
 

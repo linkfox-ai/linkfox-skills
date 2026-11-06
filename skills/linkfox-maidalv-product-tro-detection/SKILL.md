@@ -1,165 +1,121 @@
 ---
 name: linkfox-maidalv-product-tro-detection
-description: 通过卖大律检测产品是否存在 TRO（临时限制令）与知识产权（商标/专利/版权）侵权风险，输入产品主图（支持图片 URL 或 Base64 data URI），可补充参考图、参考文本、IP 关键词，返回总体风险等级、高风险侵权项与低风险 IP 清单（含 TRO 原告、立案日期、法院案号、案件数）、0-10 数值风险分及 AI 生成的法律评估报告。当用户提到 TRO 检测、TRO 风险、TRO 侵权、知识产权侵权检测、商标侵权、专利侵权、版权侵权、IP 风险检测、产品合规检测、卖大律、product TRO detection, IP infringement risk, trademark/patent/copyright infringement check 时触发此技能。即使用户未明确提及"卖大律"或"TRO"，只要用户提供产品图片并希望评估其在商标、专利、版权或 TRO 方面的侵权风险，也应触发此技能。
+description: 通过卖大律根据产品图片和补充文本评估 TRO（临时限制令）及商标、专利、版权侵权风险，提供总体风险、高风险命中、低风险 IP 清单、TRO 原告与案件线索、风险评分和 AI 法律评估报告。适用于产品上架前侵权初筛、产品图片合规检查和 TRO 风险研究；即使未提及卖大律或 TRO，只要希望根据产品图片评估知识产权风险，也适用。不适用于以图找货源、专利全文或权利要求检索、Listing 优化及关键词分析。
+---
+# 卖大律产品侵权与 TRO 风险检测
+
+## 适用范围
+
+### 适用
+
+根据产品主图及用户提供的参考信息，筛查产品涉及的知识产权和 TRO 风险，解释命中项及相关证据。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+|---|---|
+| 这个产品有没有 TRO 风险，会不会被起诉 | 查看总体风险与 TRO 案件线索。 |
+| 这个图片有没有商标、专利或版权侵权 | 查看各类 IP 命中及证据图片。 |
+| 这个 Amazon 产品上架有没有侵权风险 | 上架前侵权风险初筛。 |
+| 查一下这个产品的原告信息 | 展示命中 IP 对应的 TRO 原告及案件详情。 |
+| 给我英文的法律评估报告 | 输出英文 AI 法律评估报告。 |
+
+### 边界
+
+以图找供应商或同款使用对应以图搜图技能；专利全文或权利要求检索使用智慧芽或 Eureka 等专利技能。Listing 文案优化与关键词分析不在本技能范围。
+
+## 接口清单
+
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 产品侵权与 TRO 检测（checkApiFlash） | POST `/maidalv/checkApiFlash` | `scripts/maidalv_check_api_flash.py` | 根据产品图片及文本返回侵权风险与 AI 法律报告。 |
+| 获取图片上传预签名（presignedPut） | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 申请上传地址，脚本随后向该地址 PUT 本地图片并输出公开 URL。 |
+
+两个接口均直接访问网关端点，不经统一转发；完整定义在 `references/api.md`。文件 PUT 是上传流程的外部素材传输，不另计 LinkFox 接口。
+
+## 前置条件
+
+先取得产品主图及用户希望补充的参考资料。本地图片可先执行 `python scripts/upload_image.py <本地图片路径>` 获取 URL，或转换为符合接口要求的 data URI。图片、文本及语言的具体约定见 `references/api.md`。
+
+## 检测流程
+
+1. 确认产品主图和检测目标，按需收集参考图、产品标题、IP 关键词及报告语言；依照 `references/api.md` 核对输入。
+2. 用户提供本地图片时，选择上传或 data URI 方式准备输入。上传流程为申请预签名、PUT 文件、输出公开 URL；上传失败时停止，不继续发起检测。
+3. 使用检测脚本提交已确定的资料。检测缓存和 CLI、上传脚本的独立输出、缓存例外及数据文件后缀见 `references/api.md`。
+4. 按公共响应规则检查请求，再从已保存的 JSON 提取总体风险、命中 IP、TRO 原告和法律报告。检测脚本保存 HTTP 状态；缺少 HTTP 状态的缓存处理见 `references/api.md`。
+5. 依照下方展示规则呈现结果及证据；后续字段分析读取本地响应文件。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/maidalv_check_api_flash.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：产品检测消耗 113 算力 / 次。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、主图或连续试探；需要继续检测时，先向用户说明额外消耗。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-maidalv-product-tro-detection<接口后缀>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+产品检测消耗 113 算力 / 次（约 225000 token，含 AI 法律评估）；上传预签名的算力消耗以实际扣除为准。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **概念说明**：TRO 指 Temporary Restraining Order（临时限制令）。本技能将产品图文与知识产权资产及 TRO 原告、案件记录匹配，用于风险初筛；AI 法律评估与命中证据不能代替法律结论，低风险也不等于保证不侵权。
+- **先给总体结果**：先展示总体风险和本次检测标识，再展示高风险侵权项。每项列出 IP 类型、文字或标题、权利人、已有风险分与风险说明；缺失评分不填零。
+- **展示 TRO 线索**：有原告信息时展示原告、案件数、最近法院案号和立案日期。仅呈现响应实际提供的数据，缺失或空值不补造案件记录。
+- **呈现证据与报告**：有证据图片时内联展示，便于对比；高风险项有 AI 法律报告时展示报告。其他字段保持响应原值，具体语言范围和字段出现条件见 `references/api.md`。
+- **正确统计**：明确展示高风险数量和非高风险 IP 项数量；统计依据见 `references/api.md`，不要用渲染列数推断命中数。
+
+## 使用示例
+
+### 仅主图检测
+
+用户：检测这个产品的 TRO 和知识产权侵权风险，图片是 https://example.com/product.jpg 。
+
+核对图片，执行一次检测，先展示总体风险，再列出高风险项、TRO 线索及可用报告。
+
+### 英文法律报告
+
+用户：检测这张产品图，并给我英文的法律评估报告。
+
+按接口定义选择英文报告语言，其他字段维持响应原值。
+
+### 补充参考图与 IP 关键词
+
+用户：检测主图 https://example.com/product.jpg ，参考图 https://example.com/ref.jpg ，IP 关键词 apple、iphone。
+
+将用户提供的参考资料一并提交，不自动扩展关键词或反复更换图片。
+
+### 本地图片
+
+用户：检查我提供的本地产品图片有没有侵权风险。
+
+先上传并取得公开 URL，或准备符合接口定义的 data URI；选择上传方式时，上传成功后再检测。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Product Infringement & TRO Risk Detection
-
-This skill detects whether a product carries TRO (Temporary Restraining Order) or IP infringement risk by checking a product image against a database of IP assets (trademarks, patents, copyrights) and TRO case plaintiffs. It returns an overall risk level, high-risk hits, a low-risk IP list with TRO plaintiff details, numeric risk scores, and an AI-generated legal report.
-
-## Core Concepts
-
-TRO (Temporary Restraining Order) is a legal injunction brand owners file against sellers (often Amazon listings) for trademark/copyright/patent infringement. This tool takes a **main product image** (URL or Base64 data URI) plus optional reference images / text / IP keywords, runs visual + text matching against IP assets and TRO case records, and returns a structured risk assessment with an AI legal report (localized by the `language` parameter).
-
-## Data Fields
-
-**Top-level response:**
-
-| Field | Description |
-|-------|-------------|
-| errcode | 200 = success; see api.md for other codes |
-| status | Overall analysis status (`success`) |
-| checkId | Unique ID for this detection run |
-| riskLevel | Overall risk: 高风险/中风险/低风险 (High/Medium/Low Risk) |
-| total | Count of high-risk hits (length of `results`) |
-| results | High-risk infringement items (array) |
-| nonResults | Low-risk / non-high IP items incl. TRO plaintiff info (array) |
-| costToken | Tokens consumed this call |
-| columns | Render column metadata (display only) |
-
-**Each item (results / nonResults):**
-
-| Field | Description |
-|-------|-------------|
-| ipType | `Trademark` / `Copyright` / `Patent` |
-| text | IP text (trademark word, patent/copyright title) |
-| ipOwner | IP rights owner |
-| regNo | Registration number (may be a JSON-string array, e.g. `["1221667"]`) |
-| riskLevel / riskScore / riskDescription | Risk rating / 0-10 score / text; present only when scored |
-| ipAssetUrls | URLs to IP evidence images |
-| plaintiffName / plaintiffId | TRO plaintiff (present only when IP appears in a TRO case) |
-| numberOfCases | Plaintiff's case count (TRO only) |
-| lastCaseDocket / lastCaseDateFiled | Most recent court docket / filing date (TRO only) |
-| report | AI-generated legal assessment (localized by `language`) |
-
-## Parameter Guide
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| mainProductImage | Yes | - | Main product image: URL or `data:image/...;base64,...` (≤1000 chars) |
-| referenceImages | No | - | Reference images for similar products, up to 3 (URL or data URI) |
-| otherProductImages | No | - | Additional product images, up to 5 (URL or data URI) |
-| ipImages | No | - | IP-related images, up to 3 (URL or data URI) |
-| referenceText | No | - | Text from similar products (e.g. product title), ≤1000 chars |
-| description | No | - | Product description (title recommended), ≤1000 chars |
-| ipKeywords | No | - | IP-related keywords, up to 20 |
-| language | No | zh | Legal report language (`zh` / `en`); only affects the `report` language |
-
-**Image rules:** URL must be publicly accessible; Base64 must include the `data:image/...;base64,` prefix. For a local image, either upload it first (see 「Local Image Upload」) or convert it to a data URI.
-
-## 调用方式
-
-- **API 端点**：`POST /maidalv/checkApiFlash`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/maidalv_check_api_flash.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、换主图或连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-maidalv-product-tro-detection-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Local Image Upload
-
-This tool accepts a **publicly accessible image URL** or a Base64 data URI. If the user provides a local image file path, either upload it first to obtain a public URL, or encode it to a data URI.
-
-Run the upload script:
-```bash
-python scripts/upload_image.py /path/to/local/image.png
-```
-
-The script returns a public URL (valid for 24 hours) usable as `mainProductImage`.
-
-## Usage Examples
-
-**1. Basic detection (main image only)**
-```
-检测这个产品的 TRO 和知识产权侵权风险，图片地址为 https://m.media-amazon.com/images/I/71jKJgFpg8L._AC_SL1500_.jpg
-```
-
-**2. English legal report**
-```
-Check this product for TRO and IP infringement risk: https://example.com/product.jpg — give me the legal report in English.
-```
-
-**3. With reference image + IP keywords**
-```
-检测这个图片的侵权风险，主图 https://example.com/product.jpg，参考图 https://example.com/ref.jpg，IP 关键词 apple、iphone
-```
-
-## Display Rules
-
-1. **Lead with the overall verdict**: Show `riskLevel` (高风险/中风险/低风险) and `checkId` first.
-2. **High-risk items first**: If `results` is non-empty, list each hit's `ipType` / `text` / `ipOwner` / `riskScore` / `riskDescription` prominently.
-3. **TRO plaintiff detail**: For items with `plaintiffName`, show plaintiff, `numberOfCases`, `lastCaseDocket`, `lastCaseDateFiled` — these drive TRO risk.
-4. **Evidence images**: Display `ipAssetUrls` inline for visual comparison when available.
-5. **AI legal report**: Surface the `report` field (long-form legal assessment) for high-risk items.
-6. **Counts**: Always state `total` (high-risk count) and `nonResults` length.
-7. **No secondary processing**: Results are a one-shot analysis; no SQL/secondary query is available.
-
-## Important Limitations
-
-1. **One-shot analysis**: Results are not stored in a database; cannot use `_dataQuery_executeDynamicQuery` for secondary processing.
-2. **Image input**: `mainProductImage` is required. Local images must be uploaded or Base64-encoded (with `data:image/...;base64,` prefix).
-3. **Language scope**: `language` only affects the `report` text; field values remain as returned.
-4. **Conditional fields are expected**: Non-TRO / unscored items return only base fields (`ipType`/`text`/`ipOwner`/`regNo`/`ipAssetUrls`); plaintiff/case and risk fields are **absent** (not null) when not applicable — do not treat missing fields as an error.
-5. **`columns` is render-meta**: Its length differs from the data arrays; do not use it to infer result counts (use `results` / `nonResults` lengths).
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Product TRO / IP infringement risk checks:
-
-| User Says | Scenario |
-|-----------|----------|
-| "这个产品有没有 TRO 风险" / "会不会被起诉" | Basic TRO risk check |
-| "这个图片有没有商标/专利/版权侵权" | IP infringement detection |
-| "这个 Amazon 产品上架有没有侵权风险" | Pre-listing compliance check |
-| "查一下这个产品的原告信息" | TRO plaintiff lookup |
-| "给我英文的法律评估报告" | English legal report |
-
-**Not applicable** — Beyond this tool:
-
-- 1688 / Amazon image-based product sourcing (use 以图搜图 skills)
-- Patent全文 / 权利要求检索 (use 智慧芽/Eureka patent skills)
-- Listing 文案优化或关键词分析
-
-**Boundary judgment**: When the user provides a product image and asks about infringement/TRO/legal risk, this skill applies. If they want supplier sourcing or keyword analytics, use the respective sourcing/keyword tools instead.
-
-## 算力消耗规则
-
-消耗 113 算力（约 150000 token）。
-
-> 用户会因算力消耗而支付费用。本工具单次调用成本较高（含 AI 法律评估），请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
----
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

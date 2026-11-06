@@ -1,168 +1,123 @@
 ---
 name: linkfox-multimodal-generate-image
-description: AI驱动的图片生成与编辑工具，用于制作高质量产品图。当用户要求生成图片、制作图片、编辑照片、文生图、图生图、换背景、变换风格、替换图片中的物体、将产品合成到场景中、换模特、制作任何类型的AI生成视觉内容、AI drawing, image generation, text-to-image, image-to-image, background replacement, style transfer, product image creation, AI image editing时触发此技能。即使用户未明确说"AI图片"，只要其请求涉及生成、修改或变换图片，也应触发此技能。
+description: 生成和编辑产品图片，支持文生图、参考图生成、物体替换、背景修改、风格转换、产品场景合成和模特更换。适用于制作商品照、修改照片或生成不同构图的视觉内容；不适用于图像识别与文字提取、视频制作、文件格式转换、数百张图片的批处理或独立图片托管。
 ---
+# AI 图片生成与编辑
 
-# AI Image Generation
+## 适用范围
 
-This skill guides you on how to generate and edit images using the AI image generation service, helping users create high-quality product images, modify existing images, and perform creative visual transformations.
+### 适用
 
-## Core Concepts
+根据文字描述生成新图片，或在参考图基础上修改主体、背景、色彩、风格及构图。
+用户希望生成、修改或变换图片时使用，无需明确提到 AI 绘图。
 
-The AI Image Generation tool produces new images based on a text prompt and optional reference images. It supports a wide range of use cases:
+**场景速查**
 
-- **Text-to-image**: Generate a brand-new image purely from a text description.
-- **Image-to-image**: Provide one or more reference images and a prompt to generate a new image that preserves elements from the references.
-- **Image editing**: Modify specific elements, colors, backgrounds, or styles in an existing image.
-- **Product compositing**: Place a product from one image into a scene from another image.
-- **Model swapping**: Replace the model or mannequin in a product photo.
+| 用户表达 | 创作场景 |
+|---|---|
+| 生成一张图、制作产品照 | 文生图：根据主体与场景描述创建图片。 |
+| 修改照片、替换图里的物体 | 图片编辑：保留原图关系，修改指定元素。 |
+| 换背景、改成白底 | 背景替换或背景颜色修改。 |
+| 把产品放进这个场景 | 产品合成：结合场景图与产品图。 |
+| 改成这种画风 | 参考风格转换。 |
+| 换模特、换个人物 | 更换模特并保留服饰及姿态要求。 |
+| 做一版竖图或横图 | 按目标构图生成图片。 |
 
-**Reference images are strongly recommended** when the user wants the output to closely resemble an existing product or scene. Up to 3 reference image URLs can be provided, separated by commas.
+## 接口清单
 
-## Parameter Guide
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 图片生成与编辑 | POST `/multimodal/generateImage` | `scripts/multimodal_generate_image.py` | 按提示词和可选参考图生成图片。 |
+| 获取图片上传预签名 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 为本地参考图获取上传地址，再上传素材并输出公开 URL。 |
 
-| Parameter | Required | Description | Default |
-|-----------|----------|-------------|---------|
-| prompt | Yes | Text description of the desired image. Supports text-to-image, image-to-image, editing, model swapping, and more. Max 1000 characters. | -- |
-| referenceImageUrl | No | URL(s) of reference image(s). Separate multiple URLs with commas. Up to 3 images supported. Max 1000 characters. | -- |
-| aspectRatio | No | Aspect ratio of the output image. | 1:1 |
+## 前置条件
 
-### Supported Aspect Ratios
+确定创作目标、需要保留的元素与参考素材。使用本地图片时，先按下方流程上传；输入要求、上传命令与脚本运行约定见 `references/api.md`。
 
-| Value | Description |
-|-------|-------------|
-| 1:1 | Square (default) |
-| 3:4 | Portrait |
-| 4:3 | Landscape |
-| 9:16 | Vertical fullscreen |
-| 16:9 | Horizontal fullscreen |
+## 图片创作流程
 
-### Prompt Writing Tips
+1. 明确要生成新图还是编辑已有图片，以及主体、场景、光线、风格、氛围和必须保留的细节。
+2. 用户给出本地图片时，先运行上传脚本获得公开 URL；已有公开参考图则直接使用。按用户提供顺序组织参考图，便于提示词对应图片编号。
+3. 写清要执行的动作及保留要求，按接口文档检查输入；说明本次提示词和构图选择，执行前遵守下方动态计费提醒。
+4. 调用生成脚本，检查服务返回的完成情况与状态；已完成时展示图片，未完成时告知用户等待，不把重新生成当成进度查询。
+5. 失败时依据返回原因说明可调整的提示词、参考素材或构图。继续请求遵守成本约束，不自动连续试探。
 
-1. **Be specific and descriptive**: Clearly describe the subject, scene, lighting, style, and mood you want.
-2. **Reference images by number**: When using reference images, refer to them as "image 1", "image 2", etc., in the order they appear in `referenceImageUrl`.
-3. **State the operation explicitly**: Use clear action verbs like "replace", "change", "put", "combine", "generate".
-4. **Keep within 1000 characters**: Prompts have a maximum length of 1000 characters.
+## 执行方式
 
-### Prompt Examples by Scenario
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/multimodal_generate_image.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具按下方动态规则计费。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**Object replacement**:
-```
-Replace the vase on the table in image 1 with a potted plant
-```
+### 输出策略
 
-**Background color change**:
-```
-Change the background color of image 1 to pure white
-```
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-multimodal-generate-image-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**Product compositing**:
-```
-Place the product from image 2 onto the marble countertop in image 1
-```
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**Style transfer**:
-```
-Transform image 1 into the artistic style shown in image 2
-```
+## 执行规则
 
-**Text-to-image (no reference)**:
-```
-A professional product photo of a sleek black wireless headphone on a gradient blue background, studio lighting, 8K quality
-```
-
-**Model swapping**:
-```
-Replace the model in image 1 with a different model while keeping the same clothing and pose
-```
-
-## Local Image Upload
-
-This tool requires **publicly accessible image URLs** for reference images. If the user provides a local image file path (e.g., `C:\Users\...\photo.png`, `/home/.../image.jpg`), you must upload it first to obtain a public URL.
-
-Run the upload script:
-```bash
-python scripts/upload_image.py /path/to/local/image.png
-```
-
-The script will return a public URL (valid for 24 hours) that can be used as the reference image URL parameter.
-
-## 调用方式
-
-- **API 端点**：`POST /multimodal/generateImage`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/multimodal_generate_image.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-multimodal-generate-image-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Display Rules
-
-1. **Show the generated image**: When the response contains image content in the `text` field, display it directly to the user using markdown image syntax.
-2. **Status reporting**: Check the `status` and `finished` fields. If image generation is still in progress, inform the user and advise waiting.
-3. **Prompt transparency**: Briefly describe what prompt and parameters were sent so the user understands what was requested.
-4. **Aspect ratio confirmation**: If the user does not specify dimensions, use the default 1:1 ratio but mention it so they can request a different ratio if needed.
-5. **Reference image guidance**: If the user wants a result close to an existing image but did not provide a reference URL, proactively suggest they provide one for better fidelity.
-6. **Error handling**: When generation fails, explain the issue based on the response `status` field and suggest adjustments (e.g., simplify the prompt, check reference image URLs, try a different aspect ratio).
-## Important Limitations
-
-- **Reference image limit**: A maximum of 3 reference image URLs can be provided per request.
-- **Prompt length**: The prompt must not exceed 1000 characters.
-- **URL validity**: Reference image URLs must be publicly accessible. Private or expired URLs will cause failures.
-- **Aspect ratio options**: Only 1:1, 3:4, 4:3, 9:16, and 16:9 are supported.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Requests involving image generation or editing:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Generate an image", "Create a picture" | Text-to-image generation |
-| "Edit this photo", "Modify the image" | Image editing |
-| "Change the background", "Make it white background" | Background replacement |
-| "Put the product on this scene" | Product compositing |
-| "Make it look like this style" | Style transfer |
-| "Swap the model", "Change the person" | Model swapping |
-| "Create a product photo" | Product image generation |
-| "Make a vertical/landscape version" | Aspect ratio adjustment |
-
-**Not applicable** -- Needs beyond image generation:
-
-- Image analysis or recognition (reading text from images, identifying objects)
-- Video generation or editing
-- Image file format conversion
-- Batch processing of hundreds of images
-- Image hosting or storage
-
-## 算力消耗规则
+### 算力消耗预估
 
 按动态规则计费：消耗算力 = rawTokens × 0.045。
 
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+本服务按倍数动态计算，可能一次性消耗大量算力；调用前必须提醒用户，由用户决定是否继续。预签名上传的独立计费标准不明确，不推断为免费。
 
-**Feedback:**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 解决认证和算力问题
 
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解生成方式**：文生图无需参考图；图生图利用参考图保留既有产品或场景元素；图片编辑修改指定内容；产品合成结合多张图；模特更换应说明服饰与姿态保留要求。
+- **提高参考一致性**：希望结果接近既有产品或场景时，强烈建议使用参考图；尚未提供素材时主动建议补充。
+- **提示词写法**：具体描述主体、场景、灯光、风格和氛围；明确使用“替换”“修改”“放入”“组合”“生成”等动作。涉及多图时按传入顺序称“图片1”“图片2”，避免指代不明。长度等输入限制见 `references/api.md`。
+- **展示生成图片**：`text` 含图片内容时用 Markdown 图片语法直接展示；若已包含 Markdown 图片内容，按原内容渲染，避免重复包裹。
+- **说明生成进度**：结合 `status` 和 `finished` 报告完成情况；未完成时提示等待，不声称已经生成成功。
+- **保持请求透明**：简要说明发送的提示词与构图参数；用户未指定尺寸时采用服务默认构图，并告知用户可调整，默认值见接口定义。
+- **说明实际用量**：响应返回 `costToken` 时如实展示，不将其直接当作固定算力价格。
+- **解释失败**：根据实际状态与消息说明原因，提出简化提示词、核对参考图可用性或调整构图的建议；不虚构结果或自动重试。
+
+## 使用示例
+
+### 替换物体
+
+提示词：把图片1桌上的花瓶替换成一盆绿植。
+
+### 修改背景颜色
+
+提示词：把图片1的背景颜色改成纯白色。
+
+### 产品场景合成
+
+提示词：把图片2中的产品放在图片1的大理石台面上。
+
+### 转换风格
+
+提示词：将图片1转换为图片2展示的艺术风格。
+
+### 无参考图生成商品照
+
+提示词：一副时尚黑色无线耳机的专业产品照，渐变蓝色背景，影棚灯光，8K 画质。
+
+### 更换模特
+
+提示词：把图片1中的模特换成另一位模特，保留相同服饰和姿态。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

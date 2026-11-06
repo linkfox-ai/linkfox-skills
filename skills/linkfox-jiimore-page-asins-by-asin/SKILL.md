@@ -1,277 +1,134 @@
 ---
 name: linkfox-jiimore-page-asins-by-asin
-description: 按ASIN查找亚马逊同细分市场（Niche）竞品，支持点击转化率、综合转化率、点击量、销量、评论、评分、价格、毛利率等多维度筛选潜力竞品。当用户提到同细分竞品、ASIN竞品挖掘、Niche竞品分析、同类商品对标、ASIN对标分析、细分市场竞品列表、高转化竞品筛选、极目产品挖掘、niche competitor by ASIN, ASIN competitor analysis, same niche products, similar products discovery, conversion rate comparison, potential competitor screening, Jiimore ASIN mining时触发此技能。即使用户未明确提及"细分市场"或"Niche"，只要其需求涉及根据某个ASIN挖掘同细分下的竞品列表或筛选潜力竞品，也应触发此技能。
+description: 根据参考 ASIN 挖掘亚马逊同细分市场（Niche）的竞品，按点击转化率、综合转化率、点击量、销量、评论、评分、价格、FBA 费用、毛利率和卖家来源筛选，展示细分市场背景及趋势。适用于 ASIN 竞品挖掘、同类商品对标、高转化竞品筛选和新进入者研究；不适用于关键词级市场分析、单品营收或利润估算、关键词研究、广告管理、评论分析、Listing 优化及采购物流。
 ---
 
-# Jiimore Niche Competitor by ASIN
+# 极目亚马逊同细分市场竞品挖掘
 
-This skill guides you on how to query and filter Amazon competing products in the same niche segments as a reference ASIN, helping Amazon sellers discover potential competitors and evaluate opportunities using metrics such as click conversion rate, composite conversion rate, click volume, sales volume, reviews, price, FBA fees, and gross profit margin.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Given a reference ASIN, the tool **mines competing ASINs that share the same niche segments** on Amazon and returns a paginated list with rich metrics: click conversion rate, composite conversion rate, click counts (7-day/30-day/90-day), sales volume, pricing, FBA fees, gross profit margin, customer rating, and 90-day trend data. Data is available for **US**, **JP**, and **DE** marketplaces only.
+从指定 ASIN 出发，寻找与其同属细分市场的竞品，并根据用户关注的指标筛选和对标。用户说“竞品分析”或“相似商品”时，若目标是查找参考 ASIN 所在细分市场中的竞争商品，使用本技能，无需明确提及极目或 Niche。
 
-**ASIN is required**: Every query must include a reference `asin`. The tool finds products that share the same niche segments as this ASIN and returns them with detailed metrics.
+**场景速查**
 
-**Percentage fields**: Several parameters use a 0-1 decimal range representing 0%-100%. When displaying these values to users, convert them to percentages (e.g., 0.15 -> 15%).
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 找出这个 ASIN 的竞品 | 同细分市场竞品发现。 |
+| 我的产品有哪些高转化竞品 | 按综合转化率筛选和排序。 |
+| 最近有哪些新品进入这个细分市场 | 按上架时间和点击增长筛选。 |
+| 看看这些竞品的价格和毛利 | 价格带及毛利率对标。 |
+| 找评论少但点击多的同类商品 | 按点击量和评论数交叉筛选。 |
+| 哪些中国卖家在和这个 ASIN 竞争 | 按卖家来源筛选。 |
+| 看看日本站这个 ASIN 的竞品 | 站点内竞品对比。 |
 
-**Date format**: Launch date parameters use the format `yyyyMMdd000000` (e.g., `20240101000000` for January 1, 2024).
+### 边界
 
-## Parameter Guide
+关键词级细分市场数据使用极目关键词市场分析技能；单个 ASIN 的完整商品详情使用亚马逊商品详情技能。ABA 搜索词、广告管理、评论研究、Listing 优化、供应商采购与物流规划不属于本技能范围。
 
-### Required
+## 前置条件
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| asin | string | Reference ASIN to find competing products for (max 1000 chars) |
+**先确定参考商品和查询目标**：取得用户指定的参考 ASIN、目标站点和筛选意图。缺少参考商品时先补齐；参数、默认值、排序枚举与使用限制见 `references/api.md`。
 
-### Marketplace & Pagination
+## 查询流程
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| countryCode | string | US | Country code: US, JP, DE |
-| page | integer | 1 | Page number (starts from 1) |
-| pageSize | integer | 50 | Results per page (10-100) |
-| sortField | string | purchasedClicksT360 | Field to sort by (see Sorting Options below) |
-| sortType | string | desc | Sort direction: `desc` or `asc` |
+1. 确定用户要对标的参考商品、站点和关注指标，根据 `references/api.md` 将自然语言条件转换为筛选与排序参数。
+2. 检查已有响应和本地缓存；按已确定的条件执行查询，遵守执行方式中的成本约束。
+3. 按接口公共响应规则判断结果，遇到认证或算力问题进入下方引导；失败时解释响应原因，可建议核对 ASIN 或放宽筛选，但不自动试探。
+4. 展示本次结果范围、核心竞品指标、细分市场背景和可用趋势；有更多记录时告知总数，可建议按需继续查询，后续调用仍遵守成本约束。
 
-### Filter Parameters (all optional, min/max ranges)
+## 执行方式
 
-**Price & FBA**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| priceMin / priceMax | number | Product price range |
-| fbaFeeMin / fbaFeeMax | number | FBA commission range |
-| grossProfitMarginMin / grossProfitMarginMax | number | Gross profit margin range |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/jiimore_page_asins_by_asin.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口调用消耗 9 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**Reviews & Ratings**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| totalReviewsMin / totalReviewsMax | integer | Total review count range |
-| customerRatingMin / customerRatingMax | number | Customer rating range (0.0-5.0) |
+### 输出策略
 
-**Click Data (7-day)**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| clickCountT7Min / clickCountT7Max | integer | Weekly click count range |
-| clickCountGrowthT7Min / clickCountGrowthT7Max | number | Weekly click growth rate (0-1) |
-| clickConversionRateMin / clickConversionRateMax | number | Click conversion rate (0-1) |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-jiimore-page-asins-by-asin-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**Click Data (30-day)**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| clickCountT30Min / clickCountT30Max | integer | Monthly click count range |
-| clickCountGrowthT30Min / clickCountGrowthT30Max | number | Monthly click growth rate (0-1) |
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**Composite Conversion**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| clickConversionRateCompositeMin / clickConversionRateCompositeMax | number | Composite click conversion rate (0-1) |
+## 执行规则
 
-**Sales & Launch Date**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| salesVolumeT360Min / salesVolumeT360Max | integer | 360-day sales volume range |
-| launchDateMin / launchDateMax | string | Launch date range (format: yyyyMMdd000000) |
+### 算力消耗预估
 
-**Niche & Seller**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| nicheCountMin / nicheCountMax | integer | Number of niches the product belongs to |
-| sellerCountry | string | Seller country code(s), comma-separated (e.g., "CN,US") |
+9 算力 / 次
 
-### Sorting Options
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-| Value | Meaning |
-|-------|---------|
-| purchasedClicksT360 | 360-day purchased clicks (default) |
-| totalReviews | Total reviews |
-| price | Price |
-| launchDate | Launch date |
-| clickCountT30 | 30-day click count |
-| clickCountT90 | 90-day click count |
-| clickCountT7 | 7-day click count |
-| clickConversionRate | Click conversion rate |
-| clickConversionRateComposite | Composite click conversion rate |
-| customerRating | Customer rating |
-| clickCountGrowthT7 | Weekly click growth rate |
-| clickCountGrowthT30 | Monthly click growth rate |
-| currentPrice | Current price |
-| fbaFee | FBA commission |
-| shippingFee | FBA shipping fee |
-| gpm | Gross profit margin |
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## 调用方式
+### 解决认证和算力问题
 
-- **API 端点**：`POST /jiimore/pageAsinsByAsin`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/jiimore_page_asins_by_asin.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-jiimore-page-asins-by-asin-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 约束与建议
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- **理解同细分市场**：结果是与参考 ASIN 共享 Niche 的竞争商品，不将“同细分”直接等同于外观相同或同款。
+- **清晰展示数据**：用表格展示 ASIN、标题、价格、评分、综合点击转化率、点击量、评论数和毛利率；按需补充销量、FBA 费用和卖家信息，价格注明响应币种。
+- **转换比例显示**：将响应中的小数比率转换为百分比，例如 `0.15` 显示为 `15%`；构造请求时仍遵守接口参数约定。
+- **展示市场背景**：有 `niches` 时展示主要细分市场标题及 `demand` 市场评分，说明商品所处的市场背景。
+- **概括趋势**：有 `trends` 时概括点击量、价格等指标的 90 天方向（上升、下降或平稳），数据不足时说明缺失，不补造趋势。
+- **客观呈现**：不主动附加主观经营或开发建议；仅在用户明确要求时提供解读，并区分返回数据与分析判断。
+- **运行约定**：脚本的缓存、CLI 选项及落盘细节见 `references/api.md`；当前目录不可写时停止，遵守上方输出策略。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 使用示例
 
-## Usage Examples
+### 基础竞品查询
 
-**1. Basic competitor lookup by ASIN**
-Find competing products for a reference ASIN in the US market:
-```json
-{
-  "asin": "B0GC4RPX79",
-  "countryCode": "US",
-  "sortField": "purchasedClicksT360",
-  "sortType": "desc"
-}
-```
+用户：查美国站 ASIN B0GC4RPX79 的同细分竞品。
 
-**2. High-conversion competitors**
-Find competitors with composite conversion rate above 15%:
-```json
-{
-  "asin": "B0GC4RPX79",
-  "countryCode": "US",
-  "clickConversionRateCompositeMin": 0.15,
-  "sortField": "clickConversionRateComposite",
-  "sortType": "desc"
-}
-```
+按默认购买点击排序查询，展示竞品与细分市场背景。
 
-**3. New product opportunities**
-Find recently launched competitors (within 3 months) with high click growth:
-```json
-{
-  "asin": "B0GC4RPX79",
-  "countryCode": "US",
-  "launchDateMin": "20240101000000",
-  "clickCountGrowthT7Min": 0.1,
-  "sortField": "clickCountGrowthT7",
-  "sortType": "desc"
-}
-```
+### 高转化竞品
 
-**4. Price-range filtered competitors**
-Find competitors priced between $20 and $50 with good gross margins:
-```json
-{
-  "asin": "B0GC4RPX79",
-  "countryCode": "US",
-  "priceMin": 20,
-  "priceMax": 50,
-  "grossProfitMarginMin": 0.3,
-  "sortField": "gpm",
-  "sortType": "desc"
-}
-```
+用户：找出这个 ASIN 综合转化率超过 15% 的竞品，按综合转化率降序。
 
-**5. High-click low-review competitors (potential weak spots)**
-Find competitors with monthly clicks above 2000 but fewer than 100 reviews:
-```json
-{
-  "asin": "B0GC4RPX79",
-  "countryCode": "US",
-  "clickCountT30Min": 2000,
-  "totalReviewsMax": 100,
-  "sortField": "clickCountT30",
-  "sortType": "desc"
-}
-```
+将百分比换算为请求中的小数条件，展示对应转化率和点击量。
 
-**6. Japanese market competitor analysis**
-Explore competitors in the Japanese market sorted by rating:
-```json
-{
-  "asin": "B0GC4RPX79",
-  "countryCode": "JP",
-  "sortField": "customerRating",
-  "sortType": "desc"
-}
-```
+### 新进入者
 
-**7. Chinese sellers in the same niche**
-Filter competitors by seller country (China) with high sales volume:
-```json
-{
-  "asin": "B0GC4RPX79",
-  "countryCode": "US",
-  "sellerCountry": "CN",
-  "salesVolumeT360Min": 1000,
-  "sortField": "purchasedClicksT360",
-  "sortType": "desc"
-}
-```
+用户：查看指定日期之后上架、周点击增长超过 10% 的同细分商品。
 
-## Display Rules
+按用户指定的日期范围筛选并按周点击增长降序，展示可用趋势。
 
-1. **Present data clearly**: Show query results in well-structured tables. Convert decimal ratios to percentages for readability (e.g., 0.25 -> 25%).
-2. **Highlight key metrics**: Always surface the ASIN, product title, price, customer rating, click conversion rate (composite), click counts, total reviews, and gross profit margin as primary columns.
-3. **Show niche context**: When the `niches` field is present, display the top niche titles and demand scores to give context about which market segments the product competes in.
-4. **Trends visualization**: When `trends` data is available, summarize the 90-day trend direction (rising/falling/stable) for key metrics like clicks and pricing.
-5. **Pagination guidance**: When `total` exceeds the current page size, inform the user of the total count and suggest fetching additional pages if needed.
-6. **Error handling**: When a query fails, explain the reason based on the response message and suggest adjusting filter criteria (e.g., broadening ranges or checking the ASIN).
-7. **No subjective advice**: Present data objectively without adding unsolicited business recommendations. Only provide interpretation when explicitly requested by the user.
+### 价格与毛利筛选
 
-## Important Limitations
+用户：查美国站价格 20 至 50 美元、毛利率至少 30% 的竞品。
 
-- **Supported marketplaces**: Only US, JP, and DE are available. Other marketplace codes will be rejected.
-- **ASIN required**: Every query must include a reference ASIN. The API will not return results without one.
-- **Result cap**: Maximum 100 results per page.
-- **Percentage values**: All rate/share parameters use 0-1 range, not 0-100. Ensure correct values when constructing filters.
-- **Date format**: Launch date parameters must use `yyyyMMdd000000` format.
+按价格和毛利条件筛选，按毛利率降序展示。
 
-## User Expression & Scenario Quick Reference
+### 高点击、低评论商品
 
-**Applicable** -- Finding competing products based on a reference ASIN:
+用户：找月点击量至少 2000、评论数不超过 100 的同细分竞品。
 
-| User Says | Scenario |
-|-----------|----------|
-| "Find competitors for ASIN B0GC4RPX79" | Direct competitor lookup |
-| "What products compete with this ASIN" | Same-niche competitor exploration |
-| "Show me similar products in the same niche" | Niche competitor discovery |
-| "High-conversion competitors for my product" | Conversion-based competitor filtering |
-| "New products competing in my niche" | New entrant identification |
-| "Which Chinese sellers compete with this ASIN" | Seller-origin based filtering |
-| "Find low-review high-click products like mine" | Opportunity gap analysis |
-| "Competitor pricing analysis for ASIN XX" | Price-focused competitor analysis |
+组合点击与评论筛选，按月点击量降序展示，不额外推导开发推荐。
 
-**Not applicable** -- Needs beyond ASIN-based same-niche competitor discovery:
+### 日本站评分对标
 
-- Keyword-level niche market analysis (use Jiimore Niche Info by Keyword instead)
-- Individual ASIN revenue or profit estimation
-- ABA search term data / keyword research
-- Advertising campaign management or bid optimization
-- Product review analysis or listing optimization
-- Supplier sourcing or logistics planning
+用户：看看这个 ASIN 在日本站的竞品，按评分降序。
 
-**Boundary judgment**: When users say "competitor analysis" or "similar products," if their intent focuses on finding products that compete in the same niche as a specific ASIN, this skill applies. If they want keyword-level market segment data, direct them to Jiimore Niche Info by Keyword. If they need detailed product data for a single ASIN, direct them to Amazon Product Detail.
+在指定站点查询，展示评分和评论数。
 
-## 算力消耗规则
+### 中国卖家竞品
 
-消耗 9 算力。
+用户：找出同细分市场 360 天销量至少 1000 的中国卖家商品。
 
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+按卖家来源和 360 天销量筛选，按购买点击降序展示。
 
-**Feedback:**
+## 使用反馈
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

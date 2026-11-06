@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TikTok Product Related Videos - LinkFox Skill
+TikTok 商品关联视频 - LinkFox 技能
 调用 /chuhaijiang/products/related-videos 接口。
 
 Usage:
@@ -20,8 +20,7 @@ import os
 import secrets
 import sys
 import time
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
+from _chuhaijiang_transport import request_json, is_normal_response, is_cacheable_result
 
 _SESSION_CACHE: dict[str, str] = {}
 
@@ -132,8 +131,6 @@ SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
 _LAST_CALL_WAS_HTTP_ERROR = False
 
-def get_api_url():
-    return get_api_base() + API_PATH
 
 
 def get_api_key():
@@ -152,42 +149,9 @@ def get_api_key():
 def call_api(params):
     global _LAST_CALL_WAS_HTTP_ERROR
     _LAST_CALL_WAS_HTTP_ERROR = False
-    api_url = get_api_url()
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": (os.environ.get("SESSION_ID") or "").strip(),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(
-        api_url,
-        data=data,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            raw = response.read().decode("utf-8")
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                return {"error": "Invalid JSON response", "details": raw[:500]}
-    except HTTPError as e:
-        _LAST_CALL_WAS_HTTP_ERROR = True
-        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
-        try:
-            return json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
-        except json.JSONDecodeError:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": body[:500]}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
-    except TimeoutError:
-        return {"error": "Connection timed out"}
+    status, result = request_json(API_PATH, params)
+    _LAST_CALL_WAS_HTTP_ERROR = not is_normal_response(status, result)
+    return result
 
 
 def _cache_key(params):
@@ -221,6 +185,8 @@ def _load_cache(path):
     try:
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
+        if not is_cacheable_result(200, payload):
+            return None
         return payload
     except (OSError, json.JSONDecodeError):
         return None
@@ -235,20 +201,8 @@ def _save_cache(path, payload):
 
 
 def _is_success_result(result):
-    if _LAST_CALL_WAS_HTTP_ERROR:
-        return False
-    if not isinstance(result, dict) or result.get("error"):
-        return False
-    has_success_marker = result.get("success") is True
-    if result.get("success") is False:
-        return False
-    for key in ("errcode", "errorCode", "code"):
-        if key not in result:
-            continue
-        has_success_marker = True
-        if str(result[key]).lower() not in ("0", "200", "ok", "success"):
-            return False
-    return has_success_marker
+    # HTTP/errcode 遵循公共规则，显式 error/success 失败标记不写入缓存。
+    return not _LAST_CALL_WAS_HTTP_ERROR and is_cacheable_result(200, result)
 
 
 

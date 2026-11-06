@@ -20,14 +20,17 @@ from _video_endpoints import list_api_names
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print(f"Usage: video_api.py '<JSON with api field>'\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
+        print(f"Usage: video_api.py '<JSON with api field>' [--inline] [--no-cache]\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
+    if not isinstance(params, dict):
+        print("JSON parameters must be an object", file=sys.stderr)
+        sys.exit(1)
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
     inline = lf_inline_flag()
-    emit_result(run_video_api(str(params["api"]), params, "video_api.py"), inline)
+    emit_result(run_video_api(str(params["api"]), params, "video_api.py"), slug="linkfox-shopee-store-video-" + str(params["api"]), inline=inline)
 
 
 if __name__ == "__main__":

@@ -101,12 +101,20 @@ def run_product_api(api_name: str, params: dict, caller: Optional[str] = None) -
 
     query_string: Optional[str] = None
     body: Optional[str] = None
+    request_body: Any = None
     content_type = str(params.get("contentType") or "application/json")
 
     if method == "GET":
         query_string = _build_get_query(params)
     else:
         body = _build_post_body(params, spec)
+        # 请求前校验，避免发出无效写请求后才在构造输出时解析失败。
+        # 保留有效 JSON 字符串的原始格式，只复用解析结果生成输出。
+        try:
+            request_body = json.loads(body)
+        except json.JSONDecodeError as exc:
+            print(f"body / requestBody 必须是有效 JSON：{exc}", file=sys.stderr)
+            sys.exit(1)
 
     shop_id = params.get("shopId")
     merchant_id = params.get("merchantId")
@@ -128,11 +136,12 @@ def run_product_api(api_name: str, params: dict, caller: Optional[str] = None) -
         "api": api_name,
         "developerProxy": proxy,
         "resolvedPath": path,
+        "transportHttpStatus": getattr(proxy, "transport_http_status", None),
     }
     if query_string:
         out["queryString"] = query_string
     if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
+        out["requestBody"] = request_body
 
     merge_shopee_body(out, proxy, response_key)
     return out

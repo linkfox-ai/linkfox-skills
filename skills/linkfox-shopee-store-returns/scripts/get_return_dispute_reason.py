@@ -1,26 +1,15 @@
 #!/usr/bin/env python3
-"""
-Shopee Store — get_return_dispute_reason
+"""Shopee 店铺 — 查询争议原因（get_return_dispute_reason）。
 
-官方: https://open.shopee.com/documents/v2/v2.returns.get_return_dispute_reason?module=102&type=1
-
-入参说明见 references/apis/get-return-dispute-reason.md。
+官方：https://open.shopee.com/documents/v2/v2.returns.get_return_dispute_reason?module=102&type=1
+入参与响应见 references/apis/get-return-dispute-reason.md。
 """
 
-from __future__ import annotations
-
-import json
-import sys
-
-from _returns_api_runner import run_returns_api
+from _returns_api_runner import run_cli
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: get_return_dispute_reason.py '<JSON>'", file=sys.stderr)
-        sys.exit(1)
-    params = json.loads(sys.argv[1])
-    print(json.dumps(run_returns_api("get_return_dispute_reason", params, "get_return_dispute_reason.py"), indent=2, ensure_ascii=False))
+    run_cli("get_return_dispute_reason")
 
 
 if __name__ == "__main__":

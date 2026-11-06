@@ -12,17 +12,11 @@ PATCH `orders/v0/orders/{orderId}/regulatedInfo`，批准或拒绝管制订单�
 
 from __future__ import annotations
 
-import json
 import sys
 from typing import Any, Dict
 from urllib.parse import quote
 
-from _spapi_orders_common import (
-    developer_proxy_call,
-    emit_result,
-    ensure_auth_skill_available,
-        lf_inline_flag,
-)
+from _spapi_orders_common import run_proxy, ensure_auth_skill_available, load_cli_params, require_fields
 
 
 def _path(order_id: str) -> str:
@@ -39,46 +33,29 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-    try:
-        params = json.loads(sys.argv[1])
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON: {e}", file=sys.stderr)
-        sys.exit(1)
+    params = load_cli_params()
 
     if not params.get("skipDepCheck"):
         ensure_auth_skill_available("update_verification_status.py")
 
-    for f in ("sellerId", "region", "orderId"):
-        if f not in params:
-            print(f"Missing required field: {f}", file=sys.stderr)
-            sys.exit(1)
+    require_fields(params, ("sellerId", "region", "orderId"))
 
     body_obj: Dict[str, Any]
     if "requestBody" in params and isinstance(params["requestBody"], dict):
         body_obj = params["requestBody"]
     elif "regulatedOrderVerificationStatus" in params:
+        if not isinstance(params["regulatedOrderVerificationStatus"], dict):
+            print("regulatedOrderVerificationStatus 必须为 JSON 对象。", file=sys.stderr)
+            sys.exit(1)
         body_obj = {"regulatedOrderVerificationStatus": params["regulatedOrderVerificationStatus"]}
     else:
         print("Provide regulatedOrderVerificationStatus or requestBody object.", file=sys.stderr)
         sys.exit(1)
 
     path = _path(params["orderId"])
-    body_str = json.dumps(body_obj, ensure_ascii=False)
 
-    proxy = developer_proxy_call(
-        str(params["region"]),
-        path,
-        "PATCH",
-        seller_id,
-        body=body_str,
-    )
-    out: dict = {
-        "developerProxy": proxy,
-        "resolvedPath": path,
-        "requestBody": body_obj,
-    }
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy("updateVerificationStatus", str(params["region"]), path, "PATCH", str(params["sellerId"]),
+              body_obj=body_obj)
 
 
 if __name__ == "__main__":

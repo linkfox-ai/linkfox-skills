@@ -1,45 +1,130 @@
-# delete_follow_prize
+# Shopee 删除关注有礼活动 接口说明
 
-| 项 | 值 |
-|----|-----|
-| 脚本 | `scripts/delete_follow_prize.py` |
-| Method / path | POST `api/v2/follow_prize/delete_follow_prize` |
-| 官方文档 | [delete_follow_prize](https://open.shopee.com/documents/v2/v2.follow_prize.delete_follow_prize?module=113&type=1) |
-| 用途 | Delete follow prize |
+## 公共规则
 
-经 **`POST /shopee/developerProxy`** 转发；依赖 **`linkfox-shopee-store-auth`** 选店（通常传 `shopId` 或 `merchantId`）。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## 脚本 JSON 入参
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：删除关注有礼活动（delete_follow_prize）
+
+> 官方：[v2.follow_prize.delete_follow_prize](https://open.shopee.com/documents/v2/v2.follow_prize.delete_follow_prize?module=113&type=1)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/shopee/developerProxy`
+
+### 请求参数
+
+#### 网关 POST Body
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| path | string | 是 | 固定为 `api/v2/follow_prize/delete_follow_prize`，不带主机名前缀；公共辅助函数校验以 `api/v2` 开头。 |
+| method | string | 是 | 固定为 `POST`，为 Shopee 上游方法；LinkFox 网关请求始终使用 POST。 |
+| shopId | string | 与 merchantId 至少一个 | 已授权店铺 ID，推荐；脚本转为字符串。若两者都传则都转发。 |
+| merchantId | string | 与 shopId 至少一个 | 已授权商户 ID；脚本转为字符串。与 shopId 至少提供一个；两者都有值时均转发，不做互斥校验。 |
+| queryString | string | GET 按需 | 不带 `?` 的查询串。 |
+| body | string | POST 是 | Shopee 请求体字符串；由脚本 JSON 参数转换。 |
+| contentType | string | POST 按需 | 脚本默认 `application/json`；仅发送 body 时加入网关请求。 |
+
+#### 脚本 JSON 参数
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `shopId` | string | 与 `merchantId` 二选一 | 店铺 ID（推荐；Public 等无店铺接口可省略） |
-| `merchantId` | string | 与 `shopId` 二选一 | 商户 ID |
+| shopId | string | 与 merchantId 至少一个 | 店铺 ID；Follow Prize 不是可省略店铺的 Public 接口。 |
+| merchantId | string | 与 shopId 至少一个 | 商户 ID。 |
+| api | string | 仅通用入口必填 | `follow_prize_api.py` 传 `delete_follow_prize`；单操作脚本固定选择该操作。 |
+| contentType | string | 否 | 默认 `application/json`，仅对 POST body 生效。 |
+| body | JSON 值 / string | 与 requestBody 至少一个 | 完整活动请求体；字符串原样转发，其他 JSON 值序列化为字符串；同时提供时 body 优先。通常使用完整活动对象，脚本不校验上游 schema。 |
+| requestBody | JSON 值 / string | 与 body 至少一个 | body 的兼容别名，转换规则相同。 |
 
-- Method：**POST**
-- POST：传 `body` / `requestBody`，或把 `body_fields` 列在 JSON 顶层
-- `shopId` / `merchantId` / `skipDepCheck` 等为网关选店保留字段，不会进 Shopee query/body
-- Registry notes：Delete follow prize
+六个操作的注册配置均未设置 `body_fields`，因此 POST 操作不能只靠顶层业务字段构造请求体。必须传 `body` 或 `requestBody`；通用 runner 支持处理 `body_fields`，但这些操作没有配置可用于构造请求体的顶层字段。创建须传完整活动资料，更新、提前结束和删除须提供对应操作要求的活动资料。
+Shopee 活动 body 的内部字段类型、默认值和枚举按上方官方文档及用户资料确定；脚本不注入推测的 schema 或默认值，须提供完整请求体。
 
----
+网关选店和脚本控制字段 `shopId`、`merchantId`、`skipDepCheck`、`body`、`requestBody`、`api`、`contentType` 为保留字段，不作为 Shopee GET query；POST 仅使用显式 body/requestBody，不混入这些顶层字段。令牌由服务端按已授权店铺解析，无需提供原始令牌；GET 顶层仅放该操作的业务查询字段。
 
-## 调用示例
+#### 脚本选项与运行约定
+
+依赖检查、认证兼容、CLI 选项、输出目录和无缓存约定见 [脚本运行约定](../api.md#脚本运行约定)。
+
+### 响应结构
+
+#### 网关响应
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | LinkFox 业务码，按公共基本规则判断。 |
+| errmsg | string | 网关消息或失败原因，实际返回为准。 |
+| httpStatus | integer / 数字字符串 | Shopee 上游状态，与外层 HTTP 状态不同；脚本仅在转换为整数后等于 200 时解析 body。 |
+| contentType | string | Shopee 上游响应的 Content-Type。 |
+| body | string | Shopee 返回的 JSON 字符串；完整业务字段以实际返回为准。 |
+
+#### 脚本输出字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| api | string | 固定为 `delete_follow_prize`。 |
+| developerProxy | object | 网关原始完整响应，包括错误。 |
+| resolvedPath | string | 实际上游 path：`api/v2/follow_prize/delete_follow_prize`。 |
+| transportHttpStatus | integer / null | LinkFox 外层 HTTP 状态；连接失败为 null。 |
+| developerProxy.error | string | 公共调用器在连接失败或非 JSON HTTP 错误时生成的本地诊断，非网关成功响应字段。 |
+| developerProxy.details | string | 公共调用器保留的非 JSON HTTP 错误正文，存在时输出，非网关成功响应字段。 |
+| queryString | string | 实际查询串；非空时输出。 |
+| requestBody | JSON 值 / string / null | 发送了 body 时回显；可解析时输出解析值，否则保留原始字符串，空串为 null。 |
+| deleteFollowPrize | JSON 值 / null | 网关正常且上游 httpStatus 为 200 时解析 Shopee body；空 body 或 JSON 解析失败为 null，其他失败不新增此字段。 |
+| deleteFollowPrizeResponse | JSON 值 | 当上述解析结果为 object 且 response 非 null 时，保留其 response 子对象；原始外壳仍保留在 deleteFollowPrize。 |
+
+Shopee `response` 的内部字段以实际返回为准；保留真实嵌套对象，不预设未知字段的 schema。
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 外层符合基础规则后，仅 `developerProxy.httpStatus` 转为整数等于 200 时解析活动业务结果。解析成功不代表活动变更已经成功，仍需阅读 Shopee body 中的业务消息。
+- 上游非 200、空 body 或无法解析时保留原始响应，不将错误包装为活动成功。
+
+### curl 示例
+
+以下仅演示网关封装；body 必须替换为用户提供的完整活动资料，不能将空对象作为可执行活动请求。
 
 ```bash
-export LINKFOXAGENT_API_KEY="<your-key>"
-
-python scripts/delete_follow_prize.py '{"shopId": "67890"}'
-
-# 通用入口
-python scripts/follow_prize_api.py '{"api": "delete_follow_prize", "shopId": "67890"}'
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/shopee/developerProxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{"path": "api/v2/follow_prize/delete_follow_prize", "method": "POST", "shopId": "67890", "body": "{}", "contentType": "application/json"}'
 ```
 
----
+## Feedback
 
-## 响应要点
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
-1. 先看 **`developerProxy.httpStatus`** / `errcode`
-2. 再读 **`deleteFollowPrize`**（Shopee `response` 解析结果）
-3. 字段以官方文档为准
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-shopee-store-follow-prize",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

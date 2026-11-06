@@ -85,15 +85,18 @@ def run_plan_phase(job: dict, *, skill_root: str, variant_name: str) -> dict[str
     os.makedirs(datadir, exist_ok=True)
 
     image_urls = job.get("imageUrls") or []
-    if not image_urls or not all(isinstance(u, str) and u.startswith(("http://", "https://")) for u in image_urls):
+    if not isinstance(image_urls, list) or not image_urls or not all(isinstance(u, str) and u.startswith(("http://", "https://")) for u in image_urls):
         raise ValueError("job.imageUrls 须为非空 https URL 数组")
 
-    aspect_ratio = job.get("aspectRatio") or job.get("ratio") or "1:1"
+    # 不在这里注入全局 1:1，否则会覆盖 A+ 子类的默认比例。
+    aspect_ratio = job.get("aspectRatio") or job.get("ratio") or ""
     aplus_ratio = job.get("aplusRatio") or ""
     scene = (job.get("scene") or "D").upper()
     brand_key = normalize_brand_key(job.get("brandKey"))
 
     slots = expand_type_slots(job.get("types"), cfg["default_plan_d"])
+    if any(t not in cfg["type_labels"] for t in slots):
+        raise ValueError("job.types 含本商品图流程不支持的类型")
     skeleton = build_slots_skeleton(
         slots,
         aspect_ratio=aspect_ratio,
@@ -129,6 +132,22 @@ def run_plan_phase(job: dict, *, skill_root: str, variant_name: str) -> dict[str
             raise ValueError("S1 输出须含 imagePlanList 数组")
         plan = merge_s1_result(skeleton, s1_list)
 
+    # 比例、版式和用户完整输入优先于模型推理，白底不携带内容字段。
+    points = job.get("point") or []
+    if isinstance(points, str):
+        points = [points]
+    point_index = 0
+    for row, base in zip(plan, skeleton):
+        row["ratio"], row["layout"] = base["ratio"], base["layout"]
+        if row["type"] == "WHITE_BG":
+            row.update(point="", desc="", image_desc="", layout="")
+            continue
+        if point_index < len(points) and points[point_index]:
+            row["point"] = points[point_index]
+        point_index += 1
+        if job.get("imageDesc"):
+            row["image_desc"] = job["imageDesc"]
+
     brand_gene_file = job.get("brand_gene_file")
     if brand_gene_file:
         brand_gene_file = os.path.abspath(brand_gene_file)
@@ -161,8 +180,9 @@ def run_plan_phase(job: dict, *, skill_root: str, variant_name: str) -> dict[str
         "scene": scene,
         "imageUrls": image_urls,
         "image_urls_file": urls_path,
-        "provider": job.get("provider") or "BANANA_PRO",
-        "resolution": job.get("resolution") or "2K",
+        "provider": job.get("provider") or "GPT_2_5_IMAGE",
+        "resolution": job.get("resolution") or "1K",
+        "quality": job.get("quality") or "low",
         "plan_file": plan_path,
         "brandKey": brand_key,
         "brand_gene_file": brand_gene_file,

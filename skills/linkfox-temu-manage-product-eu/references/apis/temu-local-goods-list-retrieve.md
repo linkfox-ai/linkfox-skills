@@ -1,16 +1,68 @@
-# 商品列表搜索（Retrieve）— `temu.local.goods.list.retrieve`
+# 商品列表搜索（Retrieve） 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/eu_manage_goods_list_retrieve.py` |
-| **Partner 文档** | https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896&sub_menu_code=b13c66e2a08740ecbdcc2f95e2573ac9 |
-| **网关** | `POST /temu/proxy`，`type`=`temu.local.goods.list.retrieve`，业务载荷放在 Body 的 `params` |
+## 公共规则
 
-**Description:** local goods list search（游标分页检索，与 `bg.local.goods.list.query` 的页码分页模型不同）。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Request 结构（官方顶层）
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：商品列表搜索（Retrieve）（`temu.local.goods.list.retrieve`）
+
+商品列表检索（游标分页检索，与 `bg.local.goods.list.query` 的页码分页模型不同）。
+
+> Partner EU 文档：https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896&sub_menu_code=b13c66e2a08740ecbdcc2f95e2573ac9
+
+对应脚本：`scripts/eu_manage_goods_list_retrieve.py`；从技能根目录运行。
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+转发 path：`/temu/proxy` → 上游 `/openapi/router`，Body `type=temu.local.goods.list.retrieve`；`type` 不拼入 URL。
+
+### 请求参数
+
+#### 网关 POST Body
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是 | 欧洲站为 `eu`，EU 脚本默认 `eu`；通用脚本须显式传入。兼容 `cn`、`partner`、`us`、`global`。 |
+| managementType | string | 是 | EU 脚本默认 `semi-managed`；通用脚本须显式传入。可选 `full-managed`、`semi-managed`。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；脚本优先直接使用，或按本地 storeKey 查出后填入网关 Body。 |
+| storeKey | string | 与 accessToken 二选一 | 本地令牌库的店铺键；脚本结合 site、managementType、tokenPurpose 查找，不将 storeKey 发到网关。 |
+| tokenPurpose | string | 否 | EU 脚本查找本地令牌时默认 `product-inventory`，通用脚本默认 `default`；建议商品库存使用 `product-inventory`。此项用于本地查找。 |
+| type | string | 是 | 本接口的 Temu 操作名，见上方调用规范；不是 URL 路径。专用脚本固定该值。 |
+| params | object | 否 | Temu 业务载荷，通常为 `{ "request": { ... } }`，完整字段见下文。 |
+
+#### 脚本参数与兼容约定
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox 用户密钥，按此顺序优先于环境变量 `LINKFOX_AGENT_API_KEY`、`LINKFOXAGENT_API_KEY`；与 Temu accessToken 分开。不会作为业务字段转发。 |
+| request | object | 否 | 专用脚本可在 JSON 顶层传入此业务对象，也可放在 `params.request`；显式 object 类型的 params 优先，支持顶层业务字段透传。官方 request 为选填包装，内部必填项仍按下表执行。 |
+| --inline | CLI flag | 否 | 强制全量打印，同时保存完整响应。 |
+| --no-cache | CLI flag | 否 | 本技能不启用响应缓存；业务封装始终向公共 run 加入此选项，不读取或写入响应缓存。公共调用器可能创建空缓存目录。 |
+
+兼容请求头 `Authorization` 与 `Token` 同值，以及 SESSION_ID、MESSAGE_ID、MODE_ID、APP_NAME 透传。网关地址依次取 `LINKFOX_TOOL_GATEWAY`、`TEMU_API_BASE_URL`、`STORE_API_BASE_URL`，默认正式网关。HTTP 超时为 150 秒。输出保存在当前工作目录，不可写则在请求前报错，不回退到家目录或临时目录。专用脚本接受 JSON 参数及 `--inline`，兼容 `--no-cache`；通用脚本保留站点与托管类型校验。
+
+#### Temu 业务参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| request | OBJECT | 否 | 官方顶层业务请求包装；子字段的必填要求见下文。 |
 
 ```text
 params
@@ -27,7 +79,7 @@ params
     └── goodsSearchTags
 ```
 
-### `request` 内字段
+#### `request` 内字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -36,87 +88,72 @@ params
 | orderField | STRING | 否 | 排序属性，如 `create_time`（按创建时间） |
 | orderType | INTEGER | 否 | `0` 降序（默认），`1` 升序 |
 | goodsSearchType | STRING | **是** | 商品状态筛选，枚举见下表 |
-| goodsIdList | STRING[] | 否 | Product ID，支持批量，**最多 100** |
-| outGoodsSnList | STRING[] | 否 | Out Goods Sn，支持批量，**最多 100** |
-| skuIdList | STRING[] | 否 | Sku ID，支持批量，**最多 200** |
-| outSkuSnList | STRING[] | 否 | OutSkuSn 搜索，**最多 200** |
-| catIdList | STRING[] | 否 | Category id 搜索，**最多 100** |
+| goodsIdList | STRING[] | 否 | 商品 ID，支持批量，**最多 100** |
+| outGoodsSnList | STRING[] | 否 | 外部商品编码，支持批量，**最多 100** |
+| skuIdList | STRING[] | 否 | SKU ID，支持批量，**最多 200** |
+| outSkuSnList | STRING[] | 否 | 外部 SKU 编码搜索，**最多 200** |
+| catIdList | STRING[] | 否 | 类目 ID 搜索，**最多 100** |
 | goodsName | STRING | 否 | 商品标题 |
 | goodsCreateTimeFrom | LONG | 否 | 商品创建时间起，Unix **毫秒** |
 | goodsCreateTimeTo | LONG | 否 | 商品创建时间止，Unix **毫秒** |
 | goodsStatusChangeTimeFrom | LONG | 否 | 商品状态变更时间起，Unix **毫秒** |
 | goodsStatusChangeTimeTo | LONG | 否 | 商品状态变更时间止，Unix **毫秒** |
-| goodsSearchTags | INTEGER[] | 否 | `1` Low traffic，`4` Restricted traffic |
+| goodsSearchTags | INTEGER[] | 否 | `1` 低流量，`4` 受限流量 |
 
 #### `goodsSearchType` 枚举（STRING）
 
 | 值 | 说明 |
 |----|------|
-| `ALL` | ALL = Active + InActive |
-| `ACTIVE` | Active（在售/可用） |
-| `INACTIVE` | InActive（不可用） |
-| `INCOMPLETE` | Incomplete（未完成） |
-| `DRAFT` | Draft（草稿） |
-| `DELETED` | Deleted（已删除） |
+| `ALL` | 全部（在售与不可用） |
+| `ACTIVE` | 在售/可用 |
+| `INACTIVE` | 不可用 |
+| `INCOMPLETE` | 未完成 |
+| `DRAFT` | 草稿 |
+| `DELETED` | 已删除 |
 
-### 网关 `params` 写法
+> **勿**使用字段 `page`、`keyword`、`goodsStatus`、`goodsIds`、`sortField`/`sortOrder`；官方为 **`pageToken`** + **`goodsSearchType`**（STRING）+ **`request`** 包装。
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "pageSize": 25,
-    "goodsSearchType": "ACTIVE"
-  }
-}
-```
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "pageSize": 50,
-    "pageToken": "NEXT_PAGE_TOKEN_FROM_PREVIOUS_RESPONSE",
-    "goodsSearchType": "ALL",
-    "goodsIdList": ["123456789"],
-    "orderField": "create_time",
-    "orderType": 0
-  }
-}
-```
+#### 网关与脚本响应
 
-> **勿**使用旧字段 `page`、`keyword`、`goodsStatus`、`goodsIds`、`sortField`/`sortOrder`；官方为 **`pageToken`** + **`goodsSearchType`**（STRING）+ **`request`** 包装。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 网关状态码，按基础规则判断；不存在或空值不代替业务结果判断。 |
+| errmsg | string | 网关错误说明，以实际返回为准。 |
+| body | string | Temu 原始 JSON 字符串，保留原文。 |
+| code | integer | 网关业务错误码：`1002` 为参数或 LinkFox Token 问题，`1003` 为转发失败；未定义的 code 不擅自推断为成功。 |
+| temuBody | object / array / scalar / null | 脚本对非空且合法 JSON 的 body 解析后追加；解析失败保留 body，不添加此字段。下文为 Temu 对象响应的字段。 |
+| transportHttpStatus | integer / null | 脚本追加的 LinkFox HTTP 状态；连接失败时为 null。 |
+| error | string | 连接失败或无法解析的 HTTP 错误消息，仅出现时返回。 |
+| details | string | 无法解析的 HTTP 错误原文，仅出现时返回。 |
 
----
-
-## Response（Temu `body` 解析后）
+#### Temu 业务响应
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| success | BOOLEAN | success |
-| errorCode | INTEGER | error code |
-| errorMsg | STRING | error message |
-| result | OBJECT | Specific information（子字段在 Partner 文档中展开） |
+| success | BOOLEAN | 当前请求是否成功 |
+| errorCode | INTEGER | 错误码 |
+| errorMsg | STRING | 错误信息 |
+| result | OBJECT | 业务信息（子字段在 Partner 文档中展开） |
 
-官方 Response 表中 **`result` 未在提供的片段中展开**。游标分页列表接口通常会在 `result` 内返回 **商品列表** 与 **下一页 `pageToken`**，具体字段名以 Partner 后台为准。
+`result` 为业务结果对象；游标分页列表接口通常会返回 **商品列表** 与 **下一页 `pageToken`**，具体字段名以实际返回为准。
 
 列表项字段可能与 [bg.local.goods.list.query](./bg-local-goods-list-query.md) 的 `result.goodsList[]` 相近，但**不可假定完全一致**（尤其 ID 类型多为 STRING、状态字段命名可能不同），以实网返回为准。
 
----
-
-## 与 `bg.local.goods.list.query` 对比
+#### 与 `bg.local.goods.list.query` 对比
 
 | 项 | `temu.local.goods.list.retrieve` | `bg.local.goods.list.query` |
 |----|----------------------------------|-----------------------------|
 | 分页 | `pageToken` + `pageSize` | `pageNo` + `pageSize`（均必填） |
 | 主状态筛选 | `goodsSearchType`（STRING：`ALL`/`ACTIVE`/…） | `goodsSearchType`（INTEGER 1/4/5/6） |
-| 新版状态 | — | `goodsStatusFilterType`（必填） |
+| 状态筛选 | — | `goodsStatusFilterType`（必填） |
 | 创建时间 | `goodsCreateTimeFrom` / `To`（毫秒） | `crtFrom` / `crtTo`（毫秒） |
 | 状态变更时间 | `goodsStatusChangeTimeFrom` / `To` | `goodsStatusChangeTimeFrom` / `To` |
 | ID 列表 | `goodsIdList`（STRING[]） | `goodsIdList`（LONG[]） |
 | 搜索 | `goodsName` | `searchText`（goodsName 或 goodsId） |
 
-## 与 `temu.local.sku.list.retrieve` 对比
+#### 与 `temu.local.sku.list.retrieve` 对比
 
 | 项 | `temu.local.goods.list.retrieve` | `temu.local.sku.list.retrieve` |
 |----|----------------------------------|-------------------------------|
@@ -125,29 +162,51 @@ params
 | 状态变更时间 | `goodsStatusChangeTimeFrom` / `To` | `skuStatusChangeTimeFrom` / `To` |
 | `goodsSearchType` 含 `ALL` | 是 | SKU 侧为 ACTIVE/INACTIVE 等（无 ALL） |
 
----
+### 响应码规则
 
-## 示例
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关基础规则通过后，继续检查网关业务 `code`；`1002` 时修正参数与 LinkFox Token，`1003` 时检查 Temu token、IP 白名单与网络。
+- 再解析 `body`，检查 Temu `success`、`errorCode`、`errorMsg` 和 `result`。Temu 的 `errorCode=0` 与网关 `errcode=0` 是不同层级，不能混用；body 无法解析时保留原文，不能宣称操作成功。
+
+### curl 示例
 
 ```bash
-python scripts/eu_manage_goods_list_retrieve.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "pageSize": 25,
-    "goodsSearchType": "ACTIVE",
-    "goodsName": "keyword"
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "eu",
+  "managementType": "semi-managed",
+  "accessToken": "TEMU_EU_TOKEN",
+  "type": "temu.local.goods.list.retrieve",
+  "params": {
+    "request": {
+      "pageSize": 25,
+      "goodsSearchType": "ACTIVE"
+    }
   }
 }'
 ```
 
-```bash
-# 翻页
-python scripts/eu_manage_goods_list_retrieve.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "pageSize": 25,
-    "pageToken": "TOKEN_FROM_LAST_PAGE",
-    "goodsSearchType": "ALL"
-  }
-}'
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-manage-product-eu",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

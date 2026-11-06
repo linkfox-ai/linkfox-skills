@@ -4,7 +4,7 @@ Temu Global seller cancel-order API generic proxy (site=global, semi-managed, or
 
 Usage:
   python temu_global_proxy.py '{
-    "accessToken": "TEMU_US_TOKEN",
+    "accessToken": "TEMU_GLOBAL_TOKEN",
     "tokenPurpose": "order-shipping",
     "type": "<TEMU_API_TYPE>",
     "params": {"request": {}}
@@ -15,7 +15,7 @@ import json
 import sys
 
 from _temu_global_common import DEFAULT_SITE, global_proxy_call
-from _temu_common import load_json_arg, parse_nested_body, require_text
+from _temu_common import load_json_arg, require_text
 from _temu_global_common import emit_result, lf_inline_flag
 
 def main():
@@ -25,8 +25,7 @@ def main():
     params = load_json_arg(sys.argv)
     params.setdefault("site", DEFAULT_SITE)
     api_type = require_text(params, "type")
-    result = parse_nested_body(global_proxy_call(params, api_type))
-    emit_result(result, inline=lf_inline_flag())
+    global_proxy_call(params, api_type, emit=True)
 
 if __name__ == "__main__":
     main()

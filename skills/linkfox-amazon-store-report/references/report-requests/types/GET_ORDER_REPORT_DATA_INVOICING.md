@@ -1,21 +1,21 @@
 # `GET_ORDER_REPORT_DATA_INVOICING`
 
-> **分类**：9. Order Reports  
-> **说明**：Order data for invoicing  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：订单开票数据  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#scheduled-xml-order-report-invoicing)（章节：**Scheduled XML Order Report (Invoicing)**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#scheduled-xml-order-report-invoicing)（章节：**Scheduled XML Order Report (Invoicing)**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
+- **角色**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
 - **Order Fulfillment Channel**：MFN
-- **Availability**：Seller Central sellers
-- **Marketplace availability**：EU
-- **Requested/scheduled**：Scheduled
-- **Report output type**：XML
-- **要点**：This report can be used to generate tax invoices in the EU region. The report includes all new orders since the last report. For new reports, it contains order reports from the past 38 days. You can only schedule one GET_ORDER_REPORT_DATA_INVOICING or GET_FLAT_FILE_ORDER_REPORT_DATA_INVOICING report at a time. If you have one of these reports scheduled and you schedule a new report, the existing report is canceled.
+- **可用范围**：Seller Central 卖家
+- **站点范围**：EU
+- **按需/计划**：Scheduled
+- **输出格式**：XML
+- **要点**：用于 EU 税务发票，包含自上份报告以来的全部新订单；首次报告回溯 38 天。同时仅可计划一份 GET_ORDER_REPORT_DATA_INVOICING 或 GET_FLAT_FILE_ORDER_REPORT_DATA_INVOICING；新增计划会取消已有计划。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#scheduled-xml-order-report-invoicing>
 

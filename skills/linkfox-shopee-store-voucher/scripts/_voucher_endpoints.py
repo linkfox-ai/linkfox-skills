@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-SHOPEE_DOC_MODULE = "112"
 
 class VoucherEndpoint(TypedDict, total=False):
     path: str
@@ -59,11 +58,6 @@ RESERVED_PARAM_KEYS = frozenset({
 
 LIST_QUERY_FIELDS = frozenset()
 
-def official_doc_url(api_name: str) -> str:
-    return (
-        f"https://open.shopee.com/documents/v2/v2.voucher.{api_name}"
-        f"?module={SHOPEE_DOC_MODULE}&type=1"
-    )
 
 def list_api_names() -> list[str]:
     return sorted(VOUCHER_ENDPOINTS.keys())

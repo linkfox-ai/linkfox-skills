@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: batch_update_tpf_warehouse_tracking_status.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_logistics_api("batch_update_tpf_warehouse_tracking_status", params, "batch_update_tpf_warehouse_tracking_status.py"), indent=2, ensure_ascii=False))
+    run_logistics_api("batch_update_tpf_warehouse_tracking_status", params, "batch_update_tpf_warehouse_tracking_status.py")
 
 
 if __name__ == "__main__":

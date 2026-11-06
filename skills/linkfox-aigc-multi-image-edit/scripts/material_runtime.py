@@ -1,4 +1,4 @@
-"""Shared orchestration; HTTP API calls and response storage stay in official entries."""
+"""素材编排与媒体下载；LinkFox 接口调用和响应落盘由公共调用器承担。"""
 import contextlib
 import importlib.util
 import io
@@ -62,7 +62,20 @@ def invoke(path, params, no_cache=False):
 
 
 def api_error(result):
-    return bool(result.get("error")) or result.get("errcode") not in (None, 0, 200, "0", "200") or result.get("code") not in (None, 0, 200, "0", "200")
+    def success_code(value):
+        if value is None or isinstance(value, str) and not value.strip():
+            return True
+        if isinstance(value, str):
+            value = value.strip()
+            if len(value) != 3 or not value.isascii() or not value.isdigit():
+                return False
+            value = int(value)
+        return type(value) in (int, float) and 200 <= value < 300 and value % 1 == 0
+
+    status = result.get("transportHttpStatus", 200)  # 兼容没有 transport 字段的响应文件。
+    return (bool(result.get("error")) or not success_code(result.get("errcode"))
+            or status is None or not 200 <= status < 300
+            or result.get("code") not in (None, 0, 200, "0", "200"))
 
 
 def prepare_media(params, scripts):
@@ -91,8 +104,6 @@ def prepare_media(params, scripts):
 
 def download_results(result, scripts):
     entry = scripts / "query_task.py"
-    if not entry.exists():
-        entry = scripts / "task_query.py"
     storage = load_entry(entry)
     slug = scripts.parent.name
     stamp = time.time()
@@ -103,13 +114,20 @@ def download_results(result, scripts):
     paths, items = [], []
     if result.get("status") == "SUCCESS":
         for index, item in enumerate(result.get("resultList") or [], 1):
+            if not isinstance(item, dict):
+                items.append({"id": None, "type": None,
+                              "downloadError": "结果项不是对象；保留查询响应并核对，不重新生成"})
+                continue
             record = {"id": item.get("id"), "type": item.get("type")}
             for key in ("status", "errorCode", "errorMsg"):
                 if key in item:
                     record[key] = item[key]
             items.append(record)
             url = item.get("url")
-            if item.get("status") not in (None, 1) or not isinstance(url, str) or not url:
+            if item.get("status") not in (None, 1):
+                continue
+            if not isinstance(url, str) or not url.strip():
+                record["downloadError"] = "结果项缺少媒体 URL；保留查询响应并核对，不重新生成"
                 continue
             temporary = media / (".download-" + str(time.time_ns()))
             try:

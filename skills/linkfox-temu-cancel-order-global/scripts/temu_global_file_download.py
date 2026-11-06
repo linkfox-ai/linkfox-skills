@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""US site file download via /temu/fileDownload (default site=global)."""
+"""全球站加签文件下载 via /temu/fileDownload (default site=global)."""
 
 import json
 import sys
@@ -17,8 +17,7 @@ def main():
         sys.exit(1)
     params = load_json_arg(sys.argv)
     params.setdefault("site", DEFAULT_SITE)
-    result = global_file_download_call(params)
-    emit_result(result, inline=lf_inline_flag())
+    global_file_download_call(params, emit=True)
 
 if __name__ == "__main__":
     main()

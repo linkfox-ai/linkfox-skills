@@ -9,19 +9,18 @@ Shopee Store — update_top_picks
 
 from __future__ import annotations
 
-import json
 import sys
 
-from _top_picks_api_runner import emit_result, lf_inline_flag, run_top_picks_api
+from _shopee_top_picks_common import load_cli_params
+from _top_picks_api_runner import run_top_picks_api
 
 
 def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: update_top_picks.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
-    params = json.loads(sys.argv[1])
-    inline = lf_inline_flag()
-    emit_result(run_top_picks_api("update_top_picks", params, "update_top_picks.py"), inline)
+    params = load_cli_params()
+    run_top_picks_api("update_top_picks", params, "update_top_picks.py")
 
 
 if __name__ == "__main__":

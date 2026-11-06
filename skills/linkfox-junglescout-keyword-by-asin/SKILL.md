@@ -1,106 +1,91 @@
 ---
 name: linkfox-junglescout-keyword-by-asin
-description: Jungle Scout根据ASIN反查关键词，输入最多10个ASIN获取其在亚马逊搜索结果中出现的所有关键词及搜索量、竞争度、PPC竞价等数据，覆盖10个站点。当用户提到ASIN反查关键词、反查词、ASIN关键词挖掘、竞品关键词、ASIN流量词、反向ASIN查询、ASIN搜索词、关键词拓展、ASIN词库、竞品流量分析、reverse ASIN lookup, keyword by ASIN, ASIN keyword mining, competitor keywords, ASIN traffic keywords, reverse keyword lookup, ASIN search terms, keyword expansion时触发此技能。即使用户未明确提及"Jungle Scout"或"反查"，只要其需求涉及通过ASIN查找相关关键词或分析竞品关键词，也应触发此技能。
+description: 通过 Jungle Scout 根据亚马逊 ASIN 反查关键词，提供精确和广泛搜索量、趋势、自然与广告排名、相关度、竞争指标及 PPC 竞价参考，支持多 ASIN 对比和变体流量研究。适用于 ASIN 流量词挖掘、竞品关键词分析、关键词拓展和广告词研究；不适用于按文本搜索关键词、历史搜索量查询、ABA 排名、销量估算、Listing 优化或实际广告投放，也不覆盖非亚马逊平台。
 ---
 
-# Jungle Scout — 根据 ASIN 反查关键词
+# Jungle Scout 根据 ASIN 反查关键词
 
-This skill queries keywords associated with given ASINs via the Jungle Scout data source, returning keyword search volume, competition metrics, PPC bids, ranking positions, and relevancy scores across 10 Amazon marketplaces. It supports up to 10 ASINs per call.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Jungle Scout ASIN 反查关键词工具通过输入竞品或目标 ASIN，获取这些 ASIN 在亚马逊搜索结果中出现的所有关键词及详细指标。卖家可以利用此工具进行：
+用户提供目标或竞品 ASIN，希望了解其在哪些亚马逊搜索词下获得自然或广告排名，或从这些 ASIN 拓展关键词时，使用本技能，无需明确提及 Jungle Scout 或“反查”。
 
-- **竞品关键词分析**：查看竞品在哪些关键词下获得自然/广告排名
-- **关键词拓展**：从已知 ASIN 反向挖掘高潜力关键词
-- **广告投放参考**：获取关键词的 PPC 出价（精确/广泛匹配）和 SP 品牌广告出价
-- **竞争格局评估**：通过 Ease of Ranking Score 和竞品排名数据判断关键词竞争难度
-- **流量结构解析**：了解 ASIN 的流量来自哪些关键词，各关键词的搜索量和排名如何
+**场景速查**
 
-**数据维度**：每条记录代表一个关键词，包含搜索量、趋势、排名、竞价、竞争度等完整指标。
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个 ASIN 有哪些流量词 | 单个 ASIN 关键词反查。 |
+| 竞品用了哪些关键词 | 竞品关键词分析。 |
+| 帮我对比这几个 ASIN 的关键词 | 多 ASIN 关键词和排名对比。 |
+| 这个产品搜什么词能搜到 | ASIN 反向搜索词查询。 |
+| 找一些搜索量大、竞争小的词 | 基于 ASIN 筛选高搜索量低竞争词。 |
+| 这个 ASIN 的广告词有哪些 | 广告关键词及竞价参考分析。 |
+| 帮我拓展一下关键词 | 从已知 ASIN 挖掘核心词、长尾词或变体流量词。 |
 
-## Data Fields
+### 边界
 
-### Output Fields
+仅提供 ASIN 相关关键词数据与分析。按关键词文本搜索、关键词历史搜索量、ABA 搜索词排名、商品销量估算、Listing 优化和实际广告投放使用对应技能；非亚马逊关键词数据不在范围内。
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| 关键词 | name | 搜索关键词 | yoga mat |
-| 站点 | country | 市场代码 | us |
-| 精确搜索量 | monthlySearchVolumeExact | 月精确匹配搜索量 | 85420 |
-| 广泛搜索量 | monthlySearchVolumeBroad | 月广泛匹配搜索量 | 125000 |
-| 月趋势 | monthlyTrend | 月环比趋势（%） | 15.5 |
-| 季度趋势 | quarterlyTrend | 季度趋势（%） | 8.2 |
-| 主类目 | dominantCategory | 关键词主要类目 | Sports & Outdoors |
-| 相关度 | relevancyScore | 关键词与 ASIN 的相关度（0-100） | 92 |
-| 排名难度 | easeOfRankingScore | 排名容易程度（0-100，越高越容易） | 45 |
-| 自然排名 | organicRank | ASIN 的自然搜索排名 | 5 |
-| 广告排名 | sponsoredRank | ASIN 的广告排名 | 3 |
-| 综合排名 | overallRank | 综合排名位置 | 4 |
-| 自然结果数 | organicProductCount | 自然搜索结果中的商品总数 | 2000 |
-| 广告结果数 | sponsoredProductCount | 广告位商品总数 | 48 |
-| PPC精确出价 | ppcBidExact | 精确匹配 PPC 建议出价（USD） | 1.25 |
-| PPC广泛出价 | ppcBidBroad | 广泛匹配 PPC 建议出价（USD） | 0.95 |
-| SP品牌广告出价 | spBrandAdBid | SP 品牌广告建议出价（USD） | 2.10 |
-| 推荐促销数 | recommendedPromotions | 推荐促销量 | 5 |
-| 主力ASIN | primaryAsin | 该关键词下排名最高的 ASIN | B0XXXXXXXX |
-| 自然相对位置 | relativeOrganicPosition | 查询 ASIN 的自然排名相对位置 | 0.12 |
-| 广告相对位置 | relativeSponsoredPosition | 查询 ASIN 的广告排名相对位置 | 0.08 |
-| 自然排名ASIN数 | organicRankingAsinsCount | 有自然排名的查询 ASIN 数量 | 3 |
-| 广告排名ASIN数 | sponsoredRankingAsinsCount | 有广告排名的查询 ASIN 数量 | 2 |
-| 竞品平均自然排名 | avgCompetitorOrganicRank | 查询 ASIN 的平均自然排名 | 12.5 |
-| 竞品平均广告排名 | avgCompetitorSponsoredRank | 查询 ASIN 的平均广告排名 | 8.3 |
-| 变体最低自然排名 | variationLowestOrganicRank | 变体中最佳自然排名 | 3 |
-| 变体最低广告排名 | variationLowestSponsoredRank | 变体中最佳广告排名 | 2 |
-| 竞品自然排名详情 | competitorOrganicRank | 各 ASIN 的自然排名数组 | [{asin, organicRank}] |
-| 竞品广告排名详情 | competitorSponsoredRank | 各 ASIN 的广告排名数组 | [{asin, sponsoredRank}] |
-| 更新时间 | updatedAt | 数据最后更新时间 | 2026-04-10 |
-| 消耗Token | costToken | 本次调用消耗的 token 数 | 10 |
+## 前置条件
 
-## Supported Marketplaces
+先取得用户要研究的 ASIN，确定目标站点与研究目的。完整输入要求、站点映射、默认值和限制见 `references/api.md`。
 
-us (United States), uk (United Kingdom), de (Germany), in (India), ca (Canada), fr (France), it (Italy), es (Spain), mx (Mexico), jp (Japan)
+## 查询流程
 
-Default marketplace is **us**. Use us when the user doesn't specify a marketplace.
+1. 明确用户要查核心流量词、对比竞品、寻找高搜索量低竞争词、拓展长尾词、研究广告词还是变体流量；核对 ASIN 与站点，按接口文档补齐输入。
+2. 将用户的搜索量范围、排序、结果数量和变体需求映射为查询条件，参数规则及表达映射见 `references/api.md`。按用户范围查询，不将示例数量当成必须全部抓取的要求。
+3. 调用脚本取得结果，先看摘要；需要具体指标时从保存的完整响应按需提取。按接口文档判断错误，解释原因并建议核对输入，后续查询遵守成本约束。
+4. 根据研究目的展示关键词指标与多 ASIN 排名对比，说明返回范围和数据更新时间。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /tool-jungle-scout/keywords/by-asin`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/junglescout_keyword_by_asin.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/junglescout_keyword_by_asin.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按实际查询页数计费，详见下文“算力消耗预估”。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-keyword-by-asin-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-keyword-by-asin-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## How to Build Queries
+### 算力消耗预估
 
-Required parameters: `marketplace` and `asins`. All other parameters are optional filters for narrowing results.
+按动态规则计费：消耗算力 = 实际查询页数 × 63.75。
 
-### Principles for Building API Calls
+**重要**：本技能按倍数动态计算，可能一次性消耗大量算力。调用前必须提醒用户，由用户决定是否继续。
 
-1. **站点映射**：用户说"美国站"→ `us`，"日本站"→ `jp`，"德国站"→ `de`；未指定时默认 `us`
-2. **ASIN 格式**：标准 10 位亚马逊 ASIN（以 B0 开头），以数组传入，最多 10 个
-3. **搜索量筛选**：用户说"搜索量大于1万"→ `minMonthlySearchVolumeExact: 10000`；"搜索量1000到5000"→ `min: 1000, max: 5000`
-4. **排序选择**：默认按精确搜索量降序（`-monthly_search_volume_exact`）；用户要求"按相关度排序"→ `sort: -relevancy_score`
-5. **结果数量**：用户说"给我前50个"→ `needCount: 50`；未指定时可根据场景适当设置（如 30-100）
-6. **变体包含**：用户关注变体流量时设 `includeVariants: true`
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### Common Query Scenarios
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**1. 查看竞品 ASIN 的核心流量词**
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解数据维度**：每条记录代表一个关键词，可用于竞品关键词分析、关键词拓展、广告出价参考、竞争格局评估和流量结构解析。
+- **区分搜索量与排名**：精确和广泛搜索量分别展示；自然排名与广告排名反映 ASIN 在该关键词搜索结果中的位置，不能混作销量或转化率。数据定期更新，并非实时排名，展示 `updatedAt`。
+- **理解竞争指标**：排名容易程度分数越高，越容易获得排名；结合相关度、自然结果数和竞品排名评估机会。PPC 精确、广泛及 SP 品牌广告出价为 USD 建议值，仅供研究参考。
+- **用表格呈现**：核心列包括关键词、精确搜索量、自然排名、广告排名、相关度和 PPC 出价；竞品研究侧重搜索量与排名，广告研究侧重出价与广告排名，按需精简列。
+- **标注重点**：标注自然排名前 10、广告排名前 5 的关键词；月和季度趋势为正标注增长，为负标注下降。
+- **多 ASIN 对比**：展示各 ASIN 在关键词下的自然和广告排名，结合排名详情识别共同词与差异词；不能因一次传入多个 ASIN 就认定全部结果为共同关键词。
+- **解释失败和空结果**：依据实际错误消息说明原因；空结果只说明本次条件未返回关键词，不自动放宽条件或追加请求。
+
+## 使用示例
+
+### 查看竞品 ASIN 的核心流量词
 ```json
 {
   "marketplace": "us",
@@ -110,7 +95,7 @@ Required parameters: `marketplace` and `asins`. All other parameters are optiona
 }
 ```
 
-**2. 多个 ASIN 的共同关键词（竞品对比）**
+### 多个 ASIN 的关键词对比
 ```json
 {
   "marketplace": "us",
@@ -120,7 +105,7 @@ Required parameters: `marketplace` and `asins`. All other parameters are optiona
 }
 ```
 
-**3. 筛选高搜索量低竞争关键词**
+### 筛选高搜索量低竞争关键词
 ```json
 {
   "marketplace": "us",
@@ -132,7 +117,7 @@ Required parameters: `marketplace` and `asins`. All other parameters are optiona
 }
 ```
 
-**4. 查找长尾关键词（多词组合）**
+### 查找长尾关键词
 ```json
 {
   "marketplace": "us",
@@ -144,7 +129,7 @@ Required parameters: `marketplace` and `asins`. All other parameters are optiona
 }
 ```
 
-**5. 日本站竞品广告关键词分析**
+### 日本站竞品广告关键词分析
 ```json
 {
   "marketplace": "jp",
@@ -154,7 +139,7 @@ Required parameters: `marketplace` and `asins`. All other parameters are optiona
 }
 ```
 
-**6. 包含变体的全量关键词挖掘**
+### 包含变体的关键词挖掘
 ```json
 {
   "marketplace": "de",
@@ -165,62 +150,10 @@ Required parameters: `marketplace` and `asins`. All other parameters are optiona
 }
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **表格展示为主**：以表格形式展示关键词列表，核心列包括：关键词、精确搜索量、自然排名、广告排名、相关度、PPC 出价
-2. **按需精简列**：根据用户意图选择展示列。竞品分析侧重排名和搜索量；广告分析侧重 PPC 出价和广告排名
-3. **排名高亮**：对自然排名前 10 和广告排名前 5 的关键词做标注，帮助用户快速识别核心流量词
-4. **趋势标注**：月/季度趋势为正时标注增长，为负时标注下降
-5. **竞品对比**：当输入多个 ASIN 时，展示各 ASIN 在关键词下的排名对比
-6. **Error handling**: When a query fails, explain the reason based on the error response and suggest adjusting parameters
-
-## Important Limitations
-
-- **ASIN 数量上限**：单次查询最多 10 个 ASIN
-- **数据时效性**：数据定期更新，`updatedAt` 字段标注最后更新时间
-- **搜索量类型**：同时提供精确匹配和广泛匹配两种搜索量
-- **必填参数**：`marketplace` 和 `asins` 缺一不可
-- **排名数据**：排名为该 ASIN 在对应关键词搜索结果中的位置，非实时数据
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** - 通过 ASIN 反查和拓展关键词：
-
-| User Says | Scenario |
-|-----------|----------|
-| "这个ASIN有哪些流量词" | 单个 ASIN 关键词反查 |
-| "竞品用了哪些关键词" | 竞品关键词分析 |
-| "帮我对比这几个ASIN的关键词" | 多 ASIN 关键词对比 |
-| "这个产品搜什么词能搜到" | ASIN 反向搜索词查询 |
-| "找一些搜索量大竞争小的词" | 高搜索量低竞争关键词筛选 |
-| "这个ASIN的广告词有哪些" | ASIN 广告关键词分析 |
-| "帮我拓展一下关键词" | 基于 ASIN 的关键词拓展 |
-
-**Not applicable** - 超出 ASIN 反查关键词范围：
-- 关键词搜索量历史趋势（需要关键词历史搜索量工具）
-- ABA 搜索词排名（需要 ABA 工具）
-- 商品销量估算、listing 优化建议
-- 关键词广告投放执行（仅提供竞价参考数据）
-- 非亚马逊平台的关键词数据
-
-**Boundary judgment**: When users say "关键词", "流量词", or "搜索词", if they provide specific ASINs and want to know what keywords those ASINs rank for, this skill applies. If they want to search keywords by text or check historical search volume trends, other skills are more suitable.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 实际查询页数 × 63.75。
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,147 +1,181 @@
-# 父售后单列表查询 — `bg.aftersales.parentaftersales.list.get`
+# Temu 美国站退货与退款：父售后单列表查询 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_returns_refunds_aftersales_parentaftersales_list_get.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=d3d2812d87034d35adb016972349fcb0&sub_menu_code=36d2f55993344cf2991815f675493560 |
-| **网关** | `POST /temu/proxy`，`type`=`bg.aftersales.parentaftersales.list.get`，业务载荷放在 Body 的 `params` |
+官方来源：[Partner US 文档](https://partner-us.temu.com/documentation?menu_code=d3d2812d87034d35adb016972349fcb0&sub_menu_code=36d2f55993344cf2991815f675493560)。关联目录见 [Partner US 接口目录](../partner-us-catalog.md)。
 
-**Description:** Query parent after-sales order list.
+## 公共规则
 
-> 入参 **`createAtStart`/`createAtEnd`** 与 **`updateAtStart`/`updateAtEnd`** 至少提供一组时间范围（Partner Request 表说明）。
-> 入参分页为 **`pageNo`**，出参当前页为 **`pageNumber`**，勿混用。
-> 列表项中的 **`afterSalesStatusGroup`** 与入参筛选枚举一致（见下表）。
+### 调用规范
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 **`request`**。建议使用 **`tokenPurpose=order-shipping`**，**`managementType=semi-managed`**。
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
----
+### 响应码基本规则
 
-## Request 结构（官方顶层）
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-```text
-params
-└── request (OBJECT, 选填)
-    ├── pageSize (INTEGER, 否)
-    ├── pageNo (INTEGER, 否)
-    ├── parentOrderSnList (STRING[], 否)
-    ├── parentAfterSalesSnList (STRING[], 否)
-    ├── createAtStart (INTEGER, 否)
-    ├── createAtEnd (INTEGER, 否)
-    ├── updateAtStart (INTEGER, 否)
-    ├── updateAtEnd (INTEGER, 否)
-    └── afterSalesStatusGroup (INTEGER, 否)
-```
+## 接口：父售后单列表查询（bg.aftersales.parentaftersales.list.get）
 
-### `request` 内字段
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body 与脚本鉴权参数
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| pageSize | INTEGER | 否 | Page size for pagination, default is 10, max is 200. |
-| pageNo | INTEGER | 否 | Page number for pagination, default is 1. |
-| parentOrderSnList | STRING[] | 否 | The list of parent order numbers to limit the query. |
-| parentAfterSalesSnList | STRING[] | 否 | The list of parent after-sales order numbers to limit the query. |
-| createAtStart | INTEGER | 否 | The start time for querying the status change time of parent after-sales orders, in seconds (timestamp). Defines the starting range of the status change time when querying parent after-sales orders. |
-| createAtEnd | INTEGER | 否 | The end time for querying the creation time of parent after-sales orders, in seconds (timestamp). Defines the ending range (closed interval) of the creation time when querying parent after-sales orders. -Must be used in conjunction with createAtStart. -- At least one set of creation or update times must be provided as required input parameters. |
-| updateAtStart | INTEGER | 否 | The start time for querying the status change time of parent after-sales orders, in seconds (timestamp). Defines the starting range of the status change time when querying parent after-sales orders. |
-| updateAtEnd | INTEGER | 否 | The end time for querying the status change time of parent after-sales orders, in seconds (timestamp). Defines the ending range (closed interval) of the status change time when querying parent after-sales orders. - Must be used in conjunction with updateAtStart. - At least one set of creation or update times must be provided as required input parameters. |
-| afterSalesStatusGroup | INTEGER | 否 | The after-sales order status group, enumerated as follows: 1: Pending, 2: Requested, 3: Package Shipped, 4: Platform Reviewing, 5: Refunded, 6: Rejected, 7: Cancelled. |
+| site | string | 是 | 美国站默认 `us`；通用脚本支持 `cn`、`partner`、`us`、`global`、`eu`。US 封装会转小写，通用脚本要求小写。 |
+| managementType | string | 是 | US 默认 `semi-managed`；通用脚本支持 `semi-managed`、`full-managed`，要求小写。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；直接提供时优先于本地查找。 |
+| storeKey | string | 与 accessToken 二选一 | 脚本本地选店键，按站点、管理模式和用途读取 Token，解析为 accessToken 后发送，不原样传网关。 |
+| tokenPurpose | string | 否 | 本地 Token 用途；US 售后默认 `order-shipping`，多站点通用脚本默认 `default`；仅参与本地解析。 |
+| type | string | 是 | 固定为 `bg.aftersales.parentaftersales.list.get`；专用脚本自动填写。 |
+| params | object | 否 | 业务载荷；本接口见下方 `params.request` 定义。 |
+| token / linkfoxToken / linkfox_token | string | 否 | 仅脚本使用的 LinkFox 密钥兼容别名，按此顺序优先于两种环境变量；不放入 Temu 业务参数。 |
 
-> 官方 Request 表将顶层 **`request`** 标为选填（False）；标 **必填** 的字段须在 **`params.request`** 中提供。Partner **Request Example** CURL 将业务字段写在 JSON 顶层；经 LinkFox 网关时建议放在 **`params.request`**。
+本操作通过 Body 的 `type` 识别，不是 URL path；网关向美国站 `https://openapi-b-us.temu.com/openapi/router` 转发。
 
-### 网关 `params` 写法
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| params.request | OBJECT | 否（官方顶层标记） | 官方将 request 标为选填；内部标为必填的字段仍必须提供。网关推荐放 params.request，不照抄 Partner 将业务字段直接放顶层的示例。 |
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "pageNo": 1,
-    "pageSize": 20,
-    "afterSalesStatusGroup": 1,
-    "createAtStart": 1714521600,
-    "createAtEnd": 1714608000
-  }
-}
-```
+#### params.request 字段
 
----
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| pageSize | INTEGER | 否 | 分页大小，默认 10，最大 200。 |
+| pageNo | INTEGER | 否 | 分页页码，默认 1。 |
+| parentOrderSnList | STRING[] | 否 | 限定查询范围的父订单号列表。 |
+| parentAfterSalesSnList | STRING[] | 否 | 限定查询范围的父售后单号列表。 |
+| createAtStart | INTEGER | 否 | 父售后单状态变更时间的查询起点，秒级时间戳。 |
+| createAtEnd | INTEGER | 否 | 父售后单创建时间的查询终点，秒级时间戳，闭区间；必须与 createAtStart 成对使用。创建时间或更新时间至少提供一组完整范围。 |
+| updateAtStart | INTEGER | 否 | 父售后单状态变更时间的查询起点，秒级时间戳。 |
+| updateAtEnd | INTEGER | 否 | 父售后单状态变更时间的查询终点，秒级时间戳，闭区间；必须与 updateAtStart 成对使用。创建时间或更新时间至少提供一组完整范围。 |
+| afterSalesStatusGroup | INTEGER | 否 | 售后状态组：1 Pending（待处理）、2 Requested（已申请）、3 Package Shipped（包裹已寄出）、4 Platform Reviewing（平台审核中）、5 Refunded（已退款）、6 Rejected（已拒绝）、7 Cancelled（已取消）。 |
 
-## Response（Temu `body` 解析后）
+`createAtStart` 的定义使用“状态变更时间”，而 `createAtEnd` 使用“创建时间”，同组字段的说明口径不一致。需要精确按创建时间统计时，应先核对 Partner 对该范围的定义；不要仅凭字段名将起点认定为创建时间，也不要自行改名或替换字段。成对传入、秒级单位和至少提供一组范围的要求仍适用。
 
-Partner **Response** 表顶层为 **`response`** 对象；嵌套子行在导出 HTML 中多为折叠状态，下列层级按 **Response 表 + Response Example** 全部展开。
+#### 脚本约定
 
-```text
-response（或解析后的根对象）
-├── success
-├── errorCode
-├── errorMsg
-└── result
-    ├── total (LONG)
-    ├── pageNumber (INTEGER)
-    └── data[]
-        ├── parentAfterSalesSn (STRING)
-        ├── afterSalesStatusGroup (INTEGER)
-        ├── operateExpireTimeMs (LONG)
-        ├── availableOperateList[] (INTEGER)
-        ├── returnDeliveryType (INTEGER)
-        ├── parentAfterSalesStatus (INTEGER)
-        ├── parentOrderSn (STRING)
-        ├── updateAt (INTEGER)
-        ├── afterSalesType (INTEGER)
-        └── createAt (INTEGER)
-```
+专用脚本：`scripts/us_returns_refunds_aftersales_parentaftersales_list_get.py`。支持 `'<JSON 参数>' [--inline] [--no-cache]`；业务封装禁用响应缓存，调用公共 run 时始终加入 `--no-cache`。顶层业务字段（如 request）整体进入 params；显式传入对象 params 时以该对象为准，不再合并其余顶层业务字段。完整认证、环境兼容及输出约定见 [运行约定](../api.md#运行约定)。
 
-### 顶层字段（`response` 内，或根级）
+### 响应结构
+
+#### LinkFox 网关与脚本补充字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | LinkFox 外层状态，按公共响应码基本规则判断。 |
+| errmsg | string | LinkFox 外层错误信息。 |
+| body | string | Temu 原始 JSON 字符串，成功解析后另提供 temuBody；解析失败保留原字符串。 |
+| code | integer | 网关错误码：`1002` 参数或 Token 错误，`1003` 转发失败；不替代 Temu 业务 errorCode。 |
+| transportHttpStatus | integer / null | 业务封装补充的外层 HTTP 状态；网络连接失败为 null。 |
+| temuBody | object / array / scalar | 代理脚本补充的 body 解析结果，body 非有效 JSON 时不添加。 |
+| error | string | HTTP 或连接错误描述（若返回）。 |
+| details | string | 非 JSON HTTP 错误原文（若返回）。 |
+
+#### Temu 业务对象
+
+以下字段位于解析后的根对象，或其 `response` 内。嵌套结构按 Partner 响应表及示例展开，不补造未定义字段。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| response | OBJECT | Partner 响应的业务包装对象；部分响应直接在解析后的根级返回下方字段，此时没有此包装层。 |
+
+#### 顶层字段（`response` 内，或根级）
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| success | BOOLEAN | success（当前请求是否成功） |
-| errorCode | INTEGER | error code（错误码） |
-| errorMsg | STRING | error message（错误信息） |
+| success | BOOLEAN | 当前请求是否成功 |
+| errorCode | INTEGER | 错误码 |
+| errorMsg | STRING | 错误信息 |
 | result | OBJECT | 业务结果对象（见下表） |
 
-### `data[]`
+#### `result.data[]`
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| parentAfterSalesSn | STRING | Parent after-sales order number（父售后单号） |
-| afterSalesStatusGroup | INTEGER | The after-sales order status group（售后状态组），见下表 |
-| operateExpireTimeMs | LONG | Operation expiration time in milliseconds（可操作截止时间，毫秒时间戳） |
-| availableOperateList | INTEGER[] | List of available operations for the seller（卖家可执行操作列表，元素为操作码） |
-| returnDeliveryType | INTEGER | Return delivery type（退货配送/交付方式类型） |
-| parentAfterSalesStatus | INTEGER | Current parent after-sales status（父售后单当前状态码） |
-| parentOrderSn | STRING | Parent order number（父订单号） |
-| updateAt | INTEGER | Last update time in seconds（最后更新时间，秒级 UNIX 时间戳） |
-| afterSalesType | INTEGER | After-sales type（售后类型） |
-| createAt | INTEGER | Creation time in seconds（创建时间，秒级 UNIX 时间戳） |
+| parentAfterSalesSn | STRING | 父售后单号 |
+| afterSalesStatusGroup | INTEGER | 售后状态组，见下表 |
+| operateExpireTimeMs | LONG | 可操作截止时间，毫秒时间戳 |
+| availableOperateList | INTEGER[] | 卖家可执行操作列表，元素为操作码 |
+| returnDeliveryType | INTEGER | 退货配送/交付方式类型 |
+| parentAfterSalesStatus | INTEGER | 父售后单当前状态码 |
+| parentOrderSn | STRING | 父订单号 |
+| updateAt | INTEGER | 最后更新时间，秒级 UNIX 时间戳 |
+| afterSalesType | INTEGER | 售后类型 |
+| createAt | INTEGER | 创建时间，秒级 UNIX 时间戳 |
 
 #### `afterSalesStatusGroup`（入参筛选 / 出参）
 
 | 值 | 说明 |
 |----|------|
-| `1` | Pending |
-| `2` | Requested |
-| `3` | Package Shipped |
-| `4` | Platform Reviewing |
-| `5` | Refunded |
-| `6` | Rejected |
-| `7` | Cancelled |
+| `1` | 待处理（Pending） |
+| `2` | 已申请（Requested） |
+| `3` | 包裹已寄出（Package Shipped） |
+| `4` | 平台审核中（Platform Reviewing） |
+| `5` | 已退款（Refunded） |
+| `6` | 已拒绝（Rejected） |
+| `7` | 已取消（Cancelled） |
 
----
+#### result 分页结构
 
-## Error Code（Partner 表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| total | LONG | 符合查询范围的记录总数。 |
+| pageNumber | INTEGER | 当前页码；请求字段名为 pageNo。 |
+| data | OBJECT[] | 售后记录列表，元素定义见上方 result.data[]。 |
 
-| errorCode | errorMsg | Error SOP / 处理建议 |
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关基础状态正常后，检查网关 `code`（`1002` 为参数或 LinkFox Token 无效，`1003` 为转发失败），再解析 `body`。兼容 Temu 业务对象位于解析根级或 `response` 内。
+- 通过 Temu `success`、`errorCode`、`errorMsg` 判断业务结果；HTTP 完成不等于业务成功。检查 Temu Token、用途和 IP 白名单时，不混用 LinkFox 用户密钥。
+- 失败或空结果不得自动翻页、更换参数或连续探测；先保留原始响应并说明原因，后续请求遵守执行规则。
+
+#### Temu 错误码
+
+| errorCode | errorMsg | 处理建议 |
 |-----------|----------|----------------------|
-| 130010001 | The parameter is illegal. Please check if the input parameter meets the regulations. | 见 Partner 文档；修正入参或售后状态后重试 |
+| 130010001 | The parameter is illegal. Please check if the input parameter meets the regulations. | 根据该错误核对参数、授权条件或售后状态；修正后按用户任务决定是否重试，禁止自动连续调用 |
 
----
-
-## 脚本
+### curl 示例
 
 ```bash
-export LINKFOXAGENT_API_KEY="<key>"
-python scripts/us_returns_refunds_aftersales_parentaftersales_list_get.py '{"accessToken": "TOKEN", "tokenPurpose": "order-shipping", "request": {"pageNo": 1, "pageSize": 20, "afterSalesStatusGroup": 1, "createAtStart": 1714521600, "createAtEnd": 1714608000}}'
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+  -H "Token: $LINKFOXAGENT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{"site": "us", "managementType": "semi-managed", "accessToken": "TOKEN", "type": "bg.aftersales.parentaftersales.list.get", "params": {"request": {"pageNo": 1, "pageSize": 20, "afterSalesStatusGroup": 1, "createAtStart": 1714521600, "createAtEnd": 1714608000}}}'
 ```
 
-**典型流程：** 退货退款流程入口：按时间窗与 **`afterSalesStatusGroup`** 分页拉取父售后单 → 用 **`parentAfterSalesSn`** 调详情/子单列表/退货物流等接口。
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-returns-refunds-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

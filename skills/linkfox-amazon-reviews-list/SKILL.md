@@ -1,178 +1,77 @@
 ---
 name: linkfox-amazon-reviews-list
-description: 按ASIN获取并分析亚马逊商品评论，支持15个站点(含美国站)，按星级筛选评论。当用户提到亚马逊评论、美国站评论、商品评价、买家投诉、差评、好评、星级评分、评论分析、评论情感、产品改良建议、Vine评论、已验证购买评论、竞品评论研究、Amazon reviews, US reviews, Amazon.com reviews, product feedback, negative review analysis, positive review analysis, star rating filter, review sentiment analysis, product improvement insights, Vine reviews, competitor reviews, customer feedback时触发此技能。即使用户未明确说"评论"，只要其需求涉及读取、筛选或分析亚马逊商品的买家评论，也应触发此技能。
+description: 按 ASIN 获取并分析亚马逊商品买家评论，覆盖含美国站在内的 15 个站点，支持星级、关键词、认证购买和图片视频筛选，以及按时间或有用程度排序。适用于差评痛点、好评卖点、Vine 评论、竞品评论研究和产品改良建议；不适用于搜索量与关键词排名、销量与市场规模估算、Listing 或 A+ 创作、广告策略及定价利润分析。
 ---
+# 亚马逊商品评论获取与分析
 
-# Amazon Product Reviews
+## 适用范围
 
-Fetch and analyze Amazon product reviews to help sellers extract actionable insights from customer feedback.
+### 适用
 
-## Core Concepts
+读取指定 ASIN 的真实买家评论，提炼情感、反复出现的问题、受认可的功能及可执行的改良方向。用户未明确说“评论”，但竞品或产品研究的实际需求是分析买家反馈时，也使用本技能。
 
-This tool retrieves real customer reviews for a given Amazon ASIN across **15 marketplaces**. You can control how many reviews to fetch per star rating (1-5 stars, up to 100 each), sort by recency or helpfulness, and apply various filters. Only one ASIN per request; for multiple ASINs, make separate calls.
+**场景速查**
 
-## 调用方式
+| 用户表达 | 查询场景 |
+|---|---|
+| 看这个 ASIN 的评论，或查美国站评论 | 商品与指定站点评论查询。 |
+| 买家主要抱怨什么，差评有哪些共性 | 差评主题与痛点提炼。 |
+| 只看一星评论，或看看用户喜欢什么 | 星级筛选、好评卖点分析。 |
+| 找提到 battery 的评论 | 关键词筛选。 |
+| 看带照片或视频的评论 | 媒体评论筛选。 |
+| 只看认证购买，区分 Vine 评论 | 购买认证筛选与评论标签识别。 |
+| 分析竞品反馈，给出产品改良建议 | 基于实际评论形成行动建议。 |
 
-- **异步提交端点**：`POST /amazon/reviews/async/submit`
-- **轮询查询端点**：`POST /amazon/reviews/async/result`
-- **完整参数、响应和错误码**：见 `references/api.md`
-- **Python 脚本**：`python scripts/amazon_reviews.py '<JSON 参数>' [--inline]`；每次只提交或查询一次并立即返回
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 边界
 
-### 异步调用流程
+本技能聚焦指定商品的买家评论；ABA 搜索词与关键词研究、搜索量和排名、销量销售额及市场容量研究应使用对应数据技能。Listing 文案、A+ 内容、广告策略、定价和利润计算不在本技能范围。
 
-1. 首次执行脚本只调用 `/amazon/reviews/async/submit`，保存并立即返回 `taskId`，不得在同一次脚本调用内等待结果。不要因任务仍在运行或单次查询失败而重新提交。
-2. 提交参数与原评论参数一致，不传 `provider`；后端根据 `domainCode` 自动选择 Pango 或 Apify，实际供应商可从响应的 `provider` 查看。
-3. Agent 可继续执行用户请求中的其他独立工作；需要结果时，使用原参数再次执行脚本，或传入 `{"taskId":"..."}`。每次执行只调用一次 `/amazon/reviews/async/result` 并立即返回，不在脚本内部循环或休眠。
-4. 根据当前实测经验，Pango 通常约 `10~30` 秒、Apify 通常约 `15~60` 秒返回，这不是 SLA。脚本会返回 `estimatedReadyInSeconds` 和 `suggestedNextCheckAfterSeconds`；优先继续其他工作，到建议时间再查询，不要按接口的最小轮询间隔忙轮询。
-5. 从任务创建时间起最多观察 `200` 秒。窗口内若为 `PENDING` 或 `RUNNING`，保留原 `taskId`，继续其他工作，约 `10~20` 秒后再查询；`SUCCEEDED`：读取 `result`；`FAILED`：向用户说明 `error` 并停止；`CANCELLED`：友好说明当前评论服务可能请求较多、任务在等待执行资源时已自动取消且未产生费用，建议稍后重新提交。
-6. 超过 `200` 秒仍为 `PENDING` 或 `RUNNING` 时返回 `POLL_TIMEOUT` 并停止自动查询，让用户选择：继续查询同一个 `taskId`，或停止查询并放弃本次结果。不得自动提交新任务。当前没有手动取消端点；后端只会自动取消等待执行资源超时且尚未调用供应商的 `PENDING` 任务，已进入 `RUNNING` 的任务仍可能完成并产生费用。
-7. 未读取任务从提交起最多保留 `4` 小时；首次读取到 `SUCCEEDED`、`FAILED` 或 `CANCELLED` 终态后，后端立即删除任务。脚本将成功结果保存到本地文件，任务缓存只保留“已领取”和文件路径。原参数与 `taskId` 在同一工作目录内共用任务记录；24h 本地缓存有效期内再次执行会返回 `ALREADY_RECEIVED`、`resultFile` 和本次 `costToken: 0`，应读取该文件，不再查后端或重新提交。文件不存在时也不得自动重新抓取。
-8. 查询返回“任务不存在或已过期”时停止，不得自动创建新的付费任务。只有用户明确要求重试时才能重新提交。
-9. 任务费用由后端在上游处理结束后独立结算，与是否查询或领取结果无关。提交和查询响应的 `X-Cost-Token`/`costToken` 为 `0` 只表示该次接口不再扣费，不代表整个任务免费；实际消耗以消费记录为准，不得由 Agent 按预计公式推算或补记。
+## 接口清单
 
-脚本只执行上述异步流程，并在本地缓存未完成的 `taskId` 以便后续查询。
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 异步提交评论任务 | POST `/amazon/reviews/async/submit` | `scripts/amazon_reviews.py` | 首次使用商品参数提交，立即返回任务标记。 |
+| 异步查询评论任务 | POST `/amazon/reviews/async/result` | `scripts/amazon_reviews.py` | 使用原参数恢复任务或传入 taskId，单次查询。 |
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-reviews-list-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 前置条件
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+先确定用户的目标 ASIN、站点和评论分析目标；站点不明确时先确认，不把查询站点当作全部评论的来源国家。筛选条件和数量约定见 `references/api.md`。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 异步调用流程
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+1. 首次运行脚本仅提交一次并立即返回任务标记，保留 taskId；任务仍在运行或单次查询失败时，不重新提交。供应商由后端选择，约定见 `references/api.md`。
+2. 优先继续用户任务中的其他独立工作；需要结果时，用原参数恢复任务，或传入 taskId。每次运行仅查询一次并立即返回，脚本不循环、不休眠。按返回的经验时间提示安排下次查询，不忙轮询；观察窗口与间隔见接口文档。
+3. 任务成功后读取评论结果；失败时说明原因并停止；自动取消时友好说明资源等待情况及费用结论。失败或取消后保留原任务关联，仅在用户明确要求重试后重新提交。具体状态、生命周期及重试约定见 `references/api.md`。
+4. 超过观察窗口时停止自动查询，让用户决定继续查询同一个任务或停止。查询提示任务不存在或已过期时停止，只有用户明确要求重试才重新提交。
+5. 再次运行若提示结果已领取，读取已保存的结果文件。文件丢失时提示用户查找既有文件或输出，不自动重新抓取。缓存恢复、终态领取及兼容缓存处理规则见 `references/api.md`。
+6. 任务费用由后端在上游处理结束后独立结算，与是否查询或领取无关。单次提交或查询显示零消耗不代表任务免费；实际消耗以消费记录为准，不按预计公式补记。
 
-## Parameter Guide
+## 执行方式
 
-| Parameter | Type | Required | Scope | Description | Default |
-|-----------|------|----------|-------|-------------|---------|
-| taskId | string | Yes | Async result | Task ID returned by async submit | - |
-| asin | string | Yes | Async submit | Amazon product ASIN | - |
-| star1Num | integer | No | Async submit | 1-star reviews to fetch (0-100) | 10 |
-| star2Num | integer | No | Async submit | 2-star reviews to fetch (0-100) | 10 |
-| star3Num | integer | No | Async submit | 3-star reviews to fetch (0-100) | 10 |
-| star4Num | integer | No | Async submit | 4-star reviews to fetch (0-100) | 10 |
-| star5Num | integer | No | Async submit | 5-star reviews to fetch (0-100) | 10 |
-| sortBy | string | No | All | `recent` (newest) or `helpful` (most helpful) | `recent` |
-| formatType | string | No | All | `all_formats` or `current_format` | `all_formats` |
-| domainCode | string | No | Async submit | Marketplace code (see Supported Marketplaces); use `com` for US | `com` |
-| filterByKeyword | string | No | Async submit | Filter reviews by keyword (max 1000 chars) | - |
-| reviewerType | string | No | Async submit | `all_reviews` or `avp_only_reviews` (verified only) | `all_reviews` |
-| mediaType | string | No | Async submit | `all_contents` or `media_reviews_only` | `all_contents` |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/amazon_reviews.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### Star Count Defaults
+### 输出策略
 
-- If no star count fields are provided, `star1Num` to `star5Num` all default to `10`.
-- If any star count field is provided, unspecified star counts default to `0`.
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-reviews-list-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数及费用字段（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Supported Marketplaces
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| Marketplace | Code |
-|-------------|------|
-| United States | `com` |
-| Canada | `ca` |
-| United Kingdom | `co.uk` |
-| Germany | `de` |
-| France | `fr` |
-| Italy | `it` |
-| Spain | `es` |
-| Japan | `co.jp` |
-| India | `in` |
-| Australia | `com.au` |
-| Brazil | `com.br` |
-| Mexico | `com.mx` |
-| Netherlands | `nl` |
-| Sweden | `se` |
-| United Arab Emirates | `ae` |
+## 执行规则
 
-Use `domainCode` for every supported marketplace. Always confirm the user's intended marketplace.
-
-## Usage Examples
-
-**1. Fetch US reviews (Amazon.com)**
-```json
-{"asin": "B08N5WRWNW", "domainCode": "com", "star1Num": 10, "star2Num": 10, "star3Num": 10, "star4Num": 10, "star5Num": 10, "sortBy": "recent"}
-```
-
-**2. Fetch negative reviews with keyword filter (Germany)**
-```json
-{"asin": "B08N5WRWNW", "domainCode": "de", "star1Num": 30, "star2Num": 30, "filterByKeyword": "quality", "reviewerType": "avp_only_reviews"}
-```
-
-**3. Fetch 5-star reviews with media (Japan)**
-```json
-{"asin": "B08N5WRWNW", "domainCode": "co.jp", "star5Num": 50, "star1Num": 0, "star2Num": 0, "star3Num": 0, "star4Num": 0, "sortBy": "helpful", "mediaType": "media_reviews_only"}
-```
-
-**4. Fetch only 3-star reviews (explicit star mode)**
-```json
-{"asin": "B0FP5C63HZ", "domainCode": "com", "star3Num": 100}
-```
-
-## Display Rules
-
-1. **Present data clearly**: Show reviews grouped by star rating with key fields: rating, title, text, date, verified status, helpful count.
-2. **Summarize when appropriate**: For many reviews, provide a theme/pain-point summary before listing individuals.
-3. **Highlight actionable insights**: Call out recurring complaints in negative reviews; note praised features in positive reviews.
-4. **Vine and verified labels**: Clearly indicate Vine Voice and verified purchase status.
-5. **Media indicators**: Note when reviews include images or videos.
-6. **Response normalization**: Normalize rating and helpful-count fields for consistent display when the raw response uses marketplace-specific text formats.
-7. **Review origin**: Use each review's `reviewCountry` to describe where that review was posted; `domainCode` identifies the queried marketplace, not every review's origin. Country names may be localized (`Canada` and `Canadá` both mean Canada); treat them as the same country in analysis. If `reviewCountry` is missing, mark the origin unknown rather than inferring it from `domainCode` or `locale.country`.
-8. **Error handling**: When a query fails, explain the reason based on the response message and suggest adjusting parameters.
-9. **Single ASIN limitation**: If the user asks about multiple ASINs, make separate requests for each.
-
-## Important Limitations
-
-- **One ASIN per request**: Only a single ASIN can be queried at a time.
-- **Per-star cap**: Each star rating returns max 100 reviews per request.
-- **Parameter scope**: `filterByKeyword`, `reviewerType`, `mediaType` are available on async submit, including `domainCode: "com"`.
-- **No historical snapshots**: Reviews are fetched in real-time.
-- **Review text language**: Reviews are returned in their original language as posted.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Tasks involving Amazon product reviews:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Show me the reviews for this ASIN" | Direct review lookup |
-| "Get US reviews for B08N5WRWNW" | Marketplace-specific lookup |
-| "What are customers complaining about" | Negative review analysis |
-| "Get me all the 1-star reviews" | Star-filtered retrieval |
-| "Any common issues in the bad reviews" | Pain point mining |
-| "What do people like about this product" | Positive review analysis |
-| "Find reviews mentioning 'battery'" | Keyword-filtered reviews |
-| "Show me reviews with photos" | Media-filtered reviews |
-| "Verified purchase reviews only" | Reviewer-type filtering |
-| "Help me analyze competitor reviews" | Competitor review research |
-| "Product improvement suggestions from reviews" | Actionable insight extraction |
-
-**Not applicable** — Needs beyond product review data:
-
-- ABA search term data / keyword research (use ABA Data Explorer instead)
-- Sales estimation or revenue analysis
-- Listing copywriting or A+ content creation
-- Advertising / PPC strategy
-- Pricing strategy or profit margin calculations
-
-**Boundary judgment**: If "product research" or "competitor analysis" boils down to reading customer reviews for specific ASINs, this skill applies. If it involves search volume, keyword rankings, sales estimates, or market sizing, it does not.
-
-## 算力消耗规则
+### 算力消耗预估
 
 按计划抓取页数动态计费。设 `P = Σ min(ceil(各星级请求评论数 / 10), 10)`，则：
 
 - 计费 Token：`21000 × P`。
-- **实际消耗算力 = `ceil((21000 × P) / 2000) = ceil(10.5 × P)`**，按每次请求分别向上取整。
-- 未传任何星级数量时，1~5 星默认各抓取 10 条，`P = 5`，消耗 `53` 算力。
-- 传入任意星级数量后，未传星级按 `0`；五个星级均显式传 `0` 时，`P = 0`，不调用供应商且消耗 `0` 算力。
-- 请求成功但结果为空，或经关键词、认证购买、媒体筛选后为空，仍按计划页数计费；部分子任务失败但整体成功时仍按全部计划页数计费；上游调用完全失败不计费。
+- **预估消耗算力 = `ceil((21000 × P) / 2000) = ceil(10.5 × P)`**，按每次请求分别向上取整。
+- 未传任何星级数量时，1~5 星默认各抓取 10 条，`P = 5`，预估 `53` 算力。
+- 传入任意星级数量后，未传星级按 `0`；五个星级均显式传 `0` 时，`P = 0`，不调用供应商且消耗 `0` 算力 （限时）。
+- 请求成功但结果为空，或经关键词、认证购买、媒体筛选后为空，仍按计划页数计费；部分子任务失败但整体成功时仍按全部计划页数计费；上游调用完全失败不计费 （限时）。
 
 常见消耗：1 页 `11` 算力，2 页 `21` 算力，5 页 `53` 算力，10 页 `105` 算力。
 
@@ -180,15 +79,64 @@ Use `domainCode` for every supported marketplace. Always confirm the user's inte
 
 > 上述公式只用于调用前预估，实际是否扣费及金额以消费记录为准。费用由后端独立结算，领取结果不重复扣费；未领取、查询失败或本地观察超时不代表任务免费，不得据此报告零消耗或按预估值计为已消耗。
 
-**Feedback:**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Call the feedback API as specified in the references. Do not interrupt the user's flow.
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **评论概念**：展示真实买家反馈，并区分商品整体评分与本次取得的评论样本。接口范围和使用限制见 `references/api.md`。
+- **按星级展示**：按星级展示评分、标题、正文、日期、认证购买状态和有用数量；评论较多时，先归纳主题和痛点，再列举具体评论。
+- **形成行动建议**：指出差评中重复出现的问题和好评中受到认可的功能；改良建议应有返回评论支撑。
+- **保留标签与媒体信息**：明确标注 Vine Voice、认证购买以及图片或视频；评论正文保持买家发布时的语言，需要时另附中文解读。
+- **统一展示格式**：响应中评分和有用数量采用站点本地文本时，为便于比较统一展示格式，同时保留其原始含义。
+- **区分查询站点和评论来源**：用 reviewCountry 识别单条评论国家；Canada、Canadá 等本地化名称合并统计。缺失时标为未知，不从 domainCode 或 locale.country 推断。
+- **解释异常**：依据返回消息解释失败原因，必要时给出核对或调整条件的建议；后续调用仍遵守成本约束和同任务恢复规则。
+
+## 使用示例
+
+### 美国站评论
+
+```json
+{"asin":"B08N5WRWNW","domainCode":"com","star1Num":10,"star2Num":10,"star3Num":10,"star4Num":10,"star5Num":10,"sortBy":"recent"}
+```
+
+### 德国站含 quality 的认证购买差评
+
+```json
+{"asin":"B08N5WRWNW","domainCode":"de","star1Num":30,"star2Num":30,"filterByKeyword":"quality","reviewerType":"avp_only_reviews"}
+```
+
+### 日本站带媒体的五星好评
+
+```json
+{"asin":"B08N5WRWNW","domainCode":"co.jp","star5Num":50,"star1Num":0,"star2Num":0,"star3Num":0,"star4Num":0,"sortBy":"helpful","mediaType":"media_reviews_only"}
+```
+
+### 只获取三星评论
+
+```json
+{"asin":"B0FP5C63HZ","domainCode":"com","star3Num":100}
+```
+
+### 查询已有任务
+
+```json
+{"taskId":"提交返回的任务ID"}
+```
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Upload one local image with the LinkFox presigned PUT flow.
+"""通过 LinkFox 预签名 PUT 流程上传一张本地图片。
 
-Usage:
+用法：
   python upload_image.py /path/to/product.jpg
 
-The script prints a JSON object containing the public OSS URL and detected
-content type. It never prints the API key or the query string from the
-presigned upload URL.
+输出包含公开 OSS 地址与检测所得 MIME 类型的 JSON。
+不打印 API Key 或预签名上传地址的私密查询参数。
 """
 
 import json
 import os
 import sys
+import re
+from _linkfox_transport import request, is_success
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -26,11 +27,6 @@ CONTENT_TYPE_MAP = {
     "webp": "image/webp",
     "bmp": "image/bmp",
 }
-
-
-def get_api_base() -> str:
-    """网关基础地址：env LINKFOX_TOOL_GATEWAY 优先，缺省回退正式地址。"""
-    return (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
 
 
 def _detect_content_type(header):
@@ -70,44 +66,31 @@ def _api_key():
     return key
 
 
-def _presigned_url(content_type, extension):
-    req = Request(
-        get_api_base() + PRESIGN_PATH,
-        data=json.dumps(
-            {"contentType": content_type, "fileExtension": extension}
-        ).encode("utf-8"),
-        headers={
-            "Authorization": _api_key(),
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": (os.environ.get("SESSION_ID") or "").strip(),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            result = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        raise RuntimeError(
-            f"Unable to obtain upload URL: HTTP {exc.code} {exc.reason}"
-        ) from None
-    except URLError as exc:
-        raise RuntimeError(f"Unable to obtain upload URL: {exc.reason}") from None
-    except json.JSONDecodeError:
-        raise RuntimeError("Upload service returned invalid JSON") from None
+def _safe_message(message):
+    """错误消息也不能泄露签名查询参数或密钥。"""
+    text = str(message)
+    for key in (os.environ.get("LINKFOX_AGENT_API_KEY"), os.environ.get("LINKFOXAGENT_API_KEY")):
+        if key:
+            text = text.replace(key, "[REDACTED]")
+    return re.sub(r"https?://[^\s<>\"']+", lambda match: match.group(0).split("?", 1)[0].split("#", 1)[0], text)
 
-    if not isinstance(result, dict) or result.get("errcode") != 200:
-        message = (
-            result.get("errmsg", "unknown error")
-            if isinstance(result, dict)
-            else "unknown error"
-        )
-        raise RuntimeError(f"Unable to obtain upload URL: {message}")
+
+def _presigned_url(content_type, extension):
+    _api_key()  # 缺少密钥时通过 JSON 错误与退出码报告失败。
+    status, result = request(PRESIGN_PATH, "linkfox-geekbi-temu-search-by-image-upload",
+                             {"contentType": content_type, "fileExtension": extension})
+    if not is_success(status, result):
+        message = (result.get("errmsg") or result.get("error") or "unknown error") if isinstance(result, dict) else "unknown error"
+        if status is not None and not 200 <= status < 300:
+            message = f"HTTP {status}: {message}"
+        raise RuntimeError(f"Unable to obtain upload URL: {_safe_message(message)}")
     url = result.get("url")
-    if not isinstance(url, str) or not url.startswith("https://"):
+    try:
+        parts = urlsplit(url) if isinstance(url, str) else None
+        valid_url = parts and parts.scheme == "https" and parts.hostname
+    except ValueError:
+        valid_url = False
+    if not valid_url:
         raise RuntimeError("Upload service response is missing a valid HTTPS URL")
     return url
 
@@ -131,7 +114,7 @@ def _upload(presigned_url, local_path, content_type):
     except HTTPError as exc:
         raise RuntimeError(f"Image upload failed with HTTP {exc.code}") from None
     except URLError as exc:
-        raise RuntimeError(f"Image upload failed: {exc.reason}") from None
+        raise RuntimeError(f"Image upload failed: {_safe_message(exc.reason)}") from None
 
 
 def _public_url(presigned_url):
@@ -169,8 +152,8 @@ def main():
         presigned_url = _presigned_url(content_type, extension)
         _upload(presigned_url, local_path, content_type)
         public_url = _public_url(presigned_url)
-    except (OSError, RuntimeError) as exc:
-        print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(json.dumps({"error": _safe_message(exc)}, ensure_ascii=False))
         sys.exit(1)
 
     print(

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-SHOPEE_DOC_MODULE = "92"
 
 
 class ShopEndpoint(TypedDict, total=False):
@@ -86,13 +85,6 @@ RESERVED_PARAM_KEYS = frozenset({
     "api",
     "contentType",
 })
-
-
-def official_doc_url(api_name: str) -> str:
-    return (
-        f"https://open.shopee.com/documents/v2/v2.shop.{api_name}"
-        f"?module={SHOPEE_DOC_MODULE}&type=1"
-    )
 
 
 def list_api_names() -> list[str]:

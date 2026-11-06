@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""US site signed file download via /temu/fileDownload."""
+"""Global 站点加签文件下载 via /temu/fileDownload."""
 
 import json
 import sys
@@ -18,7 +18,7 @@ def main():
     params.setdefault("site", DEFAULT_SITE)
     result = global_file_download_call(params)
     inline = lf_inline_flag()
-    emit_result(result, inline)
+    emit_result(result, inline=inline)
 
 if __name__ == "__main__":
     main()

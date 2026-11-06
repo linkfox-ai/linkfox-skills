@@ -5,12 +5,8 @@ import json
 import os
 import sys
 import time
-import secrets
-import tempfile
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
-
 from _temu_token_store import get_token
+from _linkfox_transport import request_json
 
 BASE_URL = (
     os.environ.get("LINKFOX_TOOL_GATEWAY")
@@ -102,26 +98,13 @@ def call_temu_api(
     timeout: int = 150,
     linkfox_params=None,
 ) -> dict:
-    """调用 Temu 网关接口；必须先具备 LinkFox 用户 Token。"""
+    """调用公共 run；使用 LinkFox/Temu 双认证与业务输出，不启用缓存。"""
     linkfox_token = get_linkfox_token(linkfox_params)
-    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    req = Request(
-        url,
-        data=data,
-        headers=build_gateway_headers(linkfox_token),
-        method="POST",
+    # 在发送请求前确定输出目录可写，禁止回退家目录或临时目录。
+    _lf_root()
+    return request_json(
+        url, body, build_gateway_headers(linkfox_token), timeout=timeout,
     )
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        raw = e.read().decode("utf-8") if e.fp else ""
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": raw}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
 
 def is_linkfox_auth_error(result: dict) -> bool:
     msg = str(result.get("message") or result.get("error") or "")
@@ -163,13 +146,12 @@ def parse_nested_body(result: dict) -> dict:
     return result
 
 # ===== LinkFox 统一输出层（落盘 + 摘要，无缓存）=====
-# 本块追加到共享模块（_xxx_common.py）末尾，供各入口脚本调用 emit_result()。
+# 各入口脚本调用 emit_result() 保存完整响应并按大小展示。
 # 依赖：json, os, sys, time, secrets, tempfile（共享模块通常已 import json/os/sys；
 #       若缺 time/secrets/tempfile，请在文件顶部补 import）。
 
 import time as _lf_time
 import secrets as _lf_secrets
-import tempfile as _lf_tempfile
 
 LF_SMALL_THRESHOLD = 8000
 _LF_SESSION_CACHE: dict = {}
@@ -178,33 +160,13 @@ SLUG = "linkfox-temu-fulfillment-us"
 
 
 def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
+    root = os.path.abspath(os.path.join(os.getcwd(), "linkfox"))
+    os.makedirs(root, exist_ok=True)
+    probe = os.path.join(root, ".write_probe-" + _lf_secrets.token_hex(6))
+    with open(probe, "w", encoding="utf-8") as f:
+        f.write("")
+    os.remove(probe)
+    return root
 
 
 def _lf_iso(ts: float) -> str:
@@ -244,7 +206,7 @@ def _lf_summarize(result) -> None:
         print(json.dumps(result, ensure_ascii=False)[:500])
         return
     print(f"Top-level keys: {list(result.keys())}")
-    for k in ("errcode", "errorCode", "code", "errmsg", "msg",
+    for k in ("_http_status", "errcode", "errorCode", "code", "errmsg", "msg",
               "total", "totalCount", "count", "currentPage", "perPage",
               "costToken", "costTime", "success"):
         if k in result:
@@ -327,7 +289,7 @@ def emit_result(result, slug=SLUG, inline=False):
             f.write(serialized)
         print(f"Saved full response: {out} ({len(serialized)} bytes)")
     except OSError as e:
-        print(f"Failed to save to {out}: {e}", file=sys.stderr)
+        raise OSError(f"Failed to save to {out}: {e}") from e
     _lf_update_meta(session_dir, skill=slug, file_rel=os.path.relpath(out, session_dir), ts=ts)
     if inline or len(serialized.encode("utf-8")) <= LF_SMALL_THRESHOLD:
         print(serialized)

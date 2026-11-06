@@ -1,187 +1,120 @@
 ---
 name: linkfox-geekbi-temu-market-research
-description: 使用 GeekBI 分析 Temu 公开市场的类目机会与搜索关键词需求，支持按蓝海指数、累计销量、累计销售额、价格、商品数和店铺数筛选，并分析日/周/月趋势。当用户提到 Temu 类目市场、类目机会、搜索词、蓝海词、需求趋势、Temu category research、keyword research 或 demand research 时触发。仅查询 Temu 类目 ID、catId 或类目树时使用 linkfox-temu-category-search。本 skill 不用于商品详情、店铺明细或评论分析。
+description: 使用 GeekBI 研究 Temu 公开市场的类目机会和搜索关键词需求，比较蓝海指数、累计销量与销售额、价格、商品和店铺供给及日周月趋势。适用于 Temu 类目市场、蓝海词、热搜词、关键词供需和需求趋势分析；不适用于商品详情、店铺明细、评论分析或卖家后台操作。单纯查询站点、类目编号和类目树不自动触发本技能。
 ---
 
-# Temu Category & Keyword Demand Research
+# GeekBI Temu 类目与关键词市场研究
 
-This skill researches Temu category opportunities and buyer-demand keywords from public marketplace data. Use only the endpoints needed for the user's request, and read `references/api.md` for the full request and response contract.
+## 适用范围
 
-The site-list and category-list endpoints are helper capabilities. A helper-only request must not auto-select this skill unless the user explicitly invokes it or the skill is already active.
+### 适用
 
-## Core Concepts
+从 Temu 公开市场数据比较类目容量、供需和买家搜索词，形成有数据依据的机会判断。
 
-- `regionId` selects the marketplace. Resolve it from a non-null positive `sites[].regionId`; never substitute `siteId`. The gateway default is `regionId: 211` (United States).
-- `dsr` is a supply-demand signal, not a standalone go/no-go score. Cross-check demand scale, recent growth, item/shop supply, and price.
-- Search responses are paginated `items[]`. Defaults are `page: 1` and `size: 20`; `size` is 1–200 and `page * size` must not exceed 10,000. `order` has no gateway default; when supplied, it must be `asc` or `desc` (case-insensitive).
-- Range filters are limited to `dsr`, `totalSold`, `avgPrice`, `totalSales`, `itemCount`, and `mallCount`, each with `Min` / `Max`. Never make a minimum greater than its maximum; all except `dsr` must be non-negative.
-- Use site/category helpers only when the user has not supplied a valid ID. Stop if no unambiguous ID is returned.
-- Do not launch a paid search merely to answer a site-list or category-tree request.
+**场景速查**
 
-| Intent | Endpoint | Script |
-|---|---|---|
-| Compare category demand and competition | `/geekbi/temu/categorySearch` | `geekbi_temu_category_search.py` |
-| Discover and compare buyer-demand keywords | `/geekbi/temu/keywordSearch` | `geekbi_temu_keyword_search.py` |
-| Resolve Temu marketplaces | `/geekbi/temu/siteList` | `geekbi_temu_site_list.py` |
-| Browse the category tree | `/geekbi/temu/categoryList` | `geekbi_temu_category_list.py` |
-
-## Endpoint: `/geekbi/temu/categorySearch`
-
-### Request
-
-- Category research uses `keyword` to compare market capacity and competition. Use the separate category-list helper with `parentCatId` when a trusted category tree must be traversed; `categorySearch` itself does not accept `catLevel` or `parentCatId`.
-- Use `keyword` for a Chinese or English category name. `catLevel` and `parentCatId` are response/helper concepts, not `categorySearch` request fields.
-- Filter or rank broad demand with `totalSold`; use `dsr` for candidate discovery. Treat `monthSoldRate` and `monthSalesRate` as response fields for recent-growth analysis, not as range-filter request fields.
-- `itemCount` and `mallCount` can be filtered with Min/Max fields. Period `*ItemCount` and `*MallCount` values are response-only changes and can be negative.
-
-```bash
-# Compare US pet-related categories by cumulative demand
-python scripts/geekbi_temu_category_search.py '{"regionId":211,"keyword":"宠物","totalSoldMin":1000,"sort":"totalSold","order":"desc","page":1,"size":20}'
-```
-
-### Response
-
-| Path | Meaning |
+| 用户表达 | 查询场景 |
 |---|---|
-| `items[].catId` / `items[].parentCatItems[]` | Category identity and verified hierarchy |
-| `items[].totalSold` / `totalSales` / `avgPrice` | Cumulative demand, revenue, and average price |
-| `items[].itemCount` / `mallCount` | Product and shop supply |
-| `items[].semiManagedItemCount` / `semiManagedMallCount` | Semi-managed supply counts |
-| `items[].day*` / `week*` / `month*` | Period demand, supply changes, and growth rates |
-| `errcode` / `errmsg` | Gateway business status; verified success is `200` / `ok` |
+| 查 Temu 美国站宠物类目机会 | 比较类目需求、供给、价格与近期变化。 |
+| 找月需求增长的蓝海类目 | 发现候选后结合趋势和市场规模分析。 |
+| 挖 Temu 连衣裙热搜词 | 保留用户原词，查看相关需求词。 |
+| 比较关键词供需和价格带 | 对照累计需求、商品和店铺供给及价格。 |
+| 从这个类目找需求关键词 | 使用可信类目归属进行关键词发现。 |
 
-## Endpoint: `/geekbi/temu/keywordSearch`
+### 边界
 
-### Request
+仅查询 Temu 类目编号或类目树时使用 `linkfox-temu-category-search`。仅列站点或查编号不自动选择本技能；用户明确指定本技能或本技能已在使用时，可独立使用站点、品类辅助能力，不附带付费搜索。
+商品详情、店铺明细、评论分析，以及卖家账号、刊登、履约和广告操作不属于本技能范围；其他平台研究使用对应能力。
 
-- Keyword research uses `keyword` for a specific phrase or `catIds` for category-led discovery. Combine them only when the user explicitly wants a phrase within a category.
-- Resolve `catIds` from valid `categories[].catId` values or a verified category-search result. Prefer level-1 or level-2 IDs for broad discovery.
-- Search a supplied phrase with `keyword` without silently translating or replacing it.
-- For category-led discovery, use `catIds` from the category helper. Multiple IDs match any supplied category.
-- Rank hot terms with `totalSold` and blue-ocean candidates with `dsr`. Analyze recent demand from returned `monthSoldRate` or `monthSalesRate`; these period metrics are not range-filter request fields. Use `firstOnSaleTimeMin/Max` for market recency.
-- `firstOnSaleTimeMin/Max` use ISO-8601 timestamps and describe the earliest associated product listing time.
+## 接口清单
 
-```bash
-# Discover dress-related demand terms within a verified category
-python scripts/geekbi_temu_keyword_search.py '{"regionId":211,"keyword":"dress","catIds":[27011],"totalSoldMin":1000,"sort":"totalSold","order":"desc","page":1,"size":20}'
-```
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 类目研究（`categorySearch`） | POST `/geekbi/temu/categorySearch` | `scripts/geekbi_temu_category_search.py` | 比较类目容量、竞争供给与趋势。 |
+| 关键词研究（`keywordSearch`） | POST `/geekbi/temu/keywordSearch` | `scripts/geekbi_temu_keyword_search.py` | 发现并比较买家需求关键词。 |
+| 站点列表（`siteList`） | POST `/geekbi/temu/siteList` | `scripts/geekbi_temu_site_list.py` | 确定研究站点及币种。 |
+| 品类列表（`categoryList`） | POST `/geekbi/temu/categoryList` | `scripts/geekbi_temu_category_list.py` | 取得可信类目及层级。 |
 
-### Response
+## 前置条件
 
-| Path | Meaning |
-|---|---|
-| `items[].keyword` / `items[].cnKeyword` | Search phrase and optional Chinese form |
-| `items[].catIds` / `items[].catItems[]` | Categories associated with a keyword |
-| `items[].totalSold` / `totalSales` / `avgPrice` | Cumulative demand, revenue, and average price |
-| `items[].itemCount` / `mallCount` | Product and shop supply |
-| `items[].semiManagedItemCount` / `semiManagedMallCount` | Semi-managed supply counts |
-| `items[].day*` / `week*` / `month*` | Period demand, supply changes, and growth rates |
-| `items[].firstOnSaleTime` | Earliest associated product listing time; not keyword creation time |
-| `errcode` / `errmsg` | Gateway business status; verified success is `200` / `ok` |
+先明确目标国家和类目或关键词研究意图；仅在缺少可信站点或类目编号时使用辅助能力。参数、字段、CLI 与缓存约定见 `references/api.md`。
 
-## Endpoint: `/geekbi/temu/siteList`
+## 研究流程
 
-### Request
+1. 根据用户意图选择类目研究或关键词研究，只执行所需操作。已有可信编号时直接使用，不重复调用辅助能力。
+2. 用户未指定站点时采用接口默认并在结果中注明；已明确非美国站但缺少可信编号时查站点。类目驱动的关键词发现先从品类树或已核验的类目结果取得编号；树需逐级下钻时仅复用真实返回值，无法唯一确定时停止并澄清。
+3. 类目研究围绕用户指定类目名称比较容量和竞争；关键词研究保留用户给出的原词，不静默翻译或替换。按类目发现词与按短语搜索分别使用，只有用户明确要在指定类目内找词时才组合。
+4. 按已确定的需求、供给和价格条件搜索；发现候选后结合返回的近期增长分析，不用单一指标代替综合判断。参数、排序和分页限制见接口参考。
+5. 展示本次数据覆盖范围与关键证据，保留编号供后续研究。结果为空、失败或出现瞬时错误时停止自动搜索；后续重试或新增检索遵守接口参考的成本与重试规则。
 
-```bash
-# Resolve a non-US marketplace; use regionId, not siteId
-python scripts/geekbi_temu_site_list.py '{}'
-```
+## 执行方式
 
-### Response
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：类目研究和关键词研究各消耗 15 算力 / 次；站点列表和品类列表不消耗算力 （限时）。同一会话、同一端点和参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页、改站点或筛选条件连续试探；需要继续检索时，先向用户说明额外消耗。
 
-| Path | Meaning |
-|---|---|
-| `sites[].regionId` | IDs accepted by the research endpoints |
-| `errcode` / `errmsg` | Gateway business status; verified success is `200` / `ok` |
+### 输出策略
 
-## Endpoint: `/geekbi/temu/categoryList`
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-geekbi-temu-market-research-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。仅使用当前工作目录；不可写时直接报错，不回退到用户目录或系统临时目录。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、状态与分页计数（如 `errcode`、`total`、`page`、`size`），以及忽略 `columns` 后最大业务列表的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Request
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-```bash
-# Resolve a trusted category path when only a category name is known
-python scripts/geekbi_temu_category_list.py '{}'
-python scripts/geekbi_temu_category_list.py '{"parentCatId":27011}'
-```
+## 执行规则
 
-### Response
+### 算力消耗预估
 
-| Path | Meaning |
-|---|---|
-| `categories[].catId` | IDs accepted by the research endpoints |
-| `errcode` / `errmsg` | Gateway business status; verified success is `200` / `ok` |
+类目研究和关键词研究各消耗 15 算力 / 次；站点列表和品类列表不消耗算力 （限时）。辅助查询不应触发额外付费搜索。
 
-Fields can be absent or `null`. Preserve runtime JSON types and raw rate values; do not replace missing values with zero.
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## 调用方式
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-- **API 端点**：`POST /geekbi/temu/categorySearch`、`POST /geekbi/temu/keywordSearch`、`POST /geekbi/temu/siteList` 或 `POST /geekbi/temu/categoryList`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/geekbi_temu_category_search.py '<JSON 参数>' [--inline]`、`python scripts/geekbi_temu_keyword_search.py '<JSON 参数>' [--inline]`、`python scripts/geekbi_temu_site_list.py '{}' [--inline]` 或 `python scripts/geekbi_temu_category_list.py '<JSON 参数>' [--inline]`
-- **成本约束**：类目搜索和关键词搜索各消耗 15 算力/次，站点列表和品类列表不消耗算力；同一端点同一参数组合使用 24h 本地缓存，同一会话默认只调用一次。`--inline` 不绕过缓存；`--no-cache` 会跳过缓存读写并强制真实请求，付费端点可能再次扣算力，免费辅助端点仅强制刷新。失败、空结果或瞬时错误不得自动重试，也不得自动换关键词、翻页、改站点或筛选条件连续试探；需要继续付费检索时先向用户说明会产生额外消耗。
+### 解决认证和算力问题
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-geekbi-temu-market-research-<timestamp>.json`；`<cwd>` 为脚本执行时的当前工作目录，`<session>` 取自环境变量 `SESSION_ID`，未设置时自动生成。当前目录不可写时直接报错，不回退到用户目录或系统临时目录。
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层状态字段、常见业务计数、忽略 `columns` 后最大业务列表的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## 解决认证和算力问题
+### 约束与建议
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+- **供需信号**：蓝海指数 `dsr` 不能单独作为开发结论；同时比较需求规模、近期增长、商品和店铺供给及价格。销量、增长或供给中的任一指标均不能保证机会或未来表现。
+- **指标口径**：区分历史累计指标、日周月需求及供给变化；变化量可能为负。最早关联商品上架时间不等于关键词创建时间。
+- **查询背景**：说明站点名称、研究地区、币种、筛选、排序及本次分页范围，货币单位采用所选站点币种。
+- **类目展示**：用表格展示完整类目路径、编号、层级、需求与销售额、平均价格、商品和店铺供给、半托管供给及相关增长指标。
+- **关键词展示**：用表格展示原词、关联类目路径和编号、需求与销售额、平均价格、商品和店铺供给、半托管供给、最早关联上架时间及相关增长。关联类目展示可去重，原始数据保持不变。
+- **保留原始数据**：保留运行时 JSON 类型、原始增长率单位、空值和扩展字段，不把缺失值补零，不静默换算增长率。
+- **覆盖范围**：未完成分页时标注为样本，命中数也可能受接口上限影响；不把当前页当作整个市场。辅助数据和搜索数据的字段及使用边界见 `references/api.md`。
+- **缓存与刷新**：使用单层缓存并兼容两种认证环境变量；`--inline` 仅改变展示，`--no-cache` 会强制刷新。付费查询刷新可能再次扣费，具体有效期、隔离和错误处理见接口参考。
 
-### 异常情况
+## 使用示例
 
-- **未配置 API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY` 或兼容键 `LINKFOXAGENT_API_KEY`。
-- **响应 401 或 402 状态码**。
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”或类似含义。
+### 比较美国站宠物类目
 
-## Display Rules
+用户：查 Temu 美国站宠物类目机会，看看需求、竞争和价格。
 
-1. State marketplace name, `regionId`, currency, filters, sort, page, and page size.
-2. For categories, show the full category path, `catId`, level, demand/revenue, average price, item/shop supply, semi-managed supply, and relevant growth fields.
-3. For keywords, show the phrase, associated category path/IDs, demand/revenue, average price, item/shop supply, semi-managed supply, earliest listing time, and relevant growth fields.
-4. Label monetary values with the selected site's currency. Keep raw rate units explicit and do not silently convert them.
-5. Mark incomplete pagination as a sample. Keep IDs available for downstream product, shop, or keyword research.
-6. Preserve `null`, missing fields, and upstream extensions rather than inventing values.
+按用户范围研究相关类目，结合累计需求、供给与近期变化展示候选；不自动枚举所有页或扩展其他关键词。
 
-## Important Limitations
+### 从已核验类目发现关键词
 
-- This skill researches public Temu market data; it does not access or operate a seller account.
-- `total` can be capped at 10,000. A partial page or uncompleted pagination is not the entire marketplace.
-- `dsr`, growth, sales, or supply alone cannot prove an opportunity or predict future performance.
-- `firstOnSaleTime` is the earliest associated product listing time, not keyword creation time.
-- The category tree can require several `parentCatId` calls; do not guess intermediate IDs.
-- Do not automatically call helpers when valid IDs are already available.
-- Do not retry paid endpoints with changed filters or another page after empty results without user confirmation.
+用户：从这个连衣裙类目找热搜词，并比较供需。
 
-## User Expression & Scenario Quick Reference
+复用可信类目编号，研究关联关键词，展示词、类目、市场指标与趋势，不把最早上架时间说成关键词创建时间。
 
-**Applicable**: “查 Temu 美国站宠物类目机会”, “找月需求增长的蓝海类目”, “挖 Temu 连衣裙热搜词”, “比较关键词供需和价格带”, “Temu category/keyword demand research”.
+### 仅使用辅助能力
 
-**Adjacent**: Resolve an unknown non-US marketplace before research. For category-led keyword discovery, resolve a trusted `catId` from the category tree or a verified category result.
+用户明确使用本技能：只看这个类目的下级，不做市场研究。
 
-**Not an automatic trigger**: A request solely to enumerate Temu sites, `regionId` values, category-tree nodes, or `catId` values does not auto-trigger this skill. Route category-tree/`catId`-only requests to `linkfox-temu-category-search`. If this GeekBI skill was explicitly invoked or is already active, its site/category helpers may be called independently.
+只查看品类树并保留真实编号，不增加类目或关键词付费搜索。
 
-**Not applicable**: Temu product detail, shop-only benchmarking, review analysis, seller-center operations, listing changes, fulfillment, advertising, or research on another marketplace.
+## 使用反馈
 
-## 算力消耗规则
-
-类目搜索和关键词搜索每次各消耗 15 算力；站点列表和品类列表不消耗算力。
-
-> 用户会为类目搜索和关键词搜索支付算力。高频调用、翻页或改条件重搜前，必须让用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

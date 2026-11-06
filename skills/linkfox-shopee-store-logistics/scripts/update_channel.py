@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: update_channel.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_logistics_api("update_channel", params, "update_channel.py"), indent=2, ensure_ascii=False))
+    run_logistics_api("update_channel", params, "update_channel.py")
 
 
 if __name__ == "__main__":

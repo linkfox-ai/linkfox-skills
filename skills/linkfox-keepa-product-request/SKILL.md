@@ -1,168 +1,119 @@
 ---
 name: linkfox-keepa-product-request
-description: 通过ASIN获取亚马逊商品详情，包括价格、标题、Item Highlights（商品亮点）、主图、上架日期、材质、重量、变体月销量及近12个月的月销数据。当用户查询亚马逊商品详情、ASIN查询、Item Highlights、itemHighlights、标题补充信息、商品定价、销售排名历史、月销量趋势、商品尺寸、FBA费用、产品规格、批量ASIN查询、Keepa product details, ASIN detail lookup, monthly sales data, pricing info, product specifications, FBA fees, batch ASIN query时触发此技能。即使用户未明确提及"Keepa"，只要其需求涉及获取一个或多个亚马逊ASIN的结构化商品数据，也应触发此技能。
+description: 根据一个或多个亚马逊 ASIN 查询 Keepa 商品详情，获取价格、标题、Item Highlights（商品亮点）、图片、上架时间、材质、尺寸重量、月销量及近 12 个月销量、销售排名、评分、类目、变体和 FBA 费用。适用于指定 ASIN 的商品核验、批量对比和销量趋势分析，无需明确提及 Keepa。不适用于关键词选品、无 ASIN 的市场研究、完整描述或评论正文获取、生成 Listing 文案、广告或店铺分析，以及价格或 Buy Box 历史图表。
 ---
 
-# Keepa Product Data Request
+# Keepa 亚马逊商品详情
 
-This skill guides you on how to retrieve Amazon product details via the Keepa product request API, helping Amazon sellers and analysts obtain structured product data for one or more ASINs across multiple Amazon marketplaces.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-The Keepa Product Request API returns detailed product listing data from Amazon, sourced through Keepa. Given one or more ASINs and a marketplace, it returns comprehensive product information: pricing, title, Item Highlights (`itemHighlights`, when available), main image, listing date, material, weight, dimensions, sales rank, monthly sales units (current and up to 12 months of history), FBA fees, ratings, review counts, category tree, and more.
+用户已提供具体 ASIN，希望取得商品结构化数据，或比较多个竞品的价格、销量、规格及类目时，使用本技能。“选品调研”“竞品分析”也按是否具有明确 ASIN 和商品数据需求判断。
 
-**Key points**:
-- You can query up to **5 ASINs** in a single request by separating them with commas.
-- The `domain` parameter is a numeric marketplace ID (e.g., `1` = Amazon.com US), not a country code.
-- Setting `history` to `1` includes historical sales data (monthly sales for up to 12 prior months, average sales rank over 30/90/180 days). Setting it to `0` returns only current product information.
-- `products[].itemHighlights` is a single string of short product information separate from `title`; it may be `null`, blank, or absent. It requires no extra request parameter and can be returned with `history=0`.
-- The response does **not** include full product descriptions or review content. Item Highlights is not the same as bullet points (`features`) or a full description.
+**场景速查**
 
-## Parameter Guide
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查这个 ASIN 的商品详情、价格或规格 | 单品核验：标题、价格、品牌、材质及尺寸重量。 |
+| 查标题之外的 Item Highlights / itemHighlights | 单独展示已有商品亮点。 |
+| 比较这几个 ASIN | 批量对比商品指标。 |
+| 这个商品一个月卖多少，过去一年趋势如何 | 当前销量与历史月销量分析。 |
+| 这个商品属于什么类目，评分和评论数多少 | 类目、销售排名及评价数量核验。 |
+| 什么时候上架，有多少变体 | 上架时间、父 ASIN 与变体信息核验。 |
+| 采用 FBA 还是 FBM，FBA 费用多少 | 配送方式及可用费用数据核验。 |
 
-### domain (Required)
+## 前置条件
 
-Numeric Amazon marketplace ID. The mapping is:
+先确定用户要查询的 ASIN 与站点，按需读取 `references/api.md` 中的站点映射、参数及接口使用限制；查询历史趋势前明确用户需要历史数据。
 
-| Domain ID | Marketplace |
-|-----------|-------------|
-| 1 | Amazon.com (US) |
-| 2 | Amazon.co.uk (UK) |
-| 3 | Amazon.de (Germany) |
-| 4 | Amazon.fr (France) |
-| 5 | Amazon.co.jp (Japan) |
-| 6 | Amazon.ca (Canada) |
-| 8 | Amazon.it (Italy) |
-| 9 | Amazon.es (Spain) |
-| 10 | Amazon.in (India) |
-| 11 | Amazon.com.mx (Mexico) |
-| 12 | Amazon.com.br (Brazil) |
+## 查询流程
 
-Default to **1** (US) when the user does not specify a marketplace.
+1. 核对 ASIN、站点和所需数据范围，按接口定义准备当前信息或历史信息查询；默认值与具体参数约定见 `references/api.md`。
+2. 按“算力消耗预估”中的动态计费规则提醒用户，并由用户决定是否继续；在已明确的查询范围内复用同一参数的已有结果，避免重复消耗。
+3. 执行查询，先看摘要；需要商品亮点或其他具体字段时，读取已保存的完整响应。
+4. 按接口参考判断响应，展示商品对比与可用趋势。错误或空结果时解释原因并建议核对 ASIN、站点；后续查询遵守成本约束。
 
-### asin (Required)
+## 执行方式
 
-One or more Amazon Standard Identification Numbers. For multiple ASINs, separate with commas. Maximum 5 ASINs per request, with a total string length limit of 300 characters.
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/keepa_product_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按“算力消耗预估”中的动态公式消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### history (Optional)
+### 输出策略
 
-Whether to include historical data such as monthly sales for the past 12 months and average sales rank over 30/90/180 days. Set to `1` to include history, `0` (default) for basic info only.
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-keepa-product-request-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Usage Examples
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**1. Single ASIN lookup (US marketplace, basic info)**
+## 执行规则
+
+### 算力消耗预估
+
+消耗算力 = 0.045 × 本次商品详情查询消耗的 Keepa token，按动态规则计费。
+
+本技能按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，并由用户决定是否继续。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分商品信息**：Item Highlights 是标题之外的短商品信息，与五点描述（`features`）及完整描述不同；从完整响应的 `products[].itemHighlights` 读取，不能只看标准输出摘要或 `columns`。
+- **忠实展示亮点**：将原始 Item Highlights 与 `title` 分开展示。缺失、`null` 或空白时标注“未返回/不可用”，不得推断亚马逊页面没有亮点，也不得用标题、五点或描述拼造。
+- **分组展示数据**：用表格归类价格、销量、尺寸与费用；批量结果先给汇总表，再按用户需要展开单品。价格同时显示响应中的币种，有 `imageUrl` 时展示图片辅助识别。
+- **说明趋势与时效**：历史数据可用时，用表格展示各月销量并说明增长、下降或稳定；标明 `lastUpdate`，区分当前值与历史均值，不把缺失月份补成零销量。
+- **保持单位明确**：毫米尺寸可同时换算为厘米或英寸，重量按克展示。字段约定为不可用的 `0`、`-1` 值应标为“不适用/不可用”或省略，不作为实际测量值展示。
+- **尊重数据范围**：可返回字段、历史数据范围及 Item Highlights 可用性等接口限制见 `references/api.md`，不承诺响应未提供的数据。
+
+## 使用示例
+
+### 查询美国站单品当前信息
+
 ```json
 {"asin": "B0088PUEPK", "domain": "1"}
 ```
 
-**2. Single ASIN with historical sales data**
+### 查询历史销量
+
 ```json
 {"asin": "B0088PUEPK", "domain": "1", "history": 1}
 ```
 
-**3. Batch lookup of multiple ASINs (Germany)**
+### 对比德国站多个 ASIN
+
 ```json
 {"asin": "B0088PUEPK,B00U26V4VQ,B07M68S376", "domain": "3", "history": 1}
 ```
 
-**4. Product lookup on Amazon Japan**
+### 查询日本站商品
+
 ```json
 {"asin": "B09V3KXJPB", "domain": "5", "history": 0}
 ```
 
-**5. Competitor comparison across multiple ASINs (US, with sales history)**
+### 对比美国站竞品
+
 ```json
 {"asin": "B0CXYZ1234,B0CXYZ5678,B0CXYZ9012,B0CXYZABCD", "domain": "1", "history": 1}
 ```
 
-## 调用方式
+## 使用反馈
 
-- **API 端点**：`POST /keepa/productRequest`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/keepa_product_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-keepa-product-request-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Display Rules
-
-1. **Present data clearly**: Show product details in well-structured tables. Group related fields (e.g., dimensions together, sales data together) for readability.
-2. **Price and currency**: Always display the price alongside its currency (e.g., "$29.99 USD"). The `currency` field in the response indicates the local currency.
-3. **Sales trend**: When historical data is included, present the 12-month sales trend in a table or describe the trajectory (growing, declining, stable) to help users quickly assess momentum.
-4. **Dimensions and weight**: Convert millimeter values to more intuitive units when appropriate (e.g., show both mm and inches, or mm and cm). Note that weight is in grams.
-5. **Unavailable data**: Fields with value `0` or `-1` indicate data is unavailable. Do not display these as actual measurements; instead note "N/A" or omit them.
-6. **Image display**: If `imageUrl` is present, display the product image to help users visually identify the product.
-7. **Error handling**: When a query fails, explain the issue based on the response and suggest corrections (e.g., invalid ASIN format, unsupported marketplace).
-8. **Large batch results**: For batch queries with many ASINs, present a summary table first and offer to show individual product details on request.
-9. **Item Highlights**: Read `products[].itemHighlights` from the full response, not just the stdout summary or `columns`. Display the original value separately from `title`. If it is missing, `null`, or blank, label it "未返回/不可用"; do not infer that the Amazon listing lacks it or reconstruct it from title, bullets, or description.
-
-## Important Limitations
-
-- **No full product descriptions or reviews**: The API can return short Item Highlights, but not full product description text or review content.
-- **Item Highlights availability**: Requires a backend deployment that passes through `itemHighlights` and available upstream data. Do not promise a value for every ASIN.
-- **Maximum 5 ASINs per request**: Batch queries are capped at 5 ASINs.
-- **ASIN string length limit**: The `asin` parameter has a maximum length of 300 characters.
-- **Historical data is optional**: Monthly sales history is only returned when `history` is set to `1`.
-- **Data freshness**: The `lastUpdate` field indicates when the product data was last refreshed.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Product data retrieval by ASIN:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Look up this ASIN", "Get product details for B0XXXXXXXX" | Single ASIN lookup |
-| "查这个 ASIN 的 Item Highlights", "标题之外的商品亮点/补充信息" | Retrieve existing `itemHighlights` separately from `title` |
-| "What's the price of this product on Amazon" | Price query |
-| "How many units does this product sell per month" | Monthly sales check |
-| "Compare these ASINs", "batch lookup these products" | Multi-ASIN comparison |
-| "Show me the sales trend for this ASIN" | Historical sales analysis |
-| "What category is this product in" | Category / classification lookup |
-| "Product dimensions", "how much does it weigh" | Physical specs query |
-| "FBA fees for this product" | Fee estimation |
-| "When was this product listed", "listing date" | Listing age / launch date |
-| "Is this product FBA or FBM" | Fulfillment method check |
-
-**Not applicable** -- Needs beyond ASIN-level product data:
-
-- Search term / keyword analysis (use ABA data tools instead)
-- Full product descriptions, review text, or generating new listing copy (retrieving existing `title` and `itemHighlights` is supported)
-- Advertising / PPC campaign data
-- Seller account or store-level analytics
-- Product research without specific ASINs (e.g., "find trending products in kitchen category")
-- Price history charts or Buy Box history over time (only current and average rank data are available)
-
-**Boundary judgment**: When users say "product research" or "competitor analysis", if they have specific ASINs and want structured product data (price, sales, dimensions, category), this skill applies. If they want keyword-level analysis, market-wide trends without specific ASINs, or advertising metrics, this skill does not apply.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 0.045 × 本次商品详情查询消耗的 Keepa token。
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

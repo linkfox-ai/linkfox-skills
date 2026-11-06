@@ -1,4 +1,4 @@
-# Order — 接口文档索引
+# Temu EU 订单接口文档索引
 
 每个 `type` 单独一份文档，经 `POST /temu/proxy` 调用。网关与鉴权见 [../api.md](../api.md)；目录与 `sub_menu_code` 见 [../partner-eu-catalog.md](../partner-eu-catalog.md)。
 
@@ -48,3 +48,5 @@
 | type | 文档 |
 |------|------|
 | _待用户提供 Partner 文档_ | — |
+
+通用转发及加签文件下载的定义见 [网关接口参考](../api.md)。

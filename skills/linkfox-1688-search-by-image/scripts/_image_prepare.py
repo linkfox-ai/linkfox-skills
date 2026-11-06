@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert WebP inputs to JPEG before calling 1688 image search."""
+"""调用 1688 图搜前，将 WebP 图片转换为 JPEG。"""
 
 from __future__ import annotations
 
@@ -47,10 +47,10 @@ def _read_url_prefix(image_url: str) -> bytes:
             return response.read(64)
     except HTTPError as exc:
         raise ImagePreparationError(
-            f"cannot inspect image URL: HTTP {exc.code}"
+            f"无法识别图片链接: HTTP {exc.code}"
         ) from exc
     except (URLError, OSError, ValueError) as exc:
-        raise ImagePreparationError("cannot inspect image URL") from exc
+        raise ImagePreparationError("无法识别图片链接") from exc
 
 
 def _download_image(image_url: str) -> bytes:
@@ -64,9 +64,9 @@ def _download_image(image_url: str) -> bytes:
         ) as response:
             return response.read()
     except HTTPError as exc:
-        raise ImagePreparationError(f"cannot download image URL: HTTP {exc.code}") from exc
+        raise ImagePreparationError(f"无法下载图片链接: HTTP {exc.code}") from exc
     except (URLError, OSError, ValueError) as exc:
-        raise ImagePreparationError("cannot download image URL") from exc
+        raise ImagePreparationError("无法下载图片链接") from exc
 
 
 def _convert_to_jpeg(data: bytes, image_format: str) -> bytes:
@@ -74,11 +74,11 @@ def _convert_to_jpeg(data: bytes, image_format: str) -> bytes:
         from PIL import Image, ImageOps, UnidentifiedImageError, features
     except ImportError as exc:
         raise ImagePreparationError(
-            "Pillow is required to convert WebP; install Pillow>=10.4,<13"
+            "转换 WebP 需要 Pillow；请按图片与环境准备指引初始化 Pillow>=10.4,<13"
         ) from exc
 
     if image_format == "webp" and not features.check("webp"):
-        raise ImagePreparationError("the installed Pillow build has no WebP support")
+        raise ImagePreparationError("已安装的 Pillow 不支持 WebP")
 
     try:
         with Image.open(io.BytesIO(data)) as opened:
@@ -96,7 +96,7 @@ def _convert_to_jpeg(data: bytes, image_format: str) -> bytes:
             rgb.save(output, format="JPEG", quality=90)
             return output.getvalue()
     except (UnidentifiedImageError, OSError) as exc:
-        raise ImagePreparationError(f"cannot decode {image_format.upper()} image") from exc
+        raise ImagePreparationError(f"无法解码 {image_format.upper()} 图片") from exc
 
 
 def _upload_jpeg(data: bytes) -> str:

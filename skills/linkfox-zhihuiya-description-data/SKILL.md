@@ -1,172 +1,111 @@
 ---
 name: linkfox-zhihuiya-description-data
-description: 通过专利ID或公开号从智慧芽专利数据库获取专利说明书（描述）数据。当用户提到专利说明书、专利全文、专利技术描述、专利实施方式详情、智慧芽说明书数据、patent specification, patent full text, technical description, embodiment details, PatSnap, patent detailed description时触发此技能。即使用户未明确说"智慧芽"，只要其需要查看一项或多项专利的完整说明书/描述内容，也应触发此技能。
+description: 通过专利 ID 或公开公告号获取智慧芽（PatSnap）专利说明书，支持单项或批量查询及同族专利说明书替代。适用于查看专利全文中的技术描述、背景、实施方式和说明书章节；无需明确提及智慧芽。不适用于按关键词、申请人或分类检索专利、权利要求分析或对照表、法律状态及审查历史查询、专利布局统计、自由实施或侵权意见。
 ---
 
-# Zhihuiya Patent Description Data
+# 智慧芽专利说明书查询
 
-This skill guides you on how to query patent description (specification) data from the Zhihuiya patent database, helping users retrieve the full-text description content of specific patents.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-A patent description (also called the specification) is the detailed technical document that accompanies a patent filing. It discloses how the invention works, preferred embodiments, and other technical details required by patent law. This tool queries the Zhihuiya database to return description data for one or more patents identified by their internal patent ID or public publication number.
+用户已有一项或多项专利的内部 ID 或公开公告号，希望查看完整说明书、技术描述或实施方式时使用本技能。
 
-**Identifier priority**: When both a patent ID and a publication number are provided for the same query, the patent ID takes precedence.
+**场景速查**
 
-**Family substitution**: If the description for a given patent is unavailable, the tool can optionally return the description from a related family member patent instead.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查看这项专利的说明书 | 单项说明书查询。 |
+| 获取这些专利的完整技术描述 | 批量说明书查询。 |
+| 查看 CN115099012A 的详细文本 | 按公开公告号查询。 |
+| 原专利没有说明书，能否查看同族版本 | 根据用户意愿使用同族说明书替代。 |
+| 这项专利具体描述了什么技术、有哪些实施方式 | 获取并整理实际返回的说明书章节。 |
 
-## Parameters
+## 前置条件
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| patentId | string | Conditionally | Internal patent ID. At least one of patentId or patentNumber must be provided. Multiple values separated by commas; max 100. |
-| patentNumber | string | Conditionally | Publication / announcement number. At least one of patentId or patentNumber must be provided. Multiple values separated by commas; max 100. |
-| replaceByRelated | string | No | Whether to substitute a family patent's description when the target patent's description is unavailable. `1` = yes, `0` = no. |
+先确定用户提供的是公开公告号还是智慧芽内部专利 ID，并确认待查专利范围。仅有关键词、申请人或分类时，应先取得专利标识；输入要求见 [接口说明](references/api.md)。
 
-## Response Fields
+## 查询流程
 
-| Field | Type | Description |
-|-------|------|-------------|
-| total | integer | Number of patent records returned |
-| data | array | List of patent description objects |
-| data[].patentId | string | Patent ID |
-| data[].pn | string | Publication number |
-| data[].pnRelated | string | Publication number of the substitute family patent (only present when family substitution is used) |
-| data[].description | array | Description / specification content sections |
-| columns | array | Column definitions for rendering |
-| costToken | integer | Tokens consumed by the query |
-| type | string | Rendering style hint |
+1. 确认用户要查看的专利及内容范围：公开公告号使用 `patentNumber`，智慧芽内部 ID 使用 `patentId`；单项或批量请求均按 [接口说明](references/api.md) 的标识选择、优先级和输入限制准备。
+2. 用户希望在目标说明书缺失时查看同族版本，可在本次查询中启用同族替代；先说明返回内容可能来自另一公开公告号的专利。
+3. 查询前按“算力消耗预估”说明预计费用，在用户授权范围内执行查询；相同参数优先复用已有响应。
+4. 执行查询并保存完整响应，先检查摘要，再从保存文件读取需要的章节。失败或无说明书时解释返回原因，建议核对标识；若用户需要尝试同族版本，说明额外消耗后再按其决定继续。
+5. 按专利分别整理内容，注明同族替代来源；长文本先概括关键章节，根据用户需要展示全文。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /zhihuiya/descriptionData`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_description_data.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_description_data.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换专利标识或请求选项连续试探；需要再次请求时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-description-data-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-description-data-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## How to Build Queries
+### 算力消耗预估
 
-### Querying by Publication Number
+预计每次接口请求消耗 3 算力，按请求次数估算；批量返回的记录条数不作为该预估的乘数。拆分成多个请求或额外重新查询时，按新增请求次数累计预估，最终以实际扣除为准。
 
-When users provide a patent publication number (e.g., CN115099012A, US20230012345A1), pass it via the `patentNumber` parameter:
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-```
-patentNumber: "CN115099012A"
-```
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-### Querying by Patent ID
+### 解决认证和算力问题
 
-When users provide internal Zhihuiya patent IDs, pass them via the `patentId` parameter:
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-```
-patentId: "abc123def456"
-```
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-### Batch Queries
+### 约束与建议
 
-Both `patentId` and `patentNumber` accept comma-separated values for batch lookups (up to 100):
+- **说明书概念**：说明书是随专利申请提交的技术披露文档，介绍发明原理、优选实施方式等技术细节；本技能提取说明书内容，不据此生成法律意见。
+- **忠实展示**：保留原文技术细节、段落和引文，不添加主观解释，不补造缺失章节或字段。需要摘要时明确区分摘要与原文。
+- **分章节展示**：按实际返回的背景、概述、详细描述、实施方式等章节设置清晰标题；仅在响应确有相关内容时展示，不将未返回的权利要求或其他专利全文部分当作已取得。
+- **标注同族来源**：返回 `pnRelated` 时，明确告知说明书来自同族专利，并列出替代专利的公开公告号，不能将替代版本当作目标专利原文。
+- **区分批量结果**：每项专利以公开公告号为标题分别展示；缺少公开号时使用返回的专利 ID，并如实说明缺失。
+- **处理长文本**：先给出关键章节摘要，保留完整文件供按需读取；用户要求全文时可分段展示。
+- **解释空结果**：数据库不保证每项专利均有说明书。按 [接口说明](references/api.md) 解释返回结果，并建议核对 ID、公开号或可用的同族版本；后续查询遵循成本约束。
 
-```
-patentNumber: "CN115099012A,US20230012345A1,EP4123456A1"
-```
+## 使用示例
 
-### Family Substitution
+### 按公开号查询
 
-When a patent's description is not available in the database and the user still wants content, enable family substitution:
+用户：查看 CN115099012A 的说明书。
 
-```
-patentNumber: "CN115099012A"
-replaceByRelated: "1"
-```
+确认公开号，说明预估消耗后查询，按实际章节展示说明书。
 
-## Usage Examples
+### 批量查询
 
-**1. Look up a single patent description by publication number**
-```
-patentNumber: "CN115099012A"
-```
+用户：获取 CN115099012A 和 US20230012345A1 的技术描述。
 
-**2. Look up descriptions for multiple patents at once**
-```
-patentNumber: "CN115099012A,US20230012345A1"
-```
+按接口说明准备批量请求，说明整体预估消耗，返回后按各专利公开号分别展示。
 
-**3. Look up with family substitution enabled**
-```
-patentNumber: "CN115099012A"
-replaceByRelated: "1"
-```
+### 使用同族说明书
 
-**4. Look up by patent ID**
-```
-patentId: "some-patent-id"
-```
+用户：这项专利没有说明书时，可以查看同族版本。
 
-## Display Rules
+在请求中启用同族替代；返回后说明实际来源并展示替代公开号。
 
-1. **Present data faithfully**: Show the returned description content clearly without altering technical details or adding subjective interpretation.
-2. **Structured output**: When the description contains multiple sections (background, summary, detailed description, claims, etc.), present them with clear headings for readability.
-3. **Family substitution notice**: If the response includes a `pnRelated` field, explicitly inform the user that the description was sourced from a related family patent and state the substitute publication number.
-4. **Batch results**: When multiple patents are returned, clearly separate each patent's content with its publication number as a heading.
-5. **Error handling**: When a query fails or returns no data, explain the reason and suggest the user verify the patent ID or publication number.
-6. **Large content warning**: Patent descriptions can be very long. Summarize key sections first and offer to show the full text if the user wants it.
-## Important Limitations
+### 按内部 ID 查询
 
-- **Identifier requirement**: At least one of `patentId` or `patentNumber` must be provided; the tool cannot search by keyword or applicant name.
-- **Batch limit**: A maximum of 100 patents can be queried in a single request.
-- **Availability**: Not all patents have descriptions available in the database. Use `replaceByRelated: "1"` to attempt family substitution when needed.
-- **Priority rule**: If both `patentId` and `patentNumber` are supplied, `patentId` takes precedence.
+用户：用这个智慧芽专利 ID 查看完整说明书。
 
-## User Expression & Scenario Quick Reference
+使用用户提供的内部 ID 查询，保留原文技术细节，长内容按需分段展示。
 
-**Applicable** -- Queries about patent description / specification content:
+## 使用反馈
 
-| User Says | Scenario |
-|-----------|----------|
-| "Show me the description of patent XX" | Single patent description lookup |
-| "Get the full specification for these patents" | Batch patent description retrieval |
-| "I need the detailed text of CN115099012A" | Lookup by publication number |
-| "Can you find a family patent's description instead" | Family substitution query |
-| "What does this patent describe technically" | Description content review |
-
-**Not applicable** -- Needs beyond patent description data:
-- Patent search by keyword, applicant, or classification
-- Patent claim analysis or claim chart generation
-- Patent legal status or prosecution history
-- Patent landscape or statistical analysis
-- Freedom-to-operate or infringement opinions
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利说明书结果
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

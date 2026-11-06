@@ -1,18 +1,18 @@
 # `GET_FLAT_FILE_MFN_SKU_RETURN_ATTRIBUTES_REPORT`
 
-> **分类**：13. Returns Reports  
-> **说明**：MFN SKU return attributes (flat file)  
-> **可用范围**：Seller only
+> **分类**：13. 退货报告  
+> **说明**：MFN SKU 退货属性（平面文件）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Returns Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-returns#flat-file-return-attributes-report-by-return-date)（章节：**Flat File Return Attributes Report by Return Date**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [退货报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-returns#flat-file-return-attributes-report-by-return-date)（章节：**Flat File Return Attributes Report by Return Date**）。**与专页其它段落冲突时以官方英文文档为准。**
 
-- **受限报告**：未在相邻 Note 中写明，但 **Role** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
-- **Role**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing)
-- **Requested/scheduled**：This report can be requested or scheduled.
-- **Report output type**：Tab-delimited flat file
-- **要点**：Contains detailed return attribute information by SKU, including prepaid label eligibility and returnless refund eligibility. You can request up to 60 days of data in a single report.
+- **受限报告**：未在相邻 Note 中写明，但 **角色** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
+- **角色**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing)
+- **按需/计划**：本报告可按需请求或计划生成。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：按 SKU 提供退货属性，如预付标签资格和免退货退款资格。单份最多 60 天。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-returns#flat-file-return-attributes-report-by-return-date>
 

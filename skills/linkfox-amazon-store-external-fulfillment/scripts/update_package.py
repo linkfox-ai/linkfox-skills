@@ -15,13 +15,10 @@ import sys
 
 from _spapi_ef_common import (
     PATH_SHIPMENTS,
-    developer_proxy_call,
-    emit_result,
+    run_proxy,
     enc_path_seg,
     ensure_auth_skill_available,
-    lf_inline_flag,
     load_params_or_exit,
-    merge_json_body,
     require_fields,
 )
 
@@ -45,16 +42,7 @@ def main() -> None:
         f"/packages/{enc_path_seg(params['packageId'])}"
     )
     body_str = json.dumps(rb, ensure_ascii=False)
-    proxy = developer_proxy_call(
-        str(params["region"]),
-        path,
-        "PUT",
-        str(params["sellerId"]),
-        body=body_str,
-    )
-    out = {"developerProxy": proxy, "resolvedPath": path, "requestBody": rb}
-    merge_json_body(out, proxy, "updatePackage", ok_statuses=(200, 204))
-    emit_result(out, inline=lf_inline_flag())
+    run_proxy(str(params['region']), path, 'PUT', str(params['sellerId']), body=body_str, result_field='updatePackage', operation='update_package', ok_statuses=(200, 204), output_fields={'requestBody': rb})
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: get_add_on_deal_list.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_add_on_deal_api("get_add_on_deal_list", params, "get_add_on_deal_list.py"), indent=2, ensure_ascii=False))
+    run_add_on_deal_api("get_add_on_deal_list", params, "get_add_on_deal_list.py")
 
 
 if __name__ == "__main__":

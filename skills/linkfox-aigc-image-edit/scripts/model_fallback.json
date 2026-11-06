@@ -1,0 +1,110 @@
+[
+  {
+    "name": "BANANA",
+    "requestValue": "BANANA",
+    "documentedCapabilities": [
+      "1:1 / 16:9 / 9:16 / 3:4 / 4:3 / 3:2 / 2:3 / 4:5 / 5:4 / 21:9",
+      "1K",
+      "1K"
+    ]
+  },
+  {
+    "name": "BANANA_2_LITE",
+    "requestValue": "BANANA_2_LITE",
+    "documentedCapabilities": [
+      "1:1 / 3:2 / 2:3 / 3:4 / 4:3 / 4:5 / 5:4 / 9:16 / 16:9 / 21:9",
+      "1K",
+      "1K"
+    ]
+  },
+  {
+    "name": "BANANA_2",
+    "requestValue": "BANANA_2",
+    "documentedCapabilities": [
+      "1:1 / 3:2 / 2:3 / 3:4 / 4:3 / 4:5 / 5:4 / 16:9 / 9:16 / 21:9",
+      "1K / 2K / 4K",
+      "2K"
+    ]
+  },
+  {
+    "name": "BANANA_PRO",
+    "requestValue": "BANANA_PRO",
+    "documentedCapabilities": [
+      "1:1 / 16:9 / 9:16 / 3:4 / 4:3 / 3:2 / 2:3 / 4:5 / 5:4 / 21:9",
+      "1K / 2K / 4K",
+      "2K"
+    ]
+  },
+  {
+    "name": "WAN2_7",
+    "requestValue": "WAN2_7",
+    "documentedCapabilities": [
+      "1:1 / 1:4 / 4:1 / 3:2 / 2:3 / 3:4 / 4:3 / 4:5 / 5:4 / 16:9 / 9:16 / 21:9",
+      "1K / 2K",
+      "2K"
+    ]
+  },
+  {
+    "name": "QWEN_IMAGE_3_PRO",
+    "requestValue": "QWEN_IMAGE_3_PRO",
+    "documentedCapabilities": [
+      "1:1 / 1:4 / 4:1 / 1:8 / 8:1 / 3:2 / 2:3 / 3:4 / 4:3 / 4:5 / 5:4 / 16:9 / 9:16 / 21:9 / 9:21",
+      "1K / 2K",
+      "2K"
+    ]
+  },
+  {
+    "name": "KONTEXT",
+    "requestValue": "KONTEXT",
+    "documentedCapabilities": [
+      "按原图比例",
+      "1K",
+      "1K"
+    ]
+  },
+  {
+    "name": "SEEDREAM5_PRO",
+    "requestValue": "SEEDREAM5_PRO",
+    "documentedCapabilities": [
+      "1:1 / 3:4 / 4:3 / 9:16 / 16:9 / 3:2 / 2:3 / 21:9",
+      "1K / 2K",
+      "2K"
+    ]
+  },
+  {
+    "name": "GPT_2_IMAGE",
+    "requestValue": "GPT_2_IMAGE",
+    "documentedCapabilities": [
+      "1:1 / 3:4 / 4:3 / 2:3 / 3:2 / 9:16 / 16:9 / 4:5 / 5:4 / 21:9 / 9:21",
+      "1K / 2K / 4K",
+      "2K"
+    ]
+  },
+  {
+    "name": "GPT_2_5_IMAGE",
+    "requestValue": "GPT_2_5_IMAGE",
+    "documentedCapabilities": [
+      "1:1 / 3:4 / 4:3 / 2:3 / 3:2 / 9:16 / 16:9 / 4:5 / 5:4 / 21:9 / 9:21",
+      "1K / 2K / 4K",
+      "2K"
+    ]
+  },
+  {
+    "name": "GPT_2_5_F_IMAGE",
+    "requestValue": "GPT_2_5_F_IMAGE",
+    "documentedCapabilities": [
+      "1:1 / 3:4 / 4:3 / 2:3 / 3:2 / 9:16 / 16:9 / 4:5 / 5:4 / 21:9 / 9:21",
+      "1K / 2K / 4K",
+      "2K"
+    ]
+  },
+  {
+    "name": "AIDRAW_EDIT",
+    "requestValue": "AIDRAW_EDIT",
+    "documentedCapabilities": [
+      "1:1 / 2:3 / 3:2 / 3:4 / 4:3 / 9:16 / 16:9 / 21:9",
+      "1K / 2K",
+      "2K"
+    ]
+  }
+]

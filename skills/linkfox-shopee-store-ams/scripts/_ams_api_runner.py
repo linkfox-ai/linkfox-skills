@@ -1,4 +1,4 @@
-"""Run any Shopee AMS module API via developerProxy."""
+"""编排 AMS 参数，使用共享封装执行并输出结果。"""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from _shopee_ams_common import (
     ensure_auth_skill_available,
     merge_shopee_body,
     qs_add,
+    emit_result,
 )
 
 
@@ -92,9 +93,6 @@ def run_ams_api(api_name: str, params: dict, caller: Optional[str] = None) -> di
             print(f"Missing required field: {field}", file=sys.stderr)
             sys.exit(1)
 
-    if not params.get("skipDepCheck"):
-        ensure_auth_skill_available(caller or f"{api_name}.py")
-
     method = spec["method"]
     path = spec["path"]
     response_key = spec["response_key"]
@@ -114,6 +112,17 @@ def run_ams_api(api_name: str, params: dict, caller: Optional[str] = None) -> di
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
+    # 写请求在网络调用之前验证 JSON，避免提交后才在构造输出时抛错。
+    if body is not None and body:
+        try:
+            json.loads(body)
+        except json.JSONDecodeError:
+            print("POST body / requestBody 必须为合法 JSON", file=sys.stderr)
+            sys.exit(1)
+
+    if not params.get("skipDepCheck"):
+        ensure_auth_skill_available(caller or f"{api_name}.py")
+
     proxy = developer_proxy_call(
         path,
         method,
@@ -128,6 +137,7 @@ def run_ams_api(api_name: str, params: dict, caller: Optional[str] = None) -> di
         "api": api_name,
         "developerProxy": proxy,
         "resolvedPath": path,
+        "transportHttpStatus": getattr(proxy, "transport_http_status", None),
     }
     if query_string:
         out["queryString"] = query_string
@@ -136,3 +146,40 @@ def run_ams_api(api_name: str, params: dict, caller: Optional[str] = None) -> di
 
     merge_shopee_body(out, proxy, response_key)
     return out
+
+
+def cli_main(api_name: Optional[str] = None) -> None:
+    """专用与通用 CLI，共用参数协议并支持落盘及 --inline。"""
+    from _ams_endpoints import list_api_names
+    args = sys.argv[1:]
+    usage = f"用法: {sys.argv[0]} '<JSON 参数>' [--inline] [--no-cache]"
+    if not args or "--help" in args or "-h" in args:
+        print(usage, file=sys.stdout if args else sys.stderr)
+        if api_name is None:
+            print("可用 api: " + ", ".join(list_api_names()))
+        if not args:
+            sys.exit(1)
+        return
+    inline = "--inline" in args
+    args = [a for a in args if a not in ("--inline", "--no-cache")]
+    if len(args) != 1:
+        print(usage, file=sys.stderr)
+        sys.exit(1)
+    try:
+        params = json.loads(args[0])
+    except json.JSONDecodeError as exc:
+        print(f"JSON 参数格式错误: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(params, dict):
+        print("JSON 参数必须为对象", file=sys.stderr)
+        sys.exit(1)
+    selected = api_name or params.get("api")
+    if not isinstance(selected, str) or not selected:
+        print("Missing required field: api", file=sys.stderr)
+        sys.exit(1)
+    try:
+        result = run_ams_api(selected, params, sys.argv[0])
+        emit_result(result, slug=f"linkfox-shopee-store-ams-{selected}", inline=inline)
+    except OSError as exc:
+        print(f"本地文件操作失败: {exc}", file=sys.stderr)
+        sys.exit(1)

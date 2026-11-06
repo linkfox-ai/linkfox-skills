@@ -1,182 +1,146 @@
 ---
 name: linkfox-sif-keyword-overview
-description: 亚马逊市场关键词竞争度的SIF概览分析。当用户提到关键词竞争度、供需比、竞品数量、关键词搜索量估算、市场竞争力评估、关键词热度排名、广告竞争分析、某个关键词下的商品数量、keyword competition, supply-demand ratio, competitor count, search popularity, market competition analysis, SIF, keyword overview时触发此技能。即使用户未明确说"SIF"，只要其需求涉及评估亚马逊上关键词层面的竞争强度、供需平衡或搜索结果商品数量，也应触发此技能。
+description: 查询亚马逊关键词的 SIF 竞争概览，展示供需比、关键词热度排名、周预估搜索量、搜索结果商品总数及自然搜索、广告和推荐位商品数量。适用于关键词竞争强度、供需平衡、广告竞争、跨站点对比及指定周期的市场评估，无需明确提及 SIF。不适用于历史排名趋势、ASIN 点击或转化份额、广告竞价优化、评论与 Listing 优化或 ASIN 销量估算。
 ---
 
-# SIF Keyword Overview
+# SIF 关键词竞争概览
 
-This skill guides you on how to query and analyze keyword-level competition data on Amazon, helping sellers assess market competitiveness and supply-demand dynamics for specific keywords.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-The SIF Keyword Overview tool provides a comprehensive snapshot of competition metrics for a given keyword on Amazon. It returns the number of competing products across different placement types (organic, sponsored, video ads, brand ads, etc.), estimated weekly search volume, keyword popularity ranking, and the supply-demand ratio.
+查看亚马逊关键词层面的竞争、供需与搜索热度概览，帮助用户了解自然搜索、广告和推荐位的商品分布。
 
-**Supply-demand ratio**: Calculated as `total search result product count / monthly search volume`. A lower ratio indicates less competition and greater opportunity. This is a key metric for identifying blue-ocean keywords.
+**场景速查**
 
-**Keyword popularity ranking**: Represents where this keyword ranks among all keywords on the marketplace by monthly search volume. A smaller number means higher search popularity (rank 1 is the most popular). When a user says "ranking improved," it means the numeric value decreased; "ranking dropped" means the value increased.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个关键词竞争有多激烈 | 竞争强度评估。 |
+| 这个词下面有多少商品 | 搜索结果商品总数及位置分布。 |
+| 这个词的供需比是多少，是不是蓝海 | 供需平衡与市场机会判断。 |
+| 有多少卖家在这个词下投广告 | 广告商品数量及 SP、品牌、视频广告拆分。 |
+| 这个关键词搜索量或热度怎么样 | 周预估搜索量及关键词热度排名。 |
+| 对比不同站点的关键词竞争情况 | 跨站点竞争比较。 |
+| SIF 跟踪到多少有曝光的 ASIN | 有曝光 ASIN 的去重总数。 |
+| 查看这个关键词某一周的竞争情况 | 指定周期的竞争概览。 |
 
-## Data Fields
+### 边界
 
-| Field | API Name | Description |
-|-------|----------|-------------|
-| Keyword | keyword | The queried keyword text |
-| Keyword Popularity Rank | keywordPopularityRank | Monthly search volume rank among all keywords (lower = more popular) |
-| Estimated Weekly Search Volume | estimatedWeeklySearchVolume | Estimated weekly search count on Amazon |
-| Supply-Demand Ratio | supplyDemandRatio | Product count / monthly search volume (lower = less competition) |
-| Total Search Result Products | totalSearchResultProductCount | Total products shown under this keyword (organic + ads + recommendations) |
-| Natural Search Products | naturalSearchProductCount | Products in organic search results (excluding ads) |
-| Sponsored Products (SP) Count | sponsoredProductsCount | Products running Sponsored Products ads |
-| Brand Ad Products | brandAdProductCount | Products running Brand Ads |
-| Video Ad Products | videoAdProductCount | Products running Video Ads |
-| Total Paid Advertising Products | paidAdvertisingProductCount | All PPC ad products combined (SP + Brand + Video, etc.) |
-| Amazon's Choice Products | amazonChoiceProductCount | Products with the Amazon's Choice badge |
-| Top Rated Products | topRatedProductCount | Products in the Top Rated recommendation section |
-| Search Recommendation Products | searchRecommendationProductCount | Products recommended by Amazon during search |
-| Editorial Recommendations Products | editorialRecommendationsProductCount | Products in Editorial Recommendations section |
-| Recommendation Non-ad Products | recNonadProductCount | Products in recommendation slots classified as non-ad (organic recommendations) |
-| Recommendation Ad Products | recAdProductCount | Products in recommendation slots classified as ads |
-| SIF-Tracked Exposed ASINs | trackedAsinTotalCount | Deduplicated count of ASINs that SIF tracked with any exposure score (natural/ad/recommendation) — upstream field `totalAsinNum` |
-| Total Marketplace Keywords | totalMarketplaceKeywordCount | Total number of keywords in the marketplace |
-| Data Period Start Date | dataPeriodStartDate | ABA week start date for the returned data (yyyy-MM-dd) |
-| Data Period End Date | dataPeriodEndDate | ABA week end date for the returned data (yyyy-MM-dd) |
-| Data Update Time | keywordDataUpdateTime | Last update timestamp for this keyword's data |
+历史关键词排名趋势、ASIN 点击份额与转化份额使用 ABA Data Explorer；详细的跨周或跨月搜索趋势、广告竞价策略与 PPC 优化、商品评论、Listing 优化及 ASIN 销量估算不属于本技能范围。
 
-## Supported Marketplaces
+## 前置条件
 
-13 marketplaces: US (United States), UK (United Kingdom), DE (Germany), CA (Canada), JP (Japan), FR (France), ES (Spain), IT (Italy), MX (Mexico), AU (Australia), AE (United Arab Emirates), BR (Brazil), SA (Saudi Arabia).
+明确待分析的关键词、目标站点和统计周期。参数默认值、站点覆盖、语言要求与日期约定见 `references/api.md`。
 
-Default marketplace is **US**. Use US when the user does not specify a marketplace. Codes outside this list will be rejected by the API pattern.
+## 查询流程
 
-**Important**: The `keyword` parameter should ideally be in the language of the target marketplace. For example, use German keywords for DE, Japanese for JP, etc. If the user provides keywords in a different language, translate them to the marketplace's local language before querying.
+1. 根据用户问题确定关键词、站点、周期与关注指标；按 `references/api.md` 核对支持范围，并在查询前将关键词翻译为目标站点的当地语言。
+2. 按已确定的范围查询，优先复用相同参数的缓存；跨关键词或跨站点比较时，先明确调用范围与算力消耗，再逐项取得概览。
+3. 按接口参考分别判断网关响应与 SIF 业务结果；遇到空结果或失败，解释原因，后续检索遵守成本约束。
+4. 先展示统计周期和更新时间，再用表格展示用户关心的竞争指标；需要比较时，统一指标含义并注明各站点实际查询的关键词。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /sif/keywordOverview`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sif_keyword_overview.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sif_keyword_overview.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sif-keyword-overview-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sif-keyword-overview-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Parameter Guide
+### 算力消耗预估
 
-1. **keyword** (required): The search keyword to analyze. Should be translated to the target marketplace's language for best results. Maximum length: 1000 characters.
-2. **country** (optional): The Amazon marketplace code. Defaults to `US`. See Supported Marketplaces above for valid codes.
-3. **last7d** (optional, boolean, default `true`): Use the latest 7 days. When `false`, the API uses `startDate`/`endDate`.
-4. **startDate** (optional, `yyyy-MM-dd`): Start date for a custom window. Takes effect when `last7d=false`.
-5. **endDate** (optional, `yyyy-MM-dd`): End date paired with `startDate`.
+9 算力 / 次
 
-### Usage Examples
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**1. Basic keyword competition check**
-Query: "How competitive is the keyword 'wireless charger' on Amazon US?"
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **说明供需比含义**：供需比为搜索结果商品数除以月搜索量，越小通常意味着竞争越小、机会越大。小于 1 可提示需求相对供应较旺，大于 5 可提示市场趋于饱和；作为解读线索，不据此直接作开发承诺。不要用周预估搜索量替代公式中的月搜索量。
+- **说明热度排名方向**：关键词热度排名按站点月搜索量排列，数字越小越热门，1 为最高。用户说“排名提升”指数字下降，“排名下降”指数字上升。
+- **突出关键指标**：用表格展示用户所需指标，重点突出供需比、关键词热度排名和搜索结果商品总数。
+- **拆分广告竞争**：用户询问广告竞争时，展示付费广告商品总数，并拆分 SP、品牌广告、视频广告；这些是商品数量，不能直接解释为独立卖家数量。
+- **区分商品总数和跟踪数**：搜索结果总数涵盖自然搜索、广告及推荐位置；`trackedAsinTotalCount` 是 SIF 跟踪到有曝光的 ASIN 去重总数，不等同于搜索结果商品总数。
+- **标明数据时效**：始终展示 `keywordDataUpdateTime` 及 `dataPeriodStartDate` 至 `dataPeriodEndDate` 的 ABA 周区间；不得脱离周期单独呈现商品数量。
+- **客观呈现**：除非用户明确要求，不附加主观经营建议。周预估搜索量作为估算展示，不改称实际月搜索量。
+- **解释错误与空结果**：依据 `msg` 或 `errmsg` 说明原因，可建议核对关键词拼写或目标站点；不自动改参数重试，具体响应判断见 `references/api.md`。
+
+## 使用示例
+
+### 美国站关键词竞争
+
+用户：美国站 wireless charger 竞争如何？
+
 ```json
 {"keyword": "wireless charger", "country": "US"}
 ```
 
-**2. Check competition in a non-US marketplace**
-Query: "How many competitors are there for 'Handyhulle' on Amazon Germany?"
+### 德国站关键词商品数量
+
+用户：德国站 Handyhülle 下有多少商品？
+
 ```json
-{"keyword": "Handyhulle", "country": "DE"}
+{"keyword": "Handyhülle", "country": "DE"}
 ```
 
-**3. Supply-demand analysis for product research**
-Query: "What's the supply-demand ratio for 'yoga mat' in the US?"
+### 供需比分析
+
 ```json
 {"keyword": "yoga mat", "country": "US"}
 ```
 
-**4. Advertising competition assessment**
-Query: "How many sellers are running ads on 'dog leash' in the UK?"
+### 英国站广告竞争
+
 ```json
 {"keyword": "dog leash", "country": "UK"}
 ```
 
-**5. Multi-marketplace comparison (multiple calls)**
-Query: "Compare the competition for 'bluetooth speaker' across US, UK, and DE"
-- Call 1: `{"keyword": "bluetooth speaker", "country": "US"}`
-- Call 2: `{"keyword": "bluetooth speaker", "country": "UK"}`
-- Call 3: `{"keyword": "Bluetooth Lautsprecher", "country": "DE"}`
+### 跨站点比较
 
-**6. Specific date range**
-Query: "Competition for 'yoga mat' between 2026-03-08 and 2026-03-14"
+用户：对比蓝牙音箱在美国、英国和德国的关键词竞争情况。
+
+按已确定的查询范围分别查询，并使用德国站的当地语言关键词：
+
+```json
+{"keyword": "bluetooth speaker", "country": "US"}
+```
+
+```json
+{"keyword": "bluetooth speaker", "country": "UK"}
+```
+
+```json
+{"keyword": "Bluetooth Lautsprecher", "country": "DE"}
+```
+
+### 指定 ABA 周期
+
 ```json
 {"keyword": "yoga mat", "country": "US", "last7d": false, "startDate": "2026-03-08", "endDate": "2026-03-14"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data clearly**: Show query results in a well-structured table format. Include all relevant metrics the user asked about.
-2. **Highlight key metrics**: When showing results, emphasize the supply-demand ratio, keyword popularity rank, and total product count as these are the most actionable metrics.
-3. **Ranking clarification**: When displaying keyword popularity rank, remind users that lower values mean higher search popularity.
-4. **Supply-demand interpretation**: When showing the supply-demand ratio, provide context: values below 1 suggest high demand relative to supply (opportunity); values above 5 suggest a saturated market.
-5. **Ad competition breakdown**: When users ask about advertising competition, break down the total paid advertising count into its components (SP, Brand, Video) for a more detailed view.
-6. **Error handling**: When a query fails, explain the reason based on the `msg` field and suggest adjusting query parameters (e.g., check keyword spelling, try a different marketplace).
-7. **Data freshness & period**: Always surface `keywordDataUpdateTime` (last refresh) plus `dataPeriodStartDate` ~ `dataPeriodEndDate` (the ABA week the counts describe). Do not present product counts without naming the period.
-8. **No subjective advice**: Present data objectively without making business recommendations unless specifically asked.
-## Important Limitations
-
-- **Single keyword per request**: Each API call queries one keyword at a time. For multi-keyword comparisons, make separate calls.
-- **Single record response**: The API typically returns one data record per keyword (`total` is usually 1).
-- **Marketplace coverage**: 13 Amazon marketplaces — IN / NL / SE / PL / TR / SG are no longer supported. Keywords not found in the queried marketplace will return empty results.
-- **Time window**: Defaults to the latest 7 days. Pass `last7d=false` plus `startDate`/`endDate` for a custom ABA week range.
-- **Keyword language**: For best accuracy, keywords should be in the local language of the target marketplace.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Keyword-level competition and market assessment:
-
-| User Says | Scenario |
-|-----------|----------|
-| "How competitive is XX keyword" | Competition intensity check |
-| "How many products are there for XX" | Search result product count |
-| "What's the supply-demand ratio for XX" | Supply-demand analysis |
-| "How many sellers are advertising on XX" | Ad competition assessment |
-| "Is XX keyword a blue ocean" | Market opportunity evaluation |
-| "Search volume for XX keyword" | Search popularity estimation |
-| "How popular is XX keyword on Amazon" | Keyword popularity ranking |
-| "Compare competition across marketplaces" | Multi-market competition comparison |
-| "How many SIF-tracked ASINs are active on this keyword" | Deduplicated tracked-ASIN count (`trackedAsinTotalCount`) |
-| "Competition for this keyword in a specific week" | Custom date range via `startDate`/`endDate` |
-
-**Not applicable** -- Needs beyond keyword competition overview:
-
-- Historical keyword ranking trends over time (use ABA Data Explorer instead)
-- Click share and conversion share by ASIN (use ABA Data Explorer instead)
-- Advertising bid strategy and PPC optimization
-- Product reviews, listing optimization
-- ASIN-level sales estimation
-- Detailed keyword search trend analysis over weeks/months
-
-## 算力消耗规则
-
-消耗 9 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

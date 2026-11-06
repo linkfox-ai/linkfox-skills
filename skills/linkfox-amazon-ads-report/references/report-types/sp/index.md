@@ -1,4 +1,4 @@
-# Sponsored Products (SP) Report Types
+# Sponsored Products (SP) 报告类型
 
 `adProduct = SPONSORED_PRODUCTS`
 

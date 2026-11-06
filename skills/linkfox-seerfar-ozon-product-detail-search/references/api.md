@@ -1,15 +1,33 @@
-# Seerfar Ozon 商品详情搜索 API 参考
+# Seerfar Ozon 商品详情搜索 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：商品详情搜索
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/seerfar/ozon/productDetailSearch`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
-- **User-Agent**：`LinkFox-Skill/2.0`；HTTP 超时 150s
 
-## 请求参数
+### 请求参数
 
-POST Body（JSON）。以下字段与接口 `inputSchema` 一致。仅 `sku` 必填，其余可选。
+POST Body（JSON）。以下字段与接口 `inputSchema` 一致。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -18,19 +36,33 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。仅 `sku` 必
 | uId | string | 否 | 用户 ID（最长 1000） |
 | memberId | string | 否 | 成员 ID（一个成员唯一标识，一个用户可归属多个团队，数据归属于 memberId，最长 1000） |
 
-> **必填约束**：`sku` 为必填；缺失返回 `errcode 400`（`sku 为必填参数`）。
-> **单 SKU 查询**：本接口一次只查一个商品详情，无批量/列表模式。
-> **窗口仅作用于销量聚合**：`dateRange` 只影响 `totalSales` / `dailySales` / `totalRevenue` / `salesTrendVOList` / `startDate` / `endDate` 等销量类字段；商品元数据（标题、价格、评分、品牌、卖家、配送方式等）为当下快照，不受窗口影响。
+#### 使用限制
 
-## 响应结构
+- **单 SKU 查询**：本接口一次只查一个商品详情，无批量/列表模式。
+- **窗口仅作用于销量聚合**：`dateRange` 只影响 `totalSales` / `dailySales` / `totalRevenue` / `salesTrendVOList` / `startDate` / `endDate` 等销量类字段；商品元数据（标题、价格、评分、品牌、卖家、重量、配送方式等）为当下快照，不受窗口影响。
+- **估算数据**：销量和销售额为 Seerfar 在所选窗口内的模型估算，不是 Ozon 官方数据。
+
+#### 脚本选项与运行约定
+
+| 参数／选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| JSON 参数 | string | 是 | 首个位置参数为请求 JSON，字段见上表；缺少参数或 JSON 无效时退出码为 1。 |
+| --inline | CLI flag | 否 | 强制完整打印到标准输出，仍保存完整响应。 |
+| --no-cache | CLI flag | 否 | 禁用本次响应缓存的读取和写入；不影响会话数据落盘。 |
+
+默认保留 24 小时本地缓存：目录为 `<cwd>/linkfox/.cache/linkfox-seerfar-ozon-product-detail-search/`，缓存文件名为 `linkfox-seerfar-ozon-product-detail-search-<hash>.json`，`hash` 为原始参数按键排序、保留中文序列化后 SHA-256 的前 16 位。缓存命中时在响应中标记 `_cache.hit=true`。包括错误和空结果在内的 JSON 响应均会缓存；不自动绕过缓存反复请求。缓存仅由公共调用器维护，无第二层缓存。
+
+脚本以 UTF-8 保存响应，执行方式及大小分流见 `../SKILL.md`。业务脚本在请求前检查当前目录下的 `linkfox/` 可写性，固定输出在该目录；禁止写入 `/tmp`，不可写时报错，不回退到其他目录。Windows 下运行期间使用同一工作目录的扩展路径写法（本地路径或 UNC 路径），兼容深层目录的缓存与响应保存；结束时恢复原工作目录，不改变缓存位置或增加缓存层。`LINKFOX_TOOL_GATEWAY` 优先于默认网关，两种 API Key 环境变量及 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME` 请求头均保持兼容。
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | code | string | 返回码，`"200"` 表示成功（成功时返回） |
-| errcode | integer | 错误码，`200` 表示成功；业务错误时仅返回此项 |
+| errcode | integer | 错误码；成功响应为 `200`，与 `code` 并存。业务错误通常仍为 HTTP 200，仅返回 `errcode` 和 `errmsg`，不含 `code`；响应判断遵循公共规则。 |
 | msg | string | 消息；成功为 `ok` |
-| errmsg | string | 错误消息；成功为 `ok`，业务错误时为原因描述 |
-| total | integer | 返回记录数（命中时为 `1`，未命中为 `0`） |
+| errmsg | string | 错误消息；成功为 `ok`，业务错误时为原因描述；HTTP 401 示例为 `{"errcode":401,"errmsg":"authorized error"}`。 |
+| total | integer | 返回记录数（命中时为 `1`，未命中为 `0`），不是商品目录总数 |
 | totalSales | integer | 统计窗口内总销量 |
 | dailySales | number | 平均每天销量（≈ totalSales / 窗口天数） |
 | totalRevenue | number | 统计窗口内销售额（卢布） |
@@ -40,15 +72,13 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。仅 `sku` 必
 | salesTrendVOList | array | 每日销量数据序列（见下方） |
 | categoryRanks | array | 商品类目排名历史（见下方） |
 | products | array | 商品详情列表（单 SKU 查询命中时 1 条，未命中为空） |
-| data | array | 返回数据，内容与 `products` 完全一致 |
+| data | array | 返回数据，内容与 `products` 完全一致；命中时各含 1 条记录，展示时避免重复计数。 |
 | columns | array | 列定义，元素含 `{field, title, cellType, sortable, filterable}` |
 | type | string | 响应展示类型，如 `productWorkbenches` |
 | costTime | integer | 接口耗时（毫秒） |
 | costToken | integer | 消耗 Token 数量 |
 
-> 未命中的 SKU：返回成功（`code:"200"`、`errcode:200`），但 `total:0`、`products:[]`，且销量聚合字段（`totalSales` / `dailySales` / `totalRevenue` / `stock` / `startDate` / `endDate`）不返回。判断"商品无数据"应基于 `total=0` 或 `products` 为空，而非 `errcode`。
-
-### products[*] / data[*] 商品对象字段
+#### products[*] / data[*] 商品对象字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -67,7 +97,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。仅 `sku` 必
 | brandUrl | string | 品牌链接 |
 | sellerName | string | 卖家名称 |
 | sellerId | integer | 卖家 ID（负值为 Ozon 平台自营卖家，如 `-4` Ozon Россия） |
-| fulfillment | array | 商品配送方式，如 `["FBO"]`、`["OZON"]`，可能含多个值 |
+| fulfillment | array | 商品配送方式，可含 `FBO` / `FBS`；平台自营商品还可为 `["OZON"]`，可能含多个值。 |
 | upTime | integer | 上架时间，毫秒时间戳 |
 | upDays | integer | 上架天数 |
 | upMonths | integer | 上架月数 |
@@ -76,16 +106,14 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。仅 `sku` 必
 | productUrl | string | 商品 URL |
 | productPageUrl | string | 统一商品页 URL，映射自 `productUrl` |
 | categoryInfo | object | 商品类目信息（见下方） |
-| monthlySalesUnits | integer | 统一月销量，实际取值等于当前统计窗口的 `totalSales` |
-| monthlySalesRevenue | number | 统一月销售额，实际取值等于当前统计窗口的 `totalRevenue` |
+| monthlySalesUnits | integer | 统一月销量；实际响应取值等于当前统计窗口的 `totalSales`，可直接使用，不固定为自然月；outputSchema 中“上游无对应字段，保持 null”的标注不适用于该返回值。 |
+| monthlySalesRevenue | number | 统一月销售额；实际响应取值等于当前统计窗口的 `totalRevenue`，可直接使用，不固定为自然月；outputSchema 中“上游无对应字段，保持 null”的标注不适用于该返回值。 |
 | sourceType | string | 数据源，固定 `ozon` |
 | sourceTool | string | 来源工具，标识 Seerfar Ozon 接口（如 `Seerfar-Ozon-查竞品`） |
-| weight | number | 商品重量，单位 g（数字/服务类商品可能不返回，见字段差异） |
-| grossMargin | number | 毛利率（schema 定义，实测部分商品不返回，见字段差异） |
+| weight | number | 商品重量，单位 g；实物商品返回，数字/服务类商品（如订阅会员）不返回，使用前判空。 |
+| grossMargin | number | schema 定义的毛利率；部分商品（如 Ozon 平台自营卖家）不返回，使用前判空。 |
 
-> **`data` 与 `products`**：两者内容完全一致，单 SKU 查询命中时各含 1 条记录。
-
-### salesTrendVOList[*] 每日销量对象
+#### salesTrendVOList[*] 每日销量对象
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -97,7 +125,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。仅 `sku` 必
 | reviewCount | integer | 截至当日评论数（累计） |
 | reviewRating | number | 截至当日评分 |
 
-### categoryRanks[*] 类目排名对象
+#### categoryRanks[*] 类目排名对象
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -107,7 +135,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。仅 `sku` 必
 
 > `categoryRanks` 仅含 `date` / `rank` / `count`，不含类目名称；类目名称/路径请取自 `categoryInfo`。
 
-### categoryInfo 类目信息对象
+#### categoryInfo 类目信息对象
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -117,7 +145,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。仅 `sku` 必
 | category | object | 末级类目对象（字段见下方） |
 | fullCategoryId | array | 完整类目 ID 路径（字符串数组，根→末级，如 `["99999999", "99999999_200001489", "99999999_200001489_970727001"]`） |
 
-#### category 对象字段
+##### category 对象字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -130,32 +158,41 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。仅 `sku` 必
 | crossBorderSellable | boolean | 是否支持跨境销售 |
 | disabled | boolean | 是否停用 |
 
-## 错误码
+#### columns[*] 列定义对象
 
-正常情况下 HTTP 状态码为 200，业务结果通过响应体区分：
-- **成功**：返回 `code:"200"` + `errcode:200`（`msg` / `errmsg` 均为 `ok`）。
-- **业务错误**：HTTP 仍为 200，但仅返回 `errcode`（非 200）+ `errmsg`（原因），无 `code` 字段。
-- **认证失败**：HTTP 状态码 401，响应体 `{"errcode":401,"errmsg":"authorized error"}`。
+列定义包含以下字段；字段类型以实际响应为准，不预设类型。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| field | 未注明 | 列对应的字段名。 |
+| title | 未注明 | 列标题。 |
+| cellType | 未注明 | 单元格类型。 |
+| sortable | 未注明 | 是否可排序。 |
+| filterable | 未注明 | 是否可筛选。 |
+
+#### 脚本缓存标记
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| _cache | object | 仅缓存命中时由脚本加入的本地元信息，不是接口业务字段。 |
+| _cache.hit | boolean | 缓存命中时为 true。 |
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+> 未命中的 SKU：返回成功（`code:"200"`、`errcode:200`），但 `total:0`、`products:[]`，且销量聚合字段（`totalSales` / `dailySales` / `totalRevenue` / `stock` / `startDate` / `endDate`）不返回。判断"商品无数据"应基于 `total=0` 或 `products` 为空，而非 `errcode`。
 
 | errcode | 含义 | 处理建议 |
 |---------|------|----------|
-| 200 | 成功 | 正常解析 `products` / `data` 及销量聚合字段 |
-| 400 | 参数错误 | 查看 `errmsg`；常见为缺 `sku`（`sku 为必填参数`） |
-| 1003 | 请求过于频繁 | 限流，稍后重试 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 402 | 计费失败 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 其他非 200 值 | 业务异常 | 查看 `errmsg` 获取具体原因 |
+| 400 | 参数错误 | 查看 `errmsg`；缺少 `sku` 时为 `sku 为必填参数`。 |
+| 1003 | 请求过于频繁 | 稍候重试，遵守成本约束，不自动反复请求。 |
 
-错误响应示例：
-
-```json
-{
-    "errcode": 400,
-    "errmsg": "sku 为必填参数"
-}
-```
-
-## curl 示例
+### curl 示例
 
 ```bash
 curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/productDetailSearch \
@@ -165,7 +202,7 @@ curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/productDetailSearch \
   -d '{"sku": "175924376", "dateRange": "past_30_days"}'
 ```
 
-## 响应示例（真实响应脱敏简略）
+### 响应示例（脱敏简略）
 
 ```json
 {
@@ -229,33 +266,18 @@ curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/productDetailSearch \
 
 > `data` 内容与 `products` 完全一致；`salesTrendVOList` / `categoryRanks` / `imageUrls` / `categoryInfo` 在示例中已截断，真实返回更完整。
 
-## 字段差异（实测）
+## Feedback
 
-- **`monthlySalesUnits` / `monthlySalesRevenue`**：outputSchema 标注"上游无对应字段，保持 null"，但**实测会返回**，取值分别等于当前统计窗口的 `totalSales` / `totalRevenue`，可直接使用。
-- **`weight`**：实物商品返回（单位 g）；数字/服务类商品（如订阅会员）实测**不返回**，使用前判空。
-- **`grossMargin`**：schema 定义为毛利率，实测部分商品（如 Ozon 平台自营卖家）**不返回**，使用前判空。
-- **`fulfillment` 取值**：除 `FBO` / `FBS` 外，平台自营商品可为 `["OZON"]`。
-
----
-
-## Feedback API
-
-> 该接口与上方工具接口不同，**请勿混用两个基础 URL**。
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
   "skillName": "linkfox-seerfar-ozon-product-detail-search",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "User successfully retrieved a single Ozon product's full detail, sales trend and category rank."
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**字段说明：**
-- `skillName`：使用本 skill 的 YAML `name`
-- `sentiment`：`POSITIVE` / `NEUTRAL` / `NEGATIVE` 三选一
-- `category`：`BUG` / `COMPLAINT` / `SUGGESTION` / `OTHER` 四选一
-- `content`：用户表达、实际现象、为什么算问题或好评

@@ -11,24 +11,24 @@ dateRange:
   dataRetentionDays: 731
 ---
 
-# SB Purchased Product
+# SB 购买商品
 
-Sponsored Brands purchased product reports contain performance data for products that were purchased as a result of your campaign.
+SB 购买商品报告提供因广告活动而被购买商品的效果数据。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sbPurchasedProduct |
-| Maximum date range | 731 days |
-| Data retention | 731 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 731 天 |
+| 数据保留期 | 731 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | purchasedAsin |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | campaignId |
 | adGroupId |
@@ -58,31 +58,36 @@ Sponsored Brands purchased product reports contain performance data for products
 | kindleEditionNormalizedPagesRead14d |
 | kindleEditionNormalizedPagesRoyalties14d |
 
-## Group by purchasedAsin
+## 分组：purchasedAsin
 
-**Additional metrics**: N/A
+无附加指标。
 
-**Filters**: N/A
+**筛选**： 无
 
-## Sample call
+## 配置示例
 
-```bash
-curl --location --request POST 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxx' \
---data-raw '{
-    "name":"SB purchased product report 7/5-7/10",
-    "startDate":"2022-07-05",
-    "endDate":"2022-07-10",
-    "configuration":{
-        "adProduct":"SPONSORED_BRANDS",
-        "groupBy":["purchasedAsin"],
-        "columns":["purchasedAsin","attributionType","adGroupName","campaignName","sales14d","startDate","endDate"],
-        "reportTypeId":"sbPurchasedProduct",
-        "timeUnit":"SUMMARY",
-        "format":"GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SB purchased product report 7/5-7/10",
+  "startDate": "2022-07-05",
+  "endDate": "2022-07-10",
+  "configuration": {
+    "adProduct": "SPONSORED_BRANDS",
+    "groupBy": [
+      "purchasedAsin"
+    ],
+    "columns": [
+      "purchasedAsin",
+      "attributionType",
+      "adGroupName",
+      "campaignName",
+      "sales14d",
+      "startDate",
+      "endDate"
+    ],
+    "reportTypeId": "sbPurchasedProduct",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

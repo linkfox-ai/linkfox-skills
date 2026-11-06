@@ -1,30 +1,49 @@
-# Jungle Scout 根据关键词扩展关键词信息 API 参考
+# Jungle Scout 根据关键词扩展关键词信息 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：根据种子关键词扩展关键词信息
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/tool-jungle-scout/keywords/by-keyword`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
 
-## 请求参数
+### 请求参数
 
 POST Body（JSON）：
 
-### 必填参数
+#### 必填参数
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | marketplace | string | 是 | 目标市场代码。可选值：`us`、`uk`、`de`、`in`、`ca`、`fr`、`it`、`es`、`mx`、`jp`。默认 `us` |
 | searchTerms | string | 是 | 种子关键词（单个关键词字符串） |
 
-### 可选参数 — 结果控制
+#### 可选参数 — 结果控制
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | needCount | int | 否 | 返回结果总数 |
 | sort | string | 否 | 排序字段，默认 `-monthly_search_volume_exact`（精确搜索量降序） |
 
-### 可选参数 — 搜索量筛选
+#### 可选参数 — 搜索量筛选
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -33,7 +52,7 @@ POST Body（JSON）：
 | minMonthlySearchVolumeBroad | int | 否 | 广泛搜索量下限 |
 | maxMonthlySearchVolumeBroad | int | 否 | 广泛搜索量上限 |
 
-### 可选参数 — 其他筛选
+#### 可选参数 — 其他筛选
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -42,7 +61,7 @@ POST Body（JSON）：
 | minOrganicProductCount | int | 否 | 自然排名商品数下限 |
 | maxOrganicProductCount | int | 否 | 自然排名商品数上限 |
 
-### sort 可选值
+#### sort 可选值
 
 | 值 | 说明 |
 |----|------|
@@ -60,29 +79,53 @@ POST Body（JSON）：
 | relevancy_score / -relevancy_score | 相关性评分 升序/降序 |
 | organic_product_count / -organic_product_count | 自然商品数 升序/降序 |
 
-### 站点映射
+#### 站点映射
 
-| 站点 | marketplace 值 |
-|------|---------------|
-| 美国 | us |
-| 英国 | uk |
-| 德国 | de |
-| 印度 | in |
-| 加拿大 | ca |
-| 法国 | fr |
-| 意大利 | it |
-| 西班牙 | es |
-| 墨西哥 | mx |
-| 日本 | jp |
+| 站点 | marketplace 值 | 说明 |
+|------|---------------|------|
+| 美国 | us | Amazon.com |
+| 英国 | uk | Amazon.co.uk |
+| 德国 | de | Amazon.de |
+| 印度 | in | Amazon.in |
+| 加拿大 | ca | Amazon.ca |
+| 法国 | fr | Amazon.fr |
+| 意大利 | it | Amazon.it |
+| 西班牙 | es | Amazon.es |
+| 墨西哥 | mx | Amazon.com.mx |
+| 日本 | jp | Amazon.co.jp |
 
-## 响应结构
+#### 参数约束与使用限制
+
+- `searchTerms` 仅接受一个种子关键词字符串，可以是包含空格的短语；原样传入用户提供的词，英文小写为佳。多种子词需要拆分多次调用。
+- 未指定站点时使用 `us`。仅支持上表 10 个站点，不包括澳大利亚、荷兰等市场。
+- 默认结果数量有限，需要更多结果时设置 `needCount`；数量默认值和上限未明确，实际返回数量以响应中的 `keywordInfoList` 为准。
+- 默认按精确搜索量降序排列。排序只能使用上表预定义值，不支持自定义组合排序。
+- 充分使用 `min/max` 筛选缩小范围；长尾词通常可设置 `minWordCount` 为 3 或以上。
+- 同一会话同一参数组合默认只调用一次。失败或空结果时不得自动换关键词、翻页或改邮编连续试探；继续检索前先向用户说明额外消耗。
+- 搜索量为月均估算值，并非实时数据；`monthlyTrend`、`quarterlyTrend` 分别为环比月度和季度搜索量变化百分比。
+
+#### 脚本选项与运行约定
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| JSON 参数 | object | 是 | 首个位置参数，按上述请求参数原样提交。 |
+| --inline | CLI flag | 否 | 强制全量输出，同时保存完整响应。 |
+| --no-cache | CLI flag | 否 | 跳过本地响应缓存的读取和写入；未传时使用 24 小时缓存。 |
+
+缓存位于 `<cwd>/linkfox/.cache/linkfox-junglescout-keyword-by-keyword/`，键为参数 JSON 排序后 SHA-256 的前 16 位，文件有效期 24 小时；命中时增加 `_cache.hit` 标记。业务封装负责缓存读写，调用公共 `call_api.run` 时始终附加 `--no-cache`，公共调用器不读写第二层响应缓存。缓存也可能保存空结果或错误，命中时仍须按响应规则判断，不能视为查询成功。
+
+完整数据必须保存在当前工作目录的会话目录内，不可写时在请求前报错，不回退家目录或临时目录；`SESSION_ID` 优先，未设置时在进程内生成稳定标识。保存、摘要及 `--inline` 输出由公共调用器处理。支持 `LINKFOX_TOOL_GATEWAY` 网关覆盖、两种 API Key 变量以及 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME` 请求头透传。
+
+业务脚本在公共调用器返回后读取并解析已保存的完整 JSON；文件缺失、不可读或 JSON 不完整时，向 stderr 报错并返回退出码 1，不因保存失败自动再次请求接口。退出码 0 仅表示本地执行及保存完成，业务是否成功仍按下方响应码规则判断。
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | costToken | integer | 消耗 token 数 |
 | keywordInfoList | array | 关键词信息列表 |
 
-### keywordInfoList 数组中每个对象
+#### keywordInfoList 数组中每个对象
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -102,36 +145,38 @@ POST Body（JSON）：
 | spBrandAdBid | number | Sponsored Brand 广告建议出价（美元） |
 | recommendedPromotions | integer | 推荐促销赠品数量 |
 
-## 错误码
+#### 状态与脚本附加字段
 
-正常情况下，接口的 HTTP 状态码均为 200，业务的成功与否通过响应体中的 errorCode 字段区分（errorCode = 200 表示成功，其他值表示业务错误）。当遇到未授权等情况时，HTTP 状态码为 401，且对应的 errorCode 也是 401。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 如返回，按公共响应码基本规则判断；认证错误示例为 401。 |
+| errmsg | string | 如返回，保存并用于解释实际错误原因。 |
+| errorCode | integer / string | 业务状态字段；如返回，200 表示业务成功，其他值表示业务错误，同时仍须按公共规则判断 `errcode`。 |
+| _cache | object | 脚本命中本地缓存时增加的元信息，不是业务接口请求参数。 |
+| _cache.hit | boolean | true 表示复用本地响应。 |
 
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析 `keywordInfoList` |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 402 | 算力/余额不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
+### 响应码规则
 
-错误响应示例：
+#### 基础规则
 
-```json
-{
-    "errcode": 401,
-    "errmsg": "authorized error"
-}
-```
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-## curl 示例
+#### 业务规则
+
+- 响应含 `errorCode` 时，`200` 表示业务成功，其他值表示业务错误；业务成功还须满足公共响应码基本规则。`errorCode=401` 或 `402` 时按 `onboarding.md` 处理，其他错误依据 `errmsg` 解释；不能仅因 HTTP 成功或存在关键词列表就忽略业务错误。
+- 正常返回时解析 `keywordInfoList`；列表为空只表示本次查询未取得关键词，不自动改条件追加请求。
+
+### curl 示例
 
 ```bash
-curl -X POST https://tool-gateway.linkfox.com/tool-jungle-scout/keywords/by-keyword \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/tool-jungle-scout/keywords/by-keyword" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
   -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{"marketplace": "us", "searchTerms": "yoga mat", "needCount": 20}'
 ```
 
-## 响应示例
+### 响应示例
 
 ```json
 {
@@ -175,26 +220,24 @@ curl -X POST https://tool-gateway.linkfox.com/tool-jungle-scout/keywords/by-keyw
 }
 ```
 
----
+#### 认证错误示例
 
-## Feedback API
+```json
+{"errcode": 401, "errmsg": "authorized error"}
+```
 
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
   "skillName": "linkfox-junglescout-keyword-by-keyword",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter
-- `sentiment`: Choose ONE — `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE — `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Common CLI helpers for linkfox-1688-procurement scripts."""
+"""1688 采购业务 CLI：授权前检、独立确认、脱敏与可选落盘。"""
 
 import json
 import os
@@ -7,8 +7,11 @@ import secrets
 import sys
 import tempfile
 import time
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+import io
+from contextlib import redirect_stdout
+from unittest.mock import patch
+
+import call_api as shared_api
 
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -17,7 +20,6 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 SLUG = "linkfox-1688-procurement"
-TIMEOUT_SECONDS = 150
 SMALL_THRESHOLD = 8000
 
 ENDPOINTS = {
@@ -64,6 +66,7 @@ SENSITIVE_KEYS = {
     "jwt",
     "token",
     "secret",
+    "callbackcode",
 }
 
 HIDDEN_OUTPUT_KEYS = {
@@ -190,35 +193,52 @@ def normalize_params(operation, params):
     sys.exit(2)
 
 
+class _ResponseJSON:
+    """空响应解析为对象；其他 JSON 行为使用标准库。"""
+
+    def loads(self, value, *args, **kwargs):
+        return {} if value in ("", b"") else json.loads(value, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(json, name)
+
+
 def _call_gateway_raw(operation, params):
-    path = ENDPOINTS[operation]
-    data = json.dumps(params, ensure_ascii=False).encode("utf-8")
-    headers = {
-        "Authorization": get_api_key(),
-        "Content-Type": "application/json; charset=utf-8",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": os.environ.get("SESSION_ID", ""),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(get_api_base() + path, data=data, headers=headers, method="POST")
+    """通过公共 run 发起请求，业务层独立管理响应、脱敏和保存。
+
+    仅在本次同步 CLI 调用内替换公共调用器的输出钩子。
+    禁止缓存，不让公共 run 的自动落盘覆盖 --no-save 或写入未脱敏数据。
+    """
+    captured = {}
+    transport = shared_api.call_api
+
+    def request(api_path, request_params):
+        with patch.object(shared_api, "json", _ResponseJSON()):
+            status, body = transport(api_path, request_params)
+        if status is None or not 200 <= status < 300:
+            body = dict(body) if isinstance(body, dict) else {"details": body}
+            body.setdefault("error", f"HTTP {status}" if status is not None else "Connection failed")
+            body["transportHttpStatus"] = status
+        captured["body"] = body
+        # run 的展示要求 object；业务原响应仍由 captured 原样返回。
+        rendered = redact(body)
+        if not isinstance(rendered, dict):
+            rendered = {"response": rendered}
+        return status, rendered
+
     try:
-        with urlopen(req, timeout=TIMEOUT_SECONDS) as response:
-            body = response.read().decode("utf-8")
-            return json.loads(body) if body else {}
-    except HTTPError as exc:
-        body = exc.read().decode("utf-8") if exc.fp else ""
-        try:
-            parsed = json.loads(body) if body else {}
-        except json.JSONDecodeError:
-            parsed = {"details": body}
-        parsed.setdefault("error", f"HTTP {exc.code}: {exc.reason}")
-        return parsed
-    except URLError as exc:
-        return {"error": f"Connection failed: {exc.reason}"}
-    except json.JSONDecodeError as exc:
+        with patch.object(shared_api, "call_api", request), \
+             patch.object(shared_api, "_cache_path", return_value="memory://no-cache"), \
+             patch.object(shared_api, "_resolve_output_path", return_value="memory://response"), \
+             patch.object(shared_api, "open", side_effect=lambda *a, **k: io.StringIO(), create=True), \
+             redirect_stdout(io.StringIO()):
+            shared_api.run(
+                ENDPOINTS[operation], f"{SLUG}-{operation}",
+                [json.dumps(params, ensure_ascii=False), "--inline", "--no-cache"],
+            )
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         return {"error": f"Invalid JSON response: {exc}"}
+    return captured["body"]
 
 
 def _is_truthy_true(value):
@@ -242,6 +262,10 @@ def _extract_stores(payload):
 
 
 def _has_active_store(payload):
+    # 复用公共 errcode 判断（无缓存读写），HTTP 错误已由调用适配层标记。
+    # 错误响应即使残留店铺信息，也不能授权后续采购操作。
+    if not isinstance(payload, dict) or "error" in payload or not shared_api._is_cacheable(200, payload):
+        return False
     for store in _extract_stores(payload):
         if not isinstance(store, dict):
             continue
@@ -388,6 +412,14 @@ def summarize(payload):
 
 def run_cli(operation):
     argv = sys.argv[1:]
+    if "--help" in argv or "-h" in argv:
+        print(f"用法：{os.path.basename(sys.argv[0])} '<JSON 参数>' "
+              "[--payload-env ENV_NAME] [--payload-file path.json] "
+              "[--inline] [--save] [--no-save] [--no-cache]")
+        print("实时请求，不使用响应缓存；高风险操作须先取得用户独立确认。")
+        return
+    # 兼容公共执行示例；采购业务本来就始终禁用缓存。
+    argv = [item for item in argv if item != "--no-cache"]
     inline = False
     force_save = False
     no_save = False

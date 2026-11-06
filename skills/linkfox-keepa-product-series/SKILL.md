@@ -1,184 +1,122 @@
 ---
 name: linkfox-keepa-product-series
-description: 查询亚马逊商品的历史时序数据，包括价格走势、BSR（畅销排名）趋势、评分变化、卖家数量和月销量，支持多个亚马逊站点的任意ASIN。当用户提到价格历史、价格追踪、BSR历史、BSR趋势、历史定价、价格波动、Keepa数据、排名历史、降价提醒、秒杀历史价格、Buy Box价格趋势、优惠券价格、FBA/FBM价格对比、卖家数量变化、评分趋势、销量历史、price history, BSR trends, Keepa historical data, price tracking, sales history, rating changes, seller count changes, price fluctuation时触发此技能。即使用户未明确提及"Keepa"或"时序数据"，只要其需求涉及亚马逊历史商品级数据（如价格、排名或销量随时间的变化趋势），也应触发此技能。
+description: 查询亚马逊商品的 Keepa 历史时序数据，包括 Buy Box 和其他价格走势、BSR 趋势、评分及评分数、卖家数量和月销量。适用于指定 ASIN 的历史定价、促销、FBA/FBM 价格比较、排名及销量变化分析；不适用于关键词和广告分析、市场汇总趋势、实时库存、Listing 文案优化或评论正文与情感分析。
 ---
 
-# Keepa Product Time-Series Data Explorer
+# Keepa 亚马逊商品历史趋势
 
-This skill guides you on how to query and analyze Amazon product historical time-series data, helping Amazon sellers track price movements, BSR trends, rating changes, and other key product metrics over time.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool provides historical time-series data for individual Amazon products (ASINs) powered by Keepa. It returns timestamped data points for various metrics, allowing trend analysis over a configurable time window (up to 365 days). Each query targets a single ASIN in a specific Amazon marketplace.
+查看指定亚马逊商品在目标站点的历史价格、排名和其他商品指标。用户无需明确提及 Keepa；选品或竞品分析若具体落在某个 ASIN 的历史走势，也适用本技能。
 
-**Time-series format**: All data series are returned as arrays of `{time, value}` objects, where `time` is a timestamp and `value` is the metric at that point. BSR data includes a `categoryName` field along with a `points` array. Analyze these fields from the saved JSON directly. `_dataQuery_executeDynamicQuery` reads Linkfox session data stored in SLS, not arbitrary JSON files; its supported data mappings do not determine whether these time series can be analyzed.
+**场景速查**
 
-**BSR logic**: A smaller BSR value means a better sales rank. Rank 1 is the top-selling product in its category. When a user says "BSR improved", it means the numeric value decreased; "BSR dropped" means the value increased.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个 ASIN 以前卖多少钱，最近有没有降价 | 价格历史、降价和波动分析。 |
+| 看 BSR 趋势，排名有没有改善 | 大类和小类畅销排名变化。 |
+| 看秒杀、Prime 专属价和优惠券价格 | 促销及优惠后的价格走势。 |
+| 比较 FBA、FBM 和 Buy Box 价格 | 配送渠道及买盒价格比较。 |
+| 卖家数量有没有增加，之前是否打过价格战 | 竞争卖家数量及定价变化。 |
+| 评分、评分数和月销量如何变化 | 商品历史表现。 |
+| 给我看 Keepa 图表或 Keepa 数据 | 根据实际返回的时序点展示走势。 |
 
-## Available Data Series
+关键词或搜索词研究（包括 ABA）、广告/PPC、Listing 文案、类目或市场汇总、实时库存及评论正文分析不属于本技能范围。
 
-| Series | Parameter | Description |
-|--------|-----------|-------------|
-| Buy Box Price | *(always returned)* | Buy Box price over time |
-| Lowest New Price | showPrice=1 | Lowest marketplace new item price |
-| List Price | showPriceList=1 | Strikethrough / list price |
-| Deal Price | showPriceDeal=1 | Lightning deal price |
-| Prime Exclusive Price | showPricePrime=1 | Prime-exclusive new item price |
-| FBA Price | showPriceFba=1 | Third-party FBA new item price |
-| FBM Price | showPriceFbm=1 | Third-party FBM new item price |
-| Coupon Price | showPriceCoupon=1 | Post-coupon Buy Box price |
-| Main Category BSR | showBsrMain=1 | Best Sellers Rank in the main (root) category |
-| Seller Count | showSellerCount=1 | Number of active sellers |
-| Rating | *(always returned)* | Product star rating over time |
-| Rating Count | *(always returned)* | Number of ratings over time |
-| Monthly Sales | *(always returned)* | Monthly unit sales volume |
-| Sub-category BSR | *(always returned)* | Best Sellers Rank in sub-categories |
+## 前置条件
 
-## Supported Marketplaces
+确定目标 ASIN、站点、历史区间和需要比较的指标。站点映射、默认值、数据系列与使用限制见 `references/api.md`。
 
-| Domain ID | Marketplace |
-|-----------|-------------|
-| 1 | Amazon.com (US) |
-| 2 | Amazon.co.uk (UK) |
-| 3 | Amazon.de (Germany) |
-| 4 | Amazon.fr (France) |
-| 5 | Amazon.co.jp (Japan) |
-| 6 | Amazon.ca (Canada) |
-| 8 | Amazon.it (Italy) |
-| 9 | Amazon.es (Spain) |
-| 10 | Amazon.in (India) |
-| 11 | Amazon.com.mx (Mexico) |
-| 12 | Amazon.com.br (Brazil) |
+## 查询与分析流程
 
-Default marketplace is **1** (US). Use domain=1 when the user does not specify a marketplace.
+1. 从用户问题确定商品、站点、区间和指标；按 `references/api.md` 准备请求。站点未指定时采用其中约定的美国站默认值，不将类目汇总问题当作商品查询。
+2. 按分析目标选择系列：价格分析按需选择最低新品价、标价、促销价和券后价；FBA/FBM 比较同时选择两种渠道价格；BSR 深查包含大类排名；竞争分析包含卖家数量。完整健康检查可选择全部可选系列，具体开关见接口参考。
+3. 请求前说明动态算力消耗，并由用户决定是否继续。涉及多个 ASIN 时，按接口参考逐个串行查询并说明额外消耗；同参数优先复用已有数据。
+4. 保存响应，先看摘要，再从保存的 JSON 中提取所需系列。按接口参考判断结果；失败或空结果时解释原因、提示核对 ASIN 和站点，后续查询遵守成本约束。
+5. 用日期和对应站点币种呈现走势，概括起止变化并指出降价、BSR 波动、评分变化等重要节点；比较多个商品时注明各自站点与区间。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /keepa/productSeries`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/keepa_product_history.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/keepa_product_history.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按 Keepa token 动态计费，消耗算力 = `0.045 × costToken`。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-keepa-product-series-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-keepa-product-series-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8,000 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8,000 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Parameter Guide
-
-### Required Parameters
-
-- **asin**: The Amazon Standard Identification Number to query. Only a single ASIN per request is supported.
-- **domain**: The Amazon marketplace domain ID (see table above). Always map the user's marketplace mention to the correct numeric ID.
-
-### Optional Parameters
-
-- **days**: Number of historical days to retrieve (1-365, default 90). Use 30 for short-term, 90 for medium-term, 365 for long-term analysis.
-- **show\* flags**: Set any `show*` parameter to `1` to include that data series. By default, only the core series (Buy Box price, rating, rating count, monthly sales, sub-category BSR) are returned.
-
-### How to Choose Parameters
-
-1. **Price analysis**: Enable `showPrice`, `showPriceList`, `showPriceDeal`, `showPriceCoupon` as needed for the specific price comparison the user wants.
-2. **FBA vs FBM comparison**: Enable both `showPriceFba` and `showPriceFbm`.
-3. **BSR deep-dive**: Enable `showBsrMain` to get the root category BSR alongside the always-returned sub-category BSR.
-4. **Competitive landscape**: Enable `showSellerCount` to see how many sellers are competing.
-5. **Full product overview**: Enable all show flags for a comprehensive historical snapshot.
-
-## Usage Examples
-
-**1. Basic price history for a US product**
-```
-asin: B0XXXXXXXX, domain: 1, days: 90
-```
-
-**2. Long-term BSR trend (1 year) on the German marketplace**
-```
-asin: B0XXXXXXXX, domain: 3, days: 365, showBsrMain: 1
-```
-
-**3. Price comparison across fulfillment channels**
-```
-asin: B0XXXXXXXX, domain: 1, days: 30, showPriceFba: 1, showPriceFbm: 1, showPrice: 1
-```
-
-**4. Deal and coupon price tracking**
-```
-asin: B0XXXXXXXX, domain: 1, days: 90, showPriceDeal: 1, showPriceCoupon: 1
-```
-
-**5. Full product health check**
-```
-asin: B0XXXXXXXX, domain: 1, days: 90, showPrice: 1, showPriceList: 1, showPriceDeal: 1, showPricePrime: 1, showPriceFba: 1, showPriceFbm: 1, showPriceCoupon: 1, showBsrMain: 1, showSellerCount: 1
-```
-
-## Display Rules
-
-1. **Present data clearly**: Show time-series data in tables or describe trends; avoid subjective business advice unless the user explicitly asks for it.
-2. **BSR clarification**: When showing BSR data, remind users that lower values mean better (higher) sales ranks.
-3. **Price formatting**: Display prices with proper currency symbols matching the marketplace ($ for US, EUR for DE/FR/ES/IT, GBP for UK, JPY for JP, etc.).
-4. **Time formatting**: Present timestamps in a human-readable date format.
-5. **Trend summarization**: When data series are long, summarize the overall trend (e.g., "price decreased from $29.99 to $24.99 over 90 days") and highlight significant changes such as price drops, BSR spikes, or rating shifts.
-6. **Error handling**: When a query fails, explain the reason and suggest corrections (e.g., verify the ASIN is valid, check the marketplace domain ID).
-7. **Single ASIN limitation**: If the user asks about multiple ASINs, inform them that queries must be made one ASIN at a time, and run multiple sequential calls.
-## Important Limitations
-
-- **Single ASIN per query**: Only one ASIN can be queried at a time. For multi-ASIN comparisons, make separate requests.
-- **Maximum 365 days**: Historical data is limited to at most 365 days back.
-- **Data granularity**: Data points are at irregular intervals depending on when Keepa captured changes, not at fixed daily intervals.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Historical product-level data queries on Amazon:
-
-| User Says | Scenario |
-|-----------|----------|
-| "What's the price history for this ASIN" | Price trend analysis |
-| "Show me the BSR trend", "how is it ranking" | BSR tracking |
-| "Has the price dropped recently", "any deals" | Price drop / deal detection |
-| "How many sellers are on this listing" | Seller count trend |
-| "What's the rating trend", "review count over time" | Rating / review tracking |
-| "FBA vs FBM price", "who has the Buy Box" | Fulfillment price comparison |
-| "Monthly sales for this product" | Sales volume trend |
-| "Was there a price war on this ASIN" | Competitive pricing analysis |
-| "Show me the Keepa chart", "Keepa data" | Explicit Keepa data requests |
-
-**Not applicable** -- Needs beyond product-level historical data:
-
-- Search term / keyword analysis (use ABA data instead)
-- Advertising / PPC campaign data
-- Listing copywriting or content optimization
-- Category-wide or market-level aggregate trends (this tool is per-ASIN only)
-- Real-time inventory or stock level checks
-- Product reviews text or sentiment analysis
-
-**Boundary judgment**: When users say "product research" or "competitor analysis", if it boils down to examining a specific ASIN's historical price, BSR, or sales data, this skill applies. If they need keyword data, market-wide trends, or advertising metrics, it does not apply.
-
-## 算力消耗规则
+### 算力消耗预估
 
 按动态规则计费：消耗算力 = 0.045 × 本次历史趋势查询消耗的 Keepa token。
 
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+本服务按倍数动态计算，单次可能消耗大量算力，必须先提醒用户，由用户决定是否继续。
 
-**Feedback:**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 解决认证和算力问题
 
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **时序概念**：这些是商品指标随时间变化的观测点。数据的采样含义与嵌套结构见 `references/api.md`，不要把各系列直接视为对齐的日数据。
+- **直接分析本地数据**：从保存的 JSON 分析即可。`_dataQuery_executeDynamicQuery` 读取的是 SLS 中的 LinkFox 会话数据，并非任意本地 JSON；它支持哪些数据映射，不决定这些时序能否分析。
+- **BSR 含义**：数值越小，销量排名越靠前；1 为该类目第一。“排名改善”意味着数值下降；数值上升意味着名次后退，展示时明确这一点，并注明类目名称。
+- **客观展示**：用表格或趋势描述呈现数据；除非用户明确要求，不附加主观经营建议。
+- **币种与日期**：时间戳转为可读日期；美国用 $/USD，德国、法国、西班牙、意大利用 EUR/€，英国用 GBP/£，日本用 JPY/¥，其他站点匹配其当地币种，避免混用不同站点的价格单位。
+- **长序列摘要**：概括整体走势及起止值，例如“价格在所查区间从 $29.99 降至 $24.99”，并标出明显降价、排名突变和评分变化；仅依据实际返回数据，不补造缺失时间点。
+
+## 使用示例
+
+### 美国商品的基本价格历史
+
+用户：看这个 ASIN 在美国站最近一个季度的价格。
+
+采用核心价格系列，说明动态费用后查询并概括起止价及明显波动。
+
+### 德国商品的长期 BSR 趋势
+
+用户：看看这个 ASIN 在德国站过去一年的排名。
+
+选取长期区间及大类排名，结合小类排名展示，说明 BSR 越小越好。
+
+### FBA 与 FBM 价格比较
+
+用户：比较这个商品最近一个月的 FBA、FBM 和最低新品价格。
+
+选择相应价格系列，按实际观测日期和币种呈现差异。
+
+### 促销和优惠券价格
+
+用户：看看这个商品最近的秒杀和券后价格。
+
+选取促销与优惠券价格系列，标出发生明显变化的日期。
+
+### 完整商品历史表现
+
+用户：综合看看这个 ASIN 的 Keepa 历史数据。
+
+确定所需区间，按需选择全部可选系列，结合核心系列概括价格、BSR、卖家数量、评分与销量变化。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

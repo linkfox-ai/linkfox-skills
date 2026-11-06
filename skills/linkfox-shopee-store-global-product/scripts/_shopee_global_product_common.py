@@ -1,4 +1,4 @@
-"""Shared helpers for linkfox-shopee-store-global-product (storeTokens + developerProxy)."""
+"""Shopee 全球商品共享封装：依赖检查、公共调用器适配及业务结果输出。"""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ import subprocess
 import sys
 import time
 import secrets
-import tempfile
 from pathlib import Path
 from typing import Any, Optional
-from urllib.error import HTTPError, URLError
 from urllib.parse import quote
-from urllib.request import Request, urlopen
+from contextlib import redirect_stdout
+from io import StringIO
+import call_api as shared_api
 
 API_BASE_URL = os.environ.get("LINKFOX_TOOL_GATEWAY") or os.environ.get("SHOPEE_API_BASE_URL") or "https://tool-gateway.linkfox.com"
 STORE_TOKENS_ENDPOINT = f"{API_BASE_URL.rstrip('/')}/shopee/storeTokens"
@@ -52,46 +52,91 @@ def ensure_auth_skill_available(caller: str = "global-product script") -> None:
         sys.exit(DEPENDENCY_EXIT_CODE)
 
 
-def get_api_key() -> str:
-    """
-    获取配置在环境变量的API Key。
-    如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-    """
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
+def prepare_output_root() -> str:
+    """请求前确认最终数据目录可写；禁止回退到其他目录。"""
+    ts = time.time()
+    sid = _lf_session_id(ts)
+    root = Path.cwd() / "linkfox"
+    data_dir = root / time.strftime("%Y-%m-%d", time.localtime(ts)) / sid / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    probe = data_dir / (".write-probe-" + secrets.token_hex(6))
+    try:
+        with probe.open("x", encoding="utf-8") as handle:
+            handle.write("")
+    finally:
+        if probe.exists():
+            probe.unlink()
+    _LF_SESSION_CACHE["_root"] = str(root)
+    return str(root)
 
 
 def call_api(endpoint: str, params: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    req = Request(
-        endpoint,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
+    """保留业务接口，HTTP、认证和原始响应落盘统一交给公共 run。"""
+    root = prepare_output_root()
+    base = API_BASE_URL.rstrip("/")
+    if not endpoint.startswith(base + "/"):
+        raise ValueError("接口地址必须属于已配置的 LinkFox 网关")
+    api_path = endpoint[len(base):]
+    operation = str(params.get("path") or api_path).rsplit("/", 1)[-1]
+    captured = {}
+    original_call = shared_api.call_api
+    original_base = shared_api.get_api_base
+    original_output_path = shared_api._resolve_output_path
+    old_root = shared_api._SESSION_CACHE.get("_root")
+    old_auto = shared_api._SESSION_CACHE.get("_auto")
+
+    def capture_transport(path, payload):
+        status, result = original_call(path, payload)
+        captured.update(status=status, result=result)
+        return status, result
+
+    # 兼容 SHOPEE_API_BASE_URL，并在业务封装中固定输出根目录。
+    shared_api.call_api = capture_transport
+    shared_api.get_api_base = lambda: base
+    shared_api._resolve_output_path = lambda slug, ts: shared_api.resolve_data_path(slug, time.time())
+    shared_api._SESSION_CACHE["_root"] = root
+    shared_api._SESSION_CACHE["_auto"] = _lf_session_id(time.time())
     try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+        with redirect_stdout(StringIO()):
+            shared_api.run(api_path, SLUG + "-" + operation + "-raw", argv=[
+                json.dumps(params, ensure_ascii=False), "--inline", "--no-cache"
+            ])
+    finally:
+        shared_api.call_api = original_call
+        shared_api.get_api_base = original_base
+        shared_api._resolve_output_path = original_output_path
+        if old_root is None:
+            shared_api._SESSION_CACHE.pop("_root", None)
+        else:
+            shared_api._SESSION_CACHE["_root"] = old_root
+        if old_auto is None:
+            shared_api._SESSION_CACHE.pop("_auto", None)
+        else:
+            shared_api._SESSION_CACHE["_auto"] = old_auto
+    result = dict(captured["result"])
+    result["transportHttpStatus"] = captured["status"]
+    return result
+
+
+def normal_gateway_response(proxy: dict) -> bool:
+    status = proxy.get("transportHttpStatus")
+    if status is not None and not (200 <= status < 300):
+        return False
+    if "transportHttpStatus" in proxy and status is None:
+        return False
+    if proxy.get("error"):
+        return False
+    code = proxy.get("errcode")
+    if code is None:
+        return True
+    if isinstance(code, str):
+        code = code.strip()
+        if not code:
+            return True
+        if len(code) != 3 or not code.isascii() or not code.isdigit():
+            return False
+        code = int(code)
+    return type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
 
 
 def resolve_store_tokens(params: dict) -> dict:
@@ -142,14 +187,18 @@ def developer_proxy_call(
     return call_api(DEVELOPER_PROXY_ENDPOINT, proxy)
 
 
-
-
 def qs_add(parts: list[str], key: str, value: str) -> None:
     parts.append(f"{key}={quote(str(value), safe='')}")
 
 
 def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
-    if int(proxy.get("httpStatus") or 0) != 200:
+    if not normal_gateway_response(proxy):
+        return
+    try:
+        upstream_status = int(proxy.get("httpStatus") or 0)
+    except (TypeError, ValueError):
+        return
+    if upstream_status != 200:
         return
     body_raw = proxy.get("body")
     if not body_raw or not str(body_raw).strip():
@@ -164,14 +213,10 @@ def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
     if isinstance(parsed, dict) and parsed.get("response") is not None:
         out[f"{key}Response"] = parsed["response"]
 
-# ===== LinkFox 统一输出层（落盘 + 摘要，无缓存）=====
-# 本块追加到共享模块（_xxx_common.py）末尾，供各入口脚本调用 emit_result()。
-# 依赖：json, os, sys, time, secrets, tempfile（共享模块通常已 import json/os/sys；
-#       若缺 time/secrets/tempfile，请在文件顶部补 import）。
+# LinkFox 业务输出层：保存会话元数据并输出摘要，不启用响应缓存。
 
 import time as _lf_time
 import secrets as _lf_secrets
-import tempfile as _lf_tempfile
 
 LF_SMALL_THRESHOLD = 8000
 _LF_SESSION_CACHE: dict = {}
@@ -180,33 +225,7 @@ SLUG = "linkfox-shopee-store-global-product"
 
 
 def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
+    return prepare_output_root()
 
 
 def _lf_iso(ts: float) -> str:
@@ -214,9 +233,11 @@ def _lf_iso(ts: float) -> str:
 
 
 def _lf_session_id(ts: float) -> str:
-    env = os.environ.get("SESSION_ID")
+    env = (os.environ.get("SESSION_ID") or "").strip()
     if env:
-        return env.strip()
+        if env in (".", "..") or any(char in env for char in '/\\:'):
+            raise ValueError("SESSION_ID 必须是单个目录名，不能包含路径分隔符或盘符")
+        return env
     if "_auto" not in _LF_SESSION_CACHE:
         _LF_SESSION_CACHE["_auto"] = (
             _lf_time.strftime("%H%M%S", _lf_time.localtime(ts)) + "-" + _lf_secrets.token_hex(3)
@@ -330,6 +351,7 @@ def emit_result(result, slug=SLUG, inline=False):
         print(f"Saved full response: {out} ({len(serialized)} bytes)")
     except OSError as e:
         print(f"Failed to save to {out}: {e}", file=sys.stderr)
+        raise
     _lf_update_meta(session_dir, skill=slug, file_rel=os.path.relpath(out, session_dir), ts=ts)
     if inline or len(serialized.encode("utf-8")) <= LF_SMALL_THRESHOLD:
         print(serialized)

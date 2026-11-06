@@ -22,9 +22,8 @@ stderr 结构化信号:
 注意:
     这是一个**不联网**的本地探测脚本。它只检查文件系统上常见的
     skill 安装路径（含 **OpenClaw**、**Hermes Agent** 的常见布局）；
-    真正的"能不能调授权接口"取决于依赖 skill 的脚本是否可执行——
-    这一点由 get_pricing.py 在运行时再做一次二次校验（通过尝试调用
-    /spApi/storeTokens）。
+    此检测仅确认依赖文件存在；店铺是否已授权仍由网关检查。
+    定价脚本使用 sellerId + region，不额外请求 /spApi/storeTokens。
 
     OpenClaw 参考: workspace 下 `<workspace>/skills`、`<workspace>/.agents/skills`，
     以及 `~/.openclaw/skills`、`~/.agents/skills`（与官方文档优先级一致）。
@@ -109,6 +108,7 @@ def candidate_skill_roots() -> list[Path]:
 
     # 5) OpenClaw 全局与跨工具共享目录
     roots.extend([
+        home / ".agents" / "skills",
         home / ".openclaw" / "skills",
         home / ".hermes" / "skills",
     ])

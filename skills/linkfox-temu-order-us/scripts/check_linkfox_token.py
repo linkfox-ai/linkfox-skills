@@ -11,7 +11,10 @@ Usage:
 import json
 import sys
 
-from _temu_common import PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error, load_json_arg
+from _temu_common import (
+    PROXY_URL, call_temu_api, gateway_http_status, get_linkfox_token,
+    is_gateway_response_ok, is_linkfox_auth_error, load_json_arg,
+)
 
 def main():
     params = load_json_arg(sys.argv) if len(sys.argv) >= 2 else {}
@@ -31,14 +34,21 @@ def main():
     }
     result = call_temu_api(PROXY_URL, probe_body, timeout=150, linkfox_params=params)
 
-    if is_linkfox_auth_error(result):
+    auth_error = is_linkfox_auth_error(result)
+    if auth_error or not is_gateway_response_ok(result) or result.get("code") in (1003, "1003"):
+        status = gateway_http_status(result)
         print(
             json.dumps(
                 {
                     "ok": False,
-                    "reason": "linkfox_token_invalid",
-                    "message": result.get("message") or result,
-                    "hint": "Set LINKFOXAGENT_API_KEY or pass token in JSON.",
+                    "reason": "linkfox_token_invalid" if auth_error else "gateway_check_failed",
+                    "message": (result.get("message") or result) if isinstance(result, dict) else result,
+                    "transportHttpStatus": status,
+                    "gatewayReachable": status is not None,
+                    "hint": (
+                        "Set LINKFOX_AGENT_API_KEY / LINKFOXAGENT_API_KEY or pass token in JSON."
+                        if auth_error else "Check gateway, billing, permissions and connection; token validity is unconfirmed."
+                    ),
                 },
                 indent=2,
                 ensure_ascii=False,

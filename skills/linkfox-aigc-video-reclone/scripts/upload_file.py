@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read a file or download a source URL, then use the official Base64 upload entry."""
+"""读取本地文件或下载源 URL，通过内置 Base64 入口上传素材。"""
 import base64
 import importlib.util
 import json

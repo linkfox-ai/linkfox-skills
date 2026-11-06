@@ -3,9 +3,9 @@
 Google AI Search - LinkFox Skill
 调用 /aiMode/googleSearch 接口。
 
-Usage:
-  python google_ai_search.py '<JSON parameters>'           # 自动：小结果全量；大结果写文件+摘要
-  python google_ai_search.py '<JSON parameters>' --inline  # 强制全量打印到 stdout
+用法:
+  python google_ai_search.py '<JSON 参数>' [--no-cache]  # 自动：小结果全量；大结果写文件+摘要
+  python google_ai_search.py '<JSON 参数>' --inline  # 强制全量打印到 stdout
 
 输出策略（脚本默认行为）：
   - **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ai-mode-google-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
@@ -20,73 +20,43 @@ import os
 import sys
 import time
 import secrets
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
+import io
+from contextlib import redirect_stdout
+
+import call_api as _api
 
 
 API_PATH = "/aiMode/googleSearch"
 SLUG = "linkfox-ai-mode-google-search"
 
-# 响应小于等于该字节数时，直接全量输出，不落文件
+# 响应小于等于该字节数时，落盘后全量输出
 SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
 
 _SESSION_CACHE: dict[str, str] = {}
 
-def get_api_base() -> str:
-    """网关基础地址：env LINKFOX_TOOL_GATEWAY 优先，缺省回退正式地址。"""
-    return (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
 
-def get_api_url():
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
-    return get_api_base() + API_PATH
-
-
-def get_api_key():
-    """
-获取配置在环境变量的API Key。
-如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-"""
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
-
-
-def call_api(params):
-    api_url = get_api_url()
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": os.environ.get("SESSION_ID", ""),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(
-        api_url,
-        data=data,
-        headers=headers,
-        method="POST",
-    )
+def call_api(params, out_path=None):
+    """通过公共 run 调用一次；禁用其缓存，复用业务输出路径。"""
+    out_path = out_path or _resolve_output_path(time.time())
+    resolver = _api._resolve_output_path
+    cache_path = _api._cache_path
     try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        try:
-            return json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
-        except Exception:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+        # run 无返回值，因此从其 UTF-8 落盘文件取得原始响应。
+        # 路径由业务封装预先验证，避免公共脚本回退到其他目录。
+        _api._resolve_output_path = lambda slug, ts: out_path
+        # 公共 run 即使收到 --no-cache 也会先创建缓存目录。
+        # 此处路径不会被读取或写入，避免禁用缓存时仍依赖缓存目录权限。
+        _api._cache_path = lambda slug, params: ''
+        with redirect_stdout(io.StringIO()):
+            _api.run(API_PATH, SLUG, argv=[
+                json.dumps(params, ensure_ascii=False), '--inline', '--no-cache'
+            ])
+    finally:
+        _api._resolve_output_path = resolver
+        _api._cache_path = cache_path
+    with open(out_path, encoding='utf-8') as handle:
+        return json.load(handle)
 
 
 def _cache_key(params):
@@ -110,9 +80,11 @@ def _load_cache(path):
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
         if isinstance(payload, dict):
-            payload.setdefault("_cache", {})["hit"] = True
+            if not isinstance(payload.get("_cache"), dict):
+                payload["_cache"] = {}
+            payload["_cache"]["hit"] = True
         return payload
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
 
 
@@ -144,11 +116,11 @@ def _find_main_list(obj):
 def summarize(result):
     """打印紧凑摘要。"""
     if not isinstance(result, dict):
-        print(f"Response type: {type(result).__name__}")
+        print(f"响应类型: {type(result).__name__}")
         print(json.dumps(result, ensure_ascii=False)[:500])
         return
 
-    print(f"Top-level keys: {list(result.keys())}")
+    print(f"顶层字段: {list(result.keys())}")
 
     for k in ("errcode", "errorCode", "code", "errmsg", "msg",
               "total", "totalCount", "count", "currentPage", "perPage",
@@ -160,9 +132,9 @@ def summarize(result):
 
     list_path, main_list = _find_main_list(result)
     if list_path is not None and main_list:
-        print(f"\nMain list field: `{list_path}` (length={len(main_list)})")
+        print(f"\n最大列表字段: `{list_path}` (长度={len(main_list)})")
         sample = main_list[:3]
-        print(f"Sample (first {len(sample)} of {len(main_list)}):")
+        print(f"样本（共 {len(main_list)} 条中的前 {len(sample)} 条）:")
         print(json.dumps(sample, indent=2, ensure_ascii=False))
 
 def _ensure_meta(root: str, session_dir: str, date_str: str, sid: str, ts: float) -> None:
@@ -199,50 +171,18 @@ def _ensure_meta(root: str, session_dir: str, date_str: str, sid: str, ts: float
         pass
 
 def _linkfox_root() -> str:
-    """选择可写的 linkfox 根目录。
+    """严格使用当前工作目录；不可写时由调用者报错，不回退。"""
+    cwd = os.getcwd()
+    if cwd == '/tmp' or cwd.startswith('/tmp/'):
+        raise OSError('不能将会话数据写入 /tmp，请从项目目录运行')
+    root = os.path.abspath(os.path.join(cwd, 'linkfox'))
+    os.makedirs(root, exist_ok=True)
+    probe = os.path.join(root, '.write_probe-' + secrets.token_hex(6))
+    with open(probe, 'w', encoding='utf-8'):
+        pass
+    os.remove(probe)
+    return root
 
-    优先级：
-      1. $ACPX_WORKSPACES 第一个路径下的 linkfox/（真实的工作目录）
-      2. 当前工作目录下的 linkfox/
-      3. ~/linkfox/
-      4. $TMPDIR/linkfox/
-
-    当某路径只读（如 cwd 为 /tmp 或只读目录）时，自动回退到后序选项。
-    选定结果在进程内缓存，保证同一次运行内所有落盘路径稳定一致。
-    """
-    cached = _SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    # 1. ACPX_WORKSPACES（真实的工作目录，优先级最高）
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    # 2. 当前工作目录
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    # 3. 家目录
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    # 4. 临时目录
-    import tempfile
-    candidates.append(os.path.join(tempfile.gettempdir(), "linkfox"))
-
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _SESSION_CACHE["_root"] = fallback
-    return fallback
 
 def _format_iso(ts: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(ts))
@@ -299,60 +239,61 @@ def resolve_data_path(slug: str, ts: float, ext: str = "json") -> str:
 
 def _resolve_output_path(ts):
     """落到 <cwd>/linkfox/<日期>/<session>/data/<slug>-<ts>.json，按 SESSION_ID 聚合到同一会话。"""
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
     return resolve_data_path(SLUG, ts)
 
 
 def main():
     argv = sys.argv[1:]
-    inline = False
-    use_cache = True
-    if "--inline" in argv:
-        inline = True
-        argv = [a for a in argv if a != "--inline"]
-    if "--no-cache" in argv:
-        use_cache = False
-        argv = [a for a in argv if a != "--no-cache"]
-
+    usage = "用法: google_ai_search.py '<JSON 参数>' [--inline] [--no-cache]"
+    if '--help' in argv or '-h' in argv:
+        print(usage)
+        print('完整响应始终落盘；默认启用 24 小时缓存，超过 8000 字节仅输出摘要。')
+        return
+    inline = '--inline' in argv
+    use_cache = '--no-cache' not in argv
+    argv = [a for a in argv if a not in ('--inline', '--no-cache')]
     if not argv:
-        print(
-            "Usage: google_ai_search.py '<JSON parameters>' [--inline]",
-            file=sys.stderr,
-        )
+        print(usage, file=sys.stderr)
         sys.exit(1)
-
     try:
         params = json.loads(argv[0])
-    except json.JSONDecodeError as e:
-        print(f"Invalid parameter format: {e}", file=sys.stderr)
+    except json.JSONDecodeError as exc:
+        print(f'参数 JSON 格式错误: {exc}', file=sys.stderr)
         sys.exit(1)
 
-    cache_path = _cache_path(params)
-    result = _load_cache(cache_path) if use_cache else None
-    if result is None:
-        result = call_api(params)
-        if use_cache:
-            _save_cache(cache_path, result)
+    # 请求前建立并验证归档文件，目录不可写时不产生收费请求。
+    try:
+        out_path = _resolve_output_path(time.time())
+        with open(out_path, 'w', encoding='utf-8'):
+            pass
+        cache_path = _cache_path(params) if use_cache else None
+        result = _load_cache(cache_path) if use_cache else None
+        if result is None:
+            result = call_api(params, out_path)
+            if use_cache:
+                _save_cache(cache_path, result)
+        else:
+            with open(out_path, 'w', encoding='utf-8') as handle:
+                json.dump(result, handle, ensure_ascii=False, indent=2)
+    except OSError as exc:
+        print(f'无法保存当前目录的会话数据: {exc}', file=sys.stderr)
+        sys.exit(1)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(f'接口响应或归档文件不是有效的 UTF-8 JSON: {exc}；不自动重试请求。', file=sys.stderr)
+        sys.exit(1)
 
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
-    ts = int(time.time())
-    out_path = _resolve_output_path(ts)
-    try:
-        with open(out_path, "w") as f:
-            f.write(serialized)
-        print(f"Saved full response: {out_path} ({len(serialized)} bytes)")
-        if result.get("_cache", {}).get("hit"):
-            print(f"Cache hit: {cache_path}")
-    except OSError as e:
-        print(f"Failed to save to {out_path}: {e}", file=sys.stderr)
-
-    if inline or len(serialized.encode("utf-8")) <= SMALL_THRESHOLD:
-        if result.get("_cache", {}).get("hit"):
-            print(f"Cache hit: {cache_path}", file=sys.stderr)
+    print(f'完整响应已保存: {out_path} ({len(serialized.encode("utf-8"))} bytes)')
+    cache_hit = isinstance(result, dict) and result.get('_cache', {}).get('hit')
+    if cache_hit:
+        print(f'缓存命中: {cache_path}')
+    if inline or len(serialized.encode('utf-8')) <= SMALL_THRESHOLD:
+        if cache_hit:
+            print(f'缓存命中: {cache_path}', file=sys.stderr)
         print(serialized)
     else:
         summarize(result)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

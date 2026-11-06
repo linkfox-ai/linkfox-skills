@@ -1,4 +1,4 @@
-"""Shared runner for Amazon Fulfillment Outbound SP-API entry scripts."""
+"""Fulfillment Outbound 的参数校验、会话缓存与公共调用器封装。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,9 @@ from urllib.parse import quote
 
 from _spapi_fulfillment_outbound_specs import OPERATION_SPECS
 from _spapi_fulfillment_outbound_validators import ValidationError, validate_request_body
-from _linkfox_gateway import call_api as _template_call_api
+import call_api as api
+
+_TRANSPORT = api.call_api
 
 
 API_BASE_URL = (
@@ -52,7 +54,6 @@ MAX_QUERY_STRING_LENGTH = 4096
 MAX_SELLER_ID_LENGTH = 64
 
 SLUG = "linkfox-amazon-store-fulfillment-outbound"
-LF_SMALL_THRESHOLD = 8000
 _LF_SESSION_CACHE: dict[str, str] = {}
 
 
@@ -85,13 +86,24 @@ def ensure_auth_skill_available(caller: str = "Fulfillment Outbound script") -> 
         raise SystemExit(DEPENDENCY_EXIT_CODE)
 
 
+class GatewayResponse(dict):
+    """保留网关原响应，同时供业务判断读取外层 HTTP 状态。"""
+
+    def __init__(self, payload: dict[str, Any], http_status: int | None):
+        super().__init__(payload)
+        self.transport_http_status = http_status
+
+
 def call_api(endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
     if endpoint != DEVELOPER_PROXY_ENDPOINT:
         raise ValueError(f"Unexpected gateway endpoint: {endpoint}")
     try:
-        return _template_call_api(params)
+        http_status, payload = _TRANSPORT("/spApi/developerProxy", params)
     except json.JSONDecodeError as exc:
-        return {"error": f"Gateway returned invalid JSON: {exc}"}
+        return GatewayResponse({"error": f"Gateway returned invalid JSON: {exc}"}, None)
+    if not isinstance(payload, dict):
+        payload = {"error": "网关响应不是 JSON 对象", "response": payload}
+    return GatewayResponse(payload, http_status)
 
 
 def developer_proxy_call(
@@ -410,26 +422,29 @@ def _parse_proxy_body(proxy: dict[str, Any]) -> Any:
 
 
 def _is_success(proxy: dict[str, Any], statuses: tuple[int, ...]) -> bool:
-    try:
-        gateway_ok = int(proxy.get("errcode")) == 200
-        status = int(proxy.get("httpStatus"))
-    except (TypeError, ValueError):
+    http_status = getattr(proxy, "transport_http_status", 200)
+    if not isinstance(http_status, int) or not 200 <= http_status < 300:
         return False
-    return gateway_ok and status in statuses
-
-
-def _find_operation_id(value: Any) -> str | None:
-    if not isinstance(value, dict):
-        return None
-    operation_id = value.get("operationId")
-    if operation_id is not None and str(operation_id).strip():
-        return str(operation_id).strip()
-    payload = value.get("payload")
-    if isinstance(payload, dict):
-        operation_id = payload.get("operationId")
-        if operation_id is not None and str(operation_id).strip():
-            return str(operation_id).strip()
-    return None
+    code = proxy.get("errcode")
+    if isinstance(code, str):
+        code = code.strip()
+        if code:
+            if len(code) != 3 or not code.isascii() or not code.isdigit():
+                return False
+            code = int(code)
+        else:
+            code = None
+    if code is not None and not (
+        type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
+    ):
+        return False
+    upstream = proxy.get("httpStatus")
+    if isinstance(upstream, str):
+        upstream = upstream.strip()
+        if len(upstream) != 3 or not upstream.isascii() or not upstream.isdigit():
+            return False
+        upstream = int(upstream)
+    return type(upstream) is int and upstream in statuses
 
 
 def _find_sensitive_keys(value: Any, forbidden: frozenset[str], path: str = "") -> list[str]:
@@ -521,6 +536,7 @@ def execute_operation(
         "method": spec["method"],
         "resolvedPath": path,
         "developerProxy": proxy,
+        "transportHttpStatus": getattr(proxy, "transport_http_status", None),
     }
     if query_string:
         result["queryString"] = query_string
@@ -565,29 +581,84 @@ def load_cli_params(argv: list[str] | None = None) -> dict[str, Any]:
 
 
 def run_operation(operation_id: str) -> None:
+    global _TRANSPORT
     try:
         params = load_cli_params()
-        if not params.get("skipDepCheck"):
-            ensure_auth_skill_available(OPERATION_SPECS[operation_id]["script"])
         spec = OPERATION_SPECS[operation_id]
+        if not params.get("skipDepCheck"):
+            ensure_auth_skill_available(spec["script"])
         cache_path = _lf_cache_path(operation_id, params)
-        cacheable = spec["risk"] in {"read", "generate"}
-        use_cache = "--no-cache" not in sys.argv and cacheable
-        output = _lf_load_cache(cache_path) if use_cache else None
-        cache_hit = output is not None
-        if output is None:
-            output = execute_operation(operation_id, params)
-            succeeded = _is_success(output.get("developerProxy", {}), spec["successStatuses"])
-            if succeeded and spec["risk"] == "commit":
-                _lf_clear_cache()
-            elif succeeded and use_cache:
-                _lf_save_cache(cache_path, output)
+        use_cache = "--no-cache" not in sys.argv and spec["risk"] in {"read", "generate"}
+        cached = _lf_load_cache(cache_path) if use_cache else None
     except (ValidationError, KeyError) as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from exc
-    if cache_hit:
-        print(f"Cache hit: {cache_path}", file=sys.stderr)
-    emit_result(output, inline=lf_inline_flag())
+
+    transport = api.call_api
+    old_transport = _TRANSPORT
+    old_root = api._SESSION_CACHE.get("_root")
+    old_path = api._resolve_output_path
+    old_session_id = api._session_id
+    old_gateway = os.environ.get("LINKFOX_TOOL_GATEWAY")
+    api._SESSION_CACHE["_root"] = _lf_root()
+    # 只净化落盘目录，保持请求头与业务缓存使用的原 SESSION_ID 不变。
+    # 长会话名重复净化会改变哈希，导致写成功后无法清除原读缓存。
+    api._session_id = _lf_session_id
+    if not old_gateway:
+        os.environ["LINKFOX_TOOL_GATEWAY"] = (
+            os.environ.get("STORE_API_BASE_URL")
+            or os.environ.get("SPAPI_BASE_URL")
+            or "https://tool-gateway.linkfox.com"
+        ).rstrip("/")
+
+    def with_operation_result(api_path, request_params):
+        if cached is not None:
+            print(f"Cache hit: {cache_path}", file=sys.stderr)
+            return 200, cached
+        output = execute_operation(operation_id, request_params)
+        proxy = output.get("developerProxy", {})
+        if _is_success(proxy, spec["successStatuses"]):
+            if spec["risk"] == "commit":
+                _lf_clear_cache()
+            elif use_cache:
+                _lf_save_cache(cache_path, output)
+        return output.get("transportHttpStatus"), output
+
+    _TRANSPORT = transport
+    api.call_api = with_operation_result
+    # 使用业务会话缓存；公共调用器不缓存已加工的响应。
+    output_paths = []
+
+    def resolve_output_path(slug, _ts):
+        path = api.resolve_data_path(slug, time.time())
+        output_paths.append(path)
+        return path
+
+    api._resolve_output_path = resolve_output_path
+    try:
+        argv = [json.dumps(params, ensure_ascii=False), "--no-cache"]
+        if lf_inline_flag():
+            argv.append("--inline")
+        api.run("/spApi/developerProxy", f"{SLUG}-{operation_id}", argv=argv)
+        # 公共调用器打印保存错误后会继续；业务 CLI 必须将落盘失败报告为失败。
+        if not output_paths or not Path(output_paths[-1]).is_file():
+            raise SystemExit(1)
+    except (ValidationError, KeyError) as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(1) from exc
+    finally:
+        _TRANSPORT = old_transport
+        api.call_api = transport
+        api._resolve_output_path = old_path
+        api._session_id = old_session_id
+        if old_root is None:
+            api._SESSION_CACHE.pop("_root", None)
+        else:
+            api._SESSION_CACHE["_root"] = old_root
+        if old_gateway is None:
+            os.environ.pop("LINKFOX_TOOL_GATEWAY", None)
+        else:
+            os.environ["LINKFOX_TOOL_GATEWAY"] = old_gateway
 
 
 def _lf_root() -> str:
@@ -655,10 +726,6 @@ def _lf_save_cache(path: str, payload: Any) -> None:
         pass
 
 
-def _lf_iso(timestamp: float) -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(timestamp))
-
-
 def _lf_session_id(timestamp: float) -> str:
     configured = os.environ.get("SESSION_ID")
     if configured and configured.strip():
@@ -674,127 +741,6 @@ def _lf_session_id(timestamp: float) -> str:
             time.strftime("%H%M%S", time.localtime(timestamp)) + "-" + secrets.token_hex(3)
         )
     return _LF_SESSION_CACHE["session"]
-
-
-def _lf_find_main_list(value: Any) -> tuple[str | None, list[Any] | None]:
-    best_path: str | None = None
-    best_list: list[Any] | None = None
-
-    def walk(node: Any, path: str) -> None:
-        nonlocal best_path, best_list
-        if isinstance(node, list):
-            if best_list is None or len(node) > len(best_list):
-                best_path, best_list = path, node
-        elif isinstance(node, dict):
-            for key, child in node.items():
-                walk(child, f"{path}.{key}" if path else key)
-
-    walk(value, "")
-    return best_path, best_list
-
-
-def _lf_summarize(result: Any) -> None:
-    if not isinstance(result, dict):
-        print(f"Response type: {type(result).__name__}")
-        print(json.dumps(result, ensure_ascii=False)[:500])
-        return
-    print(f"Top-level keys: {list(result.keys())}")
-    for key in (
-        "errcode",
-        "errorCode",
-        "code",
-        "errmsg",
-        "msg",
-        "total",
-        "totalCount",
-        "count",
-        "success",
-    ):
-        if key in result and isinstance(result[key], (int, float, bool, str)):
-            print(f"  {key}: {result[key]}")
-    list_path, main_list = _lf_find_main_list(result)
-    if list_path is not None and main_list:
-        sample = main_list[:3]
-        print(f"Main list field: `{list_path}` (length={len(main_list)})")
-        print(f"Sample (first {len(sample)} of {len(main_list)}):")
-        print(json.dumps(sample, indent=2, ensure_ascii=False))
-
-
-def _lf_ensure_meta(root: str, session_dir: str, date_text: str, session_id: str, timestamp: float) -> None:
-    meta_path = os.path.join(session_dir, "_meta.json")
-    if os.path.exists(meta_path):
-        return
-    meta = {
-        "session_id": session_id,
-        "date": date_text,
-        "started_at": _lf_iso(timestamp),
-        "skills_called": [],
-        "deliverables": [],
-        "data_files": [],
-        "media_files": [],
-    }
-    with open(meta_path, "w", encoding="utf-8") as handle:
-        json.dump(meta, handle, ensure_ascii=False, indent=2)
-    try:
-        with open(os.path.join(root, "index.jsonl"), "a", encoding="utf-8") as handle:
-            handle.write(
-                json.dumps(
-                    {
-                        "session_id": session_id,
-                        "date": date_text,
-                        "path": os.path.relpath(session_dir, root),
-                        "started_at": _lf_iso(timestamp),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except OSError:
-        pass
-
-
-def _lf_update_meta(session_dir: str, file_path: str, timestamp: float) -> None:
-    meta_path = os.path.join(session_dir, "_meta.json")
-    try:
-        with open(meta_path, encoding="utf-8") as handle:
-            meta = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return
-    if SLUG not in meta.setdefault("skills_called", []):
-        meta["skills_called"].append(SLUG)
-    relative = os.path.relpath(file_path, session_dir)
-    if relative not in meta.setdefault("data_files", []):
-        meta["data_files"].append(relative)
-    meta["last_used_at"] = _lf_iso(timestamp)
-    with open(meta_path, "w", encoding="utf-8") as handle:
-        json.dump(meta, handle, ensure_ascii=False, indent=2)
-
-
-def emit_result(result: Any, slug: str = SLUG, inline: bool = False) -> None:
-    """Persist the complete response, printing full JSON only when reasonably small."""
-    serialized = json.dumps(result, ensure_ascii=False, indent=2)
-    timestamp = time.time()
-    date_text = time.strftime("%Y-%m-%d", time.localtime(timestamp))
-    session_id = _lf_session_id(timestamp)
-    root = _lf_root()
-    session_dir = os.path.join(root, date_text, session_id)
-    os.makedirs(session_dir, exist_ok=True)
-    _lf_ensure_meta(root, session_dir, date_text, session_id, timestamp)
-    data_dir = os.path.join(session_dir, "data")
-    os.makedirs(data_dir, exist_ok=True)
-    output_path = os.path.join(data_dir, f"{slug}-{int(timestamp * 1_000_000)}.json")
-    try:
-        with open(output_path, "w", encoding="utf-8") as handle:
-            handle.write(serialized)
-        print(f"Saved full response: {output_path} ({len(serialized)} bytes)")
-        _lf_update_meta(session_dir, output_path, timestamp)
-    except OSError as exc:
-        print(f"Failed to save to {output_path}: {exc}", file=sys.stderr)
-        raise SystemExit(1) from exc
-    if inline or len(serialized.encode("utf-8")) <= LF_SMALL_THRESHOLD:
-        print(serialized)
-    else:
-        _lf_summarize(result)
 
 
 def lf_inline_flag() -> bool:

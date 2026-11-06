@@ -1,23 +1,27 @@
 # `GET_FLAT_FILE_ORDER_REPORT_DATA_INVOICING`
 
-> **分类**：9. Order Reports  
-> **说明**：Order invoicing (flat file)  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：订单开票（平面文件）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#requested-or-scheduled-flat-file-order-report-invoicing)（章节：**Requested or Scheduled Flat File Order Report (Invoicing)**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#requested-or-scheduled-flat-file-order-report-invoicing)（章节：**Requested or Scheduled Flat File Order Report (Invoicing)**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
+- **角色**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
 - **Order Fulfillment Channel**：MFN
-- **Availability**：Seller Central sellers
-- **Marketplace availability**：EU
-- **Requested/scheduled**：Requested or scheduled
-- **Report output type**：Tab-delimited flat file
-- **要点**：This report can be used to generate tax invoices in the EU region. This report shows orders from the previous 60 days. Seller Central sellers can only schedule one GET_ORDER_REPORT_DATA_INVOICING or GET_FLAT_FILE_ORDER_REPORT_DATA_INVOICING report at a time. If you have one of these reports scheduled and you schedule a new report, the existing report is canceled. 📘NoteThe format of this report will differ slightly depending on whether it is scheduled or requested.
-- **reportOptions（摘录）**：
-  - ShowSalesChannel: A Boolean value that indicates whether an additional column is added to the report that shows the sales channel. Default: false. Example: "reportOptions":{"ShowSalesChannel":"true"}
+- **可用范围**：Seller Central 卖家
+- **站点范围**：EU
+- **按需/计划**：Requested or scheduled
+- **输出格式**：制表符分隔的平面文件
+- **要点**：可用于 EU 税务发票，包含过去 60 天的订单。Seller Central 卖家同时仅可计划一份 GET_ORDER_REPORT_DATA_INVOICING 或 GET_FLAT_FILE_ORDER_REPORT_DATA_INVOICING；新增计划会取消已有计划。按需请求与计划生成的文件格式略有不同。
+
+#### reportOptions 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| ShowSalesChannel | boolean / string | 布尔值，控制是否增加销售渠道列。默认 false；示例："reportOptions":{"ShowSalesChannel":"true"}。 |
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#requested-or-scheduled-flat-file-order-report-invoicing>
 

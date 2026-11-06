@@ -1,89 +1,34 @@
 #!/usr/bin/env python3
-"""
-Shopee Authorized Stores List - LinkFox Skill
-Calls /shopee/authorizedStores to list all authorized stores (ERP and/or AD).
+"""列出当前用户已授权的 Shopee 店铺，分别展示 ERP 与 AD 记录。"""
 
-Usage:
-  python authorized_stores.py
-
-Each store row may include appType=erp|ad; the same shopId can appear twice.
-"""
-
-import json
-import os
 import sys
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
 
-from _lf_output import emit_result, lf_inline_flag
-
-# 生产默认走 tool-gateway.linkfox.com；开发/测试期可 export SHOPEE_API_BASE_URL=<url> 覆盖
-API_BASE_URL = (os.environ.get("LINKFOX_TOOL_GATEWAY") or os.environ.get("SHOPEE_API_BASE_URL") or "https://tool-gateway.linkfox.com").rstrip("/")
-API_ENDPOINT = f"{API_BASE_URL}/shopee/authorizedStores"
+from _shopee_auth_common import displayed_app_type, read_params, run_request
 
 
-def get_api_key():
-    """
-    获取配置在环境变量的API Key。
-    如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-    """
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
-
-
-def call_api() -> dict:
-    api_key = get_api_key()
-    req = Request(
-        API_ENDPOINT,
-        data=b"{}",
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            result = json.loads(response.read().decode("utf-8"))
-            error_code = str(result.get("errcode", ""))
-            if error_code.isdigit() and int(error_code) not in (0, 200):
-                raise SystemExit(json.dumps(result, ensure_ascii=False))
-            return result
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+def call_api():
+    return run_request("/shopee/authorizedStores", "authorized-stores", {})
 
 
 def main():
+    params = read_params(
+        "用法：python authorized_stores.py ['{}'] [--inline] [--no-cache]",
+        optional=True,
+    )
+    if params:
+        print("已授权列表不接受业务参数，请传空对象或不传 JSON。", file=sys.stderr)
+        raise SystemExit(1)
     result = call_api()
-    emit_result(result, lf_inline_flag())
-
-    if "stores" in result:
-        stores = result.get("stores", [])
-        total = result.get("total", 0)
-        print(f"\n✓ Found {total} authorized store record(s):", file=sys.stderr)
-        for s in stores:
-            app_type = s.get("appType") or "erp"
+    if isinstance(result.get("stores"), list):
+        print(f"\n已找到 {result.get('total', 0)} 条授权记录：", file=sys.stderr)
+        for store in result["stores"]:
             print(
-                f"  - shopId={s.get('shopId')}  {s.get('shopName', 'N/A')}  "
-                f"merchantId={s.get('merchantId', '')}  region={s.get('region', '')}  "
-                f"appType={app_type}",
+                f"  - shopId={store.get('shopId')}  {store.get('shopName', 'N/A')}  "
+                f"merchantId={store.get('merchantId', '')}  region={store.get('region', '')}  "
+                f"appType={displayed_app_type(store)}",
                 file=sys.stderr,
             )
-        print(
-            "Note: Match shopId/merchantId AND appType before calling business APIs. "
-            "ERP authorization does not grant Ads; Ads does not grant ERP.",
-            file=sys.stderr,
-        )
+        print("请同时匹配店铺身份和应用类型；ERP 与 AD 授权不能互相替代。", file=sys.stderr)
 
 
 if __name__ == "__main__":

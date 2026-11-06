@@ -1,170 +1,121 @@
 ---
 name: linkfox-ruiguan-trademark-graphic-detection
-description: 产品图片的图形商标检测与相似度搜索。当用户提到商标检测、图形商标搜索、Logo侵权检查、商标相似度分析、图片商标风险评估、产品图片商标筛查、graphic trademark detection, logo infringement, trademark similarity, trademark risk, image trademark screening, Ruiguan时触发此技能。即使用户未明确说"商标检测"，只要其需求涉及将产品图片与已注册的图形商标进行比对或评估商标侵权风险，也应触发此技能。
+description: 检测产品图片中的图形商标与 Logo，搜索多个国家和地区的相似注册商标，展示相似度、商标状态、权利人、尼斯分类和雷达风险信息。适用于上架前图片商标筛查、图形商标相似度分析及指定地区风险排查，支持本地产品图片。纯文字商标搜索、商标注册申请、专利或版权检查、商标争议法律咨询及 Listing 优化不适用。
+---
+# 睿观图形商标检测
+
+## 适用范围
+
+### 适用
+
+将产品图片中的图形或 Logo 与注册商标数据库比对，帮助电商卖家和品牌方识别上架前的潜在商标风险。用户说“检查产品能否销售”时，只有关注点是图片图形或 Logo 的商标风险才使用本技能。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 检查这张图片有没有商标问题 | 产品图片商标筛查。 |
+| 这个 Logo 在哪些地方注册过 | 多地区相似商标搜索。 |
+| 找与这张图形相似的商标 | 图形相似度分析。 |
+| 只查美国和欧盟的商标 | 指定地区检测。 |
+| 扫描产品照片里的 Logo | 定位疑似商标并查看匹配。 |
+| 这是本地产品照片，检查商标风险 | 先上传图片，再执行检测。 |
+
+### 边界
+
+不处理无图片的文字商标查询、商标注册或申请、专利与版权检查、商标争议法律咨询及商品 Listing 优化。
+
+## 接口清单
+
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 图形商标检测 | POST `/ruiguan/trademarkGraphicDetection` | `scripts/ruiguan_trademark_graphic_detection.py` | 定位疑似 Logo 并比对各地区图形商标。 |
+| 获取图片上传预签名地址 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 获取临时上传地址；脚本随后向对象存储 PUT 图片并返回公开 URL。 |
+
+## 前置条件
+
+准备产品图片，按需补充产品标题、疑似 Logo 名称和目标地区。图片访问要求、地区范围及上传格式见 `references/api.md`。
+
+## 检测流程
+
+1. 确认用户希望筛查的产品图片与地区范围；没有指定地区时按接口默认范围处理。
+2. 若用户提供本地图片路径，先执行 `python scripts/upload_image.py <本地图片路径>`，从标准输出 JSON 取得公开 URL；已提供公开图片 URL 时直接使用。
+3. 按 `references/api.md` 整理检测参数，运行 `scripts/ruiguan_trademark_graphic_detection.py`；按需启用定位切图、补充产品与 Logo 上下文。
+4. 读取响应摘要，需要详细字段时从已保存的 JSON 提取，按下方展示规则解释匹配和雷达结果。
+5. 失败或结果不足时依据响应解释原因，可建议换清晰图片、核对地区或调整返回数量；后续调用遵守成本约束和接口参考中的高消耗确认规则。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：图形商标检测每次消耗为雷达开启 106 算力、关闭 71 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-trademark-graphic-detection[-<接口标识>]-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8000 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数及消耗字段（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+雷达检测开启时每次消耗 106 算力，未开启时每次消耗 71 算力；以实际返回及扣除为准。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解检测方式**：服务使用基于 YOLO 的目标检测定位图片中的疑似 Logo，再与多地区商标数据库比对；图片越清晰、分辨率越高，越有利于检测。
+- **解释相似度**：`similarity` 越接近 1.0，视觉匹配越相近；超过 0.8 时，必须明确突出提示潜在高侵权风险，不能将相似度直接表述为法律结论。
+- **清晰展示匹配**：用表格展示商标图片、相似度、商标名称、商标状态、受理局、尼斯分类、权利人和关键日期。未返回的信息不补造。
+- **说明商标状态**：`registered` 为已注册，`act` 为有效，`pend` 为申请待审，`filed` 为已提交申请，`ended` 为已到期，`DEL` 为已删除或撤销；空状态表示未提供。解释各状态对风险判断的意义，不能把到期或撤销等同于绝对安全。
+- **突出雷达结果**：返回 `radarResult` 时显著展示综合风险判断；各匹配含 `subRadarResult` 时在对应行一并展示。
+- **注明检索范围**：始终说明本次检索地区；使用默认范围时说明为接口支持的全部地区，不将其描述为全球所有国家。
+
+## 使用示例
+
+### 检查公开图片
+
+用户：查这张产品图有没有相似商标。
+
+使用公开图片 URL，按接口默认范围执行一次检测，展示匹配、状态及风险信息。
+
+### 限定美国和欧盟
+
+用户：只检查美国和欧盟，给出最相近的商标。
+
+根据接口参考选择地区与返回数量，说明地区范围并突出高相似度匹配。
+
+### 带产品上下文并查看定位切图
+
+用户：这是蓝牙耳机，疑似 Logo 为 SonicWave，希望看图中具体位置。
+
+补充产品标题和疑似商标名称，按需启用切图，结合定位信息、商标状态和雷达结果展示。
+
+### 使用本地照片
+
+用户：检查这张本地产品照片的 Logo 风险。
+
+先上传取得公开 URL，再执行检测；遵守上传链接有效期和本次调用消耗约束。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Ruiguan Graphic Trademark Detection
-
-This skill guides you on how to detect graphic trademarks in product images, helping e-commerce sellers and brand owners identify potential trademark infringement risks before listing products.
-
-## Core Concepts
-
-Graphic trademark detection analyzes a product image to find visually similar registered trademarks across multiple countries and regions. The tool uses YOLO-based object detection to locate logo-like regions in the image, then compares them against trademark databases worldwide.
-
-**Similarity score**: A higher `similarity` value means the detected graphic is more visually similar to the registered trademark. Values closer to 1.0 indicate near-identical matches and higher infringement risk.
-
-**Trademark status meanings**:
-| Status | Meaning |
-|--------|---------|
-| registered | Trademark is actively registered |
-| act | Trademark is active |
-| pend | Trademark application is pending |
-| filed | Trademark application has been filed |
-| ended | Trademark has expired |
-| DEL | Trademark has been deleted/cancelled |
-
-## Parameter Guide
-
-| Parameter | Required | Description | Default |
-|-----------|----------|-------------|---------|
-| imageUrl | Yes | Publicly accessible HTTP(S) product image URL (maximum 1000 characters). The service downloads and converts it to Base64; do not pass Base64 directly. | - |
-| topNumber | Yes | Maximum number of detection results to return (1-100) | 5 |
-| productTitle | No | Product title, helps improve detection accuracy | - |
-| trademarkName | No | Suspected logo name, helps narrow down results | - |
-| regions | No | Country/region codes to check, comma-separated. If omitted, all countries are searched | All |
-| enableLocalizing | No | Whether to enable image cropping for detected regions | false |
-| enableRadar | No | Whether to enable radar monitoring | true |
-
-### Supported Regions
-
-US (United States), WO (WIPO), ES (Spain), GB (United Kingdom), DE (Germany), IT (Italy), CA (Canada), MX (Mexico), EM (European Union), AU (Australia), FR (France), JP (Japan), TR (Turkey), BX (Benelux), CN (China)
-
-When the user does not specify a region, omit the `regions` parameter so all countries are searched by default.
-
-## Local Image Upload
-
-This tool requires a **publicly accessible image URL**. If the user provides a local image file path (e.g., `C:\Users\...\photo.png`, `/home/.../image.jpg`), you must upload it first to obtain a public URL.
-
-Run the upload script:
-```bash
-python scripts/upload_image.py /path/to/local/image.png
-```
-
-The script will return a public URL (valid for 24 hours) that can be used as the image URL parameter.
-
-## Usage Examples
-
-**1. Basic image trademark check**
-Detect trademarks in a product image across all regions, returning up to 10 results:
-```
-imageUrl: "https://example.com/product-image.jpg"
-topNumber: 10
-```
-
-**2. Region-specific trademark check**
-Check a product image against US and EU trademark databases only:
-```
-imageUrl: "https://example.com/product-image.jpg"
-topNumber: 5
-regions: "US,EM"
-```
-
-**3. Detailed check with product context**
-Provide product title and suspected logo name for more accurate detection:
-```
-imageUrl: "https://example.com/product-image.jpg"
-topNumber: 10
-productTitle: "Wireless Bluetooth Headphones with Noise Cancellation"
-trademarkName: "SonicWave"
-regions: "US,GB,DE"
-```
-
-**4. Full detection with image cropping**
-Enable localizing to get cropped images of detected logo regions:
-```
-imageUrl: "https://example.com/product-image.jpg"
-topNumber: 20
-enableLocalizing: true
-regions: "US"
-```
-
-## 调用方式
-
-- **API 端点**：`POST /ruiguan/trademarkGraphicDetection`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/ruiguan_trademark_graphic_detection.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-trademark-graphic-detection-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Display Rules
-
-1. **Present results clearly**: Show detection results in a well-structured table including trademark image, similarity score, trademark name, status, registration office, Nice classification, applicant name, and key dates
-2. **Highlight high-risk matches**: When similarity is above 0.8, explicitly warn the user about high infringement risk
-3. **Explain trademark status**: When showing results, clarify what each trademark status means for the user's risk assessment
-4. **Radar results**: If `radarResult` is present in the response, display it prominently as it contains aggregated risk assessment
-5. **Sub-radar results**: If individual items contain `subRadarResult`, include this information alongside each match
-6. **Region context**: Always indicate which regions were searched so the user understands the scope of the check
-7. **Error handling**: When a detection fails, explain the reason based on the response and suggest adjustments (e.g., using a clearer image, specifying regions, adjusting topNumber)
-## Important Limitations
-
-- **Image requirement**: The `imageUrl` parameter is mandatory; the tool cannot perform detection without an image
-- **Result cap**: The `topNumber` parameter caps at 100 results per request
-- **Image quality**: Detection accuracy depends on image resolution and clarity; higher quality images yield better results
-- **Region coverage**: Not all countries are covered; the supported list includes 15 major trademark offices
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Graphic trademark detection tasks:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Check if this image has trademark issues" | Basic trademark detection |
-| "Is this logo registered anywhere" | Multi-region trademark search |
-| "Trademark risk for my product image" | Product listing risk assessment |
-| "Find similar trademarks to this graphic" | Similarity search |
-| "Check this image against US trademarks" | Region-specific detection |
-| "Does this design infringe any trademark" | Infringement risk check |
-| "Scan my product photo for logos" | Logo detection in product images |
-
-**Not applicable** -- Needs beyond graphic trademark detection:
-- Text/word trademark search (no image involved)
-- Trademark registration or filing
-- Patent or copyright checks
-- Legal advice on trademark disputes
-- Product listing optimization
-
-**Boundary judgment**: When users say "check my product" or "is this safe to sell", if the concern relates to graphic elements or logos in product images potentially infringing registered trademarks, this skill applies. If they are asking about text trademarks, patent issues, or general legal compliance, it does not apply.
-
-## 算力消耗规则
-
-雷达检测开启消耗 106 算力，未开启消耗 71 算力。
-
-> **重要**：本技能消耗大量算力，如果调用次数超过5次，必须用`AskUserQuestion` 和用户进行二次确认，要明确告知用户已消耗算力和继续调用的话预计消耗的算力，让用户自行决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
-
----
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

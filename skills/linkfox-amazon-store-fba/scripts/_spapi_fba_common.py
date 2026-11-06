@@ -1,19 +1,19 @@
-"""Shared helpers for linkfox-amazon-store-fba (developerProxy)."""
+"""FBA 请求映射、统一调用和兼容输出；业务调用不启用响应缓存。"""
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
-import secrets
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
-from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
+import call_api as api
 
 API_BASE_URL = (
     os.environ.get("LINKFOX_TOOL_GATEWAY")
@@ -25,6 +25,7 @@ DEVELOPER_PROXY_ENDPOINT = f"{API_BASE_URL}/spApi/developerProxy"
 
 REQUIRED_SKILL = "linkfox-amazon-store-auth"
 DEPENDENCY_EXIT_CODE = 42
+SLUG = "linkfox-amazon-store-fba"
 
 
 def ensure_auth_skill_available(caller: str = "fba script") -> None:
@@ -56,39 +57,54 @@ def ensure_auth_skill_available(caller: str = "fba script") -> None:
         sys.exit(DEPENDENCY_EXIT_CODE)
 
 
-def get_api_key() -> str:
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print("API Key 未配置", file=sys.stderr)
-        sys.exit(1)
-    return key
+def call_api(endpoint: str, params: dict, *, result_builder=None,
+             operation: str = "proxy", emit_output: bool = False) -> dict:
+    """调用公共 run 并返回业务结果，不另实现 HTTP 或响应缓存。"""
+    transport = api.call_api
+    old_url = api.get_api_url
+    old_output = api._resolve_output_path
+    old_root = api._SESSION_CACHE.get("_root")
+    old_workspace = os.environ.get("ACPX_WORKSPACES")
+    received = {}
 
+    def with_business_result(api_path, request_params):
+        status, proxy = transport(api_path, request_params)
+        result = result_builder(proxy, status) if result_builder else proxy
+        received["result"] = result
+        return status, result
 
-def call_api(endpoint: str, params: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    req = Request(
-        endpoint,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
+    # 请求前确认当前目录可写，不回退到临时目录。
+    root = Path.cwd() / "linkfox"
+    root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryFile(dir=root):
+        pass
+    api.call_api = with_business_result
+    # 网关地址在导入时按三个兼容环境变量解析，通过公共调用器发送请求。
+    api.get_api_url = lambda _path: endpoint
+    api._SESSION_CACHE["_root"] = str(root)
+    os.environ["ACPX_WORKSPACES"] = str(Path.cwd())
+    # 公共调用器按秒命名；业务封装保留微秒，避免快速状态查询覆盖文件。
+    api._resolve_output_path = lambda slug, _ts: api.resolve_data_path(slug, time.time())
     try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+        argv = [json.dumps(params, ensure_ascii=False), "--no-cache"]
+        if "--inline" in sys.argv[1:]:
+            argv.append("--inline")
+        output = contextlib.nullcontext() if emit_output else contextlib.redirect_stdout(io.StringIO())
+        with output:
+            api.run("/spApi/developerProxy", f"{SLUG}-{operation}", argv=argv)
+        return received["result"]
+    finally:
+        api.call_api = transport
+        api.get_api_url = old_url
+        api._resolve_output_path = old_output
+        if old_root is None:
+            api._SESSION_CACHE.pop("_root", None)
+        else:
+            api._SESSION_CACHE["_root"] = old_root
+        if old_workspace is None:
+            os.environ.pop("ACPX_WORKSPACES", None)
+        else:
+            os.environ["ACPX_WORKSPACES"] = old_workspace
 
 
 def developer_proxy_call(
@@ -99,6 +115,7 @@ def developer_proxy_call(
     query_string: Optional[str] = None,
     body: Optional[str] = None,
     content_type: str = "application/json",
+    *, result_builder=None, operation: str = "proxy", emit_output: bool = False,
 ) -> dict:
     params: dict[str, Any] = {
         "region": region,
@@ -111,7 +128,8 @@ def developer_proxy_call(
     if body is not None:
         params["body"] = body
         params["contentType"] = content_type
-    return call_api(DEVELOPER_PROXY_ENDPOINT, params)
+    return call_api(DEVELOPER_PROXY_ENDPOINT, params, result_builder=result_builder,
+                    operation=operation, emit_output=emit_output)
 
 
 def enc_path_seg(value: str) -> str:
@@ -119,7 +137,7 @@ def enc_path_seg(value: str) -> str:
 
 
 def build_query(pairs: list[tuple[str, Any]]) -> Optional[str]:
-    """Build query string; list/tuple values become repeated keys."""
+    """按 RFC 3986 编码查询串；列表/元组生成重复键，空格使用 %20。"""
     items: list[tuple[str, str]] = []
     for k, v in pairs:
         if v is None:
@@ -138,36 +156,47 @@ def build_query(pairs: list[tuple[str, Any]]) -> Optional[str]:
                     items.append((k, s))
     if not items:
         return None
-    return urlencode(items, doseq=True)
+    return urlencode(items, doseq=True, quote_via=quote)
+
+
+def _status_code(value) -> Optional[int]:
+    """保留整数型 JSON 数值和三位数字字符串，排除布尔及小数状态码。"""
+    if isinstance(value, str):
+        value = value.strip()
+        return int(value) if len(value) == 3 and value.isascii() and value.isdigit() else None
+    if type(value) in (int, float) and 100 <= value < 600 and value % 1 == 0:
+        return int(value)
+    return None
 
 
 def merge_json_body(
     out: dict,
     proxy: dict,
     key: str,
-    ok_statuses: tuple[int, ...] = (200, 202, 204, 207),
+    ok_statuses: tuple[int, ...] = tuple(range(200, 300)),
 ) -> None:
-    http_status = int(proxy.get("httpStatus") or 0)
-    errcode = proxy.get("errcode")
-    try:
-        errcode_int = int(errcode) if errcode is not None else None
-    except (TypeError, ValueError):
-        errcode_int = None
-
-    if http_status == 204 or errcode_int == 204:
+    """外层及网关正常后解析上游；保留空响应和原始 body 字段。"""
+    outer = out.get("transportHttpStatus", 200)
+    if type(outer) is not int or not 200 <= outer < 300:
+        return
+    if not isinstance(proxy, dict) or not api._is_cacheable(200, proxy):
+        return
+    raw_status = proxy.get("httpStatus")
+    status = _status_code(raw_status)
+    # 兼容未提供 httpStatus 时由成功 errcode 表达上游状态；
+    # 显式失败的上游状态不可被 errcode=200 覆盖。
+    if raw_status is None:
+        status = _status_code(proxy.get("errcode"))
+    if status not in ok_statuses:
+        return
+    if status == 204:
         out[key] = None
         out["success"] = True
         return
-
-    ok = http_status in ok_statuses or errcode_int in ok_statuses or errcode_int == 200
-    if not ok:
-        return
-
     body_raw = proxy.get("body")
-    if body_raw is None or (isinstance(body_raw, str) and not str(body_raw).strip()):
+    if body_raw is None or (isinstance(body_raw, str) and not body_raw.strip()):
         out[key] = None
-        if http_status in (200, 202):
-            out["success"] = True
+        out["success"] = True
         return
     if isinstance(body_raw, (dict, list)):
         out[key] = body_raw
@@ -177,154 +206,3 @@ def merge_json_body(
     except json.JSONDecodeError:
         out[key] = None
         out[f"{key}Raw"] = body_raw
-
-
-LF_SMALL_THRESHOLD = 8000
-_LF_SESSION_CACHE: dict = {}
-SLUG = "linkfox-amazon-store-fba"
-
-
-def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
-
-
-def _lf_iso(ts: float) -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(ts))
-
-
-def _lf_session_id(ts: float) -> str:
-    env = os.environ.get("SESSION_ID")
-    if env:
-        return env.strip()
-    if "_auto" not in _LF_SESSION_CACHE:
-        _LF_SESSION_CACHE["_auto"] = (
-            time.strftime("%H%M%S", time.localtime(ts)) + "-" + secrets.token_hex(3)
-        )
-    return _LF_SESSION_CACHE["_auto"]
-
-
-def _lf_find_main_list(obj):
-    best = (None, None, -1)
-
-    def walk(node, path):
-        nonlocal best
-        if isinstance(node, list):
-            if len(node) > best[2]:
-                best = (path, node, len(node))
-        elif isinstance(node, dict):
-            for k, v in node.items():
-                walk(v, f"{path}.{k}" if path else k)
-
-    walk(obj, "")
-    return best[0], best[1]
-
-
-def _lf_summarize(result) -> None:
-    if not isinstance(result, dict):
-        print(f"Response type: {type(result).__name__}")
-        print(json.dumps(result, ensure_ascii=False)[:500])
-        return
-    print(f"Top-level keys: {list(result.keys())}")
-    for k in (
-        "errcode", "errorCode", "code", "errmsg", "msg",
-        "total", "totalCount", "count", "costToken", "costTime", "success",
-    ):
-        if k in result:
-            v = result[k]
-            if isinstance(v, (int, float, bool, str)):
-                print(f"  {k}: {v}")
-    list_path, main_list = _lf_find_main_list(result)
-    if list_path is not None and main_list:
-        print(f"\nMain list field: `{list_path}` (length={len(main_list)})")
-        sample = main_list[:3]
-        print(f"Sample (first {len(sample)} of {len(main_list)}):")
-        print(json.dumps(sample, indent=2, ensure_ascii=False))
-
-
-def _lf_ensure_meta(root: str, session_dir: str, date_str: str, sid: str, ts: float) -> None:
-    meta_path = os.path.join(session_dir, "_meta.json")
-    if os.path.exists(meta_path):
-        return
-    meta = {
-        "session_id": sid,
-        "date": date_str,
-        "started_at": _lf_iso(ts),
-        "skills_called": [],
-        "deliverables": [],
-        "data_files": [],
-        "media_files": [],
-    }
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
-
-
-def _lf_update_meta(session_dir: str, *, skill: str, file_rel: str, ts: float) -> None:
-    meta_path = os.path.join(session_dir, "_meta.json")
-    try:
-        with open(meta_path, encoding="utf-8") as f:
-            meta = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return
-    if skill and skill not in meta.setdefault("skills_called", []):
-        meta["skills_called"].append(skill)
-    files = meta.setdefault("data_files", [])
-    if file_rel not in files:
-        files.append(file_rel)
-    meta["last_used_at"] = _lf_iso(ts)
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
-
-
-def emit_result(result, slug=SLUG, inline=False):
-    serialized = json.dumps(result, ensure_ascii=False, indent=2)
-    ts = time.time()
-    date_str = time.strftime("%Y-%m-%d", time.localtime(ts))
-    sid = _lf_session_id(ts)
-    root = _lf_root()
-    session_dir = os.path.join(root, date_str, sid)
-    os.makedirs(session_dir, exist_ok=True)
-    _lf_ensure_meta(root, session_dir, date_str, sid, ts)
-    data_dir = os.path.join(session_dir, "data")
-    os.makedirs(data_dir, exist_ok=True)
-    out = os.path.join(data_dir, f"{slug}-{int(ts * 1_000_000)}.json")
-    try:
-        with open(out, "w", encoding="utf-8") as f:
-            f.write(serialized)
-        print(f"Saved full response: {out} ({len(serialized)} bytes)")
-    except OSError as e:
-        print(f"Failed to save to {out}: {e}", file=sys.stderr)
-    _lf_update_meta(session_dir, skill=slug, file_rel=os.path.relpath(out, session_dir), ts=ts)
-    if inline or len(serialized.encode("utf-8")) <= LF_SMALL_THRESHOLD:
-        print(serialized)
-    else:
-        _lf_summarize(result)
-
-
-def lf_inline_flag() -> bool:
-    return "--inline" in sys.argv

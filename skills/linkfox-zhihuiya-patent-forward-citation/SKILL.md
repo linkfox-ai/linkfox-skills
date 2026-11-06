@@ -1,140 +1,115 @@
 ---
 name: linkfox-zhihuiya-patent-forward-citation
-description: 从智慧芽专利数据库查询专利的前向引用详情。当用户询问专利引用、被引用专利、引用文献、专利参考文献、前向引用、在先技术引用或想查看特定专利在申请过程中引用了哪些专利、非专利文献、patent cited references, forward citations, patent references, citation analysis, PatSnap时触发此技能。当用户提供专利ID或公开号并需要引用信息时，即使未明确说"前向引用"，任何关于专利引用了哪些参考文献的请求都适用。
+description: 查询智慧芽（PatSnap）中指定专利引用的专利及非专利文献，支持按专利 ID 或公开公告号单条、批量查询和引证分析。适用于核对专利参考文献、在先技术引用、论文与技术报告等引证信息。查询“哪些专利引用了它”、专利有效性或法律状态、同族、全文检索、分类及技术全景不适用。
 ---
 
-# Zhihuiya Patent Forward Citation
+# 智慧芽专利引用查询
 
-This skill guides you on how to query patent forward citation data from the Zhihuiya patent database, helping users discover the patents and non-patent literature cited by specific patents during their application process.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Forward citation** refers to the patents and non-patent literature that a given patent has cited in its application documents. This is a fundamental aspect of patent analysis — understanding what prior art a patent references helps assess its novelty, scope, and technological lineage.
+查看指定专利在申请文件中引用了哪些专利和非专利文献。用户提供专利 ID 或公开公告号，希望查询参考文献或开展引证分析时，使用本技能，无需明确提及智慧芽或“前向引用”。
 
-- **Patent citations** (`citedPatents`): Other patents referenced by the queried patent.
-- **Non-patent literature citations** (`citedOthers`): Academic papers, technical reports, and other non-patent documents referenced by the queried patent.
+**场景速查**
 
-## Parameter Guide
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个专利引用了哪些专利 | 查询专利引证。 |
+| 看看这个专利的参考文献 | 查看引用详情。 |
+| 这个专利引用了哪些在先技术 | 核对在先技术引用。 |
+| 列出这个专利引用的论文和技术报告 | 查询非专利文献。 |
+| 帮我分析这几个专利的引证 | 按专利分组展示两类引用。 |
+| 这个专利参考了哪些文件 | 综合查看专利和非专利文献。 |
 
-You must provide at least one of the following two parameters. If both are provided, `patentId` takes priority.
+## 前置条件
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| patentId | string | Conditionally | Patent ID(s). Multiple values separated by commas. Maximum 100 entries. |
-| patentNumber | string | Conditionally | Publication/announcement number(s). Multiple values separated by commas. Maximum 100 entries. |
+**先确定查询对象和引用方向**：取得用户指定的专利标识，确认要查询的是该专利引用的文献。标识选择、批量格式及限制见 `references/api.md`。
 
-**Rules**:
-1. At least one of `patentId` or `patentNumber` must be provided.
-2. If both are present, `patentId` is used preferentially.
-3. Multiple values are separated by commas (English commas).
-4. Each parameter supports up to 100 entries per request.
+## 查询流程
 
-## Response Fields
+1. 确认目标专利和查询目的，按 `references/api.md` 准备查询参数；缺少可用标识时先补充信息。
+2. 按下方算力规则评估调用成本，并遵守费用提醒。
+3. 优先运行脚本复用已有缓存。先按接口参考判断响应，再读取摘要或从已保存的数据中提取所需内容。
+4. 按专利分组展示专利引证和非专利文献，统计两类数量；遇到空结果或错误时明确说明，后续查询遵守成本约束。
 
-| Field | Type | Description |
-|-------|------|-------------|
-| total | integer | Total number of records returned |
-| data | array | List of patent citation results |
-| data[].patentId | string | Patent ID of the queried patent |
-| data[].pn | string | Publication/announcement number |
-| data[].citedPatents | array | List of cited patent documents |
-| data[].citedOthers | array | List of cited non-patent literature |
-| columns | array | Column definitions for rendering |
-| costToken | integer | Tokens consumed by the query |
-| type | string | Rendering style hint |
+## 执行方式
 
-## 调用方式
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_cited_references.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **API 端点**：`POST /zhihuiya/patentForwardCitation`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_cited_references.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 输出策略
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-patent-forward-citation-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-patent-forward-citation-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 执行规则
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 算力消耗预估
 
-## Usage Examples
+3 算力/次。按次计费，不按返回 `data` 条数或引用文献数计算。
 
-**1. Query forward citations by publication number**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **说明引用方向**：本服务的“前向引用”查询展示指定专利引用的文献。不要仅凭英文术语将返回结果解释为“哪些专利引用了它”；后者不在本技能范围内。
+- **区分文献类型**：专利引证对应所查询专利参考的其他专利；非专利文献包括论文、技术报告等。它们可用于理解在先技术、技术脉络和新颖性分析的线索，不能据此直接断言专利有效性或法律状态。
+- **清晰展示数据**：用表格分别呈现两类文献，始终说明返回的专利引证数和非专利文献数。批量查询按查询专利分组，并标明对应专利标识。
+- **只展示真实返回**：不推断或编造引用细节；引用条目内部字段按实际返回展示，不预设结构。字段未返回时明确缺失，不当作零条；确认返回无引用时直接说明，不展示空表。
+- **解释查询错误**：根据错误响应说明原因，并提示核对专利 ID 或公开公告号；认证和算力问题按上方固定指引处理，不自动反复请求。
+
+## 使用示例
+
+### 按公开公告号查询
+
+用户：查看 US10000000B2 引用了哪些专利和文献。
+
+```json
+{"patentNumber": "US10000000B2"}
 ```
-Look up the forward citations for patent US10000000B2.
+
+### 批量查询并按专利分组
+
+用户：查询这三个专利的引用，并分别列出结果。
+
+```json
+{"patentNumber": "US10000000B2,US9876543B1,EP3456789A1"}
 ```
-Parameters: `{"patentNumber": "US10000000B2"}`
 
-**2. Query forward citations for multiple patents**
+### 按专利 ID 查询
+
+```json
+{"patentId": "12345678"}
 ```
-Find all citations for patents US10000000B2, US9876543B1, and EP3456789A1.
+
+### 同时提供两类标识
+
+```json
+{"patentId": "12345678", "patentNumber": "US10000000B2"}
 ```
-Parameters: `{"patentNumber": "US10000000B2,US9876543B1,EP3456789A1"}`
 
-**3. Query forward citations by patent ID**
-```
-Retrieve the cited references for patent ID 12345678.
-```
-Parameters: `{"patentId": "12345678"}`
+标识优先级按接口参考处理。
 
-**4. Query forward citations using both identifiers**
-```
-Look up citations for patent ID 12345678 (publication number US10000000B2).
-```
-Parameters: `{"patentId": "12345678", "patentNumber": "US10000000B2"}` (patentId takes priority)
+## 使用反馈
 
-## Display Rules
-
-1. **Present data clearly**: Show citation results in well-structured tables, separating patent citations from non-patent literature citations.
-2. **Summarize counts**: Always state the total number of cited patents and cited non-patent literature items.
-3. **No fabrication**: Only display data returned by the API. Do not infer or fabricate citation details.
-4. **Error handling**: When a query fails, explain the reason based on the error response and suggest the user verify their patent ID or publication number.
-5. **Batch results**: When querying multiple patents, organize results by patent so each patent's citations are clearly grouped.
-6. **Empty results**: If a patent has no citations, explicitly inform the user rather than showing an empty table.
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Patent citation queries:
-
-| User Says | Scenario |
-|-----------|----------|
-| "What patents does XX cite" | Forward citation lookup |
-| "Show me the references for patent XX" | Citation detail retrieval |
-| "What prior art is cited by XX" | Prior art reference query |
-| "List the cited literature for XX" | Non-patent literature lookup |
-| "Citation analysis for patent XX" | Combined patent + literature citation |
-| "What documents does patent XX reference" | General citation query |
-
-**Not applicable** -- Needs beyond forward citation data:
-- Backward/reverse citations (who cites this patent)
-- Patent validity or legal status
-- Patent family analysis
-- Patent full-text search
-- Patent classification or landscape analysis
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利引证文献结果
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -10,18 +10,14 @@ GET `externalFulfillment/2024-09-11/shipments/{shipmentId}/shippingOptions?packa
 
 from __future__ import annotations
 
-import sys
 
 from _spapi_ef_common import (
     PATH_SHIPMENTS,
     build_query,
-    developer_proxy_call,
-    emit_result,
+    run_proxy,
     enc_path_seg,
     ensure_auth_skill_available,
-    lf_inline_flag,
     load_params_or_exit,
-    merge_json_body,
     require_fields,
 )
 
@@ -37,16 +33,7 @@ def main() -> None:
 
     path = f"{PATH_SHIPMENTS}/{enc_path_seg(params['shipmentId'])}/shippingOptions"
     qs = build_query([("packageId", params.get("packageId"))])
-    proxy = developer_proxy_call(
-        str(params["region"]),
-        path,
-        "GET",
-        str(params["sellerId"]),
-        query_string=qs,
-    )
-    out = {"developerProxy": proxy, "resolvedPath": path, "queryString": qs}
-    merge_json_body(out, proxy, "shippingOptions")
-    emit_result(out, inline=lf_inline_flag())
+    run_proxy(str(params['region']), path, 'GET', str(params['sellerId']), query_string=qs, result_field='shippingOptions', operation='retrieve_shipping_options', output_fields={'queryString': qs})
 
 
 if __name__ == "__main__":

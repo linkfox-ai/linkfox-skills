@@ -17,13 +17,10 @@ import sys
 from _spapi_ef_common import (
     PATH_SHIPMENTS,
     build_query,
-    developer_proxy_call,
-    emit_result,
+    run_proxy,
     enc_path_seg,
     ensure_auth_skill_available,
-    lf_inline_flag,
     load_params_or_exit,
-    merge_json_body,
     require_fields,
 )
 
@@ -59,22 +56,7 @@ def main() -> None:
             rb["lineItems"] = params["lineItems"]
 
     body_str = json.dumps(rb, ensure_ascii=False) if rb else None
-    proxy = developer_proxy_call(
-        str(params["region"]),
-        path,
-        "POST",
-        str(params["sellerId"]),
-        query_string=qs,
-        body=body_str,
-    )
-    out = {
-        "developerProxy": proxy,
-        "resolvedPath": path,
-        "queryString": qs,
-        "requestBody": rb or None,
-    }
-    merge_json_body(out, proxy, "processShipment", ok_statuses=(200, 204))
-    emit_result(out, inline=lf_inline_flag())
+    run_proxy(str(params['region']), path, 'POST', str(params['sellerId']), query_string=qs, body=body_str, result_field='processShipment', operation='process_shipment', ok_statuses=(200, 204), output_fields={'queryString': qs, 'requestBody': rb or None})
 
 
 if __name__ == "__main__":

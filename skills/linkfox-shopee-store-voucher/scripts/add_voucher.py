@@ -22,7 +22,7 @@ def main() -> None:
         sys.exit(1)
     params = json.loads(sys.argv[1])
     inline = lf_inline_flag()
-    emit_result(run_voucher_api("add_voucher", params, "add_voucher.py"), inline)
+    emit_result(run_voucher_api("add_voucher", params, "add_voucher.py"), inline=inline)
 
 
 if __name__ == "__main__":

@@ -5,17 +5,15 @@ import json
 import os
 import sys
 import time
-import secrets
-import tempfile
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from _linkfox_transport import request, take_output_path, writable_root
 
 from _temu_token_store import get_token
 
 BASE_URL = (
     os.environ.get("LINKFOX_TOOL_GATEWAY")
     or os.environ.get("TEMU_API_BASE_URL")
-    or os.environ.get("STORE_API_BASE_URL", "https://tool-gateway.linkfox.com")
+    or os.environ.get("STORE_API_BASE_URL")
+    or "https://tool-gateway.linkfox.com"
 )
 BASE_URL = BASE_URL.rstrip("/")
 PROXY_URL = f"{BASE_URL}/temu/proxy"
@@ -49,18 +47,6 @@ def get_linkfox_token(params=None) -> str:
         sys.exit(1)
     return key
 
-def build_gateway_headers(linkfox_token: str) -> dict:
-    """网关鉴权：Authorization（全站通用）+ Token（TEMU_API_SPEC 约定）。"""
-    return {
-        "Authorization": linkfox_token,
-        "Token": linkfox_token,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": os.environ.get("SESSION_ID", ""),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
 
 def load_json_arg(argv: list) -> dict:
     if len(argv) < 2:
@@ -103,29 +89,14 @@ def call_temu_api(
     linkfox_params=None,
 ) -> dict:
     """调用 Temu 网关接口；必须先具备 LinkFox 用户 Token。"""
-    linkfox_token = get_linkfox_token(linkfox_params)
-    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    req = Request(
-        url,
-        data=data,
-        headers=build_gateway_headers(linkfox_token),
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        raw = e.read().decode("utf-8") if e.fp else ""
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": raw}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+    return request(url, body, get_linkfox_token(linkfox_params), timeout)
+
 
 def is_linkfox_auth_error(result: dict) -> bool:
-    msg = str(result.get("message") or result.get("error") or "")
-    return "无法识别当前用户" in msg or "重新登录" in msg
+    msg = str(result.get("message") or result.get("errmsg") or result.get("error") or "")
+    return (result.get("transportHttpStatus") == 401
+            or str(result.get("errcode", "")).strip() == "401"
+            or "无法识别当前用户" in msg or "重新登录" in msg)
 
 def resolve_access_token(params: dict) -> str:
     """Temu 店铺 accessToken：直接传入或从本地 storeKey 读取。"""
@@ -169,7 +140,6 @@ def parse_nested_body(result: dict) -> dict:
 
 import time as _lf_time
 import secrets as _lf_secrets
-import tempfile as _lf_tempfile
 
 LF_SMALL_THRESHOLD = 8000
 _LF_SESSION_CACHE: dict = {}
@@ -178,33 +148,7 @@ SLUG = "linkfox-temu-returns-refunds-eu"
 
 
 def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
+    return writable_root()
 
 
 def _lf_iso(ts: float) -> str:
@@ -313,21 +257,27 @@ def emit_result(result, slug=SLUG, inline=False):
     """落盘完整响应到 linkfox/<date>/<session>/data/<slug>-<ts>.json；大响应只打印摘要。无缓存。"""
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
     ts = _lf_time.time()
-    date_str = _lf_time.strftime("%Y-%m-%d", _lf_time.localtime(ts))
-    sid = _lf_session_id(ts)
     root = _lf_root()
-    session_dir = os.path.join(root, date_str, sid)
-    os.makedirs(session_dir, exist_ok=True)
-    _lf_ensure_meta(root, session_dir, date_str, sid, ts)
-    data_dir = os.path.join(session_dir, "data")
-    os.makedirs(data_dir, exist_ok=True)
-    out = os.path.join(data_dir, f"{slug}-{int(ts * 1_000_000)}.json")
+    out = take_output_path(result)
+    if out:
+        # 复用公共调用器已确定的会话，避免自动 session 和跨日时另建元数据目录。
+        session_dir = os.path.dirname(os.path.dirname(out))
+    else:
+        date_str = _lf_time.strftime("%Y-%m-%d", _lf_time.localtime(ts))
+        sid = _lf_session_id(ts)
+        session_dir = os.path.join(root, date_str, sid)
+        os.makedirs(session_dir, exist_ok=True)
+        _lf_ensure_meta(root, session_dir, date_str, sid, ts)
+        data_dir = os.path.join(session_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        out = os.path.join(data_dir, f"{slug}-{int(ts * 1_000_000)}.json")
     try:
         with open(out, "w", encoding="utf-8") as f:
             f.write(serialized)
         print(f"Saved full response: {out} ({len(serialized)} bytes)")
     except OSError as e:
         print(f"Failed to save to {out}: {e}", file=sys.stderr)
+        raise
     _lf_update_meta(session_dir, skill=slug, file_rel=os.path.relpath(out, session_dir), ts=ts)
     if inline or len(serialized.encode("utf-8")) <= LF_SMALL_THRESHOLD:
         print(serialized)

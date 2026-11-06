@@ -1,18 +1,67 @@
-# SKU 列表 / Variants — `bg.local.goods.sku.list.query`
+# Temu 美国站SKU 列表 / Variants接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_manage_sku_list_query.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=87a0d398417049bfbeb5b190f68a22b2 |
-| **网关** | `POST /temu/proxy`，`type`=`bg.local.goods.sku.list.query`，业务载荷放在 Body 的 `params` |
+对应脚本：`scripts/us_manage_sku_list_query.py`。网关及兼容运行约定见 [api.md](../api.md)。
 
-**Description:** Get sku list, as well as get Variants（分页 SKU 列表查询，**不是**按单个 `goodsId` 查全量 SKU）。
+## 公共规则
+
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：SKU 列表 / Variants（bg.local.goods.sku.list.query）
+
+> Partner 官方文档：https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=87a0d398417049bfbeb5b190f68a22b2
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+**用途说明：**SKU 列表 / Variants。
 
 > **勿**与 `bg.local.goods.detail.query` 的 `result.skuList`（单商品详情内 SKU）混淆；本接口为**列表检索**接口。
 
----
+#### 网关 POST Body
 
-## Request 结构（官方顶层）
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是 | 本技能默认 `us`；兼容 `cn`、`partner`、`global`、`eu`，须与令牌来源一致。 |
+| managementType | string | 是 | 默认 `semi-managed`，兼容 `full-managed`；区分店铺托管类型。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；传入时优先于本地令牌。 |
+| storeKey | string | 脚本兼容 | 本地店铺键，脚本读取令牌后仅发送 accessToken，不将 storeKey 发给网关。 |
+| tokenPurpose | string | 否 | 本技能店铺令牌默认用途 `product-inventory`；用于本地定位，不发往网关。 |
+| type | string | 是 | 固定为 `bg.local.goods.sku.list.query`；大小写与原值一致。 |
+| params | object | 否 | Temu 业务参数；本接口的 request 及其子字段见下文。 |
+
+#### 脚本参数与运行约定
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| token / linkfoxToken / linkfox_token | string | 否 | 按此顺序优先于环境变量读取 LinkFox Key；不进入业务参数。 |
+| site / managementType / tokenPurpose | string | 否 | 美国站包装器使用上表默认值；通用 temu_proxy.py 要求显式提供 site、managementType，本地令牌用途默认 default。 |
+| params | object | 否 | 如为对象，优先作为完整业务参数；否则美国站包装器将顶层非保留字段作为业务参数。 |
+| --inline | CLI flag | 否 | 强制全量打印响应，仍保存完整文件。 |
+| --no-cache | CLI flag | 否 | 兼容选项；业务封装始终传入，禁用响应缓存。 |
+
+#### Temu 业务参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| request | OBJECT | 否 | 官方业务参数对象；下文子字段必填性、嵌套关系和限制仍须遵守。 |
 
 ```text
 params
@@ -30,47 +79,43 @@ params
     └── goodsSearchTags
 ```
 
-### `request` 内字段
+##### `request` 内字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| pageNo | INTEGER | 否 | Page number |
-| pageSize | INTEGER | 否 | Page size，**每页最多 100** |
+| pageNo | INTEGER | 否 | 页码 |
+| pageSize | INTEGER | 否 | 每页条数，**每页最多 100** |
 | orderField | STRING | 否 | 排序：`goodsId`、`createTime`、`goodsName`、`outGoodsSn`、`quantity`、`price`；默认按创建时间 |
 | orderType | INTEGER | 否 | `0` 降序（默认），`1` 升序 |
-| skuSearchType | INTEGER | **是** | Product status：`2` Available for sale，`3` Not available for sale |
-| searchText | STRING | 否 | 搜索：`goodsName`、`goodsId` 或 SKU code |
-| statusFilterType | INTEGER | 否 | Subtype filter type |
+| skuSearchType | INTEGER | **是** | 商品状态：`2` 可售，`3` 不可售 |
+| searchText | STRING | 否 | 搜索：`goodsName`、`goodsId` 或 SKU 编码 |
+| statusFilterType | INTEGER | 否 | 子状态筛选类型 |
 | crtFrom | LONG | 否 | 创建时间起，13 位毫秒时间戳 |
 | crtTo | LONG | 否 | 创建时间止，13 位毫秒时间戳 |
-| skuIdList | LONG[] | 否 | sku id list |
+| skuIdList | LONG[] | 否 | SKU 编号列表 |
 | catIdList | LONG[] | 否 | 类目 ID 列表，支持叶子/非叶子，可批量 |
-| skuStatusFilterType | INTEGER | **是** | Product status filter（**新版字段**） |
-| skuSubStatusFilterType | INTEGER | 否 | Product sub-status filter（新版字段） |
+| skuStatusFilterType | INTEGER | **是** | 商品状态筛选（**新版字段**） |
+| skuSubStatusFilterType | INTEGER | 否 | 商品子状态筛选（新版字段） |
 | skuStatusChangeTimeFrom | LONG | 否 | SKU 状态变更时间起（时间戳） |
 | skuStatusChangeTimeTo | LONG | 否 | SKU 状态变更时间止（时间戳） |
-| goodsSearchTags | INTEGER[] | 否 | `1` Low traffic，`4` Restricted traffic |
+| goodsSearchTags | INTEGER[] | 否 | `1` 低流量，`4` 流量受限 |
 
-### 网关 `params` 写法
+> **勿**仅传 `goodsId`；官方入参为**分页 + 筛选**模型，无单独必填 `goodsId`（可用 `searchText` 或 `skuIdList` 定位）。
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "pageNo": 1,
-    "pageSize": 20,
-    "skuSearchType": 2,
-    "skuStatusFilterType": 0,
-    "searchText": "keyword"
-  }
-}
-```
+### 响应结构
 
-> **勿**使用旧文档仅传 `goodsId` 的方式；官方入参为**分页 + 筛选**模型，无单独必填 `goodsId`（可用 `searchText` 或 `skuIdList` 定位）。
+#### LinkFox 网关与脚本输出
 
----
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 如存在，严格按公共响应码基本规则判断。 |
+| errmsg | string | 网关错误说明；保留原始内容。 |
+| code | integer | 本技能网关业务错误码，1002 表示参数或 Token 问题，1003 表示转发失败；不能用它替代公共 errcode 规则。 |
+| body | string | Temu 原始 JSON 字符串；按原始内容保存。 |
+| temuBody | object / array / scalar | 仅脚本加工字段：body 为有效 JSON 字符串时解析生成；无效或空字符串不补造。 |
+| _httpStatus | integer / null | 仅脚本附加：本次请求网关的实际 HTTP 状态，连接失败为 null；用于判断 HTTP 401/402 等传输结果。完整响应和标准输出均保留，不是网关或 Temu 业务字段。 |
 
-## Response（Temu `body` 解析后）
+以下表格描述 body 解析后的 Temu 业务对象（脚本输出的 temuBody），不表示网关顶层字段。
 
 ```text
 response
@@ -96,67 +141,88 @@ response
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| success | BOOLEAN | Current request success status |
-| errorCode | INTEGER | Error code |
-| errorMsg | STRING | Error message |
-| result.pageNo | INTEGER | Page number |
-| result.total | LONG | Total count |
-| result.skuList | OBJECT[] | Product list result |
+| success | BOOLEAN | 当前请求是否成功 |
+| errorCode | INTEGER | 错误码 |
+| errorMsg | STRING | 错误信息 |
+| result.pageNo | INTEGER | 页码 |
+| result.total | LONG | 总条数 |
+| result.skuList | OBJECT[] | 商品列表结果 |
 
-### `result.skuList[]`
+##### `result.skuList[]`
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| goodsName | STRING | Product title |
-| specName | STRING | Specification |
-| thumbUrl | STRING | Preview image URL |
-| goodsId | LONG | Product ID |
-| skuId | LONG | SKU ID |
-| skuSn | STRING | SKU code |
-| stock | INTEGER | Stock quantity |
-| price | STRING | Price |
-| retailPrice | OBJECT | The selling price or retail price（子字段见 Partner 展开） |
-| crtTime | LONG | Creation time in **seconds** |
-| status4VO | INTEGER | Product status |
-| subStatus4VO | INTEGER | Product sub-status |
-| goodsIsOnSale | INTEGER | Product availability status |
-| currency | STRING | Currency information |
-| skuStatusChangeTime | STRING | SKU change time, timestamp format |
-| volumeInfo | OBJECT | Product volume（子字段见 Partner 展开） |
-| weightInfo | OBJECT | Product weight（子字段见 Partner 展开） |
-| skuShowSubStatus4VO | INTEGER | Product sub-status filter（新版字段） |
-| specList | OBJECT[] | spec list（规格列表，子字段见 Partner 展开） |
-| lowTrafficTag | INTEGER | `1` low traffic，`2` not low traffic |
-| restrictedTrafficTag | INTEGER | `1` restricted traffic，`2` not restricted traffic |
+| goodsName | STRING | 商品标题 |
+| specName | STRING | 规格 |
+| thumbUrl | STRING | 预览图片 URL |
+| goodsId | LONG | 商品 ID |
+| skuId | LONG | SKU 编号 |
+| skuSn | STRING | SKU 编码 |
+| stock | INTEGER | 库存数量 |
+| price | STRING | 价格 |
+| retailPrice | OBJECT | 售价或零售价（子字段见 Partner 展开） |
+| crtTime | LONG | 创建时间（**秒**） |
+| status4VO | INTEGER | 商品状态 |
+| subStatus4VO | INTEGER | 商品子状态 |
+| goodsIsOnSale | INTEGER | 商品可售状态 |
+| currency | STRING | 币种信息 |
+| skuStatusChangeTime | STRING | SKU 变更时间，时间戳格式 |
+| volumeInfo | OBJECT | 商品体积（子字段见 Partner 展开） |
+| weightInfo | OBJECT | 商品重量（子字段见 Partner 展开） |
+| skuShowSubStatus4VO | INTEGER | 商品子状态筛选（新版字段） |
+| specList | OBJECT[] | 规格列表（子字段见 Partner 展开） |
+| lowTrafficTag | INTEGER | `1` 低流量，`2` 非低流量 |
+| restrictedTrafficTag | INTEGER | `1` 流量受限，`2` 流量未受限 |
 
----
+### 响应码规则
 
-## 示例
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 按公共基础规则确认网关正常后，检查本技能 code（1002 / 1003 为失败），再解析 body；Temu success 为 false 时依据 errorCode / errorMsg 解释原因，保留原始响应。
+- 仅根据本接口返回的业务字段报告结果；未展开的 result 子字段以实际响应为准，不套用其他接口或补造字段。
+
+### curl 示例
 
 ```bash
-python scripts/us_manage_sku_list_query.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "us",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "request": {
-    "pageNo": 1,
-    "pageSize": 20,
-    "skuSearchType": 2,
-    "skuStatusFilterType": 0,
-    "orderField": "createTime",
-    "orderType": 0
+  "type": "bg.local.goods.sku.list.query",
+  "params": {
+    "request": {
+      "pageNo": 1,
+      "pageSize": 20,
+      "skuSearchType": 2,
+      "skuStatusFilterType": 0,
+      "orderField": "createTime",
+      "orderType": 0
+    }
   }
 }'
 ```
 
-```bash
-# 按 SKU ID 列表筛选
-python scripts/us_manage_sku_list_query.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "pageNo": 1,
-    "pageSize": 50,
-    "skuSearchType": 2,
-    "skuStatusFilterType": 0,
-    "skuIdList": [58224724203874, 58224724203875]
-  }
-}'
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-manage-product-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

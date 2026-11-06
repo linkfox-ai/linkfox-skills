@@ -1,15 +1,31 @@
-# Seerfar Ozon 类目商品搜索 API 参考
+# Seerfar Ozon 类目商品搜索 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：类目商品搜索
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/seerfar/ozon/categorySearch`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
-- **User-Agent**：`LinkFox-Skill/2.0`；HTTP 超时 150s
 
-## 请求参数
-
-POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`categoryId` 与 `page` 必填，其余可选。
+### 请求参数
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -23,12 +39,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`categoryId` 
 | uId | string | 否 | 用户 ID（最长 1000） |
 | memberId | string | 否 | 成员 ID（一个成员唯一标识，一个用户可归属多个团队，数据归属于 memberId，最长 1000） |
 
-> **必填约束**：`categoryId` 与 `page` 均为必填；缺任意一项返回 `errcode 400`。
-> **分页上限**：`page.pageSize` 最大为 20，翻页请通过 `page.page` 递增。
-> **排序**：建议通过 `page.orders` 按核心指标排序（如 `sales` DESC 看爆品、`revenue` DESC 看高销售额、`price` DESC 看高价带），避免在无序结果中翻页。
-> **历史月份**：`date` 传 `yyyy-MM` 可查该月快照；不传则返回近 30 天数据，响应中 `startDate`/`endDate` 标明实际统计区间。
-
-## 响应结构
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -56,7 +67,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`categoryId` 
 | costTime | integer | 接口耗时（毫秒） |
 | costToken | integer | 消耗 Token 数量 |
 
-### data[*] / products[*] 类目商品对象字段
+#### data[*] / products[*] 类目商品对象字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -83,9 +94,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`categoryId` 
 | sourceType | string | 数据源，固定 `ozon` |
 | sourceTool | string | 来源工具，如 `Seerfar-Ozon-查类目` |
 
-> **统一字段 vs 原始字段**：`productId`/`rating`/`brand`/`monthlySalesUnits`/`monthlySalesRevenue`/`productPageUrl` 为后端统一映射字段，与原始 `sku`/`reviewRating`/`brandName`/`sales`/`revenue`/`productUrl` 等价；展示时二选一即可，建议用原始字段（语义更直观）。
-
-### categoryInfo 结构（顶层与每个商品均返回）
+#### categoryInfo 结构（顶层与每个商品均返回）
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -97,42 +106,15 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。`categoryId` 
 
 > `categoryInfo` 在顶层与每个 `data[*]` 中均返回且内容一致，可用于核对类目名称（中/英/俄）与可否跨境销售（`category.crossBorderSellable`）。
 
-## 错误码
+### 响应码规则
 
-正常情况下 HTTP 状态码为 200，业务结果通过响应体区分：
-- **成功**：返回 `code:"200"` + `errcode:200`（`msg` / `errmsg` 均为 `ok`）。
-- **业务错误**：HTTP 仍为 200，但仅返回 `errcode`（非 200）+ `errmsg`（原因），无 `code` 字段。
-- **认证失败**：HTTP 状态码 401，响应体 `{"errcode":401,"errmsg":"authorized error"}`。
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析 `data` / `products` 字段 |
-| 400 | 参数错误 | 查看 `errmsg`；常见为缺 `categoryId`、缺 `page` |
-| 1002 | 分页参数超出限制 | `page.pageSize` 最大为 20，调小后重试 |
-| 1003 | 请求过于频繁 | 限流，稍后重试 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 402 | 计费失败 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 其他非 200 值 | 业务异常 | 查看 `errmsg` 获取具体原因 |
+#### 业务规则
 
-> **不存在的类目 ID**：传入不存在的 `categoryId` 通常返回 `errcode:200`、`total:0`、`data:[]`（空结果）。判断"类目无数据"应基于 `total=0`，而非 `errcode`。
+- **不存在的类目 ID**：传入不存在的 `categoryId` 通常返回 `errcode:200`、`total:0`、`data:[]`（空结果）。判断"类目无数据"应基于 `total=0`，而非 `errcode`。
 
-错误响应示例：
-
-```json
-{
-    "errcode": 1002,
-    "errmsg": "分页参数超出限制，请检查输入。参数 page.pageSize 最大为 20，请调小后重试。"
-}
-```
-
-```json
-{
-    "errcode": 400,
-    "errmsg": "categoryId 为必填参数"
-}
-```
-
-## curl 示例
+### 请求示例
 
 ```bash
 curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/categorySearch \
@@ -145,93 +127,18 @@ curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/categorySearch \
   }'
 ```
 
-## 响应示例（简略）
+## Feedback
 
-```json
-{
-  "code": "200",
-  "msg": "ok",
-  "errcode": 200,
-  "errmsg": "ok",
-  "id": "15621032_15621049_115951147",
-  "total": 5,
-  "totalSales": 2066,
-  "totalRevenue": 12973043,
-  "avgPrice": 7228.0,
-  "rating": 4.9,
-  "seasonalityAmplitude": "STRONG_SEASONALITY",
-  "seasonalityCoef": "OFF_SEASON",
-  "startDate": "2026-06-01",
-  "endDate": "2026-07-01",
-  "hasNextPage": true,
-  "type": "productWorkbenches",
-  "costTime": 1415,
-  "costToken": 16000,
-  "sellerType": {"FBO": 218, "RFBS": 528, "FBP": 5, "FBS": 240, "OZON": 1},
-  "categoryInfo": {
-    "cnTitlePath": "鞋类 > 运动鞋和工作鞋 > 举重鞋",
-    "enTitlePath": "Footwear > Sports and Work Footwear > Weightlifting Shoes",
-    "titlePath": "Обувь > Спортивная и рабочая обувь > Штангетки",
-    "fullCategoryId": ["15621032", "15621032_15621049", "15621032_15621049_115951147"],
-    "category": {
-      "cnTitle": "举重鞋", "enTitle": "Weightlifting Shoes", "title": "Штангетки",
-      "level": 3, "crossBorderSellable": true, "pid": "15621032_15621049",
-      "disabled": false, "id": "15621032_15621049_115951147"
-    }
-  },
-  "data": [
-    {
-      "sku": 1546459445,
-      "productId": 1546459445,
-      "title": "Штангетки YOUNGS",
-      "price": 6481.0,
-      "currency": "₽",
-      "sales": 21,
-      "monthlySalesUnits": 21,
-      "revenue": 122635.0,
-      "monthlySalesRevenue": 122635.0,
-      "reviewRating": 4.8,
-      "rating": 4.8,
-      "reviewCount": 524,
-      "brandName": "YOUNGS",
-      "brand": "YOUNGS",
-      "sellerName": "YoungS shoes",
-      "fulfillment": ["FBO"],
-      "imageUrl": "https://ir.ozone.ru/s3/multimedia-1-j/wc300/7000839379.jpg",
-      "productUrl": "https://www.ozon.ru/product/1546459445",
-      "productPageUrl": "https://www.ozon.ru/product/1546459445",
-      "categoryInfo": { "...": "同顶层 categoryInfo" },
-      "sourceType": "ozon",
-      "sourceTool": "Seerfar-Ozon-查类目"
-    }
-  ],
-  "products": [ "..." ],
-  "columns": [ { "field": "sku", "title": "商品SKU", "cellType": "number", "sortable": true, "filterable": true } ]
-}
-```
-
-> `products` 内容与 `data` 完全一致，示例中用 `"..."` 表示省略。`total` 为本页返回记录数（本例 5），并非类目商品总数；`hasNextPage=true` 表示还有更多页。`sellerType` 为配送方式分布（非卖家本土/跨境类型）。
-
----
-
-## Feedback API
-
-> 该接口与上方工具接口不同，**请勿混用两个基础 URL**。
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
   "skillName": "linkfox-seerfar-ozon-category-search",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "User successfully retrieved a category's best-sellers, total sales/revenue and average price for category selection analysis."
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**字段说明：**
-- `skillName`：使用本 skill 的 YAML `name`
-- `sentiment`：`POSITIVE` / `NEUTRAL` / `NEGATIVE` 三选一
-- `category`：`BUG` / `COMPLAINT` / `SUGGESTION` / `OTHER` 四选一
-- `content`：用户表达、实际现象、为什么算问题或好评

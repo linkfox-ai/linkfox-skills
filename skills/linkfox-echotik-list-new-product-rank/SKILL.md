@@ -1,182 +1,111 @@
 ---
 name: linkfox-echotik-list-new-product-rank
-description: 通过EchoTik新品排行数据，发现TikTok Shop 16个区域市场的热门新品。当用户提到TikTok新品排行、TikTok热销商品、TikTok Shop爆品、短视频电商选品、TikTok新品发掘、跨境TikTok选品、TikTok new product rankings, TikTok bestsellers, short-video product selection, TikTok viral products, new product ranking, TikTok product trends时触发此技能。即使用户未明确提及"EchoTik"或"新品排行"，只要其需求涉及发现TikTok Shop上的热卖新品或新兴商品趋势，也应触发此技能。
+description: 通过 EchoTik 新品排行发现 TikTok Shop 16 个区域市场的热门新品，查看销量、销售额、价格、销售趋势、达人覆盖、视频和直播表现。适用于 TikTok 新品发掘、热卖新品查询、区域选品和短视频电商新品趋势观察，无需明确提及 EchoTik。不适用于其他平台选品、广告管理、内容制作、评论分析、Listing 文案、跨多月历史趋势或利润和定价策略。
 ---
 
-# EchoTik - TikTok New Product Ranking
+# EchoTik TikTok Shop 新品排行
 
-This skill guides you on how to query and analyze the TikTok Shop new product ranking data via the EchoTik data source, helping cross-border e-commerce sellers identify trending new products across TikTok's regional markets.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-The TikTok New Product Ranking tracks recently listed products that are gaining traction on TikTok Shop. It reveals which new products are selling well, their pricing, sales volume, influencer coverage, and live-stream activity. This is an essential tool for product scouting, trend analysis, and competitive intelligence in the short-video e-commerce space.
+查看 TikTok Shop 指定市场的新品榜，发现近期上架且正在获得销售关注的商品。用户希望了解哪些新品畅销、哪些新品呈上升趋势，或达人正在推广哪些新品时，使用本技能。
 
-**Data scope**: The ranking covers 16 TikTok Shop markets and provides daily snapshots of new products along with their performance metrics (sales volume, revenue, influencer count, video count, live-stream count, commission rate, ratings, and more).
+**场景速查**
 
-**Pagination**: Results are paginated. Use `pageNum` (page number, starting from 1) and `pageSize` (items per page, default 50) to navigate through the result set.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| TikTok 最近有哪些热门新品 | 新品发掘：查看新品榜及销量表现。 |
+| 今天 TikTok Shop 哪些新品卖得好 | 当日榜单：查看指定日期的销售快照。 |
+| 东南亚 TikTok 有什么新品机会 | 区域观察：确定具体市场后查看新品榜。 |
+| 英国 TikTok 哪些新商品畅销 | 区域新品排行。 |
+| 看看短视频电商里上升中的新品 | 根据返回的销售趋势标识展示商品。 |
+| TikTok 达人正在带哪些新品 | 查看新品的达人、视频和直播覆盖。 |
 
-## Parameter Guide
+## 前置条件
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| date | string | Yes | Query date in `YYYY-MM-DD` format |
-| region | string | No | Market region code. Default: `US`. See Supported Markets below |
-| pageNum | integer | No | Page number, starting from 1 (default: 1) |
-| pageSize | integer | No | Number of products per page (default: 50) |
+先确定查询日期。用户只说“今天”时按当前日期理解；日期不明确时先补齐。用户未指定市场时使用 `US`；已指定区域范围但未明确具体市场时，先确定目标市场。接口所需信息、默认值及支持市场见 [接口定义](references/api.md)。
 
-## Supported Markets
+## 查询流程
 
-| Code | Market |
-|------|--------|
-| US | United States |
-| GB | United Kingdom |
-| ID | Indonesia |
-| TH | Thailand |
-| PH | Philippines |
-| MY | Malaysia |
-| VN | Vietnam |
-| MX | Mexico |
-| SG | Singapore |
-| SA | Saudi Arabia |
-| BR | Brazil |
-| ES | Spain |
-| JP | Japan |
-| DE | Germany |
-| IT | Italy |
-| FR | France |
+1. 确认用户关注的是 TikTok Shop 新品并明确日期；未指定市场时使用 `US`，“东南亚”等范围先确定具体市场，避免自动遍历多个市场。
+2. 按 [接口定义](references/api.md) 准备一次查询，优先复用同参数缓存；不因结果较少而自行连续请求其他日期、市场或分页。
+3. 读取结果摘要，按需从已保存数据提取商品和指标，依据下方展示规则呈现结果。
+4. 结果较多时说明本次展示范围及可继续分页；失败时解释原因，建议核对日期或市场，后续请求遵守成本约束。
 
-Default market is **US**. Use US when the user does not specify a market.
+## 执行方式
 
-## 调用方式
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_list_new_product_rank.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 5 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **API 端点**：`POST /echotik/listNewProductRank`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_list_new_product_rank.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 输出策略
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-new-product-rank-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-new-product-rank-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 执行规则
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 算力消耗预估
 
-## Usage Examples
+5 算力 / 次
 
-**1. Today's trending new products in the US**
-Query the US market for the current date to see which new products are gaining traction.
-```
-date: "2025-06-15", region: "US"
-```
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**2. Discover hot new products in Southeast Asia**
-Check the Indonesian or Thai market for new product opportunities.
-```
-date: "2025-06-15", region: "ID"
-```
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**3. Browse the UK market new product ranking**
-Scout the UK TikTok Shop for trending new arrivals.
-```
-date: "2025-06-15", region: "GB"
-```
+### 解决认证和算力问题
 
-**4. Paginate through a large result set**
-Retrieve the second page of 20 results for the US market.
-```
-date: "2025-06-15", region: "US", pageNum: 2, pageSize: 20
-```
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## Data Fields (Response)
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-| Field | API Name | Description |
-|-------|----------|-------------|
-| Product Title | title | Name of the product |
-| Product ID | asin | Unique product identifier |
-| Region | region | Market region code |
-| Price (Avg) | price | Average SPU price |
-| Min Price | minPrice | Lowest price |
-| Max Price | maxPrice | Highest price |
-| Currency | currency | Currency code |
-| Total Sales | totalSaleCnt | Total units sold |
-| 30-Day Sales | totalSale30dCnt | Units sold in the last 30 days |
-| Total Revenue | totalSaleGmvAmt | Total gross merchandise value |
-| 30-Day Revenue | totalSaleGmv30dAmt | Revenue in the last 30 days |
-| Sales Trend | salesTrendFlagText | Sales trend indicator (0 = stable, 1 = rising, 2 = declining) |
-| Total Videos | totalVideoCnt | Number of associated videos |
-| Total Live Streams | totalLiveCnt | Number of associated live streams |
-| Total Influencers | totalIflCnt | Number of influencers promoting the product |
-| Commission Rate | productCommissionRate | Product commission rate |
-| Rating | productRating | Average product rating |
-| Review Count | reviewCount | Number of product reviews |
-| First Seen Date | availableDate | Date the product was first tracked |
-| Category ID | categoryId | Product category identifier |
-| Image URL | imageUrl | Product image URL |
-| Image URLs | productImageUrls | List of product image URLs |
+### 约束与建议
 
-## Display Rules
+- **理解新品榜**：榜单观察近期上架且获得销售关注的商品，覆盖 16 个 TikTok Shop 区域市场，包含销量、销售额、价格、佣金、评分及达人、视频、直播活动指标。数据粒度与查询限制见 [接口定义](references/api.md)。
+- **只展示数据**：以清晰表格呈现结果，不附加主观经营建议，不把榜单表现推断为利润、定价策略或开发结论。
+- **解释销售趋势**：将返回的趋势标识转换为易读标签；准确映射见 [商品对象字段](references/api.md#响应结构)。不把用户提出的“上升新品”误当成接口原生筛选能力，可在本次已返回商品中展示符合趋势的项目。
+- **标明币种**：所有价格与销售额均带返回的币种，不混淆不同市场的货币。
+- **说明数据范围**：商品较多时先展示头部商品摘要，说明可查看后续页；每次额外请求遵守成本约束。
+- **处理图片**：存在商品图片 URL 时提供链接；仅在环境支持时内联展示图片。
+- **解释错误**：按 [响应码规则](references/api.md#响应码规则) 判断结果，再依据错误消息说明原因；可以建议用户核对日期或区域，不自动变更参数反复试探。
 
-1. **Present data only**: Show query results in clear tables without subjective business advice
-2. **Sales trend clarification**: When showing sales trend data, translate the numeric flag into human-readable labels: 0 = Stable, 1 = Rising, 2 = Declining
-3. **Currency awareness**: Always display prices alongside their currency code since different markets use different currencies
-4. **Volume notice**: When results are large, show a summary of the top products and remind users they can paginate for more results
-5. **Image handling**: If product image URLs are available, mention them but do not attempt to render images inline unless the environment supports it
-6. **Error handling**: When a query fails, explain the reason and suggest adjusting the date or region parameters
-## Important Limitations
+## 使用示例
 
-- **Date required**: The `date` parameter is mandatory; there is no default date
-- **Daily granularity**: Data is a daily snapshot, not weekly or monthly
-- **Pagination**: Use `pageNum` and `pageSize` to navigate large result sets; not all products are returned in a single call
+### 美国市场的当日热门新品
 
-## User Expression & Scenario Quick Reference
+用户：看看今天美国 TikTok Shop 有哪些热卖新品。
 
-**Applicable** -- TikTok Shop new product discovery and trend analysis:
+确定当前日期，查看美国市场新品榜，展示商品、价格及币种、销量和销售趋势。
 
-| User Says | Scenario |
-|-----------|----------|
-| "What new products are trending on TikTok" | New product ranking lookup |
-| "TikTok bestsellers today", "hot products on TikTok Shop" | Daily ranking query |
-| "New product opportunities in Southeast Asia TikTok" | Regional market scouting |
-| "Which new items are selling well on TikTok UK" | Region-specific ranking |
-| "TikTok product scouting", "short-video e-commerce trends" | General product discovery |
-| "Show me rising new products on TikTok" | Trend-filtered ranking |
-| "TikTok influencer product picks", "what are TikTok creators promoting" | Influencer-driven product discovery |
+### 东南亚市场的新品观察
 
-**Not applicable** -- Needs beyond TikTok new product rankings:
+用户：我想看印度尼西亚或泰国的新品。
 
-- Amazon product research or ABA keyword data
-- TikTok advertising / ad campaign management
-- TikTok content creation or video editing
-- Product reviews or listing copywriting
-- Historical trend analysis spanning many months (this tool provides daily snapshots)
-- Profit margin calculations or pricing strategy
+确定用户本次要查看的具体市场与日期后查询；多个市场的查询应说明额外消耗，不自动扩展检索范围。
 
-**Boundary judgment**: When users say "product research" or "what's selling well", if the context clearly involves TikTok Shop or short-video e-commerce, this skill applies. If they are asking about Amazon, Shopify, or other platforms, it does not apply.
+### 英国市场新品排行
 
-## 算力消耗规则
+用户：看看英国 TikTok Shop 某天有哪些畅销新品。
 
-消耗 5 算力。
+明确日期后查看英国市场，展示新品销量、达人和视频覆盖等可用指标。
 
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+### 查看第二页
 
-**Feedback:**
+用户：继续看美国市场同一天的第二页，每页 20 条。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+保持日期和市场，按用户指定的分页范围查询，说明本次返回范围与额外消耗。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+## 使用反馈
 
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

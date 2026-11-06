@@ -1,164 +1,122 @@
 ---
 name: linkfox-echotik-product-video
-description: 查询TikTok商品的关联带货视频数据，包括播放量、点赞、评论、分享、视频销量与GMV，分析商品的视频营销表现与达人内容效果。当用户提到TikTok商品视频、TikTok带货视频、商品关联视频、视频营销分析、达人视频表现、TikTok视频销量、TikTok video sales, product video analysis, influencer video performance, TikTok promotional videos, product marketing videos时触发此技能。即使用户未明确提及"EchoTik"或"商品视频"，只要其需求涉及查看某个TikTok商品有哪些带货视频、视频的播放和转化数据，也应触发此技能。
+description: 查询 TikTok Shop 商品关联的带货视频，查看播放、点赞、评论、分享、收藏、估算销量与 GMV，支持按达人和发布时间筛选并分析视频营销表现。适用于查看某个商品有哪些推广视频、哪些内容带来较多销量，以及比较达人内容效果；无需明确提及 EchoTik。商品搜索、新品排行、通用热门视频、达人整体资料、直播数据、视频创作剪辑、广告管理和非 TikTok 平台视频不适用。
 ---
 
-# EchoTik - TikTok Product Video
+# EchoTik TikTok 商品带货视频
 
-This skill guides you on how to query promotional videos associated with a TikTok Shop product, helping sellers analyze video marketing performance and identify effective influencer content strategies.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool retrieves the list of promotional videos linked to a specific TikTok product. Each video record includes engagement metrics (views, likes, comments, shares, favorites), estimated sales attribution (video sales count and GMV), video metadata (duration, resolution, publish date), and the creator (influencer) ID. This enables sellers to understand which videos drive the most sales for a product and what content patterns work best.
+查看单个 TikTok Shop 商品的关联带货视频及互动、销售表现，识别有效的达人内容和内容主题。
 
-**Required input**: A `productId` is mandatory. You can obtain product IDs from the EchoTik product search tool (`linkfox-echotik-product-search`) or the new product ranking tool (`linkfox-echotik-new-product-rank`).
+**场景速查**
 
-**Sort fields**: Videos can be sorted by views (1), likes (2), shares (3), video sales (4), video GMV (5), or publish date (6).
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 看看这个商品有哪些带货视频 | 按商品查询关联视频。 |
+| 哪些视频播放量最高 | 查看播放表现较好的视频。 |
+| 哪些视频为这个商品带来最多销量 | 查看估算视频销量较高的内容。 |
+| 哪些视频带来的 GMV 最高 | 查看估算视频销售额较高的内容。 |
+| 这个达人为该商品发过哪些视频 | 筛选指定达人的商品视频。 |
+| 查看最近发布的推广视频 | 按时间范围筛选或按发布时间排序。 |
+| 分析这个商品的视频营销表现 | 综合比较互动与估算销售指标。 |
 
-**Pagination**: `pageSize` must be a multiple of 10, max 100. The backend fetches in batches of 10 and merges results.
+### 边界
 
-## Parameter Guide
+本技能需要明确的商品背景。泛指 TikTok 热门视频而未关联商品时，不使用本技能。
+搜索商品使用 `linkfox-echotik-product-search`，查询新品排行使用 `linkfox-echotik-new-product-rank`。达人整体资料与粉丝分析、直播、内容创作剪辑、广告管理及其他平台视频不在范围内。
 
-| Parameter | Type | Required | Description | Default |
-|-----------|------|----------|-------------|---------|
-| productId | string | Yes | TikTok product ID | - |
-| userId | string | No | Filter by influencer ID | - |
-| productVideoSortField | integer | No | Sort field: 1=views, 2=likes, 3=shares, 4=video sales, 5=video GMV, 6=publish date | 1 |
-| sortType | integer | No | Sort order: 0=ascending, 1=descending | 1 |
-| minCreateTime | integer | No | Video publish start time (Unix timestamp in seconds) | - |
-| maxCreateTime | integer | No | Video publish end time (Unix timestamp in seconds) | - |
-| pageNum | integer | No | Page number | 1 |
-| pageSize | integer | No | Results per page (multiple of 10, max 100) | 50 |
+## 前置条件
 
-## 调用方式
+**先确定商品**：取得用户提供的商品编号，或从 EchoTik 商品搜索、新品排行的已有结果中确定目标商品。具体输入要求见 `references/api.md`。
 
-- **API 端点**：`POST /echotik/listProductVideo`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_list_product_video.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 查询流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-product-video-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 确认目标商品和用户要比较的表现：播放、互动、估算销量、估算 GMV 或发布时间；需要时确认达人及时间范围。
+2. 阅读 `references/api.md`，按目标准备一次查询；复用同一参数的有效缓存，按已约定范围执行。
+3. 先检查返回状态，再查看摘要和已保存的数据，按用户目标展示视频表格与结果范围。
+4. 失败或空结果时说明现状；若要继续筛选或翻页，遵守成本约束，不自动连续试探。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行方式
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_list_product_video.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口调用消耗 5 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 输出策略
 
-## Usage Examples
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-product-video-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 序列化响应的 UTF-8 大小不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
+- 序列化响应的 UTF-8 大小超过 8000 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**1. Top videos by views for a product**
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+5 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解数据范围**：这是某个商品的推广视频列表，包含视频互动、估算销售归因、视频元数据和达人编号，可用于识别该商品的有效内容模式，不能据此代表达人整体表现。
+- **用表格展示**：呈现视频描述（过长时截断）、播放量、点赞数、评论数、分享数、估算视频销量、估算视频 GMV、发布日期和达人编号。仅使用实际返回的指标，不补造缺失值。
+- **说明估算性质**：视频销量和 GMV 是估算值，向用户明确说明其近似性质。
+- **优先链接官方视频**：有 `officialUrl` 时提供 TikTok 原视频链接；`playAddr` 可能很快过期，分享时优先使用 `officialUrl`。
+- **保留内容线索**：有 `coverUrl` 时告知缩略图可用；有 `hashTag` 时展示话题标签，帮助理解内容主题。
+- **格式化时长**：将秒数 `duration` 转成易读格式，例如 90 秒展示为 `1:30`。分辨率等元数据仅在实际返回时展示。
+
+## 使用示例
+
+### 按播放量查看热门带货视频
+
 ```json
-{
-  "productId": "1729382310407603945",
-  "productVideoSortField": 1,
-  "sortType": 1,
-  "pageSize": 20
-}
+{"productId": "1729382310407603945", "productVideoSortField": 1, "sortType": 1, "pageSize": 20}
 ```
 
-**2. Find highest-converting videos (by video sales)**
+### 查看估算销量最高的视频
+
 ```json
-{
-  "productId": "1729382310407603945",
-  "productVideoSortField": 4,
-  "sortType": 1,
-  "pageSize": 20
-}
+{"productId": "1729382310407603945", "productVideoSortField": 4, "sortType": 1, "pageSize": 20}
 ```
 
-**3. Videos by a specific influencer for a product**
+### 查看指定达人的商品视频
+
 ```json
-{
-  "productId": "1729382310407603945",
-  "userId": "7234567890123456789",
-  "productVideoSortField": 1,
-  "sortType": 1
-}
+{"productId": "1729382310407603945", "userId": "7234567890123456789", "productVideoSortField": 1, "sortType": 1}
 ```
 
-**4. Recent videos in a time range (sorted by GMV)**
+### 在时间范围内按估算 GMV 排序
+
 ```json
-{
-  "productId": "1729382310407603945",
-  "minCreateTime": 1717200000,
-  "maxCreateTime": 1719792000,
-  "productVideoSortField": 5,
-  "sortType": 1
-}
+{"productId": "1729382310407603945", "minCreateTime": 1717200000, "maxCreateTime": 1719792000, "productVideoSortField": 5, "sortType": 1}
 ```
 
-**5. Videos sorted by publish date (newest first)**
+### 查看最新发布的视频
+
 ```json
-{
-  "productId": "1729382310407603945",
-  "productVideoSortField": 6,
-  "sortType": 1,
-  "pageSize": 50
-}
+{"productId": "1729382310407603945", "productVideoSortField": 6, "sortType": 1, "pageSize": 50}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data in tables**: Show video description (truncated if long), views, likes, comments, shares, video sales, video GMV, publish date, and influencer ID
-2. **Link to original**: When `officialUrl` is available, provide it so users can view the video on TikTok
-3. **Estimation notice**: Video sales and GMV are estimated values, remind users these are approximations
-4. **Cover image**: If `coverUrl` is present, mention it so the user knows video thumbnails are available
-5. **Duration formatting**: Convert `duration` (seconds) to a readable format (e.g., "1:30" for 90 seconds)
-6. **Hashtag display**: Show `hashTag` when present to help users understand content themes
-7. **Playback URL caveat**: The `playAddr` field may expire quickly; prefer `officialUrl` for sharing
-
-## User Expression & Scenario Quick Reference
-
-### Applicable Scenarios
-
-| User Says | Scenario |
-|-----------|----------|
-| "Show me the promotional videos for this TikTok product" | Query videos by product ID |
-| "Which videos are driving the most sales for this product" | Sort by video sales (field 4) |
-| "What influencer videos are promoting this product" | General video list query |
-| "Show me videos by a specific creator for this product" | Filter by userId |
-| "Recent promotional videos for this product" | Filter by time range or sort by date |
-| "Which TikTok videos have the highest GMV for this product" | Sort by video GMV (field 5) |
-| "Analyze the video marketing performance of this product" | Comprehensive video list query |
-
-### Not Applicable Scenarios
-
-- Searching for products (use `linkfox-echotik-product-search` instead)
-- TikTok new product rankings (use `linkfox-echotik-new-product-rank` instead)
-- Influencer profile analytics (follower count, bio, overall performance)
-- TikTok live-stream data
-- Video content creation or editing advice
-- TikTok advertising / ad campaign management
-- Non-TikTok platform video data
-
-### Boundary Judgment
-
-When users ask about "TikTok videos", determine whether they want videos associated with a specific product (this skill) or general TikTok video analytics (not this skill). If they mention a product ID or ask "what videos are promoting product X", this skill applies. If they ask about trending videos in general without a product context, this skill does not apply.
-
-## 算力消耗规则
-
-消耗 5 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

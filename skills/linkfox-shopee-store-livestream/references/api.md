@@ -1,86 +1,76 @@
-# linkfox-shopee-store-livestream — 参数与字段参考
+# Shopee 店铺直播接口说明
 
-> 单接口入参/响应说明已拆到 **`apis/`**（按 API 一份）；本文件保留模块总览与 Feedback。
-Shopee **Livestream 模块**全部 25 个 API，经 **`POST /shopee/developerProxy`** 转发。
+25 个直播操作经同一个转发端点提供，另提供兼容 `storeTokens` 操作。各文档独立列出已知封装字段；具体 Shopee 业务字段及嵌套 schema 以各接口官方定义和实际响应为准，不把未知字段补造为固定契约。
 
-授权见 **`linkfox-shopee-store-auth`**。官方索引：[v2.livestream.upload_image](https://open.shopee.com/documents/v2/v2.livestream.upload_image?module=125&type=1)
+| 操作 | 接口文档 |
+|---|---|
+| `upload_image` | [上传直播图片](./apis/upload-image.md) |
+| `create_session` | [创建直播场次](./apis/create-session.md) |
+| `update_session` | [更新直播场次](./apis/update-session.md) |
+| `start_session` | [开始直播](./apis/start-session.md) |
+| `end_session` | [结束直播](./apis/end-session.md) |
+| `get_session_detail` | [获取场次详情](./apis/get-session-detail.md) |
+| `add_item_list` | [添加直播商品](./apis/add-item-list.md) |
+| `delete_item_list` | [删除直播商品](./apis/delete-item-list.md) |
+| `update_item_list` | [更新直播商品列表](./apis/update-item-list.md) |
+| `get_item_count` | [获取商品数量](./apis/get-item-count.md) |
+| `get_item_list` | [获取商品列表](./apis/get-item-list.md) |
+| `update_show_item` | [更新展示商品](./apis/update-show-item.md) |
+| `delete_show_item` | [删除展示商品](./apis/delete-show-item.md) |
+| `get_show_item` | [获取展示商品](./apis/get-show-item.md) |
+| `get_like_item_list` | [获取点赞商品列表](./apis/get-like-item-list.md) |
+| `get_recent_item_list` | [获取最近展示商品](./apis/get-recent-item-list.md) |
+| `get_item_set_list` | [获取商品集列表](./apis/get-item-set-list.md) |
+| `get_item_set_item_list` | [获取商品集商品列表](./apis/get-item-set-item-list.md) |
+| `apply_item_set` | [应用商品集](./apis/apply-item-set.md) |
+| `get_session_metric` | [获取场次指标](./apis/get-session-metric.md) |
+| `get_session_item_metric` | [获取场次商品指标](./apis/get-session-item-metric.md) |
+| `get_latest_comment_list` | [获取最新评论](./apis/get-latest-comment-list.md) |
+| `post_comment` | [发表评论](./apis/post-comment.md) |
+| `ban_user_comment` | [禁言用户](./apis/ban-user-comment.md) |
+| `unban_user_comment` | [解除用户禁言](./apis/unban-user-comment.md) |
+| `storeTokens` | [兼容令牌查询](./apis/store-tokens.md) |
 
-## 通用约定
+## 公共规则
 
-- **path**：须 `api/v2/livestream/...`
-- **标识**：通常传 **`shopId`**
-- **官方文档 URL 规则**：`https://open.shopee.com/documents/v2/v2.livestream.{api}?module=125&type=1`
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Livestream 模块总览
+### 响应码基本规则
 
-| # | API | Method | path | 脚本 | 官方文档 |
-|---|-----|--------|------|------|----------|
-| 1 | add_item_list | POST | `api/v2/livestream/add_item_list` | `add_item_list.py` | [apis/add-item-list.md](./apis/add-item-list.md) |
-| 2 | apply_item_set | POST | `api/v2/livestream/apply_item_set` | `apply_item_set.py` | [apis/apply-item-set.md](./apis/apply-item-set.md) |
-| 3 | ban_user_comment | POST | `api/v2/livestream/ban_user_comment` | `ban_user_comment.py` | [apis/ban-user-comment.md](./apis/ban-user-comment.md) |
-| 4 | create_session | POST | `api/v2/livestream/create_session` | `create_session.py` | [apis/create-session.md](./apis/create-session.md) |
-| 5 | delete_item_list | POST | `api/v2/livestream/delete_item_list` | `delete_item_list.py` | [apis/delete-item-list.md](./apis/delete-item-list.md) |
-| 6 | delete_show_item | POST | `api/v2/livestream/delete_show_item` | `delete_show_item.py` | [apis/delete-show-item.md](./apis/delete-show-item.md) |
-| 7 | end_session | POST | `api/v2/livestream/end_session` | `end_session.py` | [apis/end-session.md](./apis/end-session.md) |
-| 8 | get_item_count | GET | `api/v2/livestream/get_item_count` | `get_item_count.py` | [apis/get-item-count.md](./apis/get-item-count.md) |
-| 9 | get_item_list | GET | `api/v2/livestream/get_item_list` | `get_item_list.py` | [apis/get-item-list.md](./apis/get-item-list.md) |
-| 10 | get_item_set_item_list | GET | `api/v2/livestream/get_item_set_item_list` | `get_item_set_item_list.py` | [apis/get-item-set-item-list.md](./apis/get-item-set-item-list.md) |
-| 11 | get_item_set_list | GET | `api/v2/livestream/get_item_set_list` | `get_item_set_list.py` | [apis/get-item-set-list.md](./apis/get-item-set-list.md) |
-| 12 | get_latest_comment_list | GET | `api/v2/livestream/get_latest_comment_list` | `get_latest_comment_list.py` | [apis/get-latest-comment-list.md](./apis/get-latest-comment-list.md) |
-| 13 | get_like_item_list | GET | `api/v2/livestream/get_like_item_list` | `get_like_item_list.py` | [apis/get-like-item-list.md](./apis/get-like-item-list.md) |
-| 14 | get_recent_item_list | GET | `api/v2/livestream/get_recent_item_list` | `get_recent_item_list.py` | [apis/get-recent-item-list.md](./apis/get-recent-item-list.md) |
-| 15 | get_session_detail | GET | `api/v2/livestream/get_session_detail` | `get_session_detail.py` | [apis/get-session-detail.md](./apis/get-session-detail.md) |
-| 16 | get_session_item_metric | GET | `api/v2/livestream/get_session_item_metric` | `get_session_item_metric.py` | [apis/get-session-item-metric.md](./apis/get-session-item-metric.md) |
-| 17 | get_session_metric | GET | `api/v2/livestream/get_session_metric` | `get_session_metric.py` | [apis/get-session-metric.md](./apis/get-session-metric.md) |
-| 18 | get_show_item | GET | `api/v2/livestream/get_show_item` | `get_show_item.py` | [apis/get-show-item.md](./apis/get-show-item.md) |
-| 19 | post_comment | POST | `api/v2/livestream/post_comment` | `post_comment.py` | [apis/post-comment.md](./apis/post-comment.md) |
-| 20 | start_session | POST | `api/v2/livestream/start_session` | `start_session.py` | [apis/start-session.md](./apis/start-session.md) |
-| 21 | unban_user_comment | POST | `api/v2/livestream/unban_user_comment` | `unban_user_comment.py` | [apis/unban-user-comment.md](./apis/unban-user-comment.md) |
-| 22 | update_item_list | POST | `api/v2/livestream/update_item_list` | `update_item_list.py` | [apis/update-item-list.md](./apis/update-item-list.md) |
-| 23 | update_session | POST | `api/v2/livestream/update_session` | `update_session.py` | [apis/update-session.md](./apis/update-session.md) |
-| 24 | update_show_item | POST | `api/v2/livestream/update_show_item` | `update_show_item.py` | [apis/update-show-item.md](./apis/update-show-item.md) |
-| 25 | upload_image | POST | `api/v2/livestream/upload_image` | `upload_image.py` | [apis/upload-image.md](./apis/upload-image.md) |
-通用入口：`livestream_api.py`（JSON 含 `"api": "<上表 API 名>"`）。
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
----
+## 脚本运行约定
 
-## 常用接口说明
+- 专用入口：`python scripts/<操作名>.py '<JSON 参数>' [--inline] [--no-cache]`；通用入口：`python scripts/livestream_api.py '<含 api 的 JSON 参数>' [--inline] [--no-cache]`。通用入口只接受清单中的 25 个直播操作。
+- 所有业务封装调用公共 `call_api.run` 时强制传入 `--no-cache`，不读取或保存响应缓存。公共调用器仍可能创建空 `.cache` 目录，该目录不代表启用了缓存。
+- 网关地址优先取 `LINKFOX_TOOL_GATEWAY`，其次取 `SHOPEE_API_BASE_URL`，最后使用默认网关；两个 API Key 环境变量的优先级遵循公共规则。
+- 本地依赖检测返回 0 表示找到认证技能；返回 42 且 stderr 含 `DEPENDENCY_MISSING:` 表示缺失。JSON 字段 `skipDepCheck` 默认 false，只有外部流程已确认依赖时才使用；它只跳过本地安装检测，不绕过店铺授权。
+- 完整业务响应按 `SESSION_ID` 聚合并保存到当前工作目录的 `linkfox/<日期>/<session>/data/`；请求前准备会话目录，并检查输出根目录和实际 data 目录的可写性，失败时报错，不回退到家目录、`ACPX_WORKSPACES` 或临时目录，不写 `/tmp`。同一秒内重复操作也使用独立文件名。
+- 业务脚本使用 `linkfox-shopee-store-livestream-<操作名>` 作为文件标识；完整输出、8 KB 摘要和 `--inline` 由公共调用器处理。兼容函数 `resolve_store_tokens` 只在内存返回原始令牌结果，保存的副本不含令牌正文。
+- 直播 CLI 和 Python 封装均按店铺或商户标识调用 developerProxy，由服务端解析令牌；直播 CLI 不调用兼容令牌查询。
 
-| 分类 | API | 要点 |
-|------|-----|------|
-| 会话 | `create_session` / `start_session` / `end_session` | 创建、开始、结束直播 |
-| 会话 | `get_session_detail` / `get_session_metric` | 场次详情与数据 |
-| 商品 | `add_item_list` / `get_item_list` / `update_show_item` | 直播商品管理 |
-| 商品集 | `get_item_set_list` / `apply_item_set` | 商品集应用 |
-| 互动 | `get_latest_comment_list` / `post_comment` | 评论管理 |
-| 互动 | `ban_user_comment` / `unban_user_comment` | 禁言管理 |
-| 素材 | `upload_image` | 上传直播图片 |
+## Feedback
 
----
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
-## curl 示例
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
-```bash
-curl -X POST ${LINKFOX_TOOL_GATEWAY}/shopee/developerProxy \
-  -H "Authorization: $LINKFOX_AGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "path": "api/v2/livestream/get_session_detail",
-    "method": "GET",
-    "accessToken": "xxx",
-    "shopId": "67890"
-  }'
-```
-
----
-
-## Feedback API
-
-```bash
-curl -X POST https://skill-api.linkfox.com/api/v1/public/feedback \
-  -H "Content-Type: application/json" \
-  -d '{"skillName":"linkfox-shopee-store-livestream","sentiment":"POSITIVE",
-       "category":"OTHER","content":"直播接口查询正常"}'
+```json
+{
+  "skillName": "linkfox-shopee-store-livestream",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

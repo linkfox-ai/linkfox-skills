@@ -28,7 +28,7 @@ def main() -> None:
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
     inline = lf_inline_flag()
-    emit_result(run_media_space_api(str(params["api"]), params, "media_space_api.py"), inline)
+    emit_result(run_media_space_api(str(params["api"]), params, "media_space_api.py"), inline=inline)
 
 
 if __name__ == "__main__":

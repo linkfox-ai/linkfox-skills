@@ -6,7 +6,7 @@ Temu **没有** LinkFox 侧自动 OAuth；`accessToken` 须在 Temu 卖家后台
 
 | 令牌 | 用途 | 获取方式 |
 |------|------|----------|
-| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token`；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理） |
+| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY` 或 JSON 的 `token` / `linkfoxToken` / `linkfox_token`；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理） |
 | **Temu accessToken** | Temu 业务 API（经紫鸟转发） | Temu 卖家后台授权后复制 |
 
 ```bash
@@ -70,15 +70,15 @@ python scripts/check_linkfox_token.py
 
 ```bash
 # 查看授权步骤
-python scripts/temu_token_guide.py '{"shopType":"semi-managed","tokenPurpose":"product-inventory","site":"cn"}'
+python scripts/temu_token_guide.py '{"shopType":"semi-managed","tokenPurpose":"order-shipping","site":"us"}'
 
 # 保存 token
 python scripts/save_temu_access_token.py '{
   "storeKey": "my-shop",
-  "label": "中国半托管",
-  "site": "cn",
+  "label": "美国半托管",
+  "site": "us",
   "managementType": "semi-managed",
-  "tokenPurpose": "product-inventory",
+  "tokenPurpose": "order-shipping",
   "accessToken": "PASTE_TOKEN"
 }'
 
@@ -88,11 +88,11 @@ python scripts/list_temu_access_tokens.py
 # 用 storeKey 调 API（无需每次粘贴 token）
 python scripts/temu_proxy.py '{
   "storeKey": "my-shop",
-  "site": "cn",
+  "site": "us",
   "managementType": "semi-managed",
-  "tokenPurpose": "product-inventory",
-  "type": "bg.goods.category.mapping",
-  "params": {"goodsName": "测试", "goodsNameEn": "Test"}
+  "tokenPurpose": "order-shipping",
+  "type": "bg.order.list.v2.get",
+  "params": {"request": {"pageNumber": 1, "pageSize": 10}}
 }'
 ```
 

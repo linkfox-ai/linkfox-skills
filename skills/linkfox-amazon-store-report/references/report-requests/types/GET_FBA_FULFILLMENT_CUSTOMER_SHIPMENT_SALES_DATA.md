@@ -1,19 +1,19 @@
 # `GET_FBA_FULFILLMENT_CUSTOMER_SHIPMENT_SALES_DATA`
 
-> **分类**：6.1 FBA Shipments  
-> **说明**：FBA customer shipment sales  
-> **可用范围**：Seller only
+> **分类**：6.1 FBA 配送货件  
+> **说明**：FBA 客户货件销售  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-customer-shipment-sales-report)（章节：**FBA Customer Shipment Sales Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **Availability**：FBA sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **要点**：Contains condensed item level data on shipped FBA customer orders including price, quantity, and ship-to location. Content updated in near real-time in Europe (EU), Japan, and North America (NA). 📘Note:In Japan, EU, and NA, in most cases, there will be a delay of approximately one to three hours from the time a fulfillment order ships and the time the items in the fulfillment order appear in the report. In some rare cases there could be a delay of up to 24 hours.
+- **角色**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **可用范围**：FBA 卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：包含已发货 FBA 客户订单的精简商品级数据，如价格、数量和收货位置。EU、日本和 NA 近实时更新；发货到出现在报告中通常延迟约 1–3 小时，极少数情况可达 24 小时。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-customer-shipment-sales-report>
 

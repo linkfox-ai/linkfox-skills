@@ -1,135 +1,116 @@
 ---
 name: linkfox-zhihuiya-patent-cited
-description: 从智慧芽（PatSnap）查询专利被引用数据，包括被引用次数和引用专利详情。当用户提到专利被引用、被引分析、专利影响力、引用频次、专利家族被引、前向引用、想了解哪些专利引用了某一专利、patent citations, citation count, patent influence, citation analysis, PatSnap时触发此技能。即使用户未明确提及"智慧芽"或"PatSnap"，只要其需求涉及查询某专利被引用次数或被哪些专利引用，也应触发此技能。
+description: 查询智慧芽（PatSnap）专利的前向被引数据，包括三年、五年被引次数、简单同族、INPADOC 同族和 PatSnap 同族被引数量及引用该专利的专利列表。适用于单条或批量专利被引查询、被引指标对比及基于引用事实的影响力研究，无需明确提及智慧芽。不适用于专利全文或语义搜索、法律状态、审查历史、后向引用、专利估值或许可建议。
 ---
 
-# Zhihuiya Patent Citations Explorer
+# 智慧芽专利被引查询
 
-This skill guides you on how to query patent citation data from Zhihuiya (PatSnap), helping users understand the citation landscape of specific patents.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Patent citation analysis reveals how influential a patent is within its technology domain. When Patent B references Patent A in its prior art section, Patent A is said to be "cited by" Patent B. A higher citation count generally indicates greater technological significance and broader industry influence.
+查询指定专利被其他专利引用的次数与引用详情，或比较多条专利的被引表现。
 
-**Key metrics**:
-- **3-year citations** (`citedBy3y`): Number of times the patent was cited within 3 years of publication. Indicates early-stage impact.
-- **5-year citations** (`citedBy5y`): Number of times the patent was cited within 5 years. Indicates medium-term influence.
-- **Simple family citations** (`citedBySimpleFamily`): Count of simple patent family members that cite the patent.
-- **INPADOC family citations** (`citedByInpadocFamily`): Count of INPADOC patent family members that cite the patent.
-- **PatSnap family citations** (`citedByPatsnapFamily`): Count of PatSnap-defined patent family members that cite the patent.
+**场景速查**
 
-## Parameter Guide
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这项专利被引用了多少次 | 基础被引次数查询。 |
+| 哪些专利引用了它 | 引用该专利的专利列表。 |
+| 看看这项专利的影响力 | 展示被引事实与引用分布。 |
+| 比较这几项专利的被引情况 | 多专利指标对比。 |
+| 查看三年或五年内的被引次数 | 时间窗口指标查询。 |
+| 查看专利家族的被引数据 | 同族层面的被引指标。 |
+| 查这项专利的前向引用 | 被引查询的同义表达。 |
 
-You must provide at least one of the following identifiers. If both are supplied, patent ID takes priority.
+## 前置条件
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| patentId | Zhihuiya internal patent ID. Multiple IDs separated by commas (max 100). | abc123def456 |
-| patentNumber | Publication / announcement number. Multiple numbers separated by commas (max 100). | US10123456B2, CN112345678A |
+先确定用户要查询的专利标识，并确认需求是前向被引查询。标识选择与请求约束见 `references/api.md`。
 
-**Important**: At least one of `patentId` or `patentNumber` is required. When the user provides a publication number (e.g., "US10123456B2"), use `patentNumber`. When they provide internal IDs, use `patentId`.
+## 查询流程
 
-## Usage Examples
+1. 明确查询单项专利、比较多项专利，还是查看引用详情，整理用户提供的公开公告号或智慧芽内部标识；按 `references/api.md` 准备请求。
+2. 按固定 3 算力/次预估消耗；需要高频调用或用户对消耗量预期不足时，先提醒用户并由其决定是否继续；已获明确授权时按其范围执行。
+3. 按执行方式查询并保存完整响应；响应判断与错误处理遵循 `references/api.md`，认证或算力异常按“解决认证和算力问题”处理。
+4. 从已保存的响应提取指标，按专利分组展示；需要引用详情时读取对应专利列表，不因缺失字段自行补造数据。
 
-**1. Single patent citation lookup by publication number**
-Query: "How many citations does patent US10123456B2 have?"
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_cited_by.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具固定消耗 3 算力/次。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换专利标识或连续试探；需要继续检索时，先向用户说明额外消耗。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-patent-cited-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB（8000 字节）：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB（8000 字节）：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+固定消耗 3 算力/次，不按返回 `data` 条数累乘。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分前向与后向引用**：专利 B 在现有技术中引用专利 A，表示 A 被 B 引用；本技能查询 A 的前向被引，不查询 A 引用过哪些专利。
+- **解释指标含义**：三年和五年被引分别反映公开后三年、五年内的被引情况，可作为早期及中期影响力的事实线索；被引较多通常提示更广的技术关注或行业影响，不据此直接判断专利价值。
+- **说明同族口径**：简单同族通常按相同优先权组合归组；INPADOC 扩展同族按共同优先权联系归组；PatSnap 同族采用智慧芽自身的归组定义。对不熟悉同族的用户简要解释差异，各项统计以响应口径为准。
+- **表格呈现并按专利分组**：列出公开公告号、三年被引、五年被引和三类同族被引数量；缺失值标为未返回，不当作零。比较多项专利时，突出各指标被引数量最高的专利。
+- **展开引用详情**：响应包含 `citedByPatents` 时，按所属专利用子表或可展开列表呈现实际返回的引用专利详情。
+- **解释失败原因**：根据响应说明原因，建议核对公开公告号或内部标识；后续查询遵守成本约束。
+- **保持事实陈述**：仅呈现被引事实，不给出专利估值、投资判断或许可建议。
+
+## 使用示例
+
+### 按公开公告号查询单条专利
+
+用户：专利 US10123456B2 被引用了多少次？
+
 ```json
-{
-  "patentNumber": "US10123456B2"
-}
+{"patentNumber": "US10123456B2"}
 ```
 
-**2. Multiple patents citation comparison**
-Query: "Compare citations for CN112345678A and CN113456789B"
+### 比较多条专利
+
+用户：比较 CN112345678A 与 CN113456789B 的被引情况。
+
 ```json
-{
-  "patentNumber": "CN112345678A,CN113456789B"
-}
+{"patentNumber": "CN112345678A,CN113456789B"}
 ```
 
-**3. Lookup by patent ID**
-Query: "Get citation data for patent ID abc123def456"
+### 按智慧芽内部标识查询
+
 ```json
-{
-  "patentId": "abc123def456"
-}
+{"patentId": "abc123def456"}
 ```
 
-**4. Batch query with multiple IDs**
-Query: "Citation info for these patent IDs: id001, id002, id003"
+### 批量查询内部标识
+
 ```json
-{
-  "patentId": "id001,id002,id003"
-}
+{"patentId": "id001,id002,id003"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data in tables**: Show citation results in clear, structured tables. Include the publication number, 3-year citations, 5-year citations, and family citation counts.
-2. **Highlight key metrics**: When comparing multiple patents, highlight the one with the highest citation counts.
-3. **Explain family types**: If the user is unfamiliar with patent families, briefly explain the difference between Simple, INPADOC, and PatSnap family definitions.
-4. **Citing patent details**: If the response includes a `citedByPatents` array with details of citing patents, present them in a sub-table or expandable list.
-5. **Error handling**: When a query fails, explain the reason based on the response and suggest checking whether the patent number or ID is correct.
-6. **No subjective advice**: Present factual citation data without making judgments about patent value or investment decisions.
-
-## 调用方式
-
-- **API 端点**：`POST /zhihuiya/patentCited`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_cited_by.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-patent-cited-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Patent citation analysis scenarios:
-
-| User Says | Scenario |
-|-----------|----------|
-| "How many times has this patent been cited" | Basic citation count |
-| "Which patents cite this one" | Citing patent list |
-| "Patent influence analysis" | Citation-based impact |
-| "Compare citations between patents" | Multi-patent comparison |
-| "3-year / 5-year citation count" | Time-windowed citation metrics |
-| "Patent family citation data" | Family-level citation analysis |
-| "Forward citations for patent X" | Synonym for cited-by lookup |
-
-**Not applicable** -- Needs beyond patent citation data:
-- Patent full-text search or semantic search
-- Patent legal status or prosecution history
-- Patent valuation or licensing recommendations
-- Backward citations (references *made by* a patent)
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利被引证结果
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

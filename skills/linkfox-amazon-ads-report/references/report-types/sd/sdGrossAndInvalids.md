@@ -14,27 +14,27 @@ dateRange:
   dataRetentionDays: 365
 ---
 
-# SD Gross and Invalid Traffic
+# SD 流量总量与无效流量
 
-Gross and invalid traffic reports provide Sponsored Display advertisers transparency into the nature of traffic on their campaigns. The report includes all campaigns of the requested ad type and provides transparency on gross and invalid traffic metrics at the campaign level for the requested days.
+流量总量与无效流量报告帮助 SD 广告主核查活动流量性质，覆盖指定类型全部活动，按活动提供请求日期内的总量和无效流量指标。
 
-> **Note**
-> Sponsored Products, Sponsored Brands, and Sponsored Display all support the same columns and configurations for the gross and invalid traffic report.
+> **说明**
+> SP / SB / SD 的流量总量与无效流量报告支持相同的列与配置。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sdGrossAndInvalids |
-| Maximum date range | 365 days |
-| Data retention | 365 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 365 天 |
+| 数据保留期 | 365 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | campaign |
-| format | GZIP_JSON or CSV |
+| format | GZIP_JSON / CSV |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | campaignName |
 | campaignStatus |
@@ -50,42 +50,40 @@ Gross and invalid traffic reports provide Sponsored Display advertisers transpar
 | invalidImpressions |
 | startDate |
 
-## Group by campaign
+## 分组：campaign
 
-**Additional metrics**: N/A
+无附加指标。
 
-**Filters**:
-- campaignStatus (values: ENABLED, PAUSED, ARCHIVED)
+**筛选**：
 
-## Sample calls
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| campaignStatus | array[string] | ENABLED, PAUSED, ARCHIVED |
 
-### Gross and invalid traffic summary report
+## 配置示例
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxx' \
---data '{
-    "name": "SD Gross and Invalid Traffic",
-    "startDate": "2025-03-05",
-    "endDate": "2025-03-10",
-    "configuration": {
-        "adProduct": "SPONSORED_DISPLAY",
-        "groupBy": ["campaign"],
-        "columns": [
-            "campaignName",
-            "grossImpressions",
-            "grossClickThroughs",
-            "invalidClickThroughs",
-            "invalidClickThroughRate",
-            "startDate",
-            "endDate"
-        ],
-        "reportTypeId": "sdGrossAndInvalids",
-        "timeUnit": "SUMMARY",
-        "format": "CSV"
-    }
-}'
+```json
+{
+  "name": "SD Gross and Invalid Traffic",
+  "startDate": "2025-03-05",
+  "endDate": "2025-03-10",
+  "configuration": {
+    "adProduct": "SPONSORED_DISPLAY",
+    "groupBy": [
+      "campaign"
+    ],
+    "columns": [
+      "campaignName",
+      "grossImpressions",
+      "grossClickThroughs",
+      "invalidClickThroughs",
+      "invalidClickThroughRate",
+      "startDate",
+      "endDate"
+    ],
+    "reportTypeId": "sdGrossAndInvalids",
+    "timeUnit": "SUMMARY",
+    "format": "CSV"
+  }
+}
 ```

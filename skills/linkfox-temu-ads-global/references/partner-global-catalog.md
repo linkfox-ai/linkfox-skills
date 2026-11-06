@@ -58,4 +58,4 @@ Partner Platform for **Global** 菜单：**Ads / 电商广告**（Search & Recom
 
 建议使用 **`tokenPurpose=product-inventory`**。详见 [access-token.md](./access-token.md)。
 
-> **说明**：`Partner Platform-rgq.htm` 未在提供目录中找到；若对应 `temu.searchrec.ad.reports.goods.query` 等接口，请补充 HTML 后接入。
+> **说明**：`temu.searchrec.ad.reports.goods.query` 等操作尚未接入独立文档与脚本；扩展需要包含完整请求和响应定义的 Partner 文档，`Partner Platform-rgq.htm` 当前不可用。

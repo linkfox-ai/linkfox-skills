@@ -1,34 +1,67 @@
-# 极目-亚马逊-细分市场洞察信息 API 参考
+# 极目亚马逊细分市场洞察 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：细分市场洞察信息（getNicheInfo）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/jiimore/getNicheInfo`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
 
-## 请求参数
+### 请求参数
 
 POST Body（JSON）：
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| nicheId | string | 是 | 细分市场ID，最大长度1000字符，只支持单个ID查询 |
-| countryCode | string | 否 | 国家编码，仅支持 `US`、`JP`、`DE`，默认 `US` |
+| nicheId | string | 是 | 细分市场 ID，最大长度 1000 字符；每次只支持单个 ID，不支持批量查询。必须已有编号，本接口不能按关键词或类目搜索市场。 |
+| countryCode | string | 否 | 国家编码，仅支持 `US`（美国）、`JP`（日本）、`DE`（德国），默认 `US`。仅当用户明确指定日本或德国时改为对应编码。 |
 
+#### 脚本选项与运行约定
 
-## 响应结构
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| JSON 参数 | object | 是 | CLI 的首个位置参数；请求字段见上表。 |
+| --inline | CLI flag | 否 | 强制完整打印，同时保存完整响应。 |
+| --no-cache | CLI flag | 否 | 禁用本次本地响应缓存的读取与写入；不删除已有缓存。 |
+
+脚本提供 24 小时本地缓存：以排序后的请求 JSON 的 SHA-256 前 16 位作为键，保存在 `<cwd>/linkfox/.cache/linkfox-jiimore-get-niche-info/`；字段顺序变化不会产生新的缓存键。命中时添加 `_cache.hit=true`。正常响应、业务错误或空结果均可能被缓存；过期或损坏时重新请求，不自动重试。业务封装调用 `call_api.run` 时始终传入 `--no-cache`，关闭公共调用器的响应缓存，仅使用这一层缓存。
+
+接口密钥兼容两种环境变量，优先 `LINKFOX_AGENT_API_KEY`，其次 `LINKFOXAGENT_API_KEY`；网关优先 `LINKFOX_TOOL_GATEWAY`，默认正式地址。调用器保留 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME` 请求头。完整响应始终以 UTF-8 保存在当前目录的会话数据路径，并维护 `_meta.json` 和 `index.jsonl`；禁止写入 `/tmp`，当前目录不可写时在请求前报错，不回退到家目录或临时目录。正式写入失败或文件内容不完整时以非零状态退出，不自动再次请求。无 `SESSION_ID` 时自动生成进程内稳定的会话编号。
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| errcode | integer / string / null | 业务状态码；按公共响应码基本规则判断。 |
+| errorCode | 以实际返回为准 | 补充状态字段，`200` 表示成功、其他值表示业务错误，未授权时为 `401`。若返回则保留实际值，响应判定仍按公共规则，不将其替代 `errcode`。 |
+| errmsg | string | 错误消息，业务异常时用于说明原因。 |
 | total | integer | 记录数 |
 | data | array | 细分市场信息列表，每个元素为包含以下字段的对象 |
 | columns | array | 渲染的列 |
 | costToken | integer | 消耗token |
 | type | string | 渲染的样式 |
 
-### `data` 元素关键字段
+#### data[*] 细分市场对象
 
-#### 市场概览
+##### 市场概览
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -40,7 +73,7 @@ POST Body（JSON）：
 | demand | integer | 细分市场得分 |
 | categorieList | array | 商品品类列表 |
 
-#### 商品与品牌数量
+##### 商品与品牌数量
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -62,7 +95,7 @@ POST Body（JSON）：
 | sellingPartnerCountT360T90Before | integer | 销售伙伴数量(360 天统计)(90天前) |
 | sellingPartnerCountT360T360Before | integer | 销售伙伴数量(360 天统计)(360天前) |
 
-#### 价格
+##### 价格
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -73,7 +106,7 @@ POST Body（JSON）：
 | minimumPrice | number | 产品最低价 |
 | maximumPrice | number | 产品最高价 |
 
-#### 搜索与转化
+##### 搜索与转化
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -90,7 +123,7 @@ POST Body（JSON）：
 | unitsSoldWeekly | integer | 销售数量（周数据） |
 | unitsSoldQuarterly | integer | 销售数量（季度数据） |
 
-#### 竞争 - 商品点击份额
+##### 竞争 - 商品点击份额
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -108,7 +141,7 @@ POST Body（JSON）：
 | top20ProductsClickShareT360T90Before | number | 排名前20位的商品点击份额(360 天统计)(90天前) |
 | top20ProductsClickShareT360T360Before | number | 排名前20位的商品点击份额(360 天统计)(360天前) |
 
-#### 竞争 - 品牌点击份额
+##### 竞争 - 品牌点击份额
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -126,7 +159,7 @@ POST Body（JSON）：
 | top20BrandsClickShareT360T90Before | number | 前20个品牌所占细分市场的点击量份额(360天统计)（90天前) |
 | top20BrandsClickShareT360T360Before | number | 前20个品牌所占细分市场的点击量份额(360天统计)（360天前) |
 
-#### 商品上架
+##### 商品上架
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -149,7 +182,7 @@ POST Body（JSON）：
 | successfulLaunchesT360T90Before | integer | 成功发布商品的数量（360 天统计）(90天前) |
 | successfulLaunchesT360T360Before | integer | 成功发布商品的数量（360 天统计）(360天前) |
 
-#### 库存与运营
+##### 库存与运营
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -166,7 +199,7 @@ POST Body（JSON）：
 | primeProductsPercentageT360T90Before | number | prime商品的百分比(360 天统计）(90天前) |
 | primeProductsPercentageT360T360Before | number | prime商品的百分比(360 天统计）(360天前) |
 
-#### 评论与评分
+##### 评论与评分
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -180,7 +213,7 @@ POST Body（JSON）：
 | negativeCustomerReviewInsights | array | 负面客户评论见解信息 |
 | productStarRatingImpact | array | 产品星级影响力信息 |
 
-#### 卖家成熟度
+##### 卖家成熟度
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -198,7 +231,7 @@ POST Body（JSON）：
 | avgBestSellerRankT90Before | number | 平均BestSeller排名(90天前) |
 | avgBestSellerRankT360Before | number | 平均BestSeller排名(360天前) |
 
-#### 广告与盈利
+##### 广告与盈利
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -214,55 +247,40 @@ POST Body（JSON）：
 | returnRateAnnual | number | 退货率（全年数据） |
 | cpc | object | CPC（每次点击费用）数据 |
 
-## 错误码
+`categorieList`、评论见解、星级影响、`columns` 的元素字段及 `cpc` 的子字段以实际返回的嵌套结构为准，不推测或补造字段。
 
-正常情况下，接口的 HTTP 状态码均为 200，业务的成功与否通过响应体中的 errorCode 字段区分（errorCode = 200 表示成功，其他值表示业务错误）。当遇到未授权等情况时，HTTP 状态码为 401，且对应的 errorCode 也是 401。
+### 响应码规则
 
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析业务字段 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 402 | 算力不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
+#### 基础规则
 
-错误响应示例：
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-```json
-{
-    "errcode": 401,
-    "errmsg": "authorized error"
-}
-```
+#### 业务规则
 
-## curl 示例
+- 查询失败时结合实际返回原因提示核对细分市场编号与国家编码；不要自动变更查询条件连续请求。
+
+### curl 示例
 
 ```bash
-curl -X POST https://tool-gateway.linkfox.com/jiimore/getNicheInfo \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/jiimore/getNicheInfo" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
   -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{"nicheId": "12345678", "countryCode": "US"}'
 ```
 
----
+## Feedback
 
-## Feedback API
-
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "skillName": "linkfox-xxx-xxx",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "skillName": "linkfox-jiimore-get-niche-info",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter
-- `sentiment`: Choose ONE — `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE — `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

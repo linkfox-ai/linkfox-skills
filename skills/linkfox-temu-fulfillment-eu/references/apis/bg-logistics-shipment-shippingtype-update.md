@@ -1,42 +1,74 @@
-# 更新物流跟踪号 / 发货方式 — `bg.logistics.shipment.shippingtype.update`
+# Temu 欧洲站 更新物流跟踪号 / 发货方式 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/eu_self_fulfilled_logistics_shipment_shippingtype_update.py` |
-| **Partner 文档** | https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896（按 `type` 在 Partner EU 后台打开） ||
-| **网关** | `POST /temu/proxy`，`type`=`bg.logistics.shipment.shippingtype.update`，业务载荷放在 Body 的 `params` |
+[接口导航](../api.md)；[授权与脚本兼容约定](../api.md#运行约定)。
 
-**Description:** The `bg.logistics.shipment.shippingtype.update` interface is used by sellers to update logistics tracking numbers, supporting the following scenarios（卖家更新物流跟踪号，支持以下场景）：
+## 公共规则
 
-1. **Non-integrated logistics updating logistics tracking numbers** — 非集成物流更新物流跟踪号  
-2. **Temu-integrated logistics has been changed to non-integrated logistics** — Temu 集成物流已改为非集成物流
+### 调用规范
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 `request`。建议使用 **`tokenPurpose=order-shipping`**。  
-> - `packageSn` 通常来自 **`bg.logistics.shipment.v2.get`** 或 **`bg.logistics.shipment.get`**  
-> - `shipCompanyId` 与 [bg-logistics-companies-get.md](./bg-logistics-companies-get.md) 返回的 **`logisticsServiceProviderId`** 相同  
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：更新物流跟踪号 / 发货方式（bg.logistics.shipment.shippingtype.update）
+
+> 官方：[Partner EU 文档](https://partner-eu.temu.com/documentation?menu_code=7289390cfd724be4a196f11ebe45a896)
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是 | 本技能默认 `eu`；必须匹配店铺令牌所属站点。 |
+| managementType | string | 是 | 本技能默认 `semi-managed`；合作仓仅支持半托管。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；与 LinkFox API Key 不同。脚本调用网关前解析本地选店并填入此字段。 |
+| storeKey | string | 与 accessToken 二选一 | 本地令牌库中的店铺键，指向 `~/.linkfox/temu-access-tokens.json`；当前脚本在本地读取并转换为 `accessToken`，不发送此字段。 |
+| tokenPurpose | string | 否 | 建议 `order-shipping`；脚本用于本地令牌选择，不发送至网关。 |
+| type | string | 是 | 当前操作的 Temu 接口标识，见本接口说明。 |
+| params | object | 否 | Temu 业务参数；通常使用下方 `request` 对象。 |
+
+本操作的 `type` 固定为 `bg.logistics.shipment.shippingtype.update`。脚本：`scripts/eu_self_fulfilled_logistics_shipment_shippingtype_update.py`（相对技能根目录）。
+
+#### params 业务对象
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| request | OBJECT | 否（请求表标注） | 业务请求对象；其子字段、条件必填与特殊约定见下文。业务请求以各子字段要求为准。 |
+
+#### 业务前提与限制
+
+（卖家更新物流跟踪号，支持以下场景）：
+
+1. 非集成物流更新物流跟踪号
+2. Temu 集成物流已改为非集成物流
+
+> - `packageSn` 通常来自 **`bg.logistics.shipment.v2.get`** 或 **`bg.logistics.shipment.get`**
+> - `shipCompanyId` 与 [bg-logistics-companies-get.md](./bg-logistics-companies-get.md) 返回的 **`logisticsServiceProviderId`** 相同
 > - `selfShippingWarehouseId` 来自 **`linkfox-temu-fulfillment-eu`** 的 **`bg.logistics.warehouse.list.get`**
 
----
-
-## Request 结构（官方业务参数）
-
-```text
-params
-└── request (OBJECT, 选填)
-    └── editPackageRequestList[] (OBJECT[], 否)
-        ├── packageSn (STRING, 是)
-        ├── trackingNumber (STRING, 是)
-        ├── shipCompanyId (LONG, 是)
-        └── selfShippingWarehouseId (STRING, 是)
-```
-
-### `request`
+#### `request`
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | editPackageRequestList | OBJECT[] | 否 | edit package request list（编辑包裹请求列表） |
 
-### `editPackageRequestList[]`
+#### `editPackageRequestList[]`
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -45,65 +77,82 @@ params
 | shipCompanyId | LONG | **是** | It's the same ID with the **`logisticsServiceProviderId`** you got from **`bg.logistics.companies.get`**（与 `bg.logistics.companies.get` 返回的 `logisticsServiceProviderId` 相同） |
 | selfShippingWarehouseId | STRING | **是** | The shipment warehouse ID（发货仓库 ID），可从 **`linkfox-temu-fulfillment-eu`** 的 **`bg.logistics.warehouse.list.get`** 获取 |
 
-### 网关 `params` 写法
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "editPackageRequestList": [
-      {
-        "packageSn": "PKG-123456789",
-        "trackingNumber": "1Z999AA10123456784",
-        "shipCompanyId": 123456789,
-        "selfShippingWarehouseId": "WH-001"
-      }
-    ]
-  }
-}
-```
+#### 网关与脚本响应
 
----
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 若返回此字段，按公共规则判断，不将 `0` 或 `false` 视为空。 |
+| errmsg | string | 若返回此字段，为网关消息；保留原文。 |
+| body | string | Temu 原始 JSON 字符串；先判断网关状态，再解析业务内容。 |
+| code | integer | 网关错误码：`1002` 为参数或 Token 无效，`1003` 为转发失败；不可当作 Temu 错误码。 |
+| temuBody | object / array / scalar | 脚本在 `body` 可解析为 JSON 时增加的字段，完整保留原 `body`；不可解析时不增加。 |
+| _http_status | integer / null | 仅脚本附加的本次 HTTP 状态码，不是网关字段；连接失败无 HTTP 响应时为 `null`，错误原因仍保留在 `error`。大响应摘要也展示该状态。 |
 
-## Response（Temu `body` 解析后）
+网关正常响应后，解析 `body`；若存在 `response` 包装则读取其业务对象。以下为 Temu 业务字段，不能替代外层 HTTP 与 `errcode` 判断。
 
-```text
-response
-├── success
-├── errorCode
-├── errorMsg
-└── result (BOOLEAN)
-```
-
-### `response` 顶层字段
+#### `response` 顶层字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| success | BOOLEAN | success |
-| errorCode | INTEGER | error code |
-| errorMsg | STRING | error message |
+| success | BOOLEAN | 当前请求是否成功 |
+| errorCode | INTEGER | 错误码 |
+| errorMsg | STRING | 错误信息 |
 | result | BOOLEAN | 业务结果（Partner 文档类型为 BOOLEAN；具体语义以 Temu 返回为准） |
 
----
+### 响应码规则
 
-## 示例
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+网关正常后，判断 Temu 的 `success`、`errorCode`、`errorMsg` 与各项业务状态；`success=true` 不代表异步履约或审核已最终完成。业务错误保留原文，不自动重试写入。
+
+### curl 示例
 
 ```bash
-python scripts/eu_self_fulfilled_logistics_shipment_shippingtype_update.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '
+{
+  "site": "eu",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "editPackageRequestList": [
-      {
-        "packageSn": "PKG-123456789",
-        "trackingNumber": "1Z999AA10123456784",
-        "shipCompanyId": 123456789,
-        "selfShippingWarehouseId": "WH-001"
-      }
-    ]
+  "type": "bg.logistics.shipment.shippingtype.update",
+  "params": {
+    "request": {
+      "editPackageRequestList": [
+        {
+          "packageSn": "PKG-123456789",
+          "trackingNumber": "1Z999AA10123456784",
+          "shipCompanyId": 123456789,
+          "selfShippingWarehouseId": "WH-001"
+        }
+      ]
+    }
   }
-}'
+}
+'
 ```
 
-典型流程：已发货包裹需更正跟踪号，或 Temu 集成物流改为非集成物流 → `bg.logistics.companies.get` 取 `shipCompanyId` → 本接口批量更新 `editPackageRequestList` → 可用 `bg.logistics.shipment.v2.get` 核对。
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-fulfillment-eu",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

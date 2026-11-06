@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-SHOPEE_DOC_MODULE = "95"
 
 class LogisticsEndpoint(TypedDict, total=False):
     path: str
@@ -304,11 +303,6 @@ LIST_QUERY_FIELDS = frozenset({
     "order_sn_list",
 })
 
-def official_doc_url(api_name: str) -> str:
-    return (
-        f"https://open.shopee.com/documents/v2/v2.logistics.{api_name}"
-        f"?module={SHOPEE_DOC_MODULE}&type=1"
-    )
 
 def list_api_names() -> list[str]:
     return sorted(LOGISTICS_ENDPOINTS.keys())

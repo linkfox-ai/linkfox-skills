@@ -1,163 +1,114 @@
 ---
 name: linkfox-seerfar-ozon-keyword-back-search
-description: Seerfar Ozon 关键词反查：按商品 SKU 列表（最多 20 个）反查 Ozon（及 Wildberries）搜索关键词，返回这些商品出现在哪些搜索词下（自然搜索词/广告搜索词），并按搜索热度、增长、商品数、卖家数、竞品数、自然排名、广告排名、曝光、转化、加购转化等多维指标筛选，每个关键词附带月搜热度、增长、市场空间、竞品/卖家数、均价、加购转化、Top 商品及自然/广告渠道、排名、曝光、转化（dimension）等市场画像，用于 Ozon 关键词反查、Listing 选词优化、竞品流量词挖掘与广告词分析。当用户提到 Ozon 关键词反查、Ozon 反查关键词、Ozon SKU 反查、Ozon 商品流量词、Ozon 竞品出单词、Ozon 自然词/广告词反查、Seerfar Ozon、Ozon keyword back search, Ozon reverse keyword lookup, Ozon SKU keyword reverse 时触发此技能。即使用户未明确提到"Seerfar"，只要其意图是按商品 SKU 反查 Ozon 搜索关键词并查看市场画像，也应触发此技能。
+description: 按商品 SKU 反查 Seerfar 数据库中的 Ozon 搜索关键词，区分自然词和广告词，查看搜索热度、增长、竞争、排名、曝光、转化及热门商品画像，兼顾数据源中可用的 Wildberries 记录。适用于自有商品与竞品流量词挖掘、Listing 选词及广告词分析；用户希望查询某个 Ozon 商品的搜索词时使用，无需明确提及 Seerfar。不适用于无 SKU 的全市场热词浏览、种子词扩展、商品详情或店铺商品查询。
 ---
 
-# Seerfar Ozon Keyword Back-Search
+# Seerfar Ozon 关键词反查
 
-This skill reverse-looks-up Ozon search keywords **by a list of product SKU IDs** in the Seerfar analytics database: pass up to 20 SKUs (your own listing or a competitor's) and it returns the search terms those products appear under — organic and/or ad — each enriched with a full market profile (search volume, 30-day growth, product/seller/competitor counts, average price, conversion concentration, top products, plus per-term organic/ad channel, natural rank, exposure, and conversion in the `dimension` object). It is the starting point for Ozon keyword reverse lookup, listing-title optimization, and competitor traffic-word discovery.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**SKU-driven, not keyword-driven**: unlike keyword mining (expand *from* a seed term) or market keyword search (browse the whole market), this endpoint takes `skuIds` and returns the search terms *those specific products* rank for. The direction is product → keywords (reverse).
+用户已有自有商品或竞品的 Ozon SKU，希望查出商品出现在哪些搜索词下，并查看这些词的市场画像时，使用本技能。
 
-**`hasVariant` is required**: every request must declare whether to exclude variants — `0` keep variants, `1` exclude variants. Pick `1` when you want de-duplicated keyword coverage for a parent listing.
+**场景速查**
 
-**Natural vs ad terms**: `type` filters the search-term channel — `["0"]` organic (自然搜索词) only, `["1"]` ad (广告搜索词) only; omit to get both. Combine with the `naturalRank` / `adRank` range filters to qualify positioning.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 反查这个 Ozon 商品或 SKU 的关键词 | 商品搜索词反查。 |
+| 这个 Ozon 链接有哪些搜索词带来流量 | 商品流量词发现。 |
+| 看看竞品 SKU 的出单词或流量词 | 竞品关键词画像；如实区分转化指标与实际订单。 |
+| 查这个商品的自然词或广告词 | 按渠道查看关键词与排名。 |
 
-**Back-search metrics live in `dimension`**: each returned term carries a `dimension` object with the reverse-lookup-specific metrics — `type` (`0` organic / `1` ad), `naturalRank` (the SKU's natural rank for that term), `exposure` (exposure share, 0–1), `conversion` (conversion rate, 0–1), and `x` (opaque position indicator). The input filters `type` / `naturalRank` / `adRank` / `exposure` / `conversion` filter on these same per-term values. Note: `relevancy` is defined in the schema but is **not** returned by this endpoint.
+### 边界
 
-**Platform coverage**: each keyword record carries a `platform` field (`0` = Ozon, `1` = Wildberries). The dataset is Ozon-centric; Wildberries rows appear where available. There is no input to restrict the platform — filter client-side if needed.
+无 SKU 的全市场热词浏览使用 Seerfar Ozon 市场关键词搜索技能；从种子词扩展使用关键词挖掘技能。查询商品价格、销量或库存使用商品详情数据源；查看卖家商品使用店铺搜索技能；类目查询使用对应类目技能。
 
-**Match mode**: `matchType` controls how `includeKeywords` / `excludeKeywords` are matched — `0` exact, `1` fuzzy.
+## 前置条件
 
-## Parameters
+**先确定商品与分析目标**：使用真实 Ozon SKU，可从上游 Seerfar Ozon 商品、店铺或类目数据取得；明确是否剔除变体，以及需要关注流量、低竞争、增长、自然排名还是广告表现。请求字段和限制见 [接口说明](references/api.md)。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| skuIds | array<integer> | yes | Reverse-lookup SKU list, max 20. |
-| hasVariant | integer | yes | Variant exclusion: `0` keep variants, `1` exclude variants. |
-| page | object | yes | Pagination `{page, pageSize, orders[]}`. `page` from 1 (default 1), `pageSize` default 20. `orders[]` = `{field, direction}` with `direction` `DESC`/`ASC`. |
-| matchType | integer | no | Keyword match mode: `0` exact, `1` fuzzy. |
-| type | array<string> | no | Search-term channel filter: `0` organic, `1` ad; omit for both. |
-| historyDate | string | no | Historical month `yyyy-MM` (e.g. `2026-02`); omit for current period. |
-| includeKeywords | array<string> | no | Terms that must appear (max 1000). |
-| excludeKeywords | array<string> | no | Terms to exclude (max 1000). |
-| searchVolume | {min,max} | no | Monthly search volume range. |
-| searchChange30 | {min,max} | no | 30-day search change range. |
-| wordCount | {min,max} | no | Keyword word/char count range. |
-| productViews | {min,max} | no | Product view range. |
-| products | {min,max} | no | Product count range. |
-| sellers | {min,max} | no | Seller count range. |
-| marketSpace | {min,max} | no | Market space range. |
-| conversionSharing | {min,max} | no | Conversion concentration range. |
-| uniqQueriesWCa | {min,max} | no | Cart-add count range. |
-| ca | {min,max} | no | Cart-add conversion rate range. |
-| conversion | {min,max} | no | Conversion rate range. |
-| titleDensity | {min,max} | no | Title density range. |
-| adRivalCount | {min,max} | no | Ad competitor count range. |
-| adRank | {min,max} | no | Ad rank range. |
-| naturalRank | {min,max} | no | Natural rank range. |
-| exposure | {min,max} | no | Exposure range. |
-| uId | string | no | User ID. |
-| memberId | string | no | Member ID (data attribution). |
+## 查询流程
 
-All range filters are `{min, max}` objects; supply either or both bounds. `skuIds`, `hasVariant`, and `page` are all required.
+1. 核对目标 SKU 与变体处理意图，按 [接口说明](references/api.md) 准备请求。
+2. 按分析目标确定排序：流量权重用 `searchVolume` 降序，低竞争用 `sellers` 升序，上升词用 `count30GrowthRate` 降序。
+3. 按需要选择自然或广告渠道，并结合对应排名、曝光和转化范围限定结果；将包含词、排除词一次纳入请求，减少重复查询。
+4. 查询后先看摘要，按需从保存文件提取关键词及嵌套画像，展示本次返回范围。空结果或错误先解释原因；后续查询遵守成本约束。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /seerfar/ozon/keywordBackSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/seerfar_ozon_keyword_back_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/seerfar_ozon_keyword_back_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-keyword-back-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 完整响应保存到 `<root>/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-keyword-back-search-<timestamp>.json`。`<root>` 按 `ACPX_WORKSPACES` 首个路径下的 `linkfox/`、`<cwd>/linkfox/`、`~/linkfox/`、系统临时目录下的 `linkfox/` 顺序选择可写位置；`<cwd>` 为脚本运行时的工作目录。正常使用应选择可写项目目录。`<session>` 优先取环境变量 `SESSION_ID`，未设置时自动生成，用于聚合同一任务的数据；保存失败时向标准错误输出提示。
+- 响应体不超过 8 KB（8000 字节）：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB（8000 字节）：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-**1. Reverse-lookup a single SKU's traffic keywords (sort by search volume)**
-```json
-{"skuIds": [4380710124], "hasVariant": 0, "page": {"page": 1, "pageSize": 10, "orders": [{"field": "searchVolume", "direction": "DESC"}]}}
-```
+12 算力 / 次
 
-**2. Organic terms where the SKU ranks near the top**
-```json
-{"skuIds": [4380710124], "hasVariant": 1, "type": ["0"], "naturalRank": {"max": 10}, "page": {"page": 1, "pageSize": 20, "orders": [{"field": "searchVolume", "direction": "DESC"}]}}
-```
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**3. Ad search words only, with an ad-rank floor**
-```json
-{"skuIds": [4380710124], "hasVariant": 0, "type": ["1"], "adRank": {"max": 50}, "page": {"page": 1, "pageSize": 20, "orders": [{"field": "searchVolume", "direction": "DESC"}]}}
-```
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**4. Narrow with include / exclude lists**
-```json
-{"skuIds": [4380710124], "hasVariant": 0, "page": {"page": 1, "pageSize": 20}, "includeKeywords": ["платье"], "excludeKeywords": ["ремень"], "matchType": 1}
-```
+### 解决认证和算力问题
 
-## How to Build Queries
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-1. **Always lead with `skuIds` + `hasVariant`**: both are required and define the reverse-lookup target. Use real Ozon SKU IDs (the same IDs returned by Seerfar Ozon product / shop / category skills).
-2. **Lead with `page.orders`**: sort by the metric you care about (`searchVolume` DESC for traffic weight, `sellers` ASC for low competition, `count30GrowthRate` DESC for rising terms).
-3. **Split organic vs ad with `type`**: pass `["0"]` or `["1"]` to focus a listing-optimization pass (organic) or an ads pass (ad), then bound `naturalRank` / `adRank` to qualify positioning — these filter on the values surfaced in each row's `dimension`.
-4. **Use `includeKeywords` / `excludeKeywords` to steer**: force in must-have modifiers and strip noise without running a second query.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## Display Rules
+### 约束与建议
 
-1. **Present data only**: show reverse-looked-up keyword metrics in a clear table without subjective advice.
-2. **Lead with keyword columns**: `query` / `queryCn` (Chinese translation), then `searchVolume`, `count30GrowthRate`, `productCount`, `sellers`, `avgPrice`; show `dimension.naturalRank` and `dimension.type` (organic/ad) to convey how the SKU ranks for each term.
-3. **Russian keywords**: preserve the original `query`; the `queryCn` field provides a Chinese translation when available.
-4. **Channel tag**: when `type` is omitted and both organic and ad rows are present, show `dimension.type` (`0` organic / `1` ad) and `dimension.naturalRank` so the user can distinguish them.
-5. **Large result sets**: when `total` is large, show the top rows and remind the user they can persist the full response via the large-response pattern below, or page further with `page.page`.
-6. **Error handling**: when `code` is not `200` (or `errcode` is not `200`), explain the reason from `msg` / `errmsg` and suggest adjusting the SKU list or filters.
+- **反查方向**：本技能从商品寻找关键词。按 SKU 反查与种子词扩展、全市场热词浏览是不同任务。
+- **变体与覆盖**：希望查看父级商品去重后的关键词覆盖时，选择剔除变体；需要保留各变体覆盖时，选择保留变体。具体参数取值见接口说明。
+- **区分渠道与平台**：自然词适合查看自然搜索覆盖，广告词适合查看广告搜索覆盖；混合结果中同时展示渠道与排名。数据以 Ozon 为主，可能含 Wildberries 记录，按平台分别展示，必要时在本地筛选。
+- **清晰展示数据**：只呈现查询到的数据，不附加主观建议。表格先列俄语原词 `query` 与可用的中文翻译 `queryCn`，再列月搜热度、月搜增长、商品数、卖家数、均价及 `dimension` 中的渠道、自然排名；按任务补充竞品数、市场空间、加购、曝光、转化和热门商品。
+- **保留原词与缺失值**：俄语原词保持不变，中文翻译缺失时不冒充接口原值；缺失或空的商品数、广告排名、相关度、类目信息按 [接口说明](references/api.md) 处理，不补造。
+- **注意指标单位**：增长、集中度、退货取消率及加购转化的百分数，与反查维度中的比例值分开呈现；展示百分比时按接口定义换算，保留原始数据。
+- **说明分页情况**：结果较多时先展示靠前记录和总记录数，提供完整响应文件；说明可继续翻页，后续调用遵守成本约束。
+- **解释错误原因**：依据接口说明的公共响应规则和 `errmsg`、`msg` 解释原因，提示核对 SKU 或筛选条件；脚本结果结合本地 `_http_status` 判断，摘要未列出时从保存文件读取，旧缓存缺少状态时不推定 HTTP 成功。不得仅凭 `code` 判断失败。
 
-## Important Limitations
+## 使用示例
 
-- **`skuIds` + `hasVariant` + `page` required**: a payload missing any of these is rejected.
-- **`skuIds` capped at 20**: pass more than 20 and the request is rejected or truncated.
-- **No keyword seed**: this endpoint has no `keyword` parameter — it is reverse (SKU → keywords), not expansion (keyword → keywords). Use the keyword mining skill to expand from a seed.
-- **No `searchDate` / `categories` input**: only `historyDate` (historical month) is accepted; there is no category filter. Use the market keyword search skill for month- or category-scoped browsing.
-- **Nested fields**: `products[*]` (Top 商品) and `dimension` (per-term back-search metrics: `type`, `naturalRank`, `exposure`, `conversion`, `x`) are structured and decision-useful — see `references/api.md` for sub-fields. `categoryInfos` is defined in the schema/columns but is **not** returned in `data[*]` on this endpoint (same as the keyword-mining sibling; the market-keyword-search sibling does return it — don't assume parity). `relevancy` is likewise defined in the schema but **not** returned.
+### 查看单个商品的流量词
 
-## User Expression & Scenario Quick Reference
+用户：反查这个 Ozon SKU 的搜索词，按搜索热度展示。
 
-**Applicable** — SKU-driven Ozon keyword reverse lookup:
+核对 SKU 与变体意图，按月搜热度排序，展示原词、中文翻译、市场指标及渠道排名。
 
-| User Says | Scenario |
-|-----------|----------|
-| "反查这个 Ozon 商品 / SKU 的关键词" | Reverse keyword lookup for a SKU |
-| "这个 Ozon 链接有哪些搜索词带来流量" | Traffic-word discovery for a listing |
-| "Ozon 竞品 SKU 的出单词 / 流量词" | Competitor traffic-word mining |
-| "Ozon 某商品的自然词 / 广告词" | Organic vs ad term breakdown |
-| "Ozon 关键词反查、按 SKU 反查关键词" | Generic reverse keyword lookup |
+### 查看自然排名靠前的词
 
-**Not applicable** — Needs beyond SKU-driven reverse lookup:
-- Browse/rank the whole market's hot keywords (no SKU) → use the Seerfar Ozon market keyword search skill.
-- Expand outward from a seed keyword → use the Seerfar Ozon keyword mining skill.
-- A specific SKU's price/sales/stock → use a product-level Seerfar Ozon data source.
-- A specific seller's catalog → use the Seerfar Ozon shop search skill.
-- Category-tree browsing → use the Seerfar Ozon category search skill.
+用户：只看这个商品自然排名靠前的关键词。
 
-**Boundary judgment**: if the user has a **product/SKU** (own or competitor) and wants the **search terms it ranks for**, start here. If they want to **browse the market** (no SKU) or **expand from a seed keyword**, route to the market keyword search or keyword mining skill respectively.
+确定自然渠道与排名范围，展示自然词覆盖和市场画像。
 
-## 算力消耗规则
+### 查看广告词
 
-消耗 23 算力。
+用户：查这个商品的广告搜索词和广告排名。
 
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+确定广告渠道与排名范围；广告排名缺失时明确标注，空结果先说明，不自动改条件重查。
 
-**Feedback:**
+### 排除不相关词
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户：反查女装词，保留 платье，排除 ремень。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+确认匹配意图，将包含词和排除词随首次请求提交。完整参数示例见接口说明。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

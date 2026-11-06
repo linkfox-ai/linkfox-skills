@@ -38,7 +38,7 @@ python scripts/check_linkfox_token.py
 3. **服务市场** → **授权管理**
 4. **获取授权** → 选择 **「Cyber-ERP酷鸟助手」**
 5. 全选授权 → 确认 → 复制 token
-6. 调用 API：`site=global` / `global` / `eu`，`managementType=semi-managed`
+6. 调用 API：`site=us` / `global` / `eu`，`managementType=semi-managed`
 
 ## 3. 全托管店铺
 
@@ -60,9 +60,9 @@ python scripts/check_linkfox_token.py
 |------|------|-----------|
 | cn | 中国站 | openapi.kuajingmaihuo.com |
 | partner | Partner 网关 | openapi-b-partner.temu.com |
-| us | 全球站 | openapi-b-global.temu.com |
+| us | 美国区 | openapi-b-global.temu.com |
 | global | 全球区 | openapi-b-global.temu.com |
-| eu | 全球站 | openapi-b-global.temu.com |
+| eu | 欧洲区（由网关按站点解析） | openapi-b-global.temu.com |
 
 ## 本地保存 Token（推荐）
 

@@ -1,142 +1,30 @@
 ---
 name: linkfox-shopee-store-auth
-description: Shopee（虾皮）店铺授权与管理技能，支持 ERP 与广告（AD）双应用分开授权。提供授权流程、已授权店铺查询以及授权状态读取。授权时可填写店铺名 shopName，region 支持 cn / global / br，appType 支持 erp / ad。当用户提到 Shopee 店铺授权、虾皮店铺绑定、ERP 授权、广告授权、appType、查询已授权 Shopee 店铺、Shopee seller authorization, bind Shopee shop, Shopee Ads authorization 时触发。即使未明确提及"Shopee"或"授权"，只要涉及虾皮卖家账号绑定、ERP/广告应用授权或店铺列表查询，也应触发。
+description: 管理 Shopee（虾皮）店铺的 ERP 与广告（AD）独立授权，生成授权链接、查询已授权店铺与授权状态，并为后续业务确定店铺。适用于卖家账号绑定、补充广告授权、核对授权状态和多店选择；不适用于直接管理商品、订单、物流、广告投放等店铺业务，也不用于前台选品研究。
 ---
-
 # Shopee 店铺授权与管理
 
-Shopee Open Platform 的 OAuth 授权、已授权店铺列表、授权状态读取。**下游业务的前置依赖**（经 `/shopee/developerProxy` 调用开放接口）。
+## 适用范围
 
-Shopee **ERP** 与 **广告（AD）** 使用不同应用与 Token，必须按能力分开授权。
+### 适用
 
-## Core Concepts
+完成 Shopee Open Platform 的店铺授权、已授权店铺查询和授权状态核对，为下游业务准备店铺身份。
+用户提到虾皮卖家账号绑定、ERP 授权、广告授权、授权失效或“我的虾皮店”时，按目标能力处理。
 
-- **双应用**：`appType=erp`（商品/订单/物流等，默认）与 `appType=ad`（站内广告）彼此独立；同店可同时有两条授权
-- **授权流程**：生成 URL → 用户浏览器授权 → Shopee 推送 Token → 系统按 `state` 落库
-- **店铺标识**：`shopId` 与 `merchantId` 二选一即可定位；判断是否已授权须同时匹配 **`shopId/merchantId + appType`**
-- **shopName 建议填写**：调 `authorize_url.py` 前建议问用户要一个便于识别的店铺名（API 非必填）
-- **授权 URL 1 小时有效**：每次授权重新调用 `authorize_url.py`，不要缓存旧地址
-- **下游选店**：业务 skill 经 `developerProxy` 只传 **`shopId`/`merchantId` + path**；**勿**传 `accessToken`，也**勿**在 proxy 里传 `appType`（服务端按 path 自动路由：`api/v2/ads/**` → AD，其它 `api/v2/**` → ERP）
-- **accessToken 约 4 小时有效**（`expireIn` 通常 14400）；过期需按对应 `appType` 重新授权
+**场景速查**
 
-## Shopee authorization routing
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 绑定我的虾皮店铺 | 生成 ERP 授权链接，引导浏览器完成授权。 |
+| 已绑定店铺，还要开广告 | 检查 AD 记录，补充广告应用授权。 |
+| 商品业务和广告都要用 | 分别检查两种应用，仅补充缺失授权。 |
+| 看看我授权了哪些店 | 展示店铺与对应应用记录。 |
+| 这家店的授权是否有效 | 查询对应应用的授权状态与到期元数据。 |
+| 用我的店查业务数据 | 先选店并核对目标应用，再交由业务技能执行。 |
 
-- Use `appType=erp` for product, order, logistics, and other ERP authorization.
-- Use `appType=ad` for Shopee Ads authorization.
-- Treat a missing or blank `appType` as `erp`.
-- Check authorization by both store identity and `appType`; one store may have separate ERP and AD records.
-- If the user needs both capabilities, obtain two fresh authorization URLs and explain that both authorizations must be completed.
-- Authorization URLs expire after one hour, so obtain a new URL for every authorization attempt.
+### 边界
 
-When calling `developerProxy`, pass the Shopee API path plus `shopId` or `merchantId`. Do not pass `appType` or an access token. The service routes `api/v2/ads/**` through the AD application and all other `api/v2/**` paths through the ERP application.
-
-## 可用脚本
-
-| 脚本 | 作用 |
-|------|------|
-| `authorize_url.py` | 生成授权 URL（可选 `shopName` / `region` / **`appType`**） |
-| `authorized_stores.py` | 列出已授权店铺（含 **`appType`**；同店可能两条） |
-| `store_tokens.py` | 查指定应用的授权/令牌**状态**（非下游 token 来源；须带 `appType` 区分） |
-
-入参、响应字段、错误码见 `references/api.md`。
-
-## 调用方式
-
-- **API 端点**：`POST /shopee/{authorizeUrl|storeTokens|authorizedStores}`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文）
-- **成本约束**：本工具会消耗算力；失败/空结果不得自动连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/<skill-name>-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## 支持区域
-
-`cn`（中国跨境，默认） / `global`（全球授权页） / `br`（巴西）。默认 `cn`。
-
-## Usage Scenarios
-
-### 1. 新授权店铺（ERP，默认）
-
-1. 建议问用户要 `shopName`（便于后续识别；API 非必填）
-2. 确认 `region`（默认 `cn`；全球站 `global`，巴西 `br`）
-3. 调 `authorize_url.py`，传 **`appType=erp`**（或不传，服务端默认 erp）→ 给用户在浏览器打开（安全警告：为保障店铺安全，请务必在日常运营该店铺的安全网络环境中打开此链接。强烈建议使用紫鸟浏览器等专业的防关联浏览器进行授权，切勿在陌生或公共网络下操作。）
-4. 授权完成后系统自动存 token；浏览器跳转成功/失败页
-5. 调 `authorized_stores.py`，确认存在 **`appType=erp`**（或空，历史记录视为 erp）的记录
-
-### 2. 广告应用授权（AD）
-
-1. 调 `authorized_stores.py`，检查目标店是否已有 **`appType=ad`**
-2. 未授权时调 `authorize_url.py`，传 **`appType=ad`**，并明确告知用户这是**广告应用**授权（与 ERP 无关）
-3. 授权完成后再次检查 `appType=ad`
-4. **禁止**用 ERP 授权代替广告授权
-
-### 3. 同时需要 ERP 与广告
-
-1. 分别检查 `appType=erp` 与 `appType=ad`
-2. 仅为缺失的应用生成授权地址；两项都缺则生成**两个** URL，并标注用途
-3. 提示用户需分别打开并完成两次授权；一次授权不会覆盖另一项能力
-
-### 4. 列已授权店铺
-
-调 `authorized_stores.py`，展示 `shopName / shopId / merchantId / region / **appType**`。同店可能出现 ERP、AD 两条。
-
-### 5. 给下游准备店铺选店信息（高频）
-
-用户只说自然语言（"我的虾皮店"、"67890 那家店"），**不要让用户报冗长 token**。
-
-| 用户上下文 | Agent 动作 |
-|---|---|
-| 只授权 1 家店铺（且目标能力已授权） | 直接取该店铺 `shopId`（或 `merchantId`），不问 |
-| 授权 ≥ 2 家 + 只说店名 | 按 `shopName` 向用户澄清 |
-| 同时给出 shopName 或 shopId | 直接定位 |
-| 显式给出 shopId / merchantId | 直接用 |
-| 店铺在列表中存在但缺少目标 `appType` | 按能力发起对应授权，**不要**调用业务接口 |
-
-**静默原则**：定位成功时只确认店铺标识与应用类型，不向用户索要 token。
-
-**推荐流程**：`authorized_stores.py` 按 **`shopId + appType`** 确认已授权 → 下游 skill 直接 `POST /shopee/developerProxy` 传入 `shopId`（或 `merchantId`），由服务端按 path 解析对应应用 token。
-
-`store_tokens.py` **仅用于**确认授权/令牌状态（须传 `appType`），**不要**为 proxy 调用先取 `accessToken`。
-
-## 调用原则
-
-- 授权前建议确认 `shopName`、`region`、**`appType`**
-- 不假设 `storeTokens` 响应含 raw `accessToken`；展示状态与过期元数据即可
-- 授权失败按错误码解释原因；不擅自重试
-- 令牌过期须按对应 `appType` 重新走授权流程
-- 历史空 `app_type` 视为 ERP，不是 AD
-
-## 常见问题
-
-### 授权完成但查不到店铺
-
-原因：Token 推送回调（`/shopee/oauth/tokenCallback`）未成功落库，或 `state` 不匹配。
-解决：查看服务日志；重新调 `authorize_url.py`（勿复用过期 URL）完成授权。
-
-### 查令牌 / 业务调用返回 1004
-
-原因：`shopId` / `merchantId` 错误，或**目标应用**未授权（例如只有 ERP、没有 AD）。
-解决：先调 `authorized_stores.py` 核对 `shopId + appType`；缺则按能力重新授权。
-
-### 店铺已授权但广告 API 失败
-
-原因：有 ERP 记录 ≠ 有 AD 记录；广告不能使用 ERP Token。
-解决：发起 `appType=ad` 授权后再调 `linkfox-shopee-store-ads`。
-
-## Not Applicable
+本技能负责授权与选店。业务转发仅用于下游交接，不据此主动执行用户未要求的店铺操作。具体业务按以下范围转交：
 
 - **Shopee 订单查询与处理** → `linkfox-shopee-store-orders`
 - **Shopee 店铺信息与设置** → `linkfox-shopee-store-shop`
@@ -145,7 +33,7 @@ When calling `developerProxy`, pass the Shopee API path plus `shopId` or `mercha
 - **Shopee 跨境商户信息 Merchant** → `linkfox-shopee-store-merchant`
 - **Shopee 物流发货 Logistics** → `linkfox-shopee-store-logistics`
 - **Shopee 退货退款 Returns** → `linkfox-shopee-store-returns`
-- **Shopee 站内广告 Ads** → `linkfox-shopee-store-ads`（业务调用；授权仍用本 skill 的 `appType=ad`）
+- **Shopee 站内广告 Ads** → `linkfox-shopee-store-ads`（业务调用；授权仍用本技能的 `appType=ad`）
 - **Shopee 支付结算 Payment** → `linkfox-shopee-store-payment`
 - **Shopee 联盟营销 AMS** → `linkfox-shopee-store-ams`
 - **Shopee 店铺视频 Video** → `linkfox-shopee-store-video`
@@ -167,21 +55,105 @@ When calling `developerProxy`, pass the Shopee API path plus `shopId` or `mercha
 - **Shopee FBS 巴西仓储** → `linkfox-shopee-store-fbs`
 - **Shopee 直播 Livestream** → `linkfox-shopee-store-livestream`
 - Shopee 选品（友鹰） → `linkfox-youying-shopee-product-search`
-- 商品 listing 管理 → 专用 product skill 或 `developerProxy` 商品 API
+- 商品 listing 管理 → `linkfox-shopee-store-product` 或 `developerProxy` 商品 API
 
-## 算力消耗规则
+## 接口清单
 
-不消耗算力。
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 生成授权 URL（`authorizeUrl`） | POST `/shopee/authorizeUrl` | `scripts/authorize_url.py` | 为 ERP 或 AD 应用生成新授权链接。 |
+| 列出已授权店铺（`authorizedStores`） | POST `/shopee/authorizedStores` | `scripts/authorized_stores.py` | 列出当前用户的店铺与应用授权记录。 |
+| 查询授权状态（`storeTokens`） | POST `/shopee/storeTokens` | `scripts/store_tokens.py` | 查询状态与元数据，剥离原始令牌。 |
+| 业务转发（`developerProxy`，下游协议） | POST `/shopee/developerProxy` -> path：`api/v2/**`；如 `api/v2/product/get_item_list`、`api/v2/ads/get_total_balance` | 无；由下游业务技能调用 | 服务端按资源路径选择对应应用令牌；本技能不提供业务操作封装。 |
 
-**Feedback:**
+## 前置条件
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+确定需要 ERP、广告或两种能力；授权前建议取得便于识别的店铺名并确认授权区域。需要操作已有店铺时，先按下方流程定位目标。各接口参数、时效、限制与脚本选项见 [接口说明](references/api.md)。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+## 授权与选店流程
+
+1. **确定能力与店铺**：商品、订单和物流等使用 ERP，站内广告使用 AD。查询已授权列表，按店铺身份和应用类型共同匹配；具体兼容约定见接口说明。
+2. **为下游选店**：根据下表定位目标。定位成功后仅确认店铺标识与应用类型，不向用户索要令牌。
+
+| 用户上下文 | 执行动作 |
+|---|---|
+| 只有一家店且已具备目标能力 | 直接使用该店铺标识，无需追问。 |
+| 多家店，只提到店名且目标不明确 | 按店铺展示名澄清，不擅自选店。 |
+| 提供可唯一定位的店名或店铺编号 | 直接定位。 |
+| 显式给出店铺编号或商户编号 | 使用给定标识，核对对应应用授权。 |
+| 店铺存在但缺少目标应用授权 | 先补充对应授权，再执行下游业务。 |
+
+3. **生成新授权链接**：首次授权或补授权时，建议确认店铺展示名、区域和目标应用，然后运行 `scripts/authorize_url.py`。广告授权须明确标注为 AD；不得用 ERP 授权替代。两种能力均缺失时分别生成两个链接，标注用途，说明需要完成两次授权；仅缺一种时只补该项。
+4. **浏览器完成授权**：把链接交给用户，并提醒：“为保障店铺安全，请务必在日常运营该店铺的安全网络环境中打开此链接。强烈建议使用紫鸟浏览器等专业的防关联浏览器进行授权，切勿在陌生或公共网络下操作。”授权链接的时效及重新获取要求见接口说明。优先从脚本保存的文件或剪贴板复制完整链接，避免终端软换行破坏地址。
+5. **核验结果**：用户完成授权后，系统自动接收令牌并保存，浏览器跳转成功或失败页。再次查询已授权列表，确认目标店铺对应应用的记录；必要时通过 `scripts/store_tokens.py` 核对状态，不为业务调用提前获取令牌。
+6. **交给下游**：确认目标应用已授权后，将店铺标识交给相应业务技能；由服务端按资源路径选择令牌。转发参数与路由限制见接口说明。
+7. **处理异常**：授权失败先解释原因，不擅自重试。授权完成却查不到店铺时，可能是回调未成功落库或 `state` 不匹配，建议核查服务日志，再按用户需要重新生成链接。已授权却无法使用广告时，先核对 AD 记录；服务端确认授权已失效、无法继续使用时，按目标应用重新授权。具体错误码与处理见接口说明。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具不消耗算力 （限时）。同一会话、同一参数组合默认只调用一次；用户完成授权后需重新查询列表以核验结果，每次授权尝试均重新生成链接。业务脚本禁用响应缓存，每次运行均请求接口；失败或空结果时不自动连续试探，先解释原因，再按用户需要继续。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-shopee-store-auth-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。响应数据禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、响应体中的常见计数（如 `total`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+不消耗算力 （限时）。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **双应用独立**：ERP 与 AD 使用不同应用和令牌；同店可有两条授权记录，一次授权不代表同时具备两种能力。
+- **理解授权身份**：`authRecordId` 对应一条应用授权记录；店铺编号与商户编号是定位店铺的身份信息。历史空应用类型按 ERP 理解，不认作 AD。
+- **展示店铺清单**：使用表格展示店铺名、店铺编号、商户编号、区域与应用类型；同店的 ERP 和 AD 记录分别展示，不把授权记录数当作不同店铺数。
+- **仅展示授权状态**：展示状态与过期元数据，不假设响应包含原始令牌，不向用户索要令牌。脚本会在落盘与打印前剥离原始令牌。
+- **状态读取边界**：`storeTokens` 仅读数据库；`expireIn` 是保存的有效期秒数，不是实时剩余时间，`ACTIVE` 仅表示库内存在令牌，不保证当前上游可用。不要据此计算倒计时或要求每 4 小时重新授权；下游转发的服务端刷新行为见接口说明。
+- **理解授权过程**：生成链接后由用户在浏览器授权，Shopee 推送令牌，系统按 `state` 保存。内部回调和跳转地址不作为用户直接调用的接口。
+- **保留已取得的数据**：先读摘要，再按需提取落盘字段；失败与空结果的后续调用遵循成本约束。
+
+## 使用示例
+
+### 首次授权 ERP 店铺
+
+用户：绑定我的虾皮店，后续查订单。
+
+建议取得店铺展示名并确认区域，生成 ERP 授权链接；用户在安全环境完成授权后，核验列表中的对应记录。
+
+### 为已授权店铺补充广告能力
+
+用户：这家店已经绑定，但广告查不了。
+
+核对该店的 AD 记录；缺失时仅生成广告应用链接，授权后再次确认，再交给广告业务技能。
+
+### 为下游定位店铺
+
+用户：帮我用“东南亚一店”查询业务数据。
+
+查询列表，按店名与目标能力定位；唯一匹配则直接使用店铺标识，多店歧义时澄清，不要求用户提供令牌。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

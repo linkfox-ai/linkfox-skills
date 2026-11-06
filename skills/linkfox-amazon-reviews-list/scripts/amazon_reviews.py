@@ -20,15 +20,18 @@ import os
 import sys
 import time
 import secrets
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
+import contextlib
+import io
+from unittest.mock import patch
+
+import call_api as api
 
 
 ASYNC_SUBMIT_API_PATH = "/amazon/reviews/async/submit"
 ASYNC_RESULT_API_PATH = "/amazon/reviews/async/result"
 SLUG = "linkfox-amazon-reviews-list"
 
-# 响应小于等于该字节数时，直接全量输出，不落文件
+# 响应小于等于该字节数时，落盘后全量输出
 SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
 ASYNC_OBSERVATION_LIMIT_SEC = 200
@@ -43,107 +46,88 @@ DEFAULT_READY_WINDOW_SEC = (10, 60)
 
 _SESSION_CACHE: dict[str, str] = {}
 
-def get_api_base() -> str:
-    """网关基础地址：env LINKFOX_TOOL_GATEWAY 优先，缺省回退正式地址。"""
-    return (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
 
-def get_api_url(path):
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
-    return get_api_base() + path
-
-
-def get_api_key():
-    """
-获取配置在环境变量的API Key。
-如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-"""
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
+def _errcode_ok(value):
+    """按网关响应码判断成功，0 和 false 均不是空值。"""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return True
+        if len(value) != 3 or not value.isascii() or not value.isdigit():
+            return False
+        value = int(value)
+    return type(value) in (int, float) and 200 <= value < 300 and value % 1 == 0
 
 
 def call_api(path, params, timeout=30):
-    api_url = get_api_url(path)
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": os.environ.get("SESSION_ID", ""),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(
-        api_url,
-        data=data,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            result = _parse_api_response(response.read(), path)
-            cost_token = response.headers.get("X-Cost-Token")
-            if isinstance(result, dict) and cost_token is not None:
-                try:
-                    result["costToken"] = int(cost_token)
-                except ValueError:
-                    result["costToken"] = cost_token
-            return result
-    except HTTPError as e:
-        body = e.read() if e.fp else b""
-        if not body:
-            return {"error": f"HTTP {e.code}: {e.reason}", "httpStatus": e.code}
-        result = _parse_api_response(body, path)
-        if isinstance(result, dict):
-            result["httpStatus"] = e.code
-            if not result.get("error"):
-                result["error"] = f"HTTP {e.code}: {e.reason}"
-        return result
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
-    except TimeoutError:
-        return {"error": f"Request timed out: {path}"}
+    """通过公共 run 发起请求，使用业务超时、响应头及任务处理约定。"""
+    # 先准备会话目录，禁止公共调用器回退到家目录或临时目录。
+    _ensure_session(time.time())
+    state = {}
+    saved_call = api.call_api
+    saved_open = api.urlopen
+    saved_request = api.Request
 
+    def request(*args, **kwargs):
+        req = saved_request(*args, **kwargs)
+        req.add_header("Accept", "application/json")
+        return req
 
-def _parse_api_response(raw_body, path):
-    """Parse gateway JSON and normalize business errors without changing success data."""
-    if isinstance(raw_body, bytes):
-        text = raw_body.decode("utf-8", errors="replace")
-    else:
-        text = str(raw_body or "")
-    try:
-        result = json.loads(text)
-    except (TypeError, ValueError):
-        return {
-            "error": f"Invalid JSON response: {path}",
-            "details": text[:2000],
-            "retryable": False,
-        }
+    def open_with_metadata(req, **kwargs):
+        # 公共调用器提供网络传输；使用业务超时并读取费用头。
+        response = saved_open(req, timeout=timeout)
+        state["costToken"] = response.headers.get("X-Cost-Token")
+        state["httpStatus"] = response.status
+        return response
 
-    if not isinstance(result, dict) or "errcode" not in result:
-        return result
-    try:
-        errcode = int(result["errcode"])
-    except (TypeError, ValueError):
-        return result
-    if errcode == 200:
-        return result
+    def capture(api_path, data):
+        try:
+            http_status, payload = saved_call(api_path, data)
+        except TimeoutError:
+            http_status, payload = None, {"error": f"Request timed out: {api_path}"}
+        except (ValueError, UnicodeError) as error:
+            http_status = state.get("httpStatus")
+            payload = {"error": f"Invalid JSON response: {api_path}",
+                       "details": str(getattr(error, "doc", error))[:2000], "retryable": False}
+        if not isinstance(payload, dict):
+            payload = {"error": "Invalid async API response", "details": payload, "retryable": False}
+        if http_status is not None and not 200 <= http_status < 300:
+            payload["httpStatus"] = http_status
+            if not payload.get("error"):
+                payload["error"] = payload.get("errmsg") or f"HTTP {http_status}"
+        if not _errcode_ok(payload.get("errcode")):
+            if not payload.get("error"):
+                payload["error"] = payload.get("errmsg") or f"Business error: {payload['errcode']}"
+            payload["retryable"] = False
+        cost = state.get("costToken")
+        if cost is not None:
+            try:
+                payload["costToken"] = int(cost)
+            except ValueError:
+                payload["costToken"] = cost
+        state["result"] = payload
+        return http_status, payload
 
-    normalized = dict(result)
-    normalized.setdefault(
-        "error",
-        normalized.get("errmsg") or f"Business error: {errcode}",
-    )
-    normalized["retryable"] = False
-    return normalized
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch.object(api, "call_api", capture))
+        stack.enter_context(patch.object(api, "Request", request))
+        stack.enter_context(patch.object(api, "urlopen", open_with_metadata))
+        stack.enter_context(patch.object(api, "_resolve_output_path",
+                                        lambda slug, ts: resolve_data_path(slug, time.time())))
+        # run 即使禁用缓存也会调用 _cache_path；使用同一任务路径，不建第二套缓存。
+        stack.enter_context(patch.object(api, "_cache_path", lambda slug, data: _cache_path(data)))
+        stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+        try:
+            api.run(path, SLUG + "-" + path.rsplit("/", 1)[-1],
+                    argv=[json.dumps(params, ensure_ascii=False), "--no-cache", "--inline"])
+        except OSError as error:
+            # 任务结果可能已被后端删除；让业务层继续保存或完整打印已领取的数据。
+            if "result" not in state:
+                raise
+            print(f"保存接口原始响应失败，将继续输出已领取的数据：{error}", file=sys.stderr)
+    return state["result"]
 
 
 def _task_id(payload):
@@ -292,6 +276,11 @@ def poll_async_once(task_id, provider=None, timeout=30, submitted_at=None):
         return {"error": "Invalid async result response", "taskId": task_id}, True
 
     status = _task_status(response)
+    # 网关失败时不依据残留业务状态领取成功结果或宣称取消免费。
+    if response.get("error") and (
+        response.get("httpStatus") is not None or not _errcode_ok(response.get("errcode"))
+    ):
+        status = ""
     if status == "SUCCEEDED":
         result = response.get("result")
         if not isinstance(result, dict):
@@ -405,7 +394,8 @@ def _cache_timestamp(*paths):
 
 
 def _save_cache(path, payload):
-    temporary_path = f"{path}.{secrets.token_hex(6)}.tmp"
+    # 同目录短文件名保留原子替换，避免回执路径追加后缀超过 Windows 路径限制。
+    temporary_path = os.path.join(os.path.dirname(path), f".{secrets.token_hex(6)}.tmp")
     try:
         with open(temporary_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
@@ -562,50 +552,15 @@ def _ensure_meta(root: str, session_dir: str, date_str: str, sid: str, ts: float
         pass
 
 def _linkfox_root() -> str:
-    """选择可写的 linkfox 根目录。
+    """只使用当前工作目录；不可写即报错，不回退到其他位置。"""
+    root = os.path.abspath(os.path.join(os.getcwd(), "linkfox"))
+    os.makedirs(root, exist_ok=True)
+    probe = os.path.join(root, ".write_probe-" + secrets.token_hex(6))
+    with open(probe, "w", encoding="utf-8"):
+        pass
+    os.remove(probe)
+    return root
 
-    优先级：
-      1. $ACPX_WORKSPACES 第一个路径下的 linkfox/（真实的工作目录）
-      2. 当前工作目录下的 linkfox/
-      3. ~/linkfox/
-      4. $TMPDIR/linkfox/
-
-    当某路径只读（如 cwd 为 /tmp 或只读目录）时，自动回退到后序选项。
-    选定结果在进程内缓存，保证同一次运行内所有落盘路径稳定一致。
-    """
-    cached = _SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    # 1. ACPX_WORKSPACES（真实的工作目录，优先级最高）
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    # 2. 当前工作目录
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    # 3. 家目录
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    # 4. 临时目录
-    import tempfile
-    candidates.append(os.path.join(tempfile.gettempdir(), "linkfox"))
-
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _SESSION_CACHE["_root"] = fallback
-    return fallback
 
 def _format_iso(ts: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(ts))
@@ -662,7 +617,6 @@ def resolve_data_path(slug: str, ts: float, ext: str = "json") -> str:
 
 def _resolve_output_path(ts):
     """落到 <cwd>/linkfox/<日期>/<session>/data/<slug>-<ts>.json，按 SESSION_ID 聚合到同一会话。"""
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
     return resolve_data_path(SLUG, ts)
 
 
@@ -678,7 +632,7 @@ def main():
         argv = [a for a in argv if a != "--no-cache"]
     if not argv:
         print(
-            "Usage: amazon_reviews.py '<JSON parameters>' [--inline]",
+            "用法: amazon_reviews.py '<JSON 参数>' [--inline] [--no-cache]",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -689,11 +643,15 @@ def main():
         print(f"Invalid parameter format: {e}", file=sys.stderr)
         sys.exit(1)
 
+    if not isinstance(params, dict):
+        print("JSON 参数必须为对象", file=sys.stderr)
+        sys.exit(1)
+    _ensure_session(time.time())
     cache_path, task_id, task_path, result = _load_task_state(params, use_cache)
     if (isinstance(result, dict) and result.get("error") and result.get("taskId")
             and _task_status(result) not in ("SUCCEEDED", "FAILED", "CANCELLED")
             and _is_retryable_poll_error(result)):
-        # Recover query errors cached by older versions, without submitting a new task.
+        # Resume the same task from a cached query error without submitting again.
         result = _async_task_marker(
             result["taskId"], result.get("provider"), status=None,
             submittedAt=_cache_timestamp(task_path + ".terminal.json", task_path, cache_path),
@@ -730,20 +688,16 @@ def main():
             result = marker
 
     if use_cache and task_id and cache_path != task_path:
-        if _task_status(result) == "CANCELLED":
-            # Keep the old task's terminal status, but allow a later explicit retry by parameters.
-            if os.path.isfile(cache_path):
-                os.remove(cache_path)
-        else:
-            existing = _load_cache(cache_path)
-            if not isinstance(existing, dict) or existing.get("_asyncTaskRef") != task_id:
-                _save_cache(cache_path, {"_asyncTaskRef": task_id})
+        # 取消也保留原参数关联；只有明确重试并使用 --no-cache 才能创建新任务。
+        existing = _load_cache(cache_path)
+        if not isinstance(existing, dict) or existing.get("_asyncTaskRef") != task_id:
+            _save_cache(cache_path, {"_asyncTaskRef": task_id})
 
-    # Migrate a legacy full-result task cache when its taskId is known.
-    if (cache_hit and task_id and isinstance(result, dict) and not result.get("error")
+    # 缓存结果中的费用属于历史消费；缺少 taskId 时也不能当作本次费用再次展示。
+    if (cache_hit and isinstance(result, dict) and not result.get("error")
             and isinstance(result.get("data"), list)):
-        result["costToken"] = 0  # Legacy cached charges are historical, not a new expense.
-        received_result = True
+        result["costToken"] = 0  # Cached charges are historical, not a new expense.
+        received_result = bool(task_id)
 
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
     # Preserve sub-second precision so a quick repeat cannot overwrite the result file.

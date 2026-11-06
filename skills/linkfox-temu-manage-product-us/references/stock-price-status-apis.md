@@ -1,3 +1,3 @@
-# 库存 / 价格 / 上下架 API（已拆分）
+# 库存 / 上下架接口导航
 
-- 索引：[apis/README.md](./apis/README.md) → **库存 / 价格 / 上下架（5）**
+参数和使用限制见 [接口索引](apis/README.md) 的库存 / 上下架（4）一节。价格/供货价使用 `linkfox-temu-price-us`。

@@ -59,7 +59,7 @@
 - 用户描述的"上一步 flow"或"刚才那个节点",尽量绑定当前会话内明确出现过的 JSON 片段或节点 label;绑不定就问。
 - **标签里带了 `nodeId` 就不用猜**:那是精确的节点 `id`,直接在 fetch 回来的基线里按 id 定位。反过来,基线里没有这个 id 时**不要退回按 label 猜**——直接说这个流程里没有该节点并停下。
 - 用户修改当前流程的展示名、标题或业务目标不构成“新流程”,不得因此修改文件名。只有“新建一份/另做一个/保留原流程再创建”等明确表达才允许新文件。
-- 不猜测用户的 linkfox-workflow 系统实例上有哪些 model / credential / documentStore / flow,一律留占位。
+- 不猜测用户的 linkfox-workflow 系统实例上有哪些 model / credential / documentStore / flow,一律留占位。变量和凭据**可以**用 `workflow_config.py` 查(`vars list` / `creds list`),但查到什么说什么,不编、不猜 id。
 
 ## 阻塞场景
 
@@ -67,7 +67,7 @@
 
 - 用户需求超出 24 个节点表达能力(自定义节点类型、子流程递归、并行 map-reduce 等)。
 - 用户提供的原 JSON 结构非法或不是 agentflow v2。
-- 用户要求发布、删除 flow,删除或修改执行记录,或查询 model / credential / documentStore 目录。
+- 用户要求发布、删除 flow,删除或修改执行记录,或查询 model / documentStore 目录,或查看凭据明文(变量 / 凭据的 list / set / create / update / delete 可以,走 `workflow_config.py`)。
 - 用户要求执行或查执行记录,但拿不到 workflowId(对话里没有 `<linkfox-flow-info id="...">`,也无法唯一确定是哪个流程)。
 - LinkFox API Key 缺失,linkfox-workflow 系统导入失败或 mapping 校验失败。此时不得输出 `<linkfox-flow-info>`。
 - 关键信息缺失且无法用合理默认补齐(比如 refine 时不知道要改哪个节点、generate 时连触发方式都没说明)。

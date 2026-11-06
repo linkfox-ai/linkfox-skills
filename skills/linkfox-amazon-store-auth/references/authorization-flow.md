@@ -1,99 +1,24 @@
-# Amazon Store 授权流程详细说明
+# Amazon 店铺授权流程与服务端背景
 
-本文档提供所有授权相关接口的详细说明，包括请求参数、返回值、错误处理等。
+五个客户端接口的完整定义统一见 [接口说明](api.md)。本文件说明服务端内部回调、数据模型、站点映射与故障定位信息；不指导 Agent 调用内部接口或直接访问数据库。
 
----
+## 授权与令牌处理
 
-## 1. 获取授权URL
+1. 获取授权链接：按流程准备区域与店铺名；服务端保存带当前成员、区域和店铺名的授权申请，以随机申请标识作 state，并根据 gateway.url 生成 tokenCallback 与 redirect 地址后请求紫鸟授权代理。客户端不手工组装 state 或回调地址。
+2. 用户在安全环境完成 Amazon 同意，服务端处理回调；同一 sellingPartnerId + region 更新已有记录，否则新增，并维护成员绑定。
+3. 查询店铺：服务端按 gatewayUserId 获取 sp_api_bind_user 关联 amazonAuthId，去重并按 sellerId、region 排序。
+4. 刷新令牌：检查授权属于当前成员，通过紫鸟换取并保存最新令牌；状态查询只读本地记录，不执行刷新。
+5. 下游只接收 sellerId + region，经 developerProxy 使用后台令牌；服务端识别到上游令牌过期或失效响应后刷新并重试一次。这里不提供下游业务操作。
+6. 本地解绑只删除当前成员连接，详见 [本地解绑接口](api.md#接口本地解绑cancelauthorization) 与 [入口流程](../SKILL.md#授权与店铺管理流程)。
 
-### 接口信息
+## 授权回调处理（服务端内部）
 
-- **路径**: `/spApi/authorizeUrl`
-- **方法**: POST (RouteMapping)
-- **鉴权**: 需要（从 Token 中获取 userId）
-- **实现**: `SpApiController.java:52`
+### 系统处理路径
 
-### 请求参数 (SpApiAuthorizeUrlReq)
-
-| 参数 | 类型 | 必填 | 说明 | 示例 |
-|------|------|------|------|------|
-| region | String | ✅ 是 | 区域代码：NA/EU/FE | "NA" |
-| sellerName | String | ✅ **是（必填）** | 店铺名 / 卖家展示名称，用于在已授权店铺列表中区分账号；**调用前必须向用户确认并传入非空字符串**，不可省略 | "My Amazon Store" |
-| central | String | ❌ 否 | 中心站点 | - |
-| marketplace | String | ❌ 否 | 市场代码 | - |
-
-### 返回结果 (SpApiAuthorizeUrlVo)
-
-```json
-{
-  "authorizeUrl": "https://sellercentral.amazon.com/..."
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| authorizeUrl | String | 亚马逊授权链接，用户需在浏览器中打开 |
-
-### 业务逻辑
-
-1. 校验 region 参数（必须为 NA/EU/FE）；**本 Skill 约定**：`sellerName` 须为非空字符串（与用户在 LinkFox 侧展示、区分店铺一致），AI/脚本在调用前应向用户确认店铺名。
-2. 构建 state 参数：
-   - 包含 gateway.url + /spApi/oauth/callback
-   - 附加 userId, region, sellerName
-3. 调用紫鸟代理接口 `/developer-proxy/v1/authorize/url`
-4. 返回授权链接给用户
-
-### 错误码
-
-| 错误码 | 说明 | 处理建议 |
-|--------|------|----------|
-| 1002 | 缺少 region 参数 | 必须提供 region (NA/EU/FE) |
-| 1003 | 获取授权地址失败 | 检查网络连接和白名单配置，稍后重试 |
-
-### 使用示例
-
-**请求**:
-```json
-{
-  "region": "NA",
-  "sellerName": "MyStore"
-}
-```
-
-**响应**:
-```json
-{
-  "authorizeUrl": "https://sellercentral.amazon.com/apps/authorize/consent?application_id=xxx&state=xxx"
-}
-```
-
-**后续操作**:
-用户在浏览器中打开 `authorizeUrl`，在亚马逊页面完成授权后，会自动重定向到回调地址。
-
----
-
-## 2. 授权回调处理（服务端内部）
-
-### 接口信息
-
-- **路径**: 服务端内部回调接口（不对客户端/Agent暴露）
-- **方法**: POST (RouteMapping)
-- **鉴权**: 不需要（auth=false）
-- **实现**: `SpApiController.java:111`
-
-### 请求参数 (SpApiAuthorizeCallbackReq)
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| userId | String | ✅ 是 | 用户ID（从 state 中解析） |
-| sellingPartnerId | String | ✅ 是 | 亚马逊卖家ID |
-| accessToken | String | ✅ 是 | 访问令牌 |
-| refreshToken | String | ✅ 是 | 刷新令牌 |
-| tokenType | String | ❌ 否 | 令牌类型（默认 bearer） |
-| expiresIn | String | ❌ 否 | 过期时间（秒） |
-| region | String | ✅ 是 | 区域代码 |
-| sellerName | String | ❌ 否 | 卖家名称 |
-| mwsAuthToken | String | ❌ 否 | MWS 授权令牌 |
+- 服务端在生成链接时保存授权申请，用户身份、区域与店铺名来自该申请；state 用于关联申请，不承载客户端拼接的用户信息。
+- `/spApi/oauth/tokenCallback` 接收紫鸟服务端令牌推送，网关还兼容 GET 回调；服务端按申请标识补全成员上下文，保存授权与绑定，成功后核销申请。
+- `/spApi/oauth/redirect` 处理浏览器授权结果并跳转成功或失败页；该跳转与令牌入库是不同处理路径，看到成功页后仍须按自动授权规则核验对应卖家与区域。
+- 网关另保留 `/spApi/oauth/callback` 浏览器兼容路径和 `auth=false` 的 `/spApi/authorizeCallback` 系统路由。以上均由系统调用，Agent 不手工提交回调、令牌或用户身份参数。
 
 ### 返回结果 (SpApiAuthorizeCallbackVo)
 
@@ -122,191 +47,12 @@
 
 ### 注意事项
 
-- 此接口无需鉴权，因为是亚马逊重定向回调
-- userId 从 state 参数中解析，必须在获取授权URL时正确设置
+- 生成链接、浏览器跳转和令牌入库分别核对；不以其中任一步单独认定本次授权成功。
+- 成员上下文由服务端授权申请关联，Agent 不改写 state，也不索取或展示回调中的令牌。
 - 同一店铺的授权会更新而非重复创建
 
 ---
 
-## 3. 查看已授权店铺列表
-
-### 接口信息
-
-- **路径**: `/spApi/authorizedStores`
-- **方法**: POST (RouteMapping)
-- **鉴权**: 需要（从 Token 中获取 userId）
-- **实现**: `SpApiController.java:126`
-
-### 请求参数
-
-无（从 Token 中自动获取当前用户 userId）
-
-### 返回结果 (SpApiAuthorizedStoresVo)
-
-```json
-{
-  "stores": [
-    {
-      "sellerName": "My Store",
-      "sellerId": "A1234567890",
-      "region": "NA"
-    },
-    {
-      "sellerName": "EU Store",
-      "sellerId": "A9876543210",
-      "region": "EU"
-    }
-  ],
-  "total": 2
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| stores | Array | 店铺列表 |
-| stores[].sellerName | String | 卖家名称 |
-| stores[].sellerId | String | 卖家ID |
-| stores[].region | String | 区域代码 |
-| total | Integer | 店铺总数 |
-
-### 业务逻辑
-
-1. 根据 gatewayUserId 查询 sp_api_bind_user 表
-2. 获取所有关联的 amazonAuthId
-3. 查询对应的授权记录
-4. 去重并按 sellerId 和 region 排序
-5. 返回店铺列表
-
-### 错误码
-
-| 错误码 | 说明 | 处理建议 |
-|--------|------|----------|
-| 1002 | 无法识别当前用户 | 请重新登录 |
-
----
-
-## 4. 刷新访问令牌
-
-### 接口信息
-
-- **路径**: `/spApi/refreshToken`
-- **方法**: POST (RouteMapping)
-- **鉴权**: 需要（从 Token 中获取 userId）
-- **实现**: `SpApiController.java:134`
-
-### 请求参数 (SpApiRefreshTokenReq)
-
-| 参数 | 类型 | 必填 | 说明 | 示例 |
-|------|------|------|------|------|
-| sellerId | String | ✅ 是 | 卖家ID | "A1234567890" |
-| region | String | ❌ 否 | 区域代码（用于精确匹配） | "NA" |
-
-### 返回结果 (SpApiRefreshTokenVo)
-
-```json
-{
-  "authRecordId": 123,
-  "success": true,
-  "message": "刷新成功并已更新数据库，token 已后台化管理"
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| authRecordId | Long | 授权记录ID |
-| success | Boolean | 刷新是否成功 |
-| message | String | 处理结果 |
-
-### 业务逻辑
-
-1. 根据 sellerId + region 查询授权记录
-2. 校验该授权是否属于当前用户
-3. 调用紫鸟代理接口 `/developer-proxy/{region}/auth/o2/token`
-4. 使用 refresh_token 换取新的 access_token
-5. 更新数据库中的令牌信息
-6. 返回刷新状态，不下发 raw token
-
-### 错误码
-
-| 错误码 | 说明 | 处理建议 |
-|--------|------|----------|
-| 1002 | 请指定 sellerId | 必须提供卖家ID |
-| 1004 | 未找到授权记录或不属于当前用户 | 检查 sellerId 是否正确，或重新授权 |
-| 1004 | 缺少 refresh_token | 授权记录异常，需重新授权 |
-| 1003 | 刷新令牌请求失败 | 检查网络连接，稍后重试 |
-
-### 注意事项
-
-- refresh_token 可能在刷新时更新，由服务端保存
-- 如果 region 未提供，会匹配该 sellerId 的第一条记录；生产调用建议传 region
-
----
-
-## 5. 查询授权状态
-
-### 接口信息
-
-- **路径**: `/spApi/storeTokens`
-- **方法**: POST (RouteMapping)
-- **鉴权**: 需要（从 Token 中获取 userId）
-- **实现**: `SpApiController.java:142`
-
-### 请求参数 (SpApiStoreTokensReq)
-
-| 参数 | 类型 | 必填 | 说明 | 示例 |
-|------|------|------|------|------|
-| sellerId | String | ✅ 是 | 卖家ID | "A1234567890" |
-| region | String | ✅ 是 | 区域代码 | "NA" |
-
-### 返回结果 (SpApiStoreTokensVo)
-
-```json
-{
-  "sellerId": "A1234567890",
-  "region": "NA",
-  "authRecordId": 123,
-  "status": "ACTIVE",
-  "tokenExpiresAt": 3600,
-  "message": "授权信息已后台化管理，token 不再经由 Agent 返回"
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| sellerId | String | 卖家ID |
-| region | String | 区域代码 |
-| authRecordId | Long | 授权记录ID |
-| status | String | 授权状态：ACTIVE / EXPIRED / REVOKED |
-| tokenExpiresAt | Long | token 过期时间信息 |
-| message | String | 说明 |
-
-### 业务逻辑
-
-1. 根据 sellerId + region 查询授权记录
-2. 校验该授权是否属于当前用户
-3. 读取本地授权状态（不调用刷新）
-4. 返回状态与元数据，不下发 raw token
-
-### 错误码
-
-| 错误码 | 说明 | 处理建议 |
-|--------|------|----------|
-| 1002 | 请指定 sellerId 或 region | 必须同时提供卖家ID和区域 |
-| 1004 | 未找到授权记录或不属于当前用户 | 检查参数或重新授权 |
-
-### 使用场景
-
-- 在调用亚马逊卖家开放接口前确认本地授权是否存在
-- 检查授权状态是否 ACTIVE
-- 如果令牌过期，调用 refreshToken 接口更新
-
----
-
-## 6. 本地取消/解绑授权
-
-用户操作流程见 [SKILL.md 场景 5](../SKILL.md#scenario-5-cancel-local-authorization)，参数、响应及解绑边界统一见 [API §5](api.md#5-cancel-authorization)。
-
----
 
 ## 区域与站点映射
 
@@ -361,10 +107,7 @@
 | sellingPartnerId | String | 卖家ID |
 | sellerName | String | 卖家名称 |
 | mwsAuthToken | String | MWS 授权令牌 |
-| status | String | ACTIVE / REVOKED |
-| revokedByGatewayUserId | String | 本地停用授权的用户 |
-| revokedDate | Date | 本地停用时间 |
-| revokedTime | Long | 本地停用时间戳 |
+| appId | String | 本次授权使用的紫鸟应用标识，由服务端用于令牌刷新 |
 | createDate | Date | 创建时间 |
 | createTime | Long | 创建时间戳 |
 | lastUpdateDate | Date | 更新时间 |
@@ -384,87 +127,6 @@
 
 ---
 
-## 完整授权示例
-
-### 步骤 1: 获取授权链接
-
-**请求**:
-```bash
-POST /spApi/authorizeUrl
-Headers: Authorization: Bearer <token>
-Body: {
-  "region": "NA",
-  "sellerName": "MyStore"
-}
-```
-
-**响应**:
-```json
-{
-  "authorizeUrl": "https://sellercentral.amazon.com/apps/authorize/consent?..."
-}
-```
-
-### 步骤 2: 用户授权
-
-用户在浏览器中打开 `authorizeUrl`，登录亚马逊卖家中心并同意授权。
-
-### 步骤 3: 自动回调
-
-亚马逊重定向到:
-```
-https://<gateway.url>/spApi/oauth/callback?
-  userId=<userId>&
-  region=NA&
-  sellerName=MyStore&
-  selling_partner_id=A1234567890&
-  access_token=Atza|...&
-  refresh_token=Atzr|...&
-  token_type=bearer&
-  expires_in=3600
-```
-
-系统自动保存授权信息。
-
-### 步骤 4: 查看授权结果
-
-**请求**:
-```bash
-POST /spApi/authorizedStores
-Headers: Authorization: Bearer <token>
-```
-
-**响应**:
-```json
-{
-  "stores": [
-    {
-      "sellerName": "MyStore",
-      "sellerId": "A1234567890",
-      "region": "NA"
-    }
-  ],
-  "total": 1
-}
-```
-
-### 步骤 5: 调用卖家开放接口
-
-**请求**:
-```bash
-POST /spApi/developerProxy
-Headers: Authorization: Bearer <token>
-Body: {
-  "sellerId": "A1234567890",
-  "region": "NA",
-  "path": "orders/v0/orders",
-  "method": "GET"
-}
-```
-
-服务端会根据 `sellerId` + `region` 取用后台 token，并在检测到过期时尝试刷新一次。
-
----
 
 ## 故障排查
 
@@ -483,11 +145,11 @@ Body: {
 ### 问题 2: 回调未保存授权信息
 
 **可能原因**:
-- state 参数中缺少 userId
+- 授权申请标识缺失、失效，或未正确关联成员上下文
 - 数据库连接异常
 
 **解决方案**:
-1. 确认获取授权URL时正确传入用户信息
+1. 核对本次授权申请与回调关联及服务端保存结果，不手工在 state 中补写用户信息
 2. 检查数据库连接
 3. 查看服务日志
 
@@ -522,12 +184,12 @@ Body: {
    - 仅通过后端接口访问令牌
 
 2. **访问控制**:
-   - 所有接口都进行用户鉴权
+   - 五个客户端接口均需用户鉴权；系统回调按上方内部流程处理
    - 用户只能访问自己授权的店铺
 
 3. **令牌刷新**:
-   - 定期检查令牌是否即将过期
-   - 自动刷新即将过期的令牌
+   - 服务端建设建议：定期检查有效期并预刷新；当前 developerProxy 的自动刷新条件见「授权与令牌处理」。
+   - 服务端令牌缓存建议：已有令牌缓存未过期时复用；未命中则读取数据库，距过期不足 5 分钟时先刷新，再更新服务端缓存。Agent 和本技能脚本不获取 raw token，也不增加客户端令牌缓存或响应缓存。
 
 4. **日志记录**:
    - 记录所有授权操作

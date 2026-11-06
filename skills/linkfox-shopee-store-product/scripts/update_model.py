@@ -13,14 +13,15 @@ import json
 import sys
 
 from _product_api_runner import run_product_api
+from _shopee_product_common import emit_result, lf_inline_flag, load_cli_params
 
 
 def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: update_model.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
-    params = json.loads(sys.argv[1])
-    print(json.dumps(run_product_api("update_model", params, "update_model.py"), indent=2, ensure_ascii=False))
+    params = load_cli_params("update_model")
+    emit_result(run_product_api("update_model", params, "update_model.py"), slug="linkfox-shopee-store-product-update_model", inline=lf_inline_flag())
 
 
 if __name__ == "__main__":

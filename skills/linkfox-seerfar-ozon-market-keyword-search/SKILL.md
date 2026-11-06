@@ -1,153 +1,114 @@
 ---
 name: linkfox-seerfar-ozon-market-keyword-search
-description: Seerfar Ozon 市场热词搜索：按搜索热度、增长、商品数、卖家数、竞品数、价格、销量、转化集中度等多维指标筛选 Ozon（及 Wildberries）市场关键词，返回每个关键词的月搜热度、增长、市场空间、竞品/卖家数、均价、加购转化、Top 商品等市场画像，用于 Ozon 选词、蓝海词挖掘与市场机会分析。当用户提到 Ozon 热词、Ozon 关键词市场分析、Ozon 选词、Ozon 蓝海词、Ozon 搜索热度、Wildberries 关键词、Seerfar Ozon、Ozon market keyword search, Ozon keyword research, blue ocean keywords Ozon 时触发此技能。即使用户未明确提到"Seerfar"，只要其意图是按指标筛选 Ozon 市场关键词并查看市场画像，也应触发此技能。
+description: 按搜索热度、增长、商品数、卖家数、价格、销量及转化集中度等指标筛选 Seerfar 的 Ozon 市场关键词，查看月搜热度、市场空间、竞争情况、均价、加购转化和 Top 商品，部分数据覆盖 Wildberries。适用于 Ozon 热词发现、上升词筛选、俄语长尾词扩展、蓝海词挖掘和关键词市场画像研究，无需明确提及 Seerfar。不适用于单个 SKU 详情、卖家商品目录、类目树浏览或其他平台研究。
 ---
 
-# Seerfar Ozon Market Keyword Search
+# Seerfar Ozon 市场热词搜索
 
-This skill searches Ozon marketplace keywords in the Seerfar analytics database and filters them by rich performance metrics — search volume, 30-day growth, product/seller/competitor counts, average price, monthly sales/revenue, conversion & view concentration, ratings/reviews, and more. Each returned keyword carries a full market profile (market space, return/cancellation rate, top products, Chinese translation), making it the starting point for Ozon keyword selection, blue-ocean term mining, and market-opportunity analysis.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Unit of data is the keyword, not the SKU**: unlike a product search, this endpoint returns marketplace search terms ("热词"), each enriched with market metrics. You discover *which search terms* are worth targeting on Ozon.
+发现并排序 Ozon 市场搜索词，比较需求、增长与竞争指标，查看关键词对应的市场画像。部分返回记录来自 Wildberries。
 
-**Platform coverage**: each keyword record carries a `platform` field (`0` = Ozon, `1` = Wildberries). The dataset is Ozon-centric; Wildberries rows appear where available. There is no input to restrict the platform — filter client-side if needed.
+**场景速查**
 
-**Date semantics**: `searchDate` selects the data month. Pass `2026-04-01` to get March 2026 data; omit it for the last 30 days. Metrics such as `searchVolume` (月搜热度) and `count30GrowthRate` (月搜增长) are relative to the selected period.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| Ozon 热词、热搜词有哪些 | 按搜索热度查看热门关键词。 |
+| 找低竞争高搜索的 Ozon 蓝海词 | 结合搜索热度与卖家数筛选关键词。 |
+| 最近增长快的 Ozon 上升词 | 按增长指标排序。 |
+| 围绕某个俄语词找长尾词 | 用种子词限定细分方向并模糊匹配。 |
+| 查看某关键词的市场空间、竞品数和卖家数 | 展示关键词市场画像。 |
 
-**Match mode**: `matchType` controls how the `keywords` array is matched — `0` exact, `1` fuzzy. Choose the mode that fits your discovery intent when filtering by keyword text.
+### 边界
 
-## Parameters
+单个 SKU 的价格、销量或库存使用商品详情数据源；卖家目录使用店铺数据源；类目树浏览使用类目数据源。非 Ozon / Wildberries 平台不在本技能范围内。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| page | object | yes | Pagination `{page, pageSize, orders[]}`. `page` from 1 (default 1), `pageSize` default 20. `orders[]` = `{field, direction}` with `direction` `DESC`/`ASC`. |
-| keywords | array<string> | no | Keyword list to filter (max 1000); combined with `matchType`. |
-| matchType | integer | no | Keyword match mode: `0` exact, `1` fuzzy. |
-| searchDate | string | no | Data date `yyyy-MM-dd`; default last 30 days. `2026-04-01` → March 2026 data. |
-| categories | array<string> | no | Category ID list (max 1000). |
-| searchVolume | {min,max} | no | Monthly search volume range. |
-| searchChange30 | {min,max} | no | 30-day search change range. |
-| monthlySales | {min,max} | no | Monthly sales range. |
-| monthlyRevenue | {min,max} | no | Monthly revenue range. |
-| price | {min,max} | no | Average price range. |
-| productViews | {min,max} | no | Product view range. |
-| products | {min,max} | no | Product count range. |
-| volume | {min,max} | no | Volume range. |
-| marketSpace | {min,max} | no | Market space range. |
-| conversionSharing | {min,max} | no | Conversion concentration range. |
-| reviews | {min,max} | no | Review count range. |
-| ratings | {min,max} | no | Rating range. |
-| sellers | {min,max} | no | Seller count range. |
-| weight | {min,max} | no | Weight range. |
-| uId | string | no | User ID. |
-| memberId | string | no | Member ID (data attribution). |
+## 前置条件
 
-All range filters are `{min, max}` objects; supply either or both bounds. Only `page` is required.
+根据用户目标选择核心指标；关键词方向和统计时期按需限定，未指定时可直接查询当前热词，省略 `searchDate` 使用近 30 天数据。构造请求前阅读 `references/api.md` 的参数与使用限制，`page` 是唯一必填项。
 
-## 调用方式
+## 查询流程
 
-- **API 端点**：`POST /seerfar/ozon/marketKeywordSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/seerfar_ozon_market_keyword_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+1. 根据目标选择排序指标：热词优先搜索热度，上升词优先增长，低竞争优先卖家数；建议始终设置排序，避免无序翻页。
+2. 按需求叠加范围筛选：例如高搜索热度配合较少卖家，再用转化集中度或市场空间细化。扩展长尾词时，用俄语种子词限定方向并选择模糊匹配；跨月比较时明确统计时期，日期口径见接口定义。
+3. 形成一组参数后执行查询，优先复用缓存。失败或空结果先解释原因；调整条件、翻页或比较其他月份前遵守成本约束。
+4. 先检查摘要与保存的数据，再按用户需求提取字段并展示关键词表格；仅需 Ozon 或 Wildberries 时在本地筛选现有结果。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-market-keyword-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/seerfar_ozon_market_keyword_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 输出策略
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-market-keyword-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## Usage Examples
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**1. Hottest keywords right now (sort by search volume)**
-```json
-{"page": {"page": 1, "pageSize": 10, "orders": [{"field": "searchVolume", "direction": "DESC"}]}}
-```
+## 执行规则
 
-**2. Blue-ocean terms — high volume, few sellers**
-```json
-{"page": {"page": 1, "pageSize": 20, "orders": [{"field": "searchVolume", "direction": "DESC"}]}, "searchVolume": {"min": 10000}, "sellers": {"max": 50}}
-```
+### 算力消耗预估
 
-**3. Filter by keyword text (fuzzy, Russian)**
-```json
-{"page": {"page": 1, "pageSize": 20}, "keywords": ["телефон"], "matchType": 1}
-```
+12 算力 / 次
 
-**4. A specific data month with a sales floor**
-```json
-{"page": {"page": 1, "pageSize": 20}, "searchDate": "2026-04-01", "monthlySales": {"min": 1000}}
-```
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## How to Build Queries
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-1. **Lead with `page.orders`**: the dataset is large — always sort by the metric you care about (`searchVolume` DESC for popularity, `count30GrowthRate` DESC for rising terms, `sellers` ASC for low competition).
-2. **Stack range filters to find opportunities**: combine a high `searchVolume` floor with a low `sellers` ceiling to surface blue-ocean keywords; add `conversionSharing` / `marketSpace` bounds to qualify demand.
-3. **Use `keywords` + `matchType` to scope a niche**: pass seed terms in Russian with `matchType: 1` (fuzzy) to enumerate related long-tail terms.
-4. **Pick the right `searchDate`**: omit it for current trends (last 30 days); pass an explicit date for month-over-month comparison.
+### 解决认证和算力问题
 
-## Display Rules
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-1. **Present data only**: show keyword metrics in a clear table without subjective advice.
-2. **Lead with keyword columns**: `query` / `queryCn` (Chinese translation), then `searchVolume`, `count30GrowthRate`, `productCount`, `sellers`, `avgPrice`.
-3. **Russian keywords**: preserve the original `query`; the `queryCn` field provides a Chinese translation when available.
-4. **Platform tag**: when both Ozon and Wildberries rows are present, show `platform` (0/1) so the user can distinguish them.
-5. **Large result sets**: when `total` is large, show the top rows and remind the user they can persist the full response via the large-response pattern below, or page further with `page.page`.
-6. **Error handling**: when `code` is not `200` (or `errcode` is not `200`), explain the reason from `msg` / `errmsg` and suggest adjusting filters.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## Important Limitations
+### 约束与建议
 
-- **`page` is required**: a payload without `page` is rejected.
-- **No platform selector**: the Ozon/Wildberries mix is controlled server-side; filter client-side via the `platform` field.
-- **Category IDs are opaque**: `categories` requires Seerfar category IDs, not human-readable names.
-- **Pagination caps**: use `pageSize` and `page` to page; very large `pageSize` values may be capped server-side.
-- **Nested fields**: `products[*]` (Top 商品) and `categoryInfos[*]` (类目路径与可跨境标识) are structured and decision-useful — see `references/api.md` for sub-fields. `dimension` / `columns` are opaque or partially populated; `relevancy` / `titleDensity` / `wordCount` are usually absent.
+- **数据单位是关键词**：每行代表搜索词及其市场画像，Top 商品用于补充背景；不能把关键词列表当成商品搜索结果。
+- **清晰展示数据**：用表格呈现关键词指标，不附加主观建议。依次展示 `query`、`queryCn`、`searchVolume`、`count30GrowthRate`、`productCount`、`sellers`、`avgPrice`，按需要补充市场空间、竞品数和加购指标。
+- **保留原文与统计口径**：保留俄语 `query`，有 `queryCn` 时展示中文翻译；同时展示统计时期，跨期数据不能混为同一口径。
+- **区分平台**：数据以 Ozon 为主，也可能含 Wildberries；混合结果应标注平台，平台映射和筛选限制见接口定义。
+- **按需展开嵌套数据**：需要时展示 Top 商品、类目路径和可跨境标识；可缺失字段的处理见接口定义，不自行补值。
+- **说明返回范围**：总量较大时先展示前几行，告知完整响应已保存且可继续分页；后续调用遵守成本约束。
+- **解释空结果与错误**：按照 `references/api.md` 的公共响应规则判断状态，结合 `msg` / `errmsg` 解释原因。空列表不直接认定为系统故障；可建议核对筛选条件，但不自动连续试探。
 
-## User Expression & Scenario Quick Reference
+## 使用示例
 
-**Applicable** — Ozon keyword market research:
+### 当前热门关键词
 
-| User Says | Scenario |
-|-----------|----------|
-| "Ozon 热词 / 热搜词有哪些" | Hottest keywords by search volume |
-| "Ozon 蓝海词、低竞争高搜索的词" | Blue-ocean term mining (high volume, few sellers) |
-| "Ozon 上升词 / 近期增长快的词" | Rising keywords (growth sort) |
-| "围绕某个俄语词的长尾词" | Fuzzy keyword expansion |
-| "Ozon 某关键词的市场空间/竞品数/卖家数" | Keyword market profile |
+用户：看看 Ozon 现在的热搜词。
 
-**Not applicable** — Needs beyond keyword market data:
-- A specific SKU's price/sales/stock → use a product-level Seerfar Ozon data source, not this keyword endpoint.
-- A specific seller's catalog → use a seller/shop-level Seerfar Ozon data source.
-- Category-tree browsing → use a category-level Seerfar Ozon data source.
-- Non-Ozon/Wildberries marketplaces → not covered here.
+按搜索热度降序查询，展示关键词、中文翻译与主要市场指标。
 
-**Boundary judgment**: if the user wants to **discover and rank search terms** on Ozon by market metrics, start here. If they already have a SKU / seller / category and want entities under it, route to the corresponding Seerfar Ozon data source.
+### 低竞争、高搜索需求的词
 
-## 算力消耗规则
+用户：找搜索量高、卖家少的 Ozon 关键词。
 
-消耗 15 算力。
+结合用户期望的搜索热度下限与卖家数上限筛选，再按需查看转化集中度和市场空间。
 
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+### 俄语长尾词扩展
 
-**Feedback:**
+用户：围绕 телефон 找相关长尾词。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+使用俄语种子词模糊匹配，保留返回词原文与中文翻译，按核心指标排序。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 历史月份研究
+
+用户：看看 2026 年 3 月月销量较高的关键词。
+
+按接口定义选择对应数据月份并设置月销量下限，展示时注明统计时期。示例参数见 `references/api.md`。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

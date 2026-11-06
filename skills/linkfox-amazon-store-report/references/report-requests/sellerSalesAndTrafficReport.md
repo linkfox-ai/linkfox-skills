@@ -2,12 +2,12 @@
 
 > 上游 JSON Schema 来自 Amazon [selling-partner-api-models/schemas/reports](https://github.com/amzn/selling-partner-api-models/tree/main/schemas/reports)。
 
-- **Raw**：[sellerSalesAndTrafficReport.json](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/sellerSalesAndTrafficReport.json)
+- **源文件**：[sellerSalesAndTrafficReport.json](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/sellerSalesAndTrafficReport.json)
 - **目录浏览**：https://github.com/amzn/selling-partner-api-models/tree/main/schemas/reports
 
 ## Schema 摘要
 
-This report shares data on the sales performance and page traffic of the seller's items aggregated by date (across the seller's entire catalog of items) and aggregated by ASIN. Aggregated data is available at different date range aggregation levels: DAY, WEEK, MONTH. Per-ASIN data is available at different ASIN aggregation levels: PARENT, CHILD, SKU. Requests can span multiple date range periods.
+提供按日期汇总（全目录）和按 ASIN 汇总的销售表现与页面流量。日期聚合支持 DAY、WEEK、MONTH；ASIN 聚合支持 PARENT、CHILD、SKU。请求可跨多个日期周期。
 
 ## 对应 `reportType`（从 schema 中提取）
 
@@ -31,10 +31,13 @@ LinkFox 网关通过 `developerProxy` 转发时，`body` 为 JSON 字符串，�
 }
 ```
 
-- **`reportType`** / **`marketplaceIds`**：必填（多数报告）。
-- **`dataStartTime`** / **`dataEndTime`**：ISO 8601；部分报告 schema 使用 **仅日期** `YYYY-MM-DD`（Amazon 忽略时间分量），以本文件「官方示例」为准。
-- **`reportOptions`**：对象，键名/枚举因报告而异；Brand Analytics 等 **必填**，见下节。
-- **`lastUpdatedDate`**：部分 Vendor 报告使用（见 schema `reportSpecification`），需与 `dataStartTime`/`dataEndTime` 按官方要求组合。
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| reportType | string | 是 | 报告类型枚举。 |
+| marketplaceIds | array[string] | 多数报告是 | 目标站点。 |
+| dataStartTime / dataEndTime | string | 视报告 | ISO 8601；部分 Schema 仅使用 YYYY-MM-DD，忽略时间分量，以本页官方示例为准。 |
+| reportOptions | object | 视报告 | 键名和枚举因报告而异；Brand Analytics 等必填，见下节。 |
+| lastUpdatedDate | string | 视报告 | 部分 Vendor 报告使用，须按 Schema 要求与其他日期字段组合。 |
 
 本仓库脚本 `scripts/get_report.py` 已支持：在 JSON 参数中传入 **`reportOptions`**（对象）以及 **`lastUpdatedDate`**（字符串），会合并进创建请求体。
 

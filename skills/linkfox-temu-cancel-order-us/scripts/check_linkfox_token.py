@@ -11,7 +11,10 @@ Usage:
 import json
 import sys
 
-from _temu_common import PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error, load_json_arg
+from _temu_common import (
+    PROXY_URL, call_temu_api, get_linkfox_token, is_gateway_response_normal,
+    is_linkfox_auth_error, load_json_arg,
+)
 
 def main():
     params = load_json_arg(sys.argv) if len(sys.argv) >= 2 else {}
@@ -46,13 +49,24 @@ def main():
         )
         sys.exit(1)
 
+    if not is_gateway_response_normal(result) or str(result.get("code", "")).strip() == "1003":
+        print(json.dumps({
+            "ok": False,
+            "reason": "gateway_probe_failed",
+            "gatewayReachable": result.http_status is not None,
+            "httpStatus": result.http_status,
+            "message": "网关探测未正常完成，不能确认 LinkFox 用户令牌有效。",
+            "gatewayResponse": result,
+        }, indent=2, ensure_ascii=False))
+        sys.exit(1)
+
     print(
         json.dumps(
             {
                 "ok": True,
                 "linkfoxToken": masked,
                 "gatewayReachable": True,
-                "note": "LinkFox user Token accepted by gateway.",
+                "note": "LinkFox 用户令牌探测通过；不代表 Temu 店铺授权或取消权限已确认。",
             },
             indent=2,
             ensure_ascii=False,

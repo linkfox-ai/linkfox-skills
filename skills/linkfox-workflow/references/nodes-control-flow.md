@@ -65,6 +65,7 @@
 
 - 可枚举的确定规则 → Condition；需要语言理解判定 → ConditionAgent。
 - 逐项处理列表 → Iteration；带上限的重试 → Loop；人工审批 → HumanInput。
+- **要"一批一批读完"用 Iteration，不要用 Loop**：Loop 的回跳路径不能放写型节点，只能把每批累积进 `$flow.state`（既撑爆内存、中途失败又全丢）；Iteration 的子节点可以串 `WriteFile`，每批处理完立刻落盘。数据读取节点的亚马逊分支就是这个场景（单次读不完 → 分页 / 按日期段切批），见 `nodes-linkfox-custom.md` 的「逐页读取 → 处理 → 落盘 → 下一页」。
 - HumanInput 的两个出口都应接到明确分支；少接 Else 虽允许，但必须提示用户该路径会无出口。
 
 ## 运行时已观察到、尚未定位根因的两个问题

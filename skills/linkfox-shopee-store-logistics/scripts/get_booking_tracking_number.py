@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: get_booking_tracking_number.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_logistics_api("get_booking_tracking_number", params, "get_booking_tracking_number.py"), indent=2, ensure_ascii=False))
+    run_logistics_api("get_booking_tracking_number", params, "get_booking_tracking_number.py")
 
 
 if __name__ == "__main__":

@@ -8,12 +8,12 @@ import subprocess
 import sys
 import time
 import secrets
-import tempfile
 from pathlib import Path
 from typing import Any, Optional
-from urllib.error import HTTPError, URLError
+from contextlib import redirect_stdout
+from io import StringIO
 from urllib.parse import quote
-from urllib.request import Request, urlopen
+import call_api as _gateway
 
 API_BASE_URL = (os.environ.get("LINKFOX_TOOL_GATEWAY") or os.environ.get("SHOPEE_API_BASE_URL") or "https://tool-gateway.linkfox.com").rstrip("/")
 STORE_TOKENS_ENDPOINT = f"{API_BASE_URL.rstrip('/')}/shopee/storeTokens"
@@ -52,46 +52,56 @@ def ensure_auth_skill_available(caller: str = "product script") -> None:
         sys.exit(DEPENDENCY_EXIT_CODE)
 
 
-def get_api_key() -> str:
-    """
-    获取配置在环境变量的API Key。
-    如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-    """
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
+class GatewayResponse(dict):
+    """保留原始响应字段，同时向加工层传递外层HTTP状态。"""
+
+    transport_http_status: Optional[int] = None
 
 
 def call_api(endpoint: str, params: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    req = Request(
-        endpoint,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
+    """使用公共run调用网关，关闭响应缓存，复用公共HTTP传输。"""
+    if not endpoint.startswith(API_BASE_URL + "/"):
+        raise ValueError("接口地址必须属于配置的LinkFox网关")
+    api_path = endpoint[len(API_BASE_URL):]
+    root = _lf_root()  # 必须在请求前确认当前目录可写。
+    _gateway._SESSION_CACHE["_root"] = root
+    if not (os.environ.get("SESSION_ID") or "").strip():
+        _gateway._SESSION_CACHE["_auto"] = _lf_session_id(time.time())
+    recorded = {}
+    original_call = _gateway.call_api
+
+    def capture(path, payload):
+        status, result = original_call(path, payload)
+        recorded.update(status=status, result=result)
+        return status, result
+
+    old_base = os.environ.get("LINKFOX_TOOL_GATEWAY")
+    os.environ["LINKFOX_TOOL_GATEWAY"] = API_BASE_URL
+    _gateway.call_api = capture
+    output = StringIO()
     try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+        with redirect_stdout(output):
+            operation = (params.get("path") or api_path).rsplit("/", 1)[-1]
+            # 公共run使用秒级文件时间戳，为原始响应增加标识，避免同秒调用覆盖。
+            raw_slug = SLUG + "-" + operation + "-raw-" + secrets.token_hex(4)
+            _gateway.run(api_path, raw_slug,
+                         [json.dumps(params, ensure_ascii=False), "--inline", "--no-cache"])
+    finally:
+        _gateway.call_api = original_call
+        if old_base is None:
+            os.environ.pop("LINKFOX_TOOL_GATEWAY", None)
+        else:
+            os.environ["LINKFOX_TOOL_GATEWAY"] = old_base
+        # 保留完整原始数据文件位置，避免重复打印大响应。
+        for line in output.getvalue().splitlines():
+            if line.startswith(("Saved full response:", "Failed to save to")):
+                print(line)
+    result = recorded["result"]
+    if not isinstance(result, dict):
+        raise ValueError("网关响应应为JSON对象")
+    response = GatewayResponse(result)
+    response.transport_http_status = recorded["status"]
+    return response
 
 
 def resolve_store_tokens(params: dict) -> dict:
@@ -142,14 +152,19 @@ def developer_proxy_call(
     return call_api(DEVELOPER_PROXY_ENDPOINT, proxy)
 
 
-
-
 def qs_add(parts: list[str], key: str, value: str) -> None:
     parts.append(f"{key}={quote(str(value), safe='')}")
 
 
 def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
-    if int(proxy.get("httpStatus") or 0) != 200:
+    status = getattr(proxy, "transport_http_status", 200)
+    if not gateway_response_ok(status, proxy):
+        return
+    try:
+        upstream_status = int(proxy.get("httpStatus") or 0)
+    except (ValueError, TypeError):
+        return
+    if upstream_status != 200:
         return
     body_raw = proxy.get("body")
     if not body_raw or not str(body_raw).strip():
@@ -165,14 +180,28 @@ def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
         out[f"{key}Response"] = parsed["response"]
 
 
+def gateway_response_ok(status, payload: dict) -> bool:
+    """遵循公共基础规则：0、false均不是空状态码。"""
+    if status is None or not 200 <= status < 300:
+        return False
+    code = payload.get("errcode")
+    if code is None or (isinstance(code, str) and not code.strip()):
+        return True
+    if isinstance(code, str):
+        code = code.strip()
+        if len(code) != 3 or not code.isascii() or not code.isdigit():
+            return False
+        code = int(code)
+    return type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
+
+
 # ===== LinkFox 统一输出层（落盘 + 摘要，无缓存）=====
-# 本块追加到共享模块（_xxx_common.py）末尾，供各入口脚本调用 emit_result()。
+# 各入口脚本通过 emit_result() 使用统一输出层。
 # 依赖：json, os, sys, time, secrets, tempfile（共享模块通常已 import json/os/sys；
 #       若缺 time/secrets/tempfile，请在文件顶部补 import）。
 
 import time as _lf_time
 import secrets as _lf_secrets
-import tempfile as _lf_tempfile
 
 LF_SMALL_THRESHOLD = 8000
 _LF_SESSION_CACHE: dict = {}
@@ -181,33 +210,13 @@ SLUG = "linkfox-shopee-store-product"
 
 
 def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
+    root = Path.cwd() / "linkfox"
+    root.mkdir(parents=True, exist_ok=True)
+    probe = root / (".write_probe-" + secrets.token_hex(6))
+    with probe.open("w", encoding="utf-8"):
+        pass
+    probe.unlink()
+    return str(root.resolve())
 
 
 def _lf_iso(ts: float) -> str:
@@ -336,6 +345,31 @@ def emit_result(result, slug=SLUG, inline=False):
         print(serialized)
     else:
         _lf_summarize(result)
+
+
+def load_cli_params(api_name: Optional[str] = None) -> dict:
+    """解析JSON CLI参数、帮助与选项。"""
+    args = sys.argv[1:]
+    usage = f"Usage: {Path(sys.argv[0]).name} '<JSON>' [--inline] [--no-cache]"
+    if "--help" in args or "-h" in args:
+        print(usage)
+        if api_name is None:
+            from _product_endpoints import list_api_names
+            print("Available: " + ", ".join(list_api_names()))
+        sys.exit(0)
+    args = [arg for arg in args if arg not in ("--inline", "--no-cache")]
+    if len(args) != 1:
+        print(usage, file=sys.stderr)
+        sys.exit(1)
+    try:
+        params = json.loads(args[0])
+    except json.JSONDecodeError as exc:
+        print(f"Invalid parameter format: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(params, dict):
+        print("JSON parameters must be an object", file=sys.stderr)
+        sys.exit(1)
+    return params
 
 
 def lf_inline_flag() -> bool:

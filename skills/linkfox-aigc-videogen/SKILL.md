@@ -1,156 +1,116 @@
 ---
 name: linkfox-aigc-videogen
-description: AI生视频工具（单图/首尾帧模式），根据原图和提示词生成视频，支持配置中已开放的多种视频模型。用户说"生成视频"、"AI视频"、"图生视频"、"做个视频"、"video generation"、"generate video"、"图片转视频"、"动态视频"时触发。
+description: 根据单张图片或首尾帧及提示词生成 AI 视频，支持动态可用模型选择、异步等待、素材上传和本地视频交付。适用于商品展示、场景动态化、图片转视频和首尾帧过渡；不适用于多参考图视频、图片生成或文本生成。
+---
+# AI 生视频（单图与首尾帧）
+
+## 适用范围
+
+### 适用
+
+将单张商品图、场景图或首尾帧制作成视频，按用户要求选择当前可用模型并交付本地视频。
+
+**场景速查**
+
+| 用户表达 | 使用场景 |
+|---|---|
+| 用这张商品图生成展示视频 | 单图视频：围绕商品描述镜头与动态。 |
+| 从这张首帧过渡到尾帧 | 首尾帧视频：按当前模型能力选择。 |
+| 看看现在有哪些模型可用 | 模型选择：查看动态名称与能力。 |
+| 视频还在处理中，查一下原任务 | 任务续查：保留已创建的任务。 |
+
+### 边界
+
+多参考图使用 `linkfox-aigc-videogen-multi`；HappyHorse 系列即使只有一张图，也经该技能的多图入口提交，未挂载时提示安装，不改造成单图/首尾帧请求。图片生成使用 `linkfox-aigc-imagegen`，文本生成使用 `linkfox-aigc-textgen`。
+
+## 接口清单
+
+| 接口 | 端点 | 接口文档 | 对应脚本 | 说明 |
+|---|---|---|---|---|
+| 创建视频任务 | POST `/aigc/videoGenAsync` | [references/api.md](references/api.md) | `scripts/aigc_videogen.py` | 提交单图或首尾帧任务。 |
+| 查询任务状态 | POST `/aigc/taskQuery` | [references/api.md](references/api.md) | `scripts/aigc_videogen.py`（自动轮询或导入 `query_task` 续查原任务） | 查询状态并获取结果。 |
+| 获取上传凭证 | POST `/oss/getStsVoucherByAPI` | [references/file-upload.md](references/file-upload.md) | `scripts/upload_file.py` | 准备本地素材的公开 URL。 |
+| 查询模型枚举 | GET `${LINKFOX_AI_API_URL}/image/video/model/config/list?bizType=88` | [references/api.md](references/api.md#接口查询模型枚举) | `scripts/aigc_videogen.py --list-models --inline` | 获取当前可用模型枚举及能力。 |
+
+## 前置条件
+
+先确定首帧、可选尾帧与期望动态。已有公开可访问素材直接复用；本地图片或附件按 [文件上传](references/file-upload.md) 准备，先明确告知会获得公开 URL 并确认内容可公开，禁止上传敏感或私密内容。素材准备完成后再创建任务。
+
+## 视频生成流程
+
+1. 先通过[查询模型枚举](references/api.md#接口查询模型枚举)获取当前可用模型及能力，并遵循用户选择；仅查询失败时使用文档中的静态列表兜底。
+2. 准备首帧和可选尾帧；本地素材使用内置上传器，复用同一图片 URL，保留首尾帧对应关系。上传失败停止本次生成，生成脚本不自动上传。
+3. 按用户要求和 [接口定义](references/api.md) 组装参数并提交一次。正常生成不额外查询或存档模型配置，不执行提交前能力校验，不静默改模型或参数。
+4. 创建后保留任务ID，由脚本等待并轮询，成功后下载到会话 `media/`。异常或超时先报告已知状态和任务ID，不自动重提、换模型或重复上传；续查只查询原任务。
+5. 将成功交付时 `Saved full response:` 后的本地视频路径交给用户。媒体未交付时按错误摘要及数据文件处理。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/aigc_videogen.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：生成算力按所选参数动态计算，详见“算力消耗预估”。同一会话、同一参数组合默认只创建一次任务；业务封装禁用响应缓存，查询始终获取当前状态。失败或无媒体时不自动重建任务或修改参数连续试探；再次生成前说明额外消耗，由用户决定是否继续。
+
+### 输出策略
+
+- 完整响应保存到会话 `data/`，视频下载到同一会话 `media/`。会话根目录依次尝试 `ACPX_WORKSPACES` 的首个路径、当前工作目录、用户目录、系统临时目录下的 `linkfox/`；`<YYYY-MM-DD>/<session>/` 按日期与会话聚合，`<session>` 优先取 `SESSION_ID`，否则在进程内生成稳定值。正常运行应选择可写工作目录。
+- 每次创建和查询分别存档，文件名包含接口标识与纳秒序号，最终结果另存。生成成功仅输出 `Saved full response: <本地视频路径数组>`；原始响应静默保存，无媒体时才提示诊断路径。
+- 生成时 `--inline` 不改变媒体交付协议。目录查询使用配置 JSON 输出，可通过 `--inline` 完整展示；上传器按输入顺序输出上传结果，具体见对应接口文档。
+- 直接使用公共调用器时显式传 `--no-cache`：响应不超过 8000 字节时全量输出，超过时输出顶层字段、常见计数与消耗字段、最大列表的长度和前 3 条样本；`--inline` 强制全量打印，仍保存响应文件。生成封装捕获此输出，不把媒体 URL 或上传凭证直接交付给用户。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+异步视频、目录查询和上传器的专用协议见 [references/api.md](references/api.md) 及其链接文档；生成成功始终只交付本地视频路径。
+
+## 执行规则
+
+### 算力消耗预估
+
+生成按所选参数动态计费，算力消耗与模型、时长等参数相关，没有统一固定单价。可参考响应的实际消耗信息；`costToken` 缺失时脚本按 0 记录，该缺省值不代表免费。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **模型名称展示**：介绍、推荐、确认和解释错误时只使用动态目录的 name；查询失败使用静态兜底的说明名称。禁止向用户展示 videoType、provider、模型 code 或内部渠道名称；MiniMax H3 的多个内部渠道统一展示为 MiniMax H3。
+- **动态能力与默认策略**：动态目录用于选择，不以静态名单封顶，不自动换模型。默认策略、别名兼容和能力参数见接口文档；无合法默认值时提示选择。
+- **视频交付**：只展示转存后的本地视频路径，禁止 Read 视频文件、展示 base64 或直接交付带签名且会过期的原始 URL。完整响应静默保存，仅无媒体时提示诊断路径。
+- **区分状态**：客户端等待超时不等于后端失败或算力回补；保留原任务ID和最后已知状态。空体或非 JSON 只报告上游响应异常，不编造模型不可用原因。
+- **配置地址独立**：模型目录域名与生成网关各自配置，不根据网关、Key 或环境前缀推断目录地址。目录查询不发送生成密钥或身份头。
+
+## 使用示例
+
+### 单图商品展示
+
+用户：用这张商品图做一段展示视频。
+
+选择适合的当前可用模型，准备素材及动态描述，完成生成后提供本地视频路径。
+
+### 首尾帧过渡
+
+用户：让画面从第一张图过渡到第二张图。
+
+核对当前模型尾帧能力，保留图片顺序后生成；不以静态名单代替当前目录。
+
+### 查询未完成任务
+
+用户：刚才的视频超时了，继续查这个任务。
+
+只查询原任务，不再次生成或重复上传。具体续查方式见 [references/api.md](references/api.md)。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# AI 生视频（首尾帧/单图模式）
-
-根据原图（首帧）和可选尾帧图生成视频，支持多种 AI 视频模型，异步创建任务后轮询获取结果。
-
-## 动态模型列表（仅替换目录来源）
-
-- 模型配置域名由 `LINKFOX_AI_API_URL` 覆盖（默认 `https://ai-api.linkfox.com`），与生成网关 `LINKFOX_TOOL_GATEWAY` 独立；测试/生产配置见 [references/model-config.md](references/model-config.md)。
-- 选择模型前调用 `python scripts/aigc_videogen.py --list-models --inline`；图片查 bizType=201，两个视频入口查 bizType=88。
-- 普通场景按动态完整列表选择，不由旧模型目录封顶。明确的专用业务范围只在查询时用 `--allowed-models` 取交集；生成仍按原脚本 JSON 调用，不传这个新查询参数。
-- 只有查询失败才用下方原静态表兜底；成功但缺失/维护中不补回，不自动换模型。
-- 正常生成不额外查询或存档配置，不新增提交前参数校验，不更改请求参数、默认策略、轮询、下载及交付。
-- HappyHorse 系列保留原多图入口路由：即使只有一张参考图，也通过 `linkfox-aigc-videogen-multi` 的 `imageList` 提交；未挂载多图 Skill 时提示安装，不改造成单图/首尾帧请求。
-- 模型能力用于介绍和选择选项，不作为一套新的生成请求白名单；编码适配、异常和落盘说明见 [references/model-config.md](references/model-config.md)。
-
-## 核心特点
-
-- **动态模型选择**：按动态配置读取可用状态和能力，查询失败使用原静态表。
-- **首尾帧控制**：尾帧是否可用以当前动态目录的 `supportLastFrame` 和模式能力为准。
-- **丰富参数**：支持 Pro 模式、声音生成、宽高比和分辨率等。
-- **异步模式**：创建任务立即返回 taskId，脚本自动轮询直到完成（超时 20 分钟）。
-
-## 模型说明（仅配置查询失败时兜底）
-
-| 说明名称 | 时长 | 默认分辨率/备注 |
-|------|------|------------|
-| 可灵Omni | 5秒/10秒/15秒 | 720p，旧调用默认5秒 |
-| Seedance 2.0 | 4～15秒 | 480p，可选720p/1080p |
-| Seedance 2.0 fast | 4～15秒 | 480p，可选720p |
-| Seedance 2.5 | 4～30秒 | 480p，可选720p/1080p |
-| 海螺2.3 | 6秒/10秒 | 768p |
-| Seedance 2.0 mini | 4～15秒，默认10秒 | 480p，可选720p |
-| 万相3.0 | 5/10/15/20/25/30秒，默认10秒 | 480p，可选720p/1080p，支持尾帧 |
-| MiniMax H3 | 5秒/10秒/15秒，默认5秒 | 2K，可选768p，支持尾帧 |
-| 可灵2.6 | 5秒/10秒，默认10秒 | 720p，可选1080p；声音能力仅在1080p使用 |
-
-## 展示规则
-
-- 面向用户介绍、推荐、确认模型或解释错误时，只能使用动态配置返回的 **name**（查询失败时使用上表的**说明名称**）。
-- 禁止向用户展示 videoType、provider、模型 code 或内部渠道名称。
-- MiniMax H3 的多个内部渠道只对用户展示为 **MiniMax H3**。
-
-## 参数概览
-
-- **必填字段**：`imageUrl`、`videoType`、`videoTime`
-- **可选核心**：`lastFrameImageUrl`（仅万相3.0、MiniMax H3）、`prompt`（3000字符以内）
-
-完整参数表、响应字段结构与错误码，见 [`references/api.md`](references/api.md)。
-
-## 首尾帧上传（file-upload）
-
-- `imageUrl`（首帧）及实际提供的 `lastFrameImageUrl`（尾帧）接收可访问的图片 URL，不接收本地文件路径。尾帧仍为可选，是否支持按所选模型能力处理。
-- 已有可公开访问的 HTTP(S) URL 直接复用；本地图片或附件先按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 上传，再将成功项的 `url` 填入对应字段，保留首尾帧对应关系。同一图片用于多个字段时复用 URL，无需查找或安装额外上传 skill。
-- 上传失败时停止本次生成并说明原因。生成脚本不自动上传，须在创建任务前完成素材准备；轮询原任务时不重复上传。
-
-## 调用方式
-
-- **创建任务**：`POST /aigc/videoGenAsync` → 返回 `{taskId}`
-- **轮询结果**：`POST /aigc/taskQuery` → 传入 `{taskId}` → 返回状态和结果
-- **Python 脚本**：`python scripts/aigc_videogen.py '<JSON 参数>'`（脚本内部自动完成创建+轮询）
-
-**异步流程**：
-1. 脚本调用 `/aigc/videoGenAsync` 创建任务，获得 `taskId`
-2. 等待 2 分钟后开始轮询 `/aigc/taskQuery`，每 10 秒一次，最长等待 20 分钟
-3. 成功后自动下载视频到会话 `media/` 目录
-
-**输出策略（脚本默认行为）**：
-- 脚本会自动把生成的视频**下载转存**到会话 `media/` 目录，stdout 输出一行 `Saved full response: <路径数组>`。
-- 原始 API 响应静默落盘到 `data/`，仅在无视频产物时才在 stdout 提示其路径。
-
-**读数据建议**：**禁止** Read 转存的视频文件内容。直接把 `Saved full response:` 后的本地路径提供给用户即可。
-
-## 异常与等待超时
-
-- 退出码 `0` 表示已交付媒体；错误退出 `1`，stdout 返回 `error`、`errorCode` 和 `dataFile`，完整诊断静默保存到 `data/`，不输出 Python 堆栈。
-- 退出码 `2` 表示**客户端等待超时**：`status=TIMEOUT`，`taskStatus` 保留最后已知服务端状态（无法确认时为 `UNKNOWN`），并返回 `taskId`、`pollTimedOut=true`、`canQuery=true`；不等于后端失败或已回补。
-- 异常或超时不自动重提任务、不换模型。先告知状态和任务ID；需要续查时只查原 `taskId`，不要在同一轮反复 sleep 等待。空体/非 JSON 只报告上游响应异常，不能编造模型不可用原因。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## 使用指引
-
-1. **模型选择**：一般商品视频用 **可灵Omni**；按当前动态目录能力选择；仅查询失败时参考静态兜底表。
-2. **首尾帧**：传 `imageUrl`（首帧，必传）+ 可选 `lastFrameImageUrl`（尾帧）。尾帧是否可用以当前动态目录的 `supportLastFrame` 和模式能力为准，不按旧模型名单封顶。
-3. **时长匹配**：必须传模型支持的时长值，否则报错。
-4. **提示词**：可选，3000 字符以内，描述期望的动态效果。
-5. **声音**：可灵2.6仅在1080p下使用声音能力。
-
-## 内部执行映射（禁止向用户展示）
-
-本节仅用于构造工具请求。回复用户时必须使用第一列说明名称，禁止输出第二列技术值。
-
-| 说明名称 | 内部 videoType |
-|------|------|
-| 可灵Omni | `KLING` |
-| Seedance 2.0 | `SEED` |
-| Seedance 2.0 fast | `SEED_FAST` |
-| Seedance 2.5 | `SEED_V25` |
-| 海螺2.3 | `HAILUO` |
-| Seedance 2.0 mini | `SEED_MINI` |
-| 万相3.0 | `WAN3` |
-| MiniMax H3 | `MINIMAX_V2` |
-| 可灵2.6 | `MODEL_V2_6` |
-
-### 示例
-
-以下 JSON 仅为内部调用参数，禁止原样展示给用户。
-
-**1. 可灵Omni - 商品展示**
-```json
-{"imageUrl": "https://example.com/product.jpg", "videoType": "KLING", "videoTime": 10, "prompt": "商品展示视频"}
-```
-
-**2. 万相3.0 - 首尾帧**
-```json
-{"imageUrl": "https://example.com/scene-start.jpg", "lastFrameImageUrl": "https://example.com/scene-end.jpg", "videoType": "WAN3", "videoTime": 10, "resolution": "480p"}
-```
-
-**3. 可灵2.6 - 1080p声音视频**
-```json
-{"imageUrl": "https://example.com/scene.jpg", "videoType": "MODEL_V2_6", "videoTime": 10, "resolution": "1080p", "voice": true}
-```
-
-## 展示规则
-
-- **只展示转存后的本地路径**：把 `Saved full response:` 后的本地视频路径告诉用户，例如「视频已保存至：xxx/a.mp4」。
-- **禁止** Read 视频文件、**禁止**展示 base64 内容。
-- **禁止**把原始 API 返回的临时 URL 直接给用户（带签名、会过期）。
-
-## 限制
-
-- 提示词最大 3000 字符。
-- 生成时间较长，通常 100-600 秒。脚本自动轮询，超时 20 分钟。
-- AgentOS 配置中仅万相3.0和MiniMax H3开放尾帧能力。
-- 本接口仅支持单图/首尾帧模式。多参考图请使用 `linkfox-aigc-videogen-multi`。
-- 失败时不重试（仅尝试 1 次）。
-
-## 不适用
-**不适用**：
-- 多参考图生视频 → `linkfox-aigc-videogen-multi`
-- 图片生成 → `linkfox-aigc-imagegen`
-- 文本生成 → `linkfox-aigc-textgen`
-
-## 反馈
-
-参见 `references/api.md`。
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

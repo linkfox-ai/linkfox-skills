@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Factory for thin US Promotion API CLI scripts."""
+"""全球站促销专用 CLI 入口。"""
 
 import sys
 

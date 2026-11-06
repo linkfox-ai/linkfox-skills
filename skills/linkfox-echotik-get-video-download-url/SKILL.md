@@ -1,119 +1,101 @@
 ---
 name: linkfox-echotik-get-video-download-url
-description: 解析TikTok视频地址，返回该视频的无水印/含水印下载地址、播放地址与封面地址，用于保存带货视频素材或离线分析。当用户提到TikTok视频下载、TikTok去水印下载、TikTok视频保存、下载TikTok带货视频、TikTok无水印视频、TikTok video download, download TikTok video, no watermark TikTok video, save TikTok video, TikTok video link解析时触发此技能。即使用户未明确提及"EchoTik"，只要其需求涉及从一个TikTok视频链接取出可下载/可播放的视频地址，也应触发此技能。
+description: 解析指定 TikTok 视频链接，获取无水印或含水印下载地址、播放地址及静态和动态封面，适用于保存带货视频素材、离线分析、视频预览和封面提取。用户已有具体 TikTok 视频链接，希望下载、保存或提取媒体地址时使用，无需明确提及 EchoTik。不适用于按商品发现关联视频、商品搜索或新品排行、直播数据、视频剪辑创作和其他平台视频下载。
 ---
 
-# EchoTik TikTok Video Download
+# EchoTik TikTok 视频下载地址解析
 
-This skill guides you on how to resolve a TikTok video URL into direct download and playback links, helping sellers save influencer/promotional video assets for offline analysis or reuse.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool takes a single TikTok video URL and resolves it to direct media addresses: a no-watermark download URL (preferred for clean assets), a watermarked download URL, a playback URL, and cover images (static and dynamic). This is useful when a seller wants to archive a high-performing promotional video found via the EchoTik product-video tool, or reuse a creator's clip without re-recording.
+从用户提供的具体 TikTok 视频链接提取可用媒体地址，帮助保存达人带货或推广视频素材、离线分析与预览。
 
-**Required input**: A `url` is mandatory. Two URL formats are accepted:
-- Short link: `https://vt.tiktok.com/xxxxxx`
-- Full link: `https://www.tiktok.com/@user/video/1234567890`
+**场景速查**
 
-**Conditional download URLs**: Not every video returns a downloadable address. `noWatermarkDownloadUrl` and `downloadUrl` are returned only when the source video allows it; for some videos (region/privacy/availability restricted) both are absent and only `playUrl` plus cover images come back. Always check presence before presenting a download link, and fall back to `playUrl` for playback when the download fields are missing.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 下载或保存这个 TikTok 视频 | 解析指定视频的下载地址。 |
+| 获取这个 TikTok 视频的无水印版本 | 优先展示可用的无水印下载地址。 |
+| 保存这个达人的带货视频素材 | 解析已知视频链接以便归档。 |
+| 给我一个能播放的 TikTok 视频地址 | 展示播放地址供预览。 |
+| 提取这个视频的封面或缩略图 | 展示静态与动态封面。 |
 
-**URL freshness**: The returned download/playback addresses may expire over time. Use them promptly after resolving, and re-resolve if a link stops working.
+### 边界
 
-## Parameter Guide
+用户已有具体视频链接并希望保存、下载或提取地址时使用本技能；若用户只有商品编号并想查找推广该商品的视频，转交 `linkfox-echotik-product-video`。商品搜索使用 `linkfox-echotik-list-product`，新品排行使用 `linkfox-echotik-list-new-product-rank`。直播数据、视频剪辑或创作建议及非 TikTok 平台下载不在本技能范围内。
 
-| Parameter | Type | Required | Description | Default |
-|-----------|------|----------|-------------|---------|
-| url | string | Yes | TikTok video URL (short link `vt.tiktok.com/xxx` or full link `tiktok.com/@user/video/xxx`). Max length 1000 | - |
+## 前置条件
 
-## 调用方式
+**先取得具体视频链接**：用户尚未提供链接时先补充，不以商品编号代替。支持的格式及参数要求见 `references/api.md`。
 
-- **API 端点**：`POST /echotik/getVideoDownloadUrl`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_get_video_download_url.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 视频解析流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-get-video-download-url-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 判断用户需要解析已知视频，还是发现商品关联视频；仅对已取得的具体视频链接继续。
+2. 按 `references/api.md` 准备请求，复用同一会话同一参数的已有结果或本地缓存，执行一次解析。
+3. 按接口定义判断响应；解析失败时依据实际错误说明原因，不自动反复试探。
+4. 按下方“约束与建议”展示实际返回的媒体地址。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行方式
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_get_video_download_url.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 输出策略
 
-## Usage Examples
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-get-video-download-url-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**1. Resolve a full TikTok video link**
-```json
-{
-  "url": "https://www.tiktok.com/@user/video/1234567890"
-}
-```
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**2. Resolve a TikTok short link**
-```json
-{
-  "url": "https://vt.tiktok.com/Z123abc/"
-}
-```
+## 执行规则
 
-## Display Rules
+### 算力消耗预估
 
-1. **Present the no-watermark link first**: When `noWatermarkDownloadUrl` is present, surface it as the primary download option, since clean assets are usually what sellers want
-2. **Offer the watermarked variant**: Also list `downloadUrl` (watermarked) when present, in case the user wants the original branding
-3. **Handle missing download URLs**: When both `noWatermarkDownloadUrl` and `downloadUrl` are absent (common for some videos), do not fabricate a download link — tell the user the video has no direct download address and offer `playUrl` for playback/preview instead
-4. **Provide playback + cover**: Mention `playUrl` for quick preview and `coverUrl` / `dynamicCoverUrl` for thumbnails
-5. **Freshness caveat**: Remind the user that the resolved URLs may expire and should be downloaded promptly
-6. **Present data only**: Show the resolved addresses clearly without subjective advice on how to use the video
-7. **Error handling**: When resolution fails, explain the reason based on `errcode`/`errmsg` — `400` means a missing/invalid `url`, `10000` means the link is not a valid/accessible TikTok video; suggest checking the URL format
+5 算力 / 次
 
-## User Expression & Scenario Quick Reference
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### Applicable Scenarios
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-| User Says | Scenario |
-|-----------|----------|
-| "Download this TikTok video" / "Save this TikTok clip" | Resolve a video URL into download links |
-| "Get the no-watermark version of this TikTok video" | Prioritize `noWatermarkDownloadUrl` |
-| "I want to save this influencer's promo video" | Resolve and archive a creator's video |
-| "Give me a playable link for this TikTok video" | Return `playUrl` |
-| "Get the cover/thumbnail of this TikTok video" | Return `coverUrl` / `dynamicCoverUrl` |
+### 解决认证和算力问题
 
-### Not Applicable Scenarios
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-- Listing promotional videos associated with a TikTok **product** (use `linkfox-echotik-product-video` instead — it needs a `productId`, not a video URL)
-- Searching for TikTok products (use `linkfox-echotik-product-search`)
-- TikTok new product rankings (use `linkfox-echotik-new-product-rank`)
-- TikTok live-stream data
-- Video editing or content creation advice
-- Non-TikTok platform video downloads
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-### Boundary Judgment
+### 约束与建议
 
-When users mention "TikTok video", determine whether they already have a **specific video URL** they want to download (this skill) or want to **discover videos linked to a product** (the product-video skill). If the user provides a `tiktok.com` or `vt.tiktok.com` link and asks to save/download/extract it, this skill applies. If they mention a product ID and ask "what videos promote this product", use `linkfox-echotik-product-video` instead.
+- **区分媒体用途**：无水印和含水印地址用于下载，播放地址用于预览，静态与动态封面用于缩略图展示。
+- **优先无水印**：存在无水印地址时，将其列为首选下载项；同时展示实际返回的含水印版本供用户选择。
+- **不补造下载地址**：未返回下载地址时，明确说明该视频暂无直接下载地址，改为展示播放预览；不要把播放地址标成已取得的下载地址。条件返回约定见 `references/api.md`。
+- **完整展示可用素材**：补充播放地址、静态封面和动态封面；仅展示真实返回的数据，不附加主观素材使用建议。
+- **说明时效**：解析后的下载及播放地址可能过期，应及时使用；失效后需要重新解析时，脚本使用 `--no-cache` 跳过可能仍在 24 小时有效期内的旧缓存，避免再次返回已失效地址；不自动重试，后续调用遵守成本约束。
+- **解释错误**：根据实际响应说明原因并建议核对视频链接；具体业务码与处理方式见 `references/api.md`。
 
-## 算力消耗规则
+## 使用示例
 
-消耗 5 算力。
+### 解析完整视频链接
 
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+用户：下载这个 TikTok 视频，优先给我无水印版本。
 
-**Feedback:**
+取得用户提供的完整视频链接后执行解析，按返回情况展示无水印、含水印及预览地址，提醒及时使用。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+### 解析短链接并提取封面
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+用户：从这个 TikTok 分享短链提取视频和封面。
 
+将用户提供的短链用于解析，展示可用下载地址、播放地址和静态、动态封面；没有下载地址时明确说明并提供播放预览。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

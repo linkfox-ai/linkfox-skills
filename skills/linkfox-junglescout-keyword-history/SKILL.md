@@ -1,186 +1,110 @@
 ---
 name: linkfox-junglescout-keyword-history
-description: Jungle Scout关键词历史搜索量查询，按7天周期返回亚马逊关键词的精确搜索量趋势，覆盖美国、英国、德国、日本等10个站点。当用户提到关键词搜索量趋势、历史搜索量、搜索热度变化、关键词季节性、搜索量波动、Jungle Scout搜索量、keyword search volume history, keyword trend, search volume over time, seasonal search volume, keyword popularity trend时触发此技能。即使用户未明确提及"Jungle Scout"，只要其需求涉及查看某个亚马逊关键词在一段时间内的搜索量变化趋势，也应触发此技能。
+description: 查询 Jungle Scout 亚马逊关键词历史精确匹配搜索量，覆盖美国、英国、德国、日本等 10 个站点，按周展示搜索热度、季节性、需求增长、波动和旺淡季。适用于查看某个关键词在指定时期的搜索量变化、比较时间段或站点；无需明确提及 Jungle Scout。不适用于拓词、实时搜索量排名、热门词榜、竞争度、CPC、商品销量、Listing 分析或非亚马逊搜索量。
 ---
 
-# Jungle Scout — 关键词历史搜索量
+# Jungle Scout 关键词历史搜索量
 
-This skill queries the historical exact search volume for Amazon keywords via the Jungle Scout data source, returning weekly search volume data points over a specified date range across 10 Amazon marketplaces.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Jungle Scout 关键词历史搜索量工具提供亚马逊各站点关键词的**周维度精确匹配搜索量**历史数据。卖家可以通过查询指定时间范围内的搜索量变化来判断：
+查询亚马逊关键词一段时间内的历史搜索量，判断需求方向、季节性、稳定性及节假日或大促效应。
 
-- **季节性规律**：关键词在哪些月份是旺季/淡季
-- **趋势方向**：搜索量是持续上升、下降还是平稳
-- **波动幅度**：判断市场需求的稳定性
-- **节假日效应**：大促、节日前后的搜索量飙升
+**场景速查**
 
-**数据粒度**：每条记录代表一个 **7 天周期**，包含该周内的精确匹配搜索量估算值。
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个词搜索量怎么变化的 | 历史趋势查询。 |
+| 这个品类有没有季节性 | 用代表关键词的全年数据判断季节规律。 |
+| 搜索量最近在涨还是跌 | 近期需求方向判断。 |
+| 什么时候是旺季 | 峰值与谷值周期识别。 |
+| 去年 Q4 搜索量多少 | 指定时间段查询。 |
+| 这个词在德国站热不热 | 指定亚马逊站点查询。 |
+| 对比两个时间段的搜索量 | 旺淡季或同比对比。 |
 
-## Data Fields
+## 前置条件
 
-### Output Fields
+确定用户提供的关键词、目标站点和分析时间段。请求字段、站点映射、日期约定与限制见 [接口说明](references/api.md)。
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| 周期标识 | id | 数据周期标识（市场/关键词/日期范围） | us_sushi_20250105_20250111 |
-| 周期开始日期 | estimateStartDate | 7天统计周期的起点 | 2025-01-05 |
-| 周期结束日期 | estimateEndDate | 7天统计周期的终点 | 2025-01-11 |
-| 精确搜索量 | estimatedExactSearchVolume | 该周期内精确匹配搜索量（次/周） | 12500 |
-| 资源类型 | type | 固定值 | historical_keyword_search_volume |
-| 消耗Token | costToken | 本次调用消耗的 token 数 | 1 |
+## 查询与分析流程
 
-## Supported Marketplaces
+1. 判断用户关注的是历史变化、季节性、旺淡季、需求增长还是多站点对比；当前排名、热门词清单和拓词不属于本技能范围。
+2. 按 [接口说明](references/api.md) 将自然语言站点和相对时间转换为查询条件，保留用户关键词。需要拆分时间段或进行对比时，先确定请求组合并评估总消耗。
+3. 优先复用同参数的缓存；按已确定范围查询。失败或空结果时，根据响应解释原因并提供调整建议，后续检索遵守成本约束。
+4. 核对返回周期及实际数据覆盖范围，再按日期整理趋势、峰谷和对比结果。先查看摘要，按需从完整响应文件提取数据。
 
-| 站点 | marketplace 值 | 说明 |
-|------|---------------|------|
-| 美国 | us | Amazon.com |
-| 英国 | uk | Amazon.co.uk |
-| 德国 | de | Amazon.de |
-| 印度 | in | Amazon.in |
-| 加拿大 | ca | Amazon.ca |
-| 法国 | fr | Amazon.fr |
-| 意大利 | it | Amazon.it |
-| 西班牙 | es | Amazon.es |
-| 墨西哥 | mx | Amazon.com.mx |
-| 日本 | jp | Amazon.co.jp |
+## 执行方式
 
-默认站点为 **us**。当用户未指定站点时，使用 us。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/junglescout_keyword_history.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 调用方式
+### 输出策略
 
-- **API 端点**：`POST /tool-jungle-scout/keywords/historical-search-volume`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/junglescout_keyword_history.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-keyword-history-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-junglescout-keyword-history-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行规则
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 算力消耗预估
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+64 算力 / 次
 
-## How to Build Queries
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-所有四个参数均为**必填**：`marketplace`、`keyword`、`startDate`、`endDate`。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-### Principles for Building API Calls
+### 解决认证和算力问题
 
-1. **站点映射**：用户说"美国站"→ `us`，"日本站"→ `jp`，"德国站"→ `de`；未指定时默认 `us`
-2. **日期格式**：必须为 `YYYY-MM-DD`，如 `2025-01-05`
-3. **时间跨度**：`startDate` 到 `endDate` 最长 **366 天**；超过时需拆分为多次请求
-4. **关键词**：原样传入用户提供的关键词（英文小写为佳）
-5. **常用时间推算**：
-   - "过去3个月" → endDate 取今天，startDate 取约90天前
-   - "去年全年" → `2025-01-01` 到 `2025-12-31`
-   - "旺季" → 根据品类判断，如 Q4 为 `10-01` 到 `12-31`
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### Common Query Scenarios
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**1. 查看关键词近半年搜索趋势**
-```json
-{
-  "marketplace": "us",
-  "keyword": "yoga mat",
-  "startDate": "2025-10-01",
-  "endDate": "2026-03-31"
-}
-```
+### 约束与建议
 
-**2. 判断关键词季节性（查全年数据）**
-```json
-{
-  "marketplace": "us",
-  "keyword": "christmas decorations",
-  "startDate": "2025-01-01",
-  "endDate": "2025-12-31"
-}
-```
+- **理解数据口径**：这是周维度的精确匹配搜索量估算，不代表商品销量、广泛匹配搜索量或实时排名。字段单位与周期定义见接口说明。
+- **趋势可视化优先**：使用时间线或折线图展示变化，横轴为日期周期，纵轴为搜索量；同时提供周期开始日期、结束日期和搜索量表格，便于精确查阅。
+- **总结峰谷和方向**：数据后简要总结上升、下降、平稳或周期性波动，突出最高和最低搜索量周期，并据此解释旺淡季、需求稳定性及节假日或大促效应。
+- **保留数据覆盖信息**：展示实际返回的统计区间；未返回的周期不补造数据。不同时间段或站点对比时，注明各自覆盖范围。
+- **解释错误原因**：根据接口说明与实际错误消息提出调整建议；失败后不自动换词或连续试探。
 
-**3. 对比旺季与淡季搜索量**
+## 使用示例
 
-分两次调用：
-- 淡季：`startDate=2025-02-01`, `endDate=2025-04-30`
-- 旺季：`startDate=2025-10-01`, `endDate=2025-12-31`
+### 近半年趋势或需求增长
 
-**4. 多站点对比**
+用户：看 yoga mat 近半年的搜索量；或看德国站 luftreiniger 的需求是否增长。
 
-对同一关键词分别查询不同 marketplace（如 `us`、`de`、`jp`），比较各站搜索量规模。
+确定对应站点和时间范围，查询后用折线图、表格及趋势总结呈现结果。
 
-**5. 验证市场需求是否增长**
-```json
-{
-  "marketplace": "de",
-  "keyword": "luftreiniger",
-  "startDate": "2025-04-01",
-  "endDate": "2026-03-31"
-}
-```
+### 全年季节性
 
-## Display Rules
+用户：christmas decorations 去年有没有明显季节性？
 
-1. **趋势可视化优先**：建议以时间线/折线图方式展示搜索量变化，横轴为日期周期，纵轴为搜索量
-2. **表格辅助**：同时提供数据表格供精确查阅，列包括：周期开始日期、周期结束日期、搜索量
-3. **趋势总结**：在数据之后简要总结趋势方向（上升/下降/平稳/周期性波动），标注峰值和谷值周期
-4. **峰值标注**：高亮搜索量最高和最低的周期，便于用户快速判断旺淡季
-5. **Error handling**: When a query fails, explain the reason based on the error response and suggest adjusting parameters（如日期范围超 366 天）
+查询去年全年的历史数据，标注峰谷周期，说明节日效应及实际覆盖范围。
 
-## Important Limitations
+### 旺季与淡季对比
 
-- **时间跨度上限**：单次查询 `startDate` 到 `endDate` 最长 366 天，超过需拆分查询
-- **数据粒度**：周维度（7天一个数据点），非日维度
-- **搜索量类型**：精确匹配搜索量（Exact Match），非广泛匹配
-- **所有参数必填**：`marketplace`、`keyword`、`startDate`、`endDate` 缺一不可
+用户：对比去年 2—4 月和 10—12 月的搜索量。
 
-## User Expression & Scenario Quick Reference
+分别查询两个时间段，先说明组合查询的消耗，再按实际返回周期比较旺淡季规模。
 
-**Applicable** - 关键词搜索量历史趋势分析：
+### 多站点对比
 
-| User Says | Scenario |
-|-----------|----------|
-| "这个词搜索量怎么变化的" | 搜索量趋势查询 |
-| "这个品类有没有季节性" | 全年数据判断季节规律 |
-| "搜索量最近在涨还是跌" | 近期趋势判断 |
-| "什么时候是旺季" | 峰值周期识别 |
-| "去年Q4搜索量多少" | 指定时间段搜索量查询 |
-| "这个词在德国站热不热" | 非美国站搜索量查询 |
-| "对比两个时间段的搜索量" | 旺淡季/同比对比 |
+用户：比较同一关键词在美国、德国和日本站的搜索量规模。
 
-**Not applicable** - 超出关键词历史搜索量范围：
-- 关键词建议/拓词（需要关键词挖掘工具）
-- 实时/当前搜索量排名（需要 ABA 或 SIF 工具）
-- 关键词竞争度、CPC 出价
-- 商品销量、listing 分析
-- 非亚马逊平台的搜索量
+保持用户关键词与分析区间一致，分别查询所选站点，展示各站点趋势及数据覆盖范围。
 
-**Boundary judgment**: When users say "搜索量", "关键词热度", or "市场需求趋势", if they specifically want to see how a keyword's search volume changes over a period of time (historical trend), this skill applies. If they want the current ranking or a list of trending keywords, it does not apply.
+## 使用反馈
 
-## 算力消耗规则
-
-消耗 64 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

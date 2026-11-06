@@ -1,103 +1,157 @@
-# 活动商品操作结果查询 — `bg.promotion.activity.goods.operation.query`
+# Temu 美国站促销：活动商品操作结果查询 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_promotion_activity_goods_operation_query.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=873ac072a78249c893e5f8d0e656a11f&sub_menu_code=57a37eb5dd104e3f9f90118e3276b291 |
-| **网关** | `POST /temu/proxy`，`type`=`bg.promotion.activity.goods.operation.query`，业务载荷放在 Body 的 `params` |
+> Partner 接口文档：<https://partner-us.temu.com/documentation?menu_code=873ac072a78249c893e5f8d0e656a11f&sub_menu_code=57a37eb5dd104e3f9f90118e3276b291>；脚本：`scripts/us_promotion_activity_goods_operation_query.py`。
 
-**Description:** Query promotion goods operation result by draft ID.
+## 公共规则
 
-> **`draftIdList`** 为必填（来自 enroll/update 返回的 **`draftId`**）。
-> Partner **Response Example** 中 **`result`** 为 **OBJECT[]**（非带 `total` 的对象包装）。
+### 调用规范
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 **`request`**。建议使用 **`tokenPurpose=product-inventory`**，**`managementType=semi-managed`**。
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
----
+### 响应码基本规则
 
-## Request 结构（官方顶层）
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-```text
-params
-└── request (OBJECT, 选填)
-    └── draftIdList (LONG[], 必填)
-```
+## 接口：活动商品操作结果查询（bg.promotion.activity.goods.operation.query）
 
-### `request` 内字段
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| draftIdList | LONG[] | **是** | goods registration activity draft id, which will be generated when the pre-procedure is successfully completed. |
+| site | string | 是 | 美国站使用 us；US 脚本默认 us。通用兼容脚本支持 cn / partner / us / global / eu，须小写。 |
+| managementType | string | 是 | US 脚本默认 semi-managed；通用脚本支持 full-managed / semi-managed，须小写；具体权限以授权店铺为准。 |
+| accessToken | string | 是 | Temu 店铺令牌；脚本可用本地 storeKey 解析后填入，不能以 LinkFox API key 替代。 |
+| type | string | 是 | 本接口操作标识，见本节接口标题；它位于 Body，不是 URL path。 |
+| tokenPurpose | string | 否 | 建议使用 product-inventory；脚本仅将其用于本地令牌匹配，不发送此字段。 |
+| params | object | 否 | 本接口的业务载荷，按下方 params.request 结构提供。 |
+| params.request | OBJECT | 否（官方顶层标记） | 官方请求表将 request 标为选填（False）；下表标为必填的子字段仍须在 params.request 提供。 |
 
-> 官方 Request 表将顶层 **`request`** 标为选填（False）；标 **必填** 的字段须在 **`params.request`** 中提供。
+#### 脚本认证与业务参数约定
 
-### 网关 `params` 写法
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| accessToken / storeKey | string | 二选一 | 直接令牌优先；storeKey 仅为本地令牌索引，不发送网关。 |
+| site | string | 否 | US 脚本默认 us；通用脚本必填，支持站点见网关表。 |
+| managementType | string | 否 | US 脚本默认 semi-managed；通用脚本必填。 |
+| tokenPurpose | string | 否 | US 脚本默认 product-inventory；通用脚本默认 default。令牌按 storeKey + site + managementType + tokenPurpose 精确匹配，不跨店铺或用途回退。 |
+| token / linkfoxToken / linkfox_token | string | 否 | 兼容的 LinkFox 鉴权字段，依次取首个非空值，优先于两种 API key 环境变量；仅用于请求头，不混入业务载荷。 |
+| params | object | 否 | 显式对象优先；未提供对象时 US 脚本将顶层非保留业务字段（如 request）收集为 params；通用 temu_proxy.py 只接受显式 params 对象。 |
+| --inline | CLI flag | 否 | 强制全量打印，仍保存完整响应。 |
+| --no-cache | CLI flag | 否 | 保留兼容选项；业务封装始终向 call_api.run 添加此选项，不读取或保存响应缓存。 |
+
+保留参数集合为 token、linkfoxToken、linkfox_token、accessToken、storeKey、site、managementType、tokenPurpose、type、params。通用 temu_us_proxy.py 的 type 必填，专用促销脚本固定 type。授权步骤见 [access-token.md](../access-token.md)。
+
+#### `params.request` 内字段
+
+| 参数 | 类型 | 必填 | 说明 |
+| ------ | ------ | ------ | ------ |
+| draftIdList | LONG[] | **是** | 商品报名活动的草稿 ID 列表；由前置报名或更新流程成功提交后生成。 |
+
+### 响应结构
+
+#### LinkFox 网关与脚本输出
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 若返回，依公共响应码基本规则判断。 |
+| errmsg | string | 网关错误消息，若返回则按实际内容解释。 |
+| body | string | Temu 原始 JSON 字符串，脚本保留原文并尝试解析。 |
+| code | integer | 网关业务错误码：1002 参数或 Token 无效；1003 转发失败。不能替代 errcode 的公共判断。 |
+| temuBody | 任意 JSON 类型 | 脚本解析字段：body 能解析为 JSON 时的业务对象；解析失败时不添加，仍保留 body。 |
+| transportHttpStatus | integer / null | 脚本记录的 LinkFox 外层 HTTP 状态；连接失败时为 null。 |
+| rawResponse | 任意 JSON 类型 | 仅网关返回非对象 JSON 时，脚本用此字段保留原值。 |
+| error / details | string | 连接错误或非 JSON 响应的说明与原文；HTTP 成功但响应非 JSON 时也保留，不自动重试。 |
+
+#### Temu 顶层字段
+
+以下字段位于解析后的 temuBody 根级或其 response 内；须按实际层级读取。
+
+| 参数 | 类型 | 说明 |
+| ------ | ------ | ------ |
+| success | BOOLEAN | 当前请求是否成功。 |
+| errorCode | INTEGER | Temu 业务错误码。 |
+| errorMsg | STRING | Temu 业务错误消息。 |
+| result | OBJECT 或 OBJECT[] | 业务结果支持 OBJECT 或 OBJECT[]；本接口按数组读取。 |
+
+#### `result`（OBJECT[]）
+
+Partner 响应示例中 result 直接为数组；下表为各元素字段。
+
+| 参数 | 类型 | 说明 |
+| ------ | ------ | ------ |
+| draftId | LONG | 草稿 ID。 |
+| operationStatus | INTEGER | 操作状态码；具体数值含义须结合实际返回核实，不预设枚举。 |
+| failReason | STRING | 失败原因。 |
+| goodsId | LONG | 商品 ID。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关 code=1002 表示参数或 Token 无效，code=1003 表示转发失败。网关正常时解析 body，并按 Temu 的 success / errorCode / errorMsg 判断业务结果。
+- body 不能解析时保留原文，不将传输完成或空结果当作业务成功。
+- draftId 是异步操作线索，不能视为报名或更新已完成；operationStatus 不预设数值枚举或成功值，结合 failReason 与后续已报名商品核验。按用户任务范围查询，避免无间隔或无限轮询。
+
+| errorCode | errorMsg | 说明 / 处理建议 |
+|-----------|----------|----------------------|
+| 220010001 | parameter is illegal | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
+| 220010002 | system error, please try again later | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "us",
+  "managementType": "semi-managed",
+  "accessToken": "TOKEN",
+  "type": "bg.promotion.activity.goods.operation.query",
+  "params": {
+    "request": {
+      "draftIdList": [
+        10001,
+        10002
+      ]
+    }
+  }
+}'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "accessToken": "TOKEN",
-  "tokenPurpose": "product-inventory",
-  "request": {
-    "draftIdList": [
-      10001,
-      10002
-    ]
-  }
+  "skillName": "linkfox-temu-promotion-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
----
-
-## Response（Temu `body` 解析后）
-
-Partner **Response** 表嵌套子行在导出 HTML 中多为折叠状态，下列层级按 **Response 表 + Response Example** 全部展开。
-
-```text
-response
-├── success / errorCode / errorMsg
-└── result[]
-    ├── draftId (LONG)
-    ├── operationStatus (INTEGER)
-    ├── failReason (STRING)
-    └── goodsId (LONG)
-```
-
-### 顶层字段（`response` 内，或根级）
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | success（当前请求是否成功） |
-| errorCode | INTEGER | error code |
-| errorMsg | STRING | error message |
-| result | OBJECT 或 OBJECT[] | 业务结果（见下表；**goods.operation.query** 的 `result` 为数组） |
-
-### `result`（OBJECT[]）
-
-Partner Response Example 中 **`result`** 直接为数组。每个元素：
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| draftId | LONG | Draft id |
-| operationStatus | INTEGER | Operation status（操作状态码） |
-| failReason | STRING | Failure reason |
-| goodsId | LONG | goods id |
-
----
-
-## Error Code（Partner 表）
-
-| errorCode | errorMsg | Error SOP / 处理建议 |
-|-----------|----------|----------------------|
-| 220010001 | parameter is illegal | 见 Partner 文档；修正入参或活动状态后重试 |
-| 220010002 | system error, please try again later | 见 Partner 文档；修正入参或活动状态后重试 |
-
----
-
-## 脚本
-
-```bash
-export LINKFOXAGENT_API_KEY="<key>"
-python scripts/us_promotion_activity_goods_operation_query.py '{"accessToken": "TOKEN", "tokenPurpose": "product-inventory", "request": {"draftIdList": [10001, 10002]}}'
-```
-
-**典型流程：** 轮询 [goods.enroll](./bg-promotion-activity-goods-enroll.md) / [goods.update](./bg-promotion-activity-goods-update.md) 提交的 **`draftId`**。

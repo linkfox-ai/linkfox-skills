@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dependency Check - linkfox-shopee-store-shop-flash-sale
+依赖检查 - linkfox-shopee-store-shop-flash-sale
 =================================================
 
 探测是否已安装 `linkfox-shopee-store-auth`。
@@ -95,8 +95,8 @@ def emit(as_json: bool, ok: bool, payload: dict) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Check required dependency skill availability.")
-    parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON on stdout.")
+    parser = argparse.ArgumentParser(description="检查所需授权技能是否已安装。")
+    parser.add_argument("--json", action="store_true", help="在标准输出中提供 JSON 检测结果。")
     args = parser.parse_args()
 
     found = locate_dependency()
@@ -116,8 +116,8 @@ def main() -> None:
         ),
         "searchedRoots": searched_locations_for_report(),
         "suggestedActions": [
-            f"If a skill installer tool is available, install '{REQUIRED_SKILL}' immediately.",
-            "Otherwise ask the user to install from https://skill.linkfox.com/ and retry.",
+            f"若可用技能安装工具，安装 '{REQUIRED_SKILL}' 后重试。",
+            "否则提示用户从 https://skill.linkfox.com/ 安装后重试。",
         ],
         "marketplaceUrl": "https://skill.linkfox.com/",
     }

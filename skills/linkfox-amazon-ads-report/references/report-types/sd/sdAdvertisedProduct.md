@@ -11,24 +11,24 @@ dateRange:
   dataRetentionDays: 65
 ---
 
-# SD Advertised Product
+# SD 投放商品
 
-Advertised product reports contain performance data for products that are advertised as part of your Sponsored Display campaigns.
+投放商品报告提供 SD 活动所推广商品的效果数据。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sdAdvertisedProduct |
-| Maximum date range | 31 days |
-| Data retention | 65 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 65 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | advertiser |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | addToCart |
 | addToCartRate |
@@ -102,40 +102,35 @@ Advertised product reports contain performance data for products that are advert
 | viewabilityRate |
 | viewClickThroughRate |
 
-## Group by advertiser
+## 分组：advertiser
 
-**Additional metrics**: N/A
+无附加指标。
 
-**Filters**: N/A
+**筛选**： 无
 
-## Sample calls
+## 配置示例
 
-### Advertised product summary report
-
-```bash
-curl --location --request POST 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxxxxx' \
---data-raw '{
-    "name": "SD advertised product report 3/5-3/10",
-    "startDate": "2025-03-05",
-    "endDate": "2025-03-10",
-    "configuration": {
-        "adProduct": "SPONSORED_DISPLAY",
-        "groupBy": ["advertiser"],
-        "columns": [
-            "impressions",
-            "clicks",
-            "cost",
-            "campaignId",
-            "newToBrandSalesClicks",
-            "detailPageViews"
-        ],
-        "reportTypeId": "sdAdvertisedProduct",
-        "timeUnit": "SUMMARY",
-        "format": "GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SD advertised product report 3/5-3/10",
+  "startDate": "2025-03-05",
+  "endDate": "2025-03-10",
+  "configuration": {
+    "adProduct": "SPONSORED_DISPLAY",
+    "groupBy": [
+      "advertiser"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "newToBrandSalesClicks",
+      "detailPageViews"
+    ],
+    "reportTypeId": "sdAdvertisedProduct",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

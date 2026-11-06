@@ -1,187 +1,110 @@
 ---
 name: linkfox-echotik-list-video-rank
-description: 查询TikTok视频排行榜，按日榜、周榜或月榜以及区域与视频排名指标获取热门视频榜单，返回播放量、点赞、评论、分享、收藏、视频销量与GMV等指标，覆盖16个TikTok Shop站点。当用户提到TikTok视频排行、TikTok热门视频榜单、TikTok视频排名、TikTok日榜、TikTok周榜、TikTok月榜、TikTok带货视频排行、TikTok视频销量排行、TikTok视频GMV排行、EchoTik视频排行、TikTok video ranking, TikTok top videos chart, TikTok video leaderboard, TikTok viral video ranking时触发此技能。即使用户未明确提及"EchoTik"或"视频排行"，只要其需求涉及按日期获取TikTok视频榜单或视频排名，也应触发此技能。
+description: 查询 EchoTik 的 TikTok 视频日榜、周榜和月榜，按站点及播放量或视频销量发现热门视频，展示播放、互动、估算销量与 GMV、达人和关联商品信息，覆盖 16 个 TikTok Shop 站点。适用于视频排行、热门视频榜单、带货视频排名及按日期研究视频表现；无需明确提及 EchoTik。不适用于自由条件视频列表、单个商品关联视频、下载地址解析或商品与店铺排行榜。
 ---
 
-# EchoTik - TikTok Video Ranking
+# EchoTik TikTok 视频排行
 
-This skill queries TikTok Shop **video ranking** data via the EchoTik data source, helping cross-border sellers and marketers discover top-performing videos in daily, weekly, or monthly rankings. Unlike `linkfox-echotik-list-video` (which lists videos by region with free filters), this tool returns a **dated ranking** of videos sorted by a chosen metric.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-EchoTik is a TikTok Shop analytics platform. This tool returns ranked video lists for a selected day, week, or month, ordered by a selected ranking metric.
+查看指定日期对应的 TikTok 视频日榜、周榜或月榜，帮助跨境卖家和营销人员发现热门视频及带货内容。用户要求“视频排行”“视频榜单”或结合日期、站点查看“最火视频”时，使用本技能。
 
-**Required input**: `date`, `rankType`, `region`, and `videoRankField` are all mandatory. There are no defaults for required fields.
+**场景速查**
 
-**Related skill**: To list videos by region with free filters (creator / product / views range / ad / AI flags) instead of a dated ranking, use `linkfox-echotik-list-video`. This skill is for ranked, date-scoped video charts.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| TikTok 视频排行、热门视频榜单 | 按选定周期和指标查看视频排名。 |
+| 本周 TikTok 最火的视频 | 查看周度视频播放量榜单。 |
+| 本月 TikTok 带货视频榜 | 查看月度视频销量榜单及估算 GMV。 |
+| 英国 TikTok 视频榜单 | 查询英国站指定周期的视频排行。 |
+| 月度 AI 带货视频排行 | 按 AI 标记及商品类目筛选月度榜单。 |
 
-## Data Fields
+### 边界
 
-The response `data[*]` video object has 25 documented fields. Metric names begin with `total` but represent the **ranking period's** cumulative value. Key fields:
+- 按达人、商品、播放量范围、广告或 AI 标记自由筛选视频列表，且不需要指定周期榜单时，使用 `linkfox-echotik-list-video`。
+- 查看某个商品关联的视频，使用 `linkfox-echotik-product-video`；解析视频下载地址，使用 `linkfox-echotik-get-video-download-url`。
+- 商品榜单和店铺榜单不属于本技能范围。
 
-| Field | Description |
-|-------|-------------|
-| videoId / officialUrl / coverUrl | Video ID / TikTok URL / cover image URL |
-| videoDesc / duration / createDate | Description / duration (seconds) / publish date |
-| userId / uniqueId / nickName / avatar | Creator ID / TikTok account ID / nickname / avatar |
-| category / region | Creator category / marketplace code |
-| totalViewsCnt / totalDiggCnt / totalCommentsCnt | Period views / likes / comments |
-| totalSharesCnt / totalFavoritesCnt | Period shares / favorites |
-| totalVideoSaleCnt / totalVideoSaleGmvAmt | Period video sales (units, estimated) / sales GMV (estimated) |
-| salesFlagText / createdByAiText | Selling video flag / AI video flag (是/否) |
-| productCategoryList / videoProducts | Selling product categories / products |
-| sourceType / sourceTool | Product source / source tool |
+## 前置条件
 
-> Full field list with types is in `references/api.md`. This shape **differs** from `linkfox-echotik-list-video` (no width/height/ratio, no 1d/7d/30d breakdowns, no `isAdText`).
+先确定查询日期、榜单周期、站点与排名指标。参数定义、站点选择约定和数据可用性限制见 `references/api.md`。
 
-## Parameter Guide
+## 查询流程
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| date | string | Yes | - | Query date, `YYYY-MM-DD` |
-| rankType | integer | Yes | - | Ranking type (see values below) |
-| region | string | Yes | - | Marketplace code. See supported list below |
-| videoRankField | integer | Yes | - | Ranking metric (see values below) |
-| productCategoryId | string | No | - | Level-1 product category ID for filtering sales-video rankings |
-| createdByAi | string | No | - | AI-video filter: `true` or `false` |
-| pageNum | integer | No | 1 | Page number, starts at 1 |
-| pageSize | integer | No | 50 | Page size — must be a multiple of 10, max 100 |
+1. 根据用户意图确定查询范围，区分周期榜单与自由条件的视频列表；核对前置条件，按需确定类目或 AI 视频筛选条件。
+2. 阅读 `references/api.md`，将用户要求映射为请求参数；执行一次查询，优先复用同参数的本地缓存。
+3. 按接口文档的响应码规则判断结果；认证、用量或数据不可用时，解释原因。更改日期、筛选条件或继续翻页前，遵守成本约束。
+4. 先看摘要，再从保存文件提取需要的数据。按原榜单顺序展示视频表现、总记录数和当前页，并说明估算指标。
 
-### rankType values
+## 执行方式
 
-| Value | Meaning |
-|-------|---------|
-| 1 | Daily ranking (day) |
-| 2 | Weekly ranking (week) |
-| 3 | Monthly ranking (month) |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_list_video_rank.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 5 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### videoRankField values
+### 输出策略
 
-| Value | Meaning | Verified |
-|-------|---------|----------|
-| 1 | Rank by views (播放量) | ✓ 200 |
-| 2 | Rank by video sales (视频销量) | ✓ 200 |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-video-rank-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-> **Metric sparsity**: when ranking by a given `videoRankField`, the other metric fields may return 0 (ranking by sales → views/likes/comments can be 0; ranking by views → sales/GMV can be 0).
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### Supported Marketplaces
+## 执行规则
 
-US (United States), ID (Indonesia), TH (Thailand), PH (Philippines), MY (Malaysia), VN (Vietnam), GB (United Kingdom), MX (Mexico), SG (Singapore), SA (Saudi Arabia), BR (Brazil), ES (Spain), JP (Japan), DE (Germany), IT (Italy), FR (France)
+### 算力消耗预估
 
-When the user doesn't specify a marketplace, ask or default to **US**.
+5 算力 / 次
 
-## 调用方式
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- **API 端点**：`POST /echotik/listVideoRank`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_list_video_rank.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-video-rank-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 解决认证和算力问题
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 约束与建议
 
-## Usage Examples
+- **理解榜单周期**：EchoTik 提供选定周期的视频排名。名称以 `total` 开头的指标表示该排行周期内的累计值，不能解释成视频发布以来的终身数据。
+- **保留榜单顺序**：使用服务端返回的排名顺序，明确展示榜单周期、站点与所选排名指标。
+- **清晰展示数据**：用表格列出视频描述（过长时截断）、播放量、点赞、评论、分享、视频销量、视频 GMV、发布日期和达人 ID；按需补充收藏数、账号、昵称、视频封面和关联商品。
+- **提供原视频链接**：存在 `officialUrl` 时提供链接，便于用户在 TikTok 查看原视频。
+- **解释估算与稀疏指标**：说明视频销量和 GMV 为估算值。非排名指标的零值按接口文档的稀疏约定解释，不据此断言视频没有互动或销售。
+- **说明返回范围**：始终展示 `total` 及当前页；结果很多时可建议继续分页，后续调用遵守成本约束。
+- **使用实际字段**：榜单与自由筛选视频列表的响应不同；按本接口文档展示返回字段，不补造画面宽高、比例、分时段统计或广告标记。
 
-**1. Top US videos by views on a given day**
-```json
-{
-  "date": "2026-08-10",
-  "rankType": 1,
-  "region": "US",
-  "videoRankField": 1,
-  "pageNum": 1,
-  "pageSize": 20
-}
-```
+## 使用示例
 
-**2. Weekly UK video ranking**
-```json
-{
-  "date": "2026-08-10",
-  "rankType": 2,
-  "region": "GB",
-  "videoRankField": 1
-}
-```
+### 指定日期的美国播放量日榜
 
-**3. Monthly US sales ranking filtered to AI videos**
-```json
-{
-  "date": "2026-08-01",
-  "rankType": 3,
-  "region": "US",
-  "videoRankField": 2,
-  "createdByAi": "true",
-  "productCategoryId": "601450",
-  "pageNum": 1,
-  "pageSize": 20
-}
-```
+用户：查看 2026 年 8 月 10 日美国播放量最高的视频，先看 20 条。
 
-## Display Rules
+确定站点、日期、周期与播放量指标，查询后按原顺序展示互动数据并附原视频链接。请求示例见 `references/api.md`。
 
-1. **Present data in tables**: Show video description (truncated if long), views, likes, comments, shares, video sales, video GMV, publish date, and creator ID.
-2. **Rank order**: Results are already ranked by the chosen `videoRankField`; preserve and surface the ranking order.
-3. **Link to original**: When `officialUrl` is available, provide it so users can view the video on TikTok.
-4. **Estimation notice**: Video sales and GMV are estimated values; remind users these are approximations.
-5. **Result count**: Always inform the user of `total` records and the current page; suggest pagination when the result set is large.
+### 英国周榜
 
-## Important Limitations
+用户：查看 2026 年 8 月 10 日对应的英国视频周榜。
 
-1. **All four required fields**: `date`, `rankType`, `region`, `videoRankField` are mandatory; no defaults are applied.
-2. **Ranking data lags 1–2 days**: Recent ranking data may be unavailable and return `errcode:10000` ("no matching data"). Use an earlier date if needed.
-3. **Ranking vs. listing**: This is a dated ranking. For region-scoped video listing with free filters (creator / views range / ad / AI flags), use `linkfox-echotik-list-video`.
-4. **No secondary processing**: Results are live queries; secondary SQL/data processing is not available.
+使用英国站与周榜，按播放量查看热门视频，说明结果对应的周期和当前页。
 
-## User Expression & Scenario Quick Reference
+### 按类目筛选 AI 带货视频月榜
 
-**Applicable** — TikTok video ranking / charts:
+用户：查看 2026 年 8 月美国类目 601450 的 AI 带货视频销量榜，先看 20 条。
 
-| User Says | Scenario |
-|-----------|----------|
-| "TikTok视频排行" / "TikTok top video chart" | Video ranking by selected period and metric |
-| "本周TikTok最火的视频" | Weekly ranking (`rankType:2`) |
-| "本月TikTok带货视频榜" | Monthly sales ranking (`rankType:3`) |
-| "TikTok带货视频排行" | Ranked selling videos (inspect sales/GMV columns) |
-| "英国TikTok视频榜单" | region=GB ranking |
+使用月度销量榜，结合商品类目与 AI 视频条件查询；展示视频销量和 GMV，并说明两者为估算值。
 
-**Not applicable** — Needs beyond dated video ranking:
+## 使用反馈
 
-- Region-scoped video listing with free filters (use `linkfox-echotik-list-video`)
-- Videos for one specific product by `productId` (use `linkfox-echotik-product-video`)
-- Video download URL resolution (use `linkfox-echotik-get-video-download-url`)
-- TikTok product / seller rankings
-
-**Boundary judgment**: When users say "视频排行/视频榜单/最火视频" with a date or region context, this skill applies. If they want to filter videos by creator, views range, or ad/AI flags without a ranking, use `linkfox-echotik-list-video`.
-
-## 算力消耗规则
-
-消耗 5 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

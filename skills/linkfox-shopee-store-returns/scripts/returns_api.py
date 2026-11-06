@@ -1,34 +1,15 @@
 #!/usr/bin/env python3
-"""
-Shopee Store — generic Returns API caller
-=========================================
+"""Shopee 店铺退货退款通用入口；JSON 中的 api 选择 15 个 Returns 操作之一。
 
-Usage:
-  python returns_api.py '{"api": "get_return_list", "shopId": "67890", "page_no": 1, "page_size": 20}'
-
-Official docs: https://open.shopee.com/documents/v2/v2.returns.<api>?module=102&type=1
+官方：https://open.shopee.com/documents/v2/v2.returns.<api>?module=102&type=1
+参数、兼容与输出约定见 references/api.md。
 """
 
-from __future__ import annotations
-
-import json
-import sys
-
-from _returns_api_runner import run_returns_api
-from _returns_endpoints import list_api_names
-from _shopee_returns_common import emit_result, lf_inline_flag
+from _returns_api_runner import run_cli
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print(f"Usage: returns_api.py '<JSON with api field>'\nAvailable: {', '.join(list_api_names())}", file=sys.stderr)
-        sys.exit(1)
-    params = json.loads(sys.argv[1])
-    if not params.get("api"):
-        print("Missing required field: api", file=sys.stderr)
-        sys.exit(1)
-    inline = lf_inline_flag()
-    emit_result(run_returns_api(str(params["api"]), params, "returns_api.py"), inline)
+    run_cli()
 
 
 if __name__ == "__main__":

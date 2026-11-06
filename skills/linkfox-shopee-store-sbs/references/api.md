@@ -1,64 +1,63 @@
-# linkfox-shopee-store-sbs — 参数与字段参考
+# Shopee SBS 仓储服务 接口说明
 
-> 单接口入参/响应说明已拆到 **`apis/`**（按 API 一份）；本文件保留模块总览与 Feedback。
-Shopee **SBS 模块**全部 5 个 API，经 **`POST /shopee/developerProxy`** 转发。
+SBS 业务接口按操作拆分，全部通过 `POST /shopee/developerProxy` 转发；另提供共享模块中的授权状态辅助查询。账户引导公共资源不计入业务接口清单。
 
-授权见 **`linkfox-shopee-store-auth`**。官方索引：[v2.sbs.get_bound_whs_info](https://open.shopee.com/documents/v2/v2.sbs.get_bound_whs_info?module=124&type=1)
+| 操作 | 接口文档 | 上游方法与 path |
+|---|---|---|
+| 绑定仓库（`get_bound_whs_info`） | [apis/get-bound-whs-info.md](apis/get-bound-whs-info.md) | GET `api/v2/sbs/get_bound_whs_info` |
+| 当前库存（`get_current_inventory`） | [apis/get-current-inventory.md](apis/get-current-inventory.md) | GET `api/v2/sbs/get_current_inventory` |
+| 效期报表（`get_expiry_report`） | [apis/get-expiry-report.md](apis/get-expiry-report.md) | GET `api/v2/sbs/get_expiry_report` |
+| 库龄报表（`get_stock_aging`） | [apis/get-stock-aging.md](apis/get-stock-aging.md) | GET `api/v2/sbs/get_stock_aging` |
+| 库存变动（`get_stock_movement`） | [apis/get-stock-movement.md](apis/get-stock-movement.md) | GET `api/v2/sbs/get_stock_movement` |
+| 授权状态（`storeTokens`） | [apis/store-tokens.md](apis/store-tokens.md) | POST `/shopee/storeTokens`（非 Shopee 转发 path） |
 
-## 通用约定
+## 公共规则
 
-- **path**：须 `api/v2/sbs/...`
-- **标识**：通常传 **`shopId`**
-- **官方文档 URL 规则**：`https://open.shopee.com/documents/v2/v2.sbs.{api}?module=124&type=1`
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## SBS 模块总览
+### 响应码基本规则
 
-| # | API | Method | path | 脚本 | 官方文档 |
-|---|-----|--------|------|------|----------|
-| 1 | get_bound_whs_info | GET | `api/v2/sbs/get_bound_whs_info` | `get_bound_whs_info.py` | [apis/get-bound-whs-info.md](./apis/get-bound-whs-info.md) |
-| 2 | get_current_inventory | GET | `api/v2/sbs/get_current_inventory` | `get_current_inventory.py` | [apis/get-current-inventory.md](./apis/get-current-inventory.md) |
-| 3 | get_expiry_report | GET | `api/v2/sbs/get_expiry_report` | `get_expiry_report.py` | [apis/get-expiry-report.md](./apis/get-expiry-report.md) |
-| 4 | get_stock_aging | GET | `api/v2/sbs/get_stock_aging` | `get_stock_aging.py` | [apis/get-stock-aging.md](./apis/get-stock-aging.md) |
-| 5 | get_stock_movement | GET | `api/v2/sbs/get_stock_movement` | `get_stock_movement.py` | [apis/get-stock-movement.md](./apis/get-stock-movement.md) |
-通用入口：`sbs_api.py`（JSON 含 `"api": "<上表 API 名>"`）。
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
----
+## 脚本运行约定
 
-## 常用接口说明
+| 项目 | 约定 |
+|---|---|
+| 专用入口 | `python scripts/<操作名>.py '<JSON 参数>' [--inline] [--no-cache]`。 |
+| 通用入口 | `python scripts/sbs_api.py '<含 api 字段的 JSON 参数>' [--inline] [--no-cache]`；`api` 仅可为上表五个 SBS 操作名。 |
+| 依赖检查 | `python scripts/check_auth_dependency.py [--json]`；找到依赖返回 0，缺失或检测失败返回 42，stderr 含 `DEPENDENCY_MISSING:`；先安装 `linkfox-shopee-store-auth`。 |
+| 依赖目录探测 | 探测 `LINKFOX_SKILLS_DIR`、`SKILLS_DIR`、`CURSOR_SKILLS_DIR`、`HERMES_SKILLS_EXTERNAL_DIRS`、OpenClaw 工作区与 skills 环境变量、当前目录、相邻技能目录及常见用户安装目录。 |
+| 认证 | 优先 `LINKFOX_AGENT_API_KEY`，兼容 `LINKFOXAGENT_API_KEY`，缺失时退出 1 并按 [onboarding.md](onboarding.md) 处理。 |
+| 网关 | 优先 `LINKFOX_TOOL_GATEWAY`，其次 `SHOPEE_API_BASE_URL`，默认公共网关；配置在模块加载时解析。 |
+| 会话头 | 保留 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME`。 |
+| 响应缓存 | 脚本不启用响应缓存，业务封装调用公共 `call_api.run` 时始终添加 `--no-cache`；公共调用器可能建立空缓存目录，但不读取或保存响应缓存。 |
+| 落盘 | 加工后的完整响应一次保存到 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-shopee-store-sbs-<接口标识>-<timestamp>.json`，保留会话元数据和索引；同秒请求使用细粒度时间戳分别保存。 |
+| 目录要求 | 必须使用可写当前工作目录，请求前检查根目录及日期、会话、data 子目录（含会话元数据）；路径冲突或不可写时先报错，不发起请求。禁止回退到 `/tmp`、其他临时目录或用户目录。 |
+| 输出 | 不超过 8000 字节完整打印，否则摘要含顶层字段、顶层存在的常见计数、非空最大列表长度及前 3 条；`--inline` 强制全量打印，仍保存完整响应。 |
+| 重复调用 | 不自动换店铺、重试、翻页或试探；失败或空结果后继续调用须遵守 SKILL.md 调用约束。 |
 
-| API | 要点 |
-|-----|------|
-| `get_bound_whs_info` | 已绑定仓库信息 — [apis/get-bound-whs-info.md](./apis/get-bound-whs-info.md) |
-| `get_current_inventory` | 当前 SBS 库存 — [apis/get-current-inventory.md](./apis/get-current-inventory.md) |
-| `get_expiry_report` | 效期报表 — [apis/get-expiry-report.md](./apis/get-expiry-report.md) |
-| `get_stock_aging` | 库龄报表 — [apis/get-stock-aging.md](./apis/get-stock-aging.md) |
-| `get_stock_movement` | 库存变动记录 — [apis/get-stock-movement.md](./apis/get-stock-movement.md) |
+## Feedback
 
----
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
-## curl 示例
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
-```bash
-curl -X POST ${LINKFOX_TOOL_GATEWAY}/shopee/developerProxy \
-  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "path": "api/v2/sbs/get_bound_whs_info",
-    "method": "GET",
-    "accessToken": "xxx",
-    "shopId": "67890"
-  }'
-```
-
----
-
-## Feedback API
-
-```bash
-curl -X POST https://skill-api.linkfox.com/api/v1/public/feedback \
-  -H "Content-Type: application/json" \
-  -d '{"skillName":"linkfox-shopee-store-sbs","sentiment":"POSITIVE",
-       "category":"OTHER","content":"SBS库存查询正常"}'
+```json
+{
+  "skillName": "linkfox-shopee-store-sbs",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

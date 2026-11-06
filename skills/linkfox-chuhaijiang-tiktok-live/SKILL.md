@@ -1,116 +1,117 @@
 ---
 name: linkfox-chuhaijiang-tiktok-live
-description: 使用出海匠（Chuhaijiang）研究 TikTok 公开直播市场，支持多条件直播搜索、单场直播详情和直播带货商品钻取。用户明确点名出海匠或 Chuhaijiang 且意图是直播搜索、直播详情或从直播反查商品时触发；即使用户未指定数据源，也仅在需要从直播反查带货商品时触发。通用 TikTok 带货直播榜单或详情使用 linkfox-kalodata-tiktok-livestream，从商品出发的关联直播研究使用 linkfox-chuhaijiang-tiktok-product；点名其他数据源时不触发。
+description: 使用出海匠（Chuhaijiang）研究 TikTok 公开直播市场，支持多条件直播搜索、单场直播详情和直播带货商品钻取。用户点名出海匠或 Chuhaijiang 且需要直播搜索、详情或从直播反查商品时使用；未指定数据源时，仅在需要从直播反查带货商品时使用。不适用于通用直播榜单、商品或达人出发的研究、直播运营管理、卖家后台操作、回放下载、转录或媒体制作。
 ---
 
-# TikTok Live Commerce Intelligence
+# 出海匠 TikTok 直播带货情报
 
-Use this skill to research public TikTok livestream commerce: discover live sessions with market filters, inspect one session and its performance metrics, or identify the products sold in that session.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- This is read-only public-market research. It does not start, moderate, schedule, or manage a TikTok livestream.
-- Search returns `data.items[]` plus `data.total_count`. Reuse a search item's string `id` for detail or related-product calls.
-- Detail returns identity and creator context in `data.items[]`; `include=core` additionally returns performance metrics in `data.core.items[]`.
-- Related-product rows use `tiktok_live_detail_product_*` fields. Read `references/api.md` before interpreting them.
-- Money fields are objects such as `{ "unit": "US", "value": 2015752.25 }`. Preserve both fields and do not silently relabel or convert the unit.
-- A requested `country` is query context; preserve the row-level `country_code` because it is authoritative for the returned record.
+研究 TikTok 公开直播的带货表现，按市场条件发现直播、查看指定场次，或识别该场直播关联的商品。
 
-## Data Fields
+**场景速查**
 
-| Field | Meaning |
-|---|---|
-| `data.total_count` | Total matching live sessions or products |
-| `data.items[].id` | Live room ID, or product ID on the related-products endpoint |
-| `title` / `room_link` | Live title and public room URL |
-| `user_id` / `user_unique_id` | Host identifiers |
-| `gmv` / `gpm` / `opm` | Revenue, GMV per thousand viewers, and orders per thousand viewers |
-| `total_sold_count` / `product_count` | Units sold and products promoted in the live |
-| `total_user` / `max_user_count` | Total and peak audience counts |
-| `data.core.items[]` | Optional normalized performance metrics from detail `include=core` |
-| `tiktok_live_detail_product_*` | Related product, seller, price, sales, GMV, commission, and conversion fields |
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 用出海匠搜美国 TikTok 带货直播 | 按市场和筛选条件搜索直播。 |
+| 用 Chuhaijiang 看这场直播详情 | 查看直播与主播背景，按需获取核心表现指标。 |
+| 这场直播卖了哪些商品 | 从直播反查带货商品、卖家及销售表现。 |
+| 出海匠 TikTok live analytics | 根据问题选择搜索、详情或商品钻取。 |
 
-## Endpoints
+### 边界
 
-| User goal | Endpoint | Script |
-|---|---|---|
-| Search public livestreams | `/chuhaijiang/lives/search` | `chuhaijiang_live_search.py` |
-| Inspect one livestream | `/chuhaijiang/lives/detail` | `chuhaijiang_live_detail.py` |
-| Find products sold in a livestream | `/chuhaijiang/lives/related-products` | `chuhaijiang_live_related_products.py` |
+未点名数据源的通用直播榜单或详情使用 `linkfox-kalodata-tiktok-livestream`；从商品查关联直播使用 `linkfox-chuhaijiang-tiktok-product`；从达人出发的直播研究使用 `linkfox-chuhaijiang-tiktok-creator`。点名其他数据源时不使用本技能。
+本技能只读公开市场数据，不启动、排期、管理或审核直播，不操作卖家后台或订单，也不下载回放、转录或制作媒体。
 
-Call only the endpoint needed for the user's current question. Do not automatically drill from search to detail or products because each endpoint is billed independently.
+## 接口清单
 
-## Parameter Guide
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 直播搜索 | POST `/chuhaijiang/lives/search` | `scripts/chuhaijiang_live_search.py` | 按市场、分类及表现条件查找直播。 |
+| 直播详情 | POST `/chuhaijiang/lives/detail` | `scripts/chuhaijiang_live_detail.py` | 读取指定直播、主播背景及可选核心指标。 |
+| 直播关联商品 | POST `/chuhaijiang/lives/related-products` | `scripts/chuhaijiang_live_related_products.py` | 查看指定直播带货的商品与卖家表现。 |
 
-- `country`: required lowercase marketplace code: `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`.
-- `page`: starts at 1. Search and related products accept `pageSize` up to 10.
-- `id`: required for detail and related products. Pass 19-digit IDs as JSON strings to preserve precision.
-- `include`: detail-only optional string; use `core` when normalized performance metrics are needed.
-- Search supports `keyword`, `category`, `productCategory`, `isLiving`, `isCommercial`, sales/GMV/audience ranges, and `sort` in `field:asc|desc` form. The default sort is `gmv:desc`.
-- Use the camelCase request fields documented in `references/api.md`; do not send the upstream snake_case aliases.
+## 前置条件
 
-## 调用方式
+先确定目标市场与研究问题。指定场次查询需要用户提供直播标识，或在任务需要时从搜索结果取得；字段定义、参数约束和脚本缓存约定见 `references/api.md`。
 
-- **API 端点**：`POST /chuhaijiang/lives/search`、`POST /chuhaijiang/lives/detail` 或 `POST /chuhaijiang/lives/related-products`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/chuhaijiang_live_<entry>.py '<JSON 参数>' [--inline]`，其中 `<entry>` 为 `search`、`detail` 或 `related_products`
-- **成本约束**：业务入口脚本默认只缓存成功响应 24 小时，业务成功的空结果也可缓存；缓存按当前工作目录、调用身份、网关、端点和完整请求参数隔离。相同组合命中时输出 `Cache hit`，不会发起新的付费请求。HTTP 或业务失败不缓存；`--inline` 不绕过缓存；`--no-cache` 会强制真实请求并可能再次消耗算力，仅在用户明确同意额外消耗或调试时使用。
+## 查询流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-live-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、业务总数、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 根据用户当前问题选择搜索、详情或直播关联商品，只执行所需操作。各端点独立计费，不自动从搜索继续钻取详情或商品。
+2. 需要发现直播时先搜索；需要进一步研究某场直播时，沿用该搜索记录的直播标识。已有标识时直接查询所需内容。
+3. 查看详情时，先区分直播与主播背景和核心表现指标；仅在用户需要核心指标时请求相应扩展。商品研究直接读取该场直播的关联商品结果。
+4. 先检查响应与摘要，再从落盘文件提取本次需要的字段，按下方口径展示。失败或空结果保留已有数据，后续检索遵守成本约束。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行方式
 
-## 解决认证和算力问题
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具按下方“算力消耗预估”中的端点规则计费。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-网关返回认证或余额错误时，读取 `references/onboarding.md`，按其中的 auth/billing 分流使用 `scripts/onboarding.py`。不要把 API Key、验证码、支付链接或原始用户消息写入反馈。
+### 输出策略
 
-## Usage Examples
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-live-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`data.total_count`，以及响应体中存在时的 `costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-```bash
-python scripts/chuhaijiang_live_search.py '{"country":"us","isCommercial":true,"sort":"gmv:desc","page":1,"pageSize":3}'
-python scripts/chuhaijiang_live_detail.py '{"country":"us","id":"7643101948819835678","include":"core"}'
-python scripts/chuhaijiang_live_related_products.py '{"country":"us","id":"7643101948819835678","page":1,"pageSize":3}'
-```
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-These examples were production-validated with non-empty semantic results on 2026-08-29. Public-market IDs are volatile; use a fresh search result if an example stops resolving.
+## 执行规则
 
-## Display Rules
+### 算力消耗预估
 
-1. State the requested marketplace, filters, sort, page, page size, and returned total.
-2. For search, show title, room ID/link, host, time range, audience, products, units sold, GMV, GPM, and OPM when returned.
-3. For detail, separate identity/host fields from optional `core` metrics; label `follower_conversion_rate` as a decimal unless explicitly formatting it as a percentage.
-4. For related products, show product ID/title/image, country, price range, seller, units sold, GMV, commission rate, and conversion rate when present.
-5. Preserve 19-digit IDs as strings. Preserve raw epoch-millisecond timestamps and add readable dates only as derived labels.
-6. Report empty arrays honestly and never invent a product relationship or a currently-live status.
+按端点分别计费：直播详情 9 算力 / 次；直播搜索和直播关联商品各 18 算力 / 次。高频调用或多端点钻取前，说明预计调用次数与合计算力。
 
-## Important Limitations
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-1. Data reflects the provider's indexed public snapshot and can lag TikTok.
-2. `isLiving` is a search filter, not proof that a returned room is still live when displayed later.
-3. Related products are available only when the indexed live session has product relationships.
-4. Search filters do not imply causality between audience, GMV, sales, and creator performance.
-5. Do not expose internal tool identifiers, credentials, cache files, or unrelated response fields.
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## User Expression & Scenario Quick Reference
+### 解决认证和算力问题
 
-**Use this skill**: “用出海匠搜美国 TikTok 带货直播”, “用 Chuhaijiang 看这场直播详情”, “这场直播卖了哪些商品”, “出海匠 TikTok live analytics”.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**Adjacent**: General TikTok livestream rankings or detail requests without a named source should use `linkfox-kalodata-tiktok-livestream`. Product-first research, including finding livestreams associated with a product, uses `linkfox-chuhaijiang-tiktok-product`. Creator-first live research uses `linkfox-chuhaijiang-tiktok-creator`.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**Not applicable**: starting or scheduling livestreams, moderation, seller-backend operations, order handling, replay downloading, transcription, or media generation/editing.
+### 约束与建议
 
-## 算力消耗规则
+- **说明查询背景**：注明请求市场、筛选、排序、分页范围和返回总数；请求市场是查询背景，记录所属国家以返回记录为准。
+- **展示搜索结果**：按实际返回展示标题、直播标识与公开链接、主播、起止时间、观众、商品数、销量、GMV、GPM 和 OPM。GPM 为每千观众 GMV，OPM 为每千观众订单数。
+- **展示详情**：将直播和主播身份信息与可选核心指标分开展示。粉丝转化率、商品佣金率和转化率为小数比率；若转换为百分比，明确标注换算口径。
+- **展示关联商品**：按实际返回展示商品标识、标题、图片、国家、价格区间、卖家、销量、GMV、佣金率和转化率。字段含义见 `references/api.md`。
+- **保留原始口径**：保留金额单位与数值，不静默改标或换算；保留原始毫秒时间戳，可另加可读时间作为派生标签；长标识始终保留字符串形式。
+- **区分快照与实时状态**：数据来自服务商索引的公开快照，可能滞后于 TikTok。直播状态筛选不证明稍后展示时仍在直播；只有索引中有商品关系的场次才能返回关联商品。
+- **如实说明结果**：空数组按无数据展示，不编造商品关系或当前直播状态；筛选结果不能证明观众、GMV、销量与主播表现之间存在因果关系。
+- **保护任务上下文**：不向用户展示内部工具标识、凭证、缓存文件或无关字段。反馈提交须遵守用户明确要求或授权的范围；先概括并脱敏，不包含原始用户消息、无关上下文、手机号、验证码、支付链接、签名 URL 或凭证。
 
-按端点分别计费：直播详情 9 算力/次；直播搜索和直播关联商品 18 算力/次。
+## 使用示例
 
-> 用户会因算力消耗而支付费用。高频调用或多端点钻取前，先说明预计调用次数与算力消耗。
+### 搜索带货直播
+
+用户：用出海匠查看美国带货直播里 GMV 较高的场次。
+
+按用户条件搜索，展示本次返回范围、总数与可用指标，不自动追加详情或商品查询。
+
+### 查看指定场次的表现
+
+用户：用 Chuhaijiang 看这场直播的详情和核心指标。
+
+确认市场与场次后查询详情，分开展示直播与主播背景及核心指标；指标缺失时如实说明。
+
+### 从直播反查商品
+
+用户：这场直播卖了哪些商品，分别卖得怎么样？
+
+读取关联商品，用表格展示商品、价格、卖家与直播关联销售表现，不把直播销量当作商品全市场销量。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
 
-**Feedback:** Use the Feedback API in `references/api.md` only when the user explicitly asks to submit feedback or authorizes it after an issue is identified. Sanitize the content and never include credentials, signed URLs, phone numbers, or unrelated task context.
-
----
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

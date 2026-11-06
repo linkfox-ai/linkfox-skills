@@ -1,70 +1,81 @@
 ---
 name: linkfox-sellersprite-market-research
-description: 使用卖家精灵选市场列表能力，基于类目维度筛选亚马逊细分市场，支持市场规模、竞争度、头部集中度、卖家结构、新品占比、价格/评分/毛利区间等大量条件，用于发现可进入市场与评估选品方向。当用户提到亚马逊市场调研、细分类目研究、市场机会筛选、市场集中度分析、新品机会、选市场、SellerSprite market research、category market research时触发此技能。即使用户未明确提及"卖家精灵"，只要需求是按类目维度筛选和评估亚马逊市场，也应触发此技能。
+description: 使用卖家精灵数据，按类目维度筛选和评估亚马逊细分市场，支持市场规模、竞争度、头部集中度、卖家结构、新品机会及价格、评分、毛利区间分析。适用于亚马逊市场调研、细分类目研究、市场机会筛选和选品方向评估，无需明确提及卖家精灵。不适用于商品级列表筛选、单个 ASIN 详情或关键词流量研究。
 ---
 
-# SellerSprite Market Research
+# 卖家精灵类目市场调研
 
-This skill helps screen and rank Amazon category markets using SellerSprite market-research data.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- **类目市场级分析**：不是商品级列表，而是按类目/节点聚合后的市场画像。
-- **市场规模**：月均销量、月均销售额、商品数量等。
-- **竞争结构**：卖家/品牌集中度、头部集中度、自营占比、FBA/FBM 占比。
-- **入参刻度**：筛选用的 **GoodsCrn / BrandCrn / SellerCrn / EbcProportion / FbaProportion / FbmProportion / AmazonSelfProportion**（`min*`/`max*`）须为 **0～1 小数**，见下文参数表与 `references/api.md`。
-- **新品机会**：新品数量、新品占比、新品均价/评分/销量等。
+按类目或节点聚合数据筛选亚马逊市场，比较市场容量、竞争结构和新品机会，发现可进入的细分市场并评估选品方向。
 
-## 调用方式
+**场景速查**
 
-- **API 端点**：`POST /sellersprite/market/research`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sellersprite_market_research.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 找一些规模足够、竞争较低的亚马逊市场 | 按市场规模与集中度筛选候选类目。 |
+| 看看这个细分类目的卖家和品牌竞争 | 比较品牌、卖家、头部集中度与配送结构。 |
+| 找新品占比较高的市场 | 结合新品数量、占比、均价、评分和销量评估机会。 |
+| 根据价格、评分和毛利筛选市场 | 比较符合经营目标的类目市场。 |
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sellersprite-market-research-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 前置条件
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+先确定目标站点和调研目的，按用户需求明确类目范围、统计时间、筛选方向与排序依据。具体参数、单位及可用范围见 `references/api.md`。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 市场筛选与评估流程
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+1. 将用户的规模、竞争、新品或利润目标整理为筛选条件，按 `references/api.md` 核对单位、刻度和排序规则。
+2. 使用已确定的条件查询类目市场，先查看响应摘要，再按需读取保存的数据。
+3. 先列出市场候选 Top N，再对照市场规模、集中度、卖家结构和新品机会给出评估；同时回显筛选条件，便于用户复现。
+4. 结果过少或过多时，建议用户调整集中度、规模等关键阈值；后续检索遵守成本约束。
 
-## Key Parameters
+## 执行方式
 
-> 接口筛选项与工具 `_sellersprite_market_research` 一致（70+）；下表为常用子集，**完整参数与出参字段见 `references/api.md`**。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sellersprite_market_research.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| marketplace | string | 是 | 站点编码，默认 `US` |
-| month | string | 否 | `nearly` 或 `yyyyMM` |
-| nodeIdPath | string | 否 | 类目节点路径 |
-| departmentKeyword | string | 否 | 类目关键字路径 |
-| page / size | integer | 否 | 分页，默认 1/50，`size` 最大 200 |
-| orderField / orderDesc | string/boolean | 否 | 排序字段与方向；`orderDesc` 默认 `true`（降序） |
-| minAvgRevenue / maxAvgRevenue | number | 否 | 月均销售额范围 |
-| minAvgUnits / maxAvgUnits | integer | 否 | 月均销量范围 |
-| minGoodsCount / maxGoodsCount | integer | 否 | 商品数量范围 |
-| minGoodsCrn / maxGoodsCrn | number | 否 | 商品集中度（**小数 0～1**，如 `0.4` 表示 40%，勿用整数 `40`） |
-| minSellerCrn / maxSellerCrn | number | 否 | 卖家集中度（**小数 0～1**） |
-| minBrandCrn / maxBrandCrn | number | 否 | 品牌集中度（**小数 0～1**） |
-| minAmazonSelfProportion / maxAmazonSelfProportion | number | 否 | Amazon 自营占比（**小数 0～1**） |
-| minFbaProportion / maxFbaProportion | number | 否 | FBA 占比（**小数 0～1**） |
-| minFbmProportion / maxFbmProportion | number | 否 | FBM 占比（**小数 0～1**） |
-| minEbcProportion / maxEbcProportion | number | 否 | A+ 数量占比（**小数 0～1**） |
-| minNewProportion / maxNewProportion | number | 否 | 新品占比（刻度可能与上列不同，以 `references/api.md` / schema 为准） |
-| minAvgPrice / maxAvgPrice | number | 否 | 平均价格范围 |
-| minAvgRating / maxAvgRating | number | 否 | 平均评分范围 |
-| minAvgProfit / maxAvgProfit | number | 否 | 平均毛利率（%） |
+### 输出策略
 
-## Usage Example
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sellersprite-market-research-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+15 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分类目与商品**：本技能返回按类目或节点聚合的市场画像，不是商品级列表。
+- **比较市场规模**：结合月均销量、月均销售额和商品数量判断容量，不将市场总量与均值混用。
+- **比较竞争结构**：关注卖家、品牌和头部集中度，以及 Amazon 自营和 FBA / FBM 结构；仅展示实际返回的指标，不补造缺失数据。
+- **观察新品机会**：结合新品数量、占比、均价、评分和销量评估进入机会。
+- **清晰回显条件**：向用户说明比例筛选条件时可换算为百分数；入参刻度与响应单位分别按 `references/api.md` 解释，不对所有比例字段使用同一换算规则。
+- **展示核心指标**：候选市场表优先呈现规模、集中度和新品占比，标明站点、统计时间和实际币种；响应未提供的值明确说明缺失。
+
+## 使用示例
+
+### 筛选具有新品机会、集中度较低的美国站市场
 
 ```json
 {
@@ -81,33 +92,10 @@ This skill helps screen and rank Amazon category markets using SellerSprite mark
 }
 ```
 
-## Display Rules
+## 使用反馈
 
-1. 先给出市场候选 Top N，再展示核心指标（市场规模、集中度、新品占比）。
-2. **入参回显**：`GoodsCrn` / `BrandCrn` / `SellerCrn` / `EbcProportion` / `FbaProportion` / `FbmProportion` / `AmazonSelfProportion` 对应筛选为 **0～1 小数**；向用户说明时可换算为百分数（如传 `0.4` 可表述为「商品集中度上限 40%」）。响应 `data[]` 里若仍带「(%)」字段，与入参刻度可能不同，以返回为准。
-3. 其它比例/毛利率等字段的单位以 `references/api.md` 为准。
-4. 显示筛选条件回显，便于用户复现。
-5. 若结果过少或过多，建议用户调整关键阈值（如集中度、规模阈值）。
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
-## Important Limitations
+---
 
-- 必填参数：`marketplace`
-- 每页最多 200 条
-- 历史月份范围受第三方限制（通常近24个月）
-
-## 算力消耗规则
-
-消耗 15 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

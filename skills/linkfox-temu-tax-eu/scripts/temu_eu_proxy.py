@@ -25,7 +25,7 @@ def main():
     api_type = require_text(params, "type")
     result = parse_nested_body(eu_proxy_call(params, api_type))
     inline = lf_inline_flag()
-    emit_result(result, inline)
+    emit_result(result, inline=inline)
 
 if __name__ == "__main__":
     main()

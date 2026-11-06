@@ -373,13 +373,29 @@ def _parse_proxy_body(proxy: dict[str, Any]) -> Any:
         return raw
 
 
-def _is_success(proxy: dict[str, Any], statuses: tuple[int, ...]) -> bool:
-    try:
-        gateway_ok = int(proxy.get("errcode")) == 200
-        status = int(proxy.get("httpStatus"))
-    except (TypeError, ValueError):
+def _is_success(proxy: dict[str, Any], statuses: tuple[int, ...], transport_http_status: int | None = 200) -> bool:
+    transport_http_status = getattr(proxy, "transport_http_status", transport_http_status)
+    if type(transport_http_status) is not int or not 200 <= transport_http_status < 300:
         return False
-    return gateway_ok and status in statuses
+    errcode = proxy.get("errcode")
+    if isinstance(errcode, str):
+        errcode = errcode.strip()
+        if errcode:
+            if len(errcode) != 3 or not errcode.isascii() or not errcode.isdigit():
+                return False
+            errcode = int(errcode)
+    if errcode is not None and errcode != "":
+        if type(errcode) not in (int, float) or not 200 <= errcode < 300 or errcode % 1:
+            return False
+    status = proxy.get("httpStatus")
+    if isinstance(status, str):
+        status = status.strip()
+        if len(status) != 3 or not status.isascii() or not status.isdigit():
+            return False
+        status = int(status)
+    if type(status) not in (int, float) or status not in statuses:
+        return False
+    return True
 
 
 def _find_operation_id(value: Any) -> str | None:
@@ -466,6 +482,7 @@ def execute_operation(
         "method": spec["method"],
         "resolvedPath": path,
         "developerProxy": proxy,
+        "transportHttpStatus": getattr(proxy, "transport_http_status", 200),
     }
     if query_string:
         result["queryString"] = query_string
@@ -518,7 +535,7 @@ def run_operation(operation_id: str) -> None:
         cache_hit = output is not None
         if output is None:
             output = execute_operation(operation_id, params)
-            succeeded = _is_success(output.get("developerProxy", {}), spec["successStatuses"])
+            succeeded = _is_success(output.get("developerProxy", {}), spec["successStatuses"], output.get("transportHttpStatus"))
             if succeeded and spec["risk"] in {"write", "commit", "generate"}:
                 _lf_clear_cache()
             if succeeded and use_cache:

@@ -1,174 +1,120 @@
 ---
 name: linkfox-aigc-imagegen
-description: AI生图工具，根据提示词或参考图生成图片。支持配置中已开放的多种图片模型，可控制分辨率、宽高比、质量和输出数量。用户说"生成图片"、"AI画图"、"AI生图"、"帮我画"、"图片生成"、"image generation"、"generate image"、"画一张图"、"做张图"、"图生图"时触发。
+description: 根据提示词或参考图生成与编辑图片，支持多种图片模型、分辨率、宽高比、质量和批量输出。适用于 AI 生图、文生图、图生图、商品场景图和图片编辑；不适用于文本生成或视频生成。
 ---
-
 # AI 生图
 
-根据提示词和参考图生成图片，支持多种 AI 模型，异步创建任务后轮询获取结果。
+## 适用范围
 
-## 动态模型列表（仅替换目录来源）
+### 适用
 
-- 模型配置域名由 `LINKFOX_AI_API_URL` 覆盖（默认 `https://ai-api.linkfox.com`），与生成网关 `LINKFOX_TOOL_GATEWAY` 独立；测试/生产配置见 [references/model-config.md](references/model-config.md)。
-- 选择模型前调用 `python scripts/aigc_imagegen.py --list-models --inline`；图片查 bizType=201，两个视频入口查 bizType=88。
-- 普通场景按动态完整列表选择，不由旧模型目录封顶。明确的专用业务范围只在查询时用 `--allowed-models` 取交集；生成仍按原脚本 JSON 调用，不传这个新查询参数。
-- 只有查询失败才用下方原静态表兜底；成功但缺失/维护中不补回，不自动换模型。
-- 正常生成不额外查询或存档配置，不新增提交前参数校验，不更改请求参数、默认策略、轮询、下载及交付。
-- 模型能力用于介绍和选择选项，不作为一套新的生成请求白名单；编码适配、异常和落盘说明见 [references/model-config.md](references/model-config.md)。
+用户希望“生成图片”“AI 画图”“帮我画”“做张图”“图生图”或 image generation 时使用本技能。
 
-## 核心特点
+**场景速查**
 
-- **多模型选择**：优先读取动态模型配置，静态表仅用于查询失败兜底。
-- **文生图/图生图**：可仅使用提示词生成，也可传入参考图+提示词生成新图。
-- **批量输出**：单次最多生成 10 张图片。
-- **异步模式**：创建任务立即返回 taskId，脚本自动轮询直到完成（超时 10 分钟）。
+| 用户表达 | 创作场景 |
+|---|---|
+| 按描述画一张图 | 文生图：根据提示词生成图片。 |
+| 用商品图做一张场景图 | 参考图生图：准备素材后生成新图。 |
+| 编辑这张现有图片 | 图片编辑：根据用户目标选择图片模型。 |
+| 看看有哪些模型可选 | 模型查询：展示当前开放的图片模型与能力。 |
 
-## 模型说明（仅配置查询失败时兜底）
+### 边界
 
-| 说明名称 | 支持分辨率 | 参考图上限 | 特点 |
-|------|------|------|------|
-| LF全能模型 | 1K | 6张 | 基础生成 |
-| LF全能模型 2 | 1K/2K/4K | 10张 | 支持更高分辨率 |
-| LF全能模型 Pro（兼容默认） | 1K/2K/4K | 10张 | 保持旧调用默认行为 |
-| LF智能模型 G-2 | 1K/2K/4K | 10张 | 支持 low/medium/high 质量档位 |
-| Linkfox-Image-1 | 2K | 4张 | 适合编辑类场景 |
-| Wan 2.7 | 1K/2K | 6张 | 创意增强 |
-| Seedream 5.0 | 2K | 6张 | 仅支持2K |
-| LF智能模型 G-2.5 Sunburst | 1K/2K/4K（默认2K） | 10张 | 支持 low/medium/high/xhigh/max 质量档位 |
-| LF智能模型 G-2.5 Flare | 1K/2K/4K（默认2K） | 10张 | 支持 low/medium/high/xhigh/max 质量档位 |
-| Seedream 5.0 Pro | 1K/2K | 6张 | 不使用 quality 档位 |
+文本生成使用 `linkfox-aigc-textgen`，视频生成使用 `linkfox-aigc-videogen`。
 
-## 展示规则
+## 接口清单
 
-- 面向用户介绍、推荐、确认模型或解释错误时，只能使用动态配置返回的 **name**（查询失败时使用上表的**说明名称**）。
-- 禁止向用户展示请求字段值、模型别名、provider 或下游模型 code。
-- 用户未指定模型时使用 **LF全能模型 Pro**，不得改为跟随后台默认模型。
+| 接口 | 端点 | 接口文档 | 对应脚本 | 说明 |
+|---|---|---|---|---|
+| 创建生图任务 | POST `/aigc/imageGenAsync` | [references/api.md](references/api.md) | `scripts/aigc_imagegen.py` | 创建异步任务。 |
+| 查询任务状态 | POST `/aigc/taskQuery` | [references/api.md](references/api.md) | `scripts/aigc_imagegen.py` | 查询原任务的状态与图片结果。 |
+| 查询模型枚举 | GET `${LINKFOX_AI_API_URL}/image/model/config/list?bizType=201` | [references/api.md](references/api.md#接口查询模型枚举) | `scripts/aigc_imagegen.py --list-models --inline` | 获取当前可用模型枚举及能力。 |
+| 查询视频模型枚举（共用模块兼容分支） | GET `${LINKFOX_AI_API_URL}/image/video/model/config/list?bizType=88` | [references/api.md](references/api.md#接口查询视频模型枚举共用模块兼容分支) | `scripts/aigc_model_config.py` | 共用模块支持枚举查询；图片命令行入口不调用，不创建视频任务。 |
+| 获取上传凭证 | POST `/oss/getStsVoucherByAPI` | [references/file-upload.md](references/file-upload.md) | `scripts/upload_file.py` | 获取临时凭证后向 OSS 上传素材。 |
 
-## 参数概览
+以上均为直接端点，无统一转发 path。账号引导使用固定公共资源，不计入本技能业务接口；OSS 上传为素材传输，不另计 LinkFox 接口。
 
-- **必填字段**：`prompt`
-- **参考图**：`imageUrls` 可选；不传或传空列表时为文生图，传入时为参考图生图。
-- **常用可选字段**：`outputNum`（默认 `1`）、`resolution`、`aspectRatio`、`quality`
+## 前置条件
 
-完整参数表、响应字段结构与错误码，见 [`references/api.md`](references/api.md)。
+明确用户的创作目标与提示词。仅在使用参考图时准备素材；已有公开可访问的 HTTP(S) URL 直接复用，本地图片或附件按 [references/file-upload.md](references/file-upload.md) 上传，保留输入顺序，用成功项 URL 替换原路径。上传失败即停止生成。
 
-## 参考图上传（file-upload）
+上传前告知文件将获得公开可访问 URL，取得用户对内容可公开的确认；“上传这个文件”不等于确认可以公开。禁止上传敏感或私密内容，不修改源文件；不需要另找或安装上传技能。
 
-- `imageUrls` 接收可访问的图片 URL，不接收本地文件路径。仅在传入参考图时执行素材准备；文生图不传或传空数组，无需上传。
-- 逐项检查 `imageUrls`，保持原顺序：已有可公开访问的 HTTP(S) URL 直接复用；本地图片或附件先按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 上传，再用成功项的 `url` 替换对应路径。无需查找或安装额外上传 skill。
-- 上传失败时停止本次生成并说明原因，不把本地路径或失败项传给生成接口。生成脚本不自动上传，素材准备完成后再创建任务。
+## 生图流程
 
-## 调用方式
+1. 先通过[查询模型枚举](references/api.md#接口查询模型枚举)获取当前可用模型及能力，并遵循用户选择；仅查询失败时使用文档中的静态列表兜底。
+2. 准备提示词、模型与所需参考图；按下方默认策略及接口参考构造生成参数。收到 `ARGUMENTS:` 后，先完成必要素材准备，参数齐全即执行 `python scripts/aigc_imagegen.py '<JSON 参数>'`，已有可用 URL 或纯文生图可直接执行；上传授权仍按前置条件处理，其余不额外等待确认。
+3. 脚本创建一次任务、轮询该任务并自动下载图片；初始轮询间隔 10 秒，每次减 1 秒至最低 5 秒，最多等待 600 秒。向用户交付本地图片路径；禁止 Read 转存图片内容，避免 base64 进入上下文。
+4. 异常或等待超时时告知状态与任务 ID；只续查原任务，不自动重提、不切换模型，不在同轮反复等待。客户端等待超时不代表服务端失败或已回补；空体或非 JSON 只解释为上游响应异常。退出码、可续查标记与续查方法见 [references/api.md](references/api.md)。
 
-- **创建任务**：`POST /aigc/imageGenAsync` → 返回 `{taskId}`
-- **轮询结果**：`POST /aigc/taskQuery` → 传入 `{taskId}` → 返回状态和结果
-- **Python 脚本**：`python scripts/aigc_imagegen.py '<JSON 参数>'`（脚本内部自动完成创建+轮询）
+## 执行方式
 
-**异步流程**：
-1. 脚本调用 `/aigc/imageGenAsync` 创建任务，获得 `taskId`
-2. 轮询 `/aigc/taskQuery`，初始间隔 10 秒，每次递减 1 秒至最低 5 秒，最长等待 10 分钟
-3. 成功后自动下载图片到会话 `media/` 目录
 
-**文件存储路径约定**（遵循 CLAUDE.md 规范）：
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/aigc_imagegen.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：按所选参数动态计费，具体见“算力消耗预估”。同一会话、同一参数组合默认只创建一次任务，业务脚本禁用响应缓存。失败或无图片结果时，只续查已有任务，不自动重提或切换模型；用户要求再次生成时，先说明额外消耗。
 
-所有文件存储在 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/` 下，按类型划分目录：
+### 输出策略
 
-| 内容类型 | 目录 | 路径格式 | 说明 |
-|----------|------|----------|------|
-| 生成的图片 | `media/` | `<session>/media/linkfox-aigc-imagegen-<ts_ms>.<ext>` | 如 `media/linkfox-aigc-imagegen-1718000000000.png` |
-| 原始 API 响应 | `data/` | `<session>/data/linkfox-aigc-imagegen-<ts>.json` | 含完整 taskId、状态、临时 URL 等 |
+- 生成成功后自动下载图片到会话 `media/`，stdout 仅输出 `Saved full response: ["本地图片路径", ...]`；完整最终响应静默写入 `data/`。前端应解析所有同类行；单次调用通常一行，多次调用可有多行。
+- 无图片产物或生成失败时，输出完整响应或诊断的文件路径与错误摘要；不向用户输出 Python 堆栈。等待超时和下载失败的处理见接口参考。
+- 会话目录为 `<可写根目录>/linkfox/<YYYY-MM-DD>/<session>/`；优先使用 `ACPX_WORKSPACES` 首个路径，其次当前工作目录、用户目录、系统临时目录。`<session>` 优先取 `SESSION_ID`；响应文件名为 `data/linkfox-aigc-imagegen-<ts_us>.json`，使用微秒时间戳。
+- 业务封装禁用响应缓存，最终响应或失败诊断统一存档；中间创建与轮询不额外建会话或响应文件。`--inline` 不改变生成时的媒体路径交付，模型查询与上传的 CLI 和输出见接口参考。
 
-**输出策略（脚本默认行为）**：
+需要具体字段时，使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取。禁止 Read 图片内容，避免 base64 进入上下文；向用户交付本地图片路径。会话登记、目录回退与文件精度详见 [references/api.md](references/api.md)。
 
-1. **成功生成图片时**（无论多少张）：
-   - stdout 输出 `Saved full response: <路径数组>` 格式的行，例如：
-     - 1张：`Saved full response: ["/path/to/media/a.png"]`
-     - 多张：`Saved full response: ["/path/to/media/a.png", "/path/to/media/b.png"]`
-   - 原始 API 响应（含临时 URL 等）静默落盘到 `data/`。
-   - 前端 UI 可解析 stdout 中**所有** `Saved full response:` 行，把后续 JSON 数组渲染出来。
-   - 每次调用脚本通常输出一行；分多次调用时会有多行。
+## 执行规则
 
-2. **无图片产物时**（失败/无结果）：
-   - stdout 输出原始响应路径：`Saved full response: /path/to/data/xxx.json`
+### 算力消耗预估
 
-**读数据建议**：**禁止** Read 转存的图片文件内容（避免 base64 进入上下文）。直接把 `Saved full response:` 后的本地路径提供给用户即可。
+按所选参数动态计费，算力消耗与模型、分辨率、质量和输出数量等参数相关。使用实际返回的 `costToken` 等计费信息，不编造固定单价或金额；脚本在 `costToken` 缺失时按 0 记录，不据此推断免费。
 
-## 异常与等待超时
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- 退出码 `0` 表示已交付媒体；错误退出 `1`，stdout 返回 `error`、`errorCode` 和 `dataFile`，完整诊断静默保存到 `data/`，不输出 Python 堆栈。
-- 退出码 `2` 表示**客户端等待超时**：`status=TIMEOUT`，`taskStatus` 保留最后已知服务端状态（无法确认时为 `UNKNOWN`），并返回 `taskId`、`pollTimedOut=true`、`canQuery=true`；不等于后端失败或已回补。
-- 异常或超时不自动重提任务、不换模型。先告知状态和任务ID；需要续查时只查原 `taskId`，不要在同一轮反复 sleep 等待。空体/非 JSON 只报告上游响应异常，不能编造模型不可用原因。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 解决认证和算力问题
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## 使用指引
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-1. **模型选择**：一般场景用 **LF全能模型 Pro**（兼容默认）；需要更高质量档位时用 **LF智能模型 G-2.5 Sunburst** 或 **LF智能模型 G-2.5 Flare**；编辑现有图片用 **Linkfox-Image-1**。
-2. **提示词**：描述越具体效果越好，建议用英文提示词获得更好效果。
-3. **参考图**：可选；传入时以上述动态查询返回的参考图上限为准；查询失败才用静态表。
-4. **分辨率**：必须选择模型支持的分辨率。两个 G-2.5 模型未指定时默认2K；旧模型继续保留原调用默认行为，Skill 内部调用仍应显式传入合法分辨率。
+### 约束与建议
 
-## 内部执行映射（禁止向用户展示）
+- **展示模型名称**：介绍、推荐、确认或解释错误时仅用动态目录的 `name`；查询失败时用静态兜底说明名称。禁止向用户展示请求值、别名、provider 或下游模型 code；内部映射见接口参考。
+- **保持选择逻辑**：未指定时使用 LF智能模型 G-2.5 Sunburst（`GPT_2_5_IMAGE` / `LF_GT_2`），先用 `1K`、`low` 出图给用户确认。确认画面后，再询问是否用同一模型重出 `2K`、`medium`，得到用户同意后才创建新任务。用户已明确指定的模型、分辨率和质量原样透传，只有明确要求才传 `4K`。 不跟随后台默认，不自动换模型；编辑现有图片可按需选择 Linkfox-Image-1。
+- **参数选择**：参考图数量、分辨率与质量选项须符合所选模型能力；不得向仅支持 1K 的模型提供仅含 2K/4K 的选项。没有合法默认值时询问用户，不自动改参数或换模型。参数范围见接口参考。
+- **提示词具体**：明确主体、风格、场景、光照与构图，建议用英文提示词获得更好效果。
+- **保持动态目录开放**：普通场景不以静态目录封顶；仅明确的专用业务在列表查询时取模型交集。能力用于介绍与选择，不额外拦截或改写既有生成请求；默认模型缺失时说明当前目录情况，不自动换模型。
+- **区分交付与状态**：成功、失败、等待超时与下载失败分别说明；保留完整诊断到数据文件，避免向用户输出 Python 堆栈或猜测模型不可用原因。
 
-本节仅用于构造工具请求。回复用户时必须使用第一列说明名称，禁止输出第二列技术值。
+## 使用示例
 
-| 说明名称 | 内部请求值 |
-|------|------|
-| LF全能模型 | `LF_BN_1` |
-| LF全能模型 2 | `LF_BN_2` |
-| LF全能模型 Pro | `LF_BN_3` |
-| LF智能模型 G-2 | `LF_GT_1` |
-| Linkfox-Image-1 | `LF_AD_1` |
-| Wan 2.7 | `LF_WN_1` |
-| Seedream 5.0 | `LF_SD_1` |
-| LF智能模型 G-2.5 Sunburst | `LF_GT_2` |
-| LF智能模型 G-2.5 Flare | `LF_GT_2_F` |
-| Seedream 5.0 Pro | `LF_SD_2` |
+### 商品场景图
 
-已有模型保留上表请求别名；动态新增且无旧别名的图片模型使用配置 apiCode，由脚本完成规范化。
+用户：用这张商品图做一张白色背景、摄影棚灯光的商品图。
 
-### 示例
+准备公开可访问的参考图，结合用户的主体与构图目标组织具体提示词，按当前模型能力选择参数，执行生成并交付本地图片。
 
-以下 JSON 仅为内部调用参数，禁止原样展示给用户。
+### 编辑已有图片
 
-**1. 用 LF全能模型 Pro 生成商品场景图**
-```json
-{"imageUrls": ["https://example.com/product.jpg"], "prompt": "product photography on white background, studio lighting", "provider": "LF_BN_3", "outputNum": 1, "resolution": "1K", "aspectRatio": "1:1", "quality": "high"}
-```
+用户：保留商品外观，换成极简展示背景。
 
-**2. 用 LF智能模型 G-2.5 Sunburst 高质量生图**
-```json
-{"imageUrls": ["https://example.com/ref.jpg"], "prompt": "modern minimalist product showcase", "provider": "LF_GT_2", "outputNum": 1, "resolution": "2K", "aspectRatio": "16:9", "quality": "xhigh"}
-```
+查询模型目录并按名称介绍适合编辑的模型；取得必要素材公开授权后上传，提交编辑目标，交付结果。
 
-**3. 批量生成多张**
-```json
-{"imageUrls": ["https://example.com/ref.jpg"], "prompt": "creative product ad design", "provider": "LF_BN_3", "outputNum": 4, "resolution": "2K", "aspectRatio": "1:1", "quality": "high"}
-```
+### 已有任务续查
 
-## 限制
+用户：刚才等待超时了，查一下原任务。
 
-- 参考图 URL 可选；传入时具体上限按所选模型配置执行。
-- 单次最多生成 10 张。
-- 生成时间视模型和分辨率不同，通常 10-120 秒。脚本自动轮询，超时 10 分钟。
-- 失败时不重试（仅尝试 1 次）。
+使用原任务 ID 查询结果，保留服务端状态；不重新创建任务。
 
-## 不适用
+## 使用反馈
 
-**不适用**：
-- 文本生成 → `linkfox-aigc-textgen`
-- 视频生成 → `linkfox-aigc-videogen`
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
-## 反馈
+---
 
-参见 `references/api.md`。
-
-## 执行指令
-
-**重要**：收到本文档末尾的 `ARGUMENTS:` 字段后，先按上述参考图上传指引完成必要的素材准备，再立即调用 `python scripts/aigc_imagegen.py '<JSON>'` 执行；已有可用 URL 或纯文生图直接调用。上传授权按内置文档处理，其余生成参数齐全时不额外等待确认。
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

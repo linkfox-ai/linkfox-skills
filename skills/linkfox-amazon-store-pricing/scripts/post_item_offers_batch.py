@@ -23,10 +23,8 @@ import sys
 from urllib.parse import quote
 
 from _spapi_pricing_common import (
-    developer_proxy_post_json,
-    emit_result,
+    run_proxy,
     ensure_auth_skill_available,
-        lf_inline_flag,
 )
 
 PATH_BATCH = "batches/products/pricing/v0/itemOffers"
@@ -102,20 +100,8 @@ def main() -> None:
     seller_id = str(params["sellerId"])
     region = str(params["region"])
 
-    proxy = developer_proxy_post_json(region, PATH_BATCH, seller_id, body_obj)
-    out: dict = {
-        "developerProxy": proxy,
-        "resolvedPath": PATH_BATCH,
-        "requestBody": body_obj,
-    }
-    if proxy.get("errcode") == 200 and proxy.get("httpStatus") == 200:
-        br = proxy.get("body") or "{}"
-        try:
-            out["itemOffersBatch"] = json.loads(br)
-        except json.JSONDecodeError:
-            out["itemOffersBatch"] = None
-            out["itemOffersBatchRaw"] = br
-    emit_result(out, lf_inline_flag())
+    run_proxy("getItemOffersBatch", "POST", region, PATH_BATCH, seller_id,
+              result_field="itemOffersBatch", body_obj=body_obj)
 
 
 if __name__ == "__main__":

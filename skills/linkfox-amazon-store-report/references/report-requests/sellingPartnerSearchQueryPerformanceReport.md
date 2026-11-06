@@ -2,12 +2,12 @@
 
 > 上游 JSON Schema 来自 Amazon [selling-partner-api-models/schemas/reports](https://github.com/amzn/selling-partner-api-models/tree/main/schemas/reports)。
 
-- **Raw**：[sellingPartnerSearchQueryPerformanceReport.json](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/sellingPartnerSearchQueryPerformanceReport.json)
+- **源文件**：[sellingPartnerSearchQueryPerformanceReport.json](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/sellingPartnerSearchQueryPerformanceReport.json)
 - **目录浏览**：https://github.com/amzn/selling-partner-api-models/tree/main/schemas/reports
 
 ## Schema 摘要
 
-The Search Query Performance Report provides overall query performance, such as impressions, clicks, cart adds, and purchases for a list of Amazon Standard Identification Numbers (ASINs) and date range that you specify. Data is available at different reporting periods: WEEK, MONTH, and QUARTER. Requests cannot span multiple periods. For example, a request at the WEEK level cannot start on 2025-01-05 and end on 2025-01-18 as this request spans two weeks.
+搜索查询表现报告提供指定 ASIN 列表和日期范围的整体曝光、点击、加购及购买表现，支持 WEEK、MONTH、QUARTER；请求不可跨多个周期。例如 WEEK 不能从 2025-01-05 到 2025-01-18，因为跨了两周。
 
 ## 对应 `reportType`（从 schema 中提取）
 
@@ -31,10 +31,13 @@ LinkFox 网关通过 `developerProxy` 转发时，`body` 为 JSON 字符串，�
 }
 ```
 
-- **`reportType`** / **`marketplaceIds`**：必填（多数报告）。
-- **`dataStartTime`** / **`dataEndTime`**：ISO 8601；部分报告 schema 使用 **仅日期** `YYYY-MM-DD`（Amazon 忽略时间分量），以本文件「官方示例」为准。
-- **`reportOptions`**：对象，键名/枚举因报告而异；Brand Analytics 等 **必填**，见下节。
-- **`lastUpdatedDate`**：部分 Vendor 报告使用（见 schema `reportSpecification`），需与 `dataStartTime`/`dataEndTime` 按官方要求组合。
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| reportType | string | 是 | 报告类型枚举。 |
+| marketplaceIds | array[string] | 多数报告是 | 目标站点。 |
+| dataStartTime / dataEndTime | string | 视报告 | ISO 8601；部分 Schema 仅使用 YYYY-MM-DD，忽略时间分量，以本页官方示例为准。 |
+| reportOptions | object | 视报告 | 键名和枚举因报告而异；Brand Analytics 等必填，见下节。 |
+| lastUpdatedDate | string | 视报告 | 部分 Vendor 报告使用，须按 Schema 要求与其他日期字段组合。 |
 
 本仓库脚本 `scripts/get_report.py` 已支持：在 JSON 参数中传入 **`reportOptions`**（对象）以及 **`lastUpdatedDate`**（字符串），会合并进创建请求体。
 

@@ -1,26 +1,46 @@
-# Seerfar Ozon 商品报表搜索 API 参考
+# Seerfar Ozon 商品报表搜索 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：商品报表搜索
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/seerfar/ozon/productReportSearch`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
-- **User-Agent**：`LinkFox-Skill/2.0`；HTTP 超时 150s
 
-## 请求参数
+### 请求参数
 
-POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` 必填外，其余均可选；所有范围筛选项均为 `{min, max}` 对象，可单边或双边传值。
+POST Body（JSON）。以下字段与接口 `inputSchema` 一致。
 
-### 分页与排序
+#### 分页与排序
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| page | object | 是 | 分页与排序：`{page, pageSize, orders[]}` |
+| page | object | 是 | 唯一必填项；不传会被拒绝。分页与排序：`{page, pageSize, orders[]}` |
 | page.page | integer | 否 | 页码，从 1 开始，默认 1 |
 | page.pageSize | integer | 否 | 每页条数，默认 20 |
-| page.orders | array | 否 | 排序规则，元素 `{field, direction}`；`direction` 取 `DESC`（倒序）/ `ASC`（正序）。`field` 为响应中的指标字段（如 `sales`、`revenue`、`price`、`reviewRating`、`reviewCount`、`salesRate`） |
+| page.orders | array | 否 | 排序规则，元素 `{field, direction}`；常用字段为 `sales`、`revenue`、`price`、`reviewRating`、`reviewCount`、`salesRate` |
+| page.orders[].field | string | 随排序项提供 | 响应指标字段；是否支持排序由 `columns[].sortable` 标记，示例见上一行 |
+| page.orders[].direction | string | 随排序项提供 | `DESC` 倒序或 `ASC` 正序 |
 
-### 筛选条件
+#### 筛选条件
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -28,7 +48,9 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` �
 | keywords | array<string> | 否 | 关键词数组，按商品标题筛选 |
 | categoryIds | array<string> | 否 | 类目 ID 数组（Seerfar 类目 ID，非类目名） |
 | sellerName | array<string> | 否 | 卖家名称数组 |
-| brand | object | 否 | 品牌筛选：`{brandName: array<string>, type: integer}`；`type` 取 `0` 包含品牌、`1` 排除品牌、`2` 无品牌 |
+| brand | object | 否 | 品牌筛选：`{brandName, type}`，子字段见下方 |
+| brand.brandName | array<string> | 否 | 品牌名称列表，配合 `brand.type` 使用 |
+| brand.type | integer | 否 | `0` 包含品牌、`1` 排除品牌、`2` 无品牌 |
 | fulfillment | array<string> | 否 | 配送方式数组，固定可选值：`OZON`、`FBO`、`FBS`、`RFBS`、`FBP` |
 | labels | array<integer> | 否 | 标签数组，固定可选值：`0` 新品、`1` 正品、`2` 畅销品 |
 | creationDate | integer | 否 | 上架时间筛选（月），固定可选值：`1` 近30天、`3` 近90天、`6` 近180天、`12` 近一年、`24` 近两年；不传不筛选 |
@@ -38,30 +60,55 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` �
 | uId | string | 否 | 用户 ID |
 | memberId | string | 否 | 成员 ID（一个成员唯一标识，数据归属于 memberId） |
 
-### 范围筛选（均为 `{min, max}` 对象）
+#### 范围筛选
 
-| 参数 | 筛选目标 | 单位/说明 |
-|------|----------|-----------|
-| monthlySales | 月销量 `sales` | 件 |
-| monthlySalesRate | 销量增长率 `salesRate` | % |
-| monthlyRevenue | 月销售额 `revenue` | 卢布 |
-| price | 价格 `price` | 卢布 |
-| convToCartPdp | 购物车转化率 `convToCartPdp` | % |
-| reviewRating | 评分 `reviewRating` | 0~5 |
-| reviewCount | 评论数 `reviewCount` | 条 |
-| questionsAndAnswers | QA 数量 `questionsAndAnswers` | 条 |
-| variants | 变体数 `variants` | 个 |
-| drr | 广告费用份额 `drr` | 比例 |
-| grossMargin | 毛利率 `grossMargin` | % |
-| returnCancellationRate | 退货取消率 `returnCancellationRate` | % |
-| weight | 重量 `weight` | g |
-| volume | 体积 `volume` | L |
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| monthlySales | object | 否 | {min, max}；筛选月销量 `sales`，单位/说明：件 |
+| monthlySalesRate | object | 否 | {min, max}；筛选销量增长率 `salesRate`，单位/说明：% |
+| monthlyRevenue | object | 否 | {min, max}；筛选月销售额 `revenue`，单位/说明：卢布 |
+| price | object | 否 | {min, max}；筛选价格 `price`，单位/说明：卢布 |
+| convToCartPdp | object | 否 | {min, max}；筛选购物车转化率 `convToCartPdp`，单位/说明：% |
+| reviewRating | object | 否 | {min, max}；筛选评分 `reviewRating`，单位/说明：0~5 |
+| reviewCount | object | 否 | {min, max}；筛选评论数 `reviewCount`，单位/说明：条 |
+| questionsAndAnswers | object | 否 | {min, max}；筛选QA 数量 `questionsAndAnswers`，单位/说明：条 |
+| variants | object | 否 | {min, max}；筛选变体数 `variants`，单位/说明：个 |
+| drr | object | 否 | {min, max}；筛选广告费用份额 `drr`，单位/说明：比例 |
+| grossMargin | object | 否 | {min, max}；筛选毛利率 `grossMargin`，单位/说明：% |
+| returnCancellationRate | object | 否 | {min, max}；筛选退货取消率 `returnCancellationRate`，单位/说明：% |
+| weight | object | 否 | {min, max}；筛选重量 `weight`，单位/说明：g |
+| volume | object | 否 | {min, max}；筛选体积 `volume`，单位/说明：L |
 
-> **必填约束**：`page` 为唯一必填项；不传 `page` 请求会被拒绝。
-> **范围筛选**：所有 `{min, max}` 对象的两个子字段都可选，传单边即做下/上界过滤。
-> **排序**：数据量可达数千万，务必通过 `page.orders` 按核心指标排序后再分页，避免在无序大结果集中翻页。
+以下子字段适用于上述每一个范围对象；可单边或双边传值。
 
-## 响应结构
+| 子字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| min | number | 否 | 下界，仅传此值时做下界过滤 |
+| max | number | 否 | 上界，仅传此值时做上界过滤 |
+
+排序使用响应指标字段，结合类目、品牌、卖家缩小范围后再分页，避免在无序大结果集中盲目遍历。本接口的 `pageSize` 上限未定义，以实际响应中的校验结果为准，不套用其他接口的限制。
+
+#### 脚本选项与运行约定
+
+| 选项 / 环境变量 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| JSON 参数 | JSON | 是 | 位置参数，按上述请求对象传入 |
+| --inline | CLI flag | 否 | 强制全量打印，同时保存完整响应 |
+| --no-cache | CLI flag | 否 | 禁用默认 24 小时响应缓存，重新查询且不更新缓存 |
+| LINKFOX_TOOL_GATEWAY | string | 否 | 自定义网关，优先使用此值，否则使用公共规则中的默认地址；自动去掉末尾斜杠 |
+| LINKFOX_AGENT_API_KEY / LINKFOXAGENT_API_KEY | string | 否 | 两者任一非空即可认证，前者优先；均为空时输出“API Key 未配置”并退出 |
+| SESSION_ID | string | 否 | 用于落盘的会话标识，未设置时在进程内生成稳定标识；请求头仅发送环境变量原值，未设置时为空字符串 |
+| MESSAGE_ID / MODE_ID / APP_NAME | string | 否 | 原样随同名请求头发送，未设置时为空字符串 |
+
+缓存位于 `<cwd>/linkfox/.cache/linkfox-seerfar-ozon-product-report-search/`，键为按字段名排序的 JSON 参数的 SHA-256 前 16 位；有效期 24 小时。缓存仅保留一层，命中标记为 `_cache.hit=true`。业务错误和空结果也可被缓存，显式 `--no-cache` 可绕过缓存。缓存命中时仍保存完整响应。
+
+按 SKILL.md 的输出策略在可写项目目录运行，禁止选择临时目录。业务脚本在请求前检查会话数据目录与元信息文件可写，并将公共调用器的输出根目录固定为 `<cwd>/linkfox/`；不可写时退出，不回退到 `ACPX_WORKSPACES`、家目录或临时目录。文件与元信息按会话聚合，保留 `_meta.json` 和 `index.jsonl`。
+
+脚本仅执行一次网络请求，不自动翻页、换筛选或重试；HTTP 错误优先保留 JSON 响应，非 JSON 错误保留 `error` / `details`，连接错误保留 `error`。这些本地错误包装不替代公共响应判断。
+
+**脚本本地附加字段**：对象响应的 `_http_status` 保留实际 HTTP 状态，供公共响应规则及 `401` / `402` 引导判断使用；它由业务封装添加，不是网关字段。连接失败没有 HTTP 状态，应按 `error` 解释，不能视为成功。缓存命中时，`_http_status` 是缓存写入时的历史状态，不代表新请求；已有缓存若缺少此字段，不能据此推断 HTTP 成功，也不自动绕过缓存重查，确需刷新时先说明额外消耗，再使用 `--no-cache`。
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -77,10 +124,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` �
 | costTime | integer | 接口耗时（毫秒） |
 | costToken | integer | 消耗 Token 数量 |
 
-> **`data` 与 `products`**：两者为同一份数组，读取任一即可。
-> **`total` 语义**：为整库匹配总数（而非当前页条数），无筛选时量级可达数千万，务必配合排序与分页。
-
-### data[*] / products[*] 商品报表对象字段
+#### data[*] / products[*] 商品报表对象字段
 
 **标识与基础**
 
@@ -158,7 +202,7 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` �
 | sellerId | integer | 卖家 ID（Ozon 自营可能为负值） |
 | categoryInfo | object | 类目信息（详见下方） |
 
-### categoryInfo 类目信息对象字段
+#### categoryInfo 类目信息对象字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -168,49 +212,55 @@ POST Body（JSON）。以下字段与接口 `inputSchema` 一致。除 `page` �
 | fullCategoryId | array<string> | 完整类目 ID 层级数组 |
 | category | object | 类目节点：`{cnTitle, enTitle, title, level, id, pid, crossBorderSellable, disabled}` |
 
-### 统一字段与原始字段对照（值完全相同）
+#### categoryInfo.category 类目节点
 
-| 统一字段 | 原始字段 |
-|----------|----------|
-| productId | sku |
-| monthlySalesUnits | sales |
-| monthlySalesRevenue | revenue |
-| rating | reviewRating |
-| brand | brandName |
-| productPageUrl | productUrl |
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| cnTitle | string | 中文类目名称 |
+| enTitle | string | 英文类目名称 |
+| title | string | 俄语类目名称 |
+| level | integer | 类目层级 |
+| id | string | 类目 ID |
+| pid | string | 父类目 ID |
+| crossBorderSellable | boolean | 是否可跨境销售 |
+| disabled | boolean | 是否禁用 |
 
-> 这六对字段为同一值的两个键，读取任一即可，无需重复展示。
+#### columns[*] 列定义
 
-## 错误码
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| field | 未声明 | 对应字段名；类型以实际响应为准 |
+| title | 未声明 | 展示列标题；类型以实际响应为准 |
+| cellType | 未声明 | 单元格展示类型；类型及取值以实际响应为准 |
+| sortable | 未声明 | 标记列是否可排序；类型以实际响应为准 |
+| filterable | 未声明 | 标记列是否可筛选；类型以实际响应为准 |
 
-正常情况下 HTTP 状态码为 200，业务结果通过响应体区分：
-- **成功**：返回 `code:"200"` + `errcode:200`（`msg` / `errmsg` 均为 `ok`）。
-- **业务错误**：HTTP 仍为 200，但仅返回 `errcode`（非 200）+ `errmsg`（原因），无 `code` 字段。
-- **认证失败**：HTTP 状态码 401，响应体 `{"errcode":401,"errmsg":"authorized error"}`。
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
 
 | errcode | 含义 | 处理建议 |
 |---------|------|----------|
-| 200 | 成功 | 正常解析 `data` / `products` 字段 |
-| 400 | 参数错误 | 查看 `errmsg`；常见为缺 `page`、`searchDate` 格式错误、类目 ID 不合法等 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 402 | 计费失败 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 1003 | 请求过于频繁 | 限流，等待后重试，不要通过减小 `pageSize` 绕过 |
-| 其他非 200 值 | 业务异常 | 查看 `errmsg` 获取具体原因 |
+| 400 | 参数错误 | 根据 `errmsg` 核对缺少 `page`、`searchDate` 格式错误或类目 ID 不合法等情况 |
+| 1003 | 请求过于频繁 | 等待后再处理，不通过减小 `pageSize` 绕过限流；继续请求仍遵守成本约束 |
+
+错误响应可能仅有 `errcode` 与 `errmsg`，没有 `code`；不要要求同时存在两个状态字段。空商品列表需结合筛选范围与匹配总数解释，不自动改参继续试探。其他错误按基础规则及实际 `errmsg` 处理。
 
 错误响应示例：
 
 ```json
-{
-    "errcode": 1003,
-    "errmsg": "请求过于频繁，请稍后再试。"
-}
+{"errcode": 1003, "errmsg": "请求过于频繁，请稍后再试。"}
 ```
 
-## curl 示例
+### curl 示例
 
 ```bash
-curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/productReportSearch \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/seerfar/ozon/productReportSearch" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
   -H "Content-Type: application/json" \
   -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{
@@ -218,7 +268,7 @@ curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/productReportSearch \
   }'
 ```
 
-## 响应示例（简略）
+### 响应示例（简略）
 
 ```json
 {
@@ -293,26 +343,18 @@ curl -X POST https://tool-gateway.linkfox.com/seerfar/ozon/productReportSearch \
 }
 ```
 
----
+## Feedback
 
-## Feedback API
-
-> 该接口与上方工具接口不同，**请勿混用两个基础 URL**。
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
   "skillName": "linkfox-seerfar-ozon-product-report-search",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "User successfully screened high-sales low-price Ozon products."
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**字段说明：**
-- `skillName`：使用本 skill 的 YAML `name`
-- `sentiment`：`POSITIVE` / `NEUTRAL` / `NEGATIVE` 三选一
-- `category`：`BUG` / `COMPLAINT` / `SUGGESTION` / `OTHER` 四选一
-- `content`：用户表达、实际现象、为什么算问题或好评

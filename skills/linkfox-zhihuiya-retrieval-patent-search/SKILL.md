@@ -1,197 +1,124 @@
 ---
 name: linkfox-zhihuiya-retrieval-patent-search
-description: 通过 Analytics 检索式（如 TACD： 关键词）在智慧芽专利数据库中检索专利列表，返回专利ID、公开号及命中总数。当用户提到专利检索式检索、专利表达式搜索、Analytics检索式、TACD检索、专利关键词检索、检索式查专利、专利语义检索、patent expression search, patent query syntax, Analytics query, TACD search, PatSnap, 智慧芽专利检索时触发此技能。即使用户未明确提及"检索式"或"智慧芽"，只要用户希望用检索式/表达式语法在专利库中检索专利列表，也应触发此技能。
+description: 使用 Analytics 检索式在智慧芽（PatSnap）专利数据库中搜索专利列表，返回专利 ID、公开（公告）号、基本资料及命中总数，支持排序、分页和同族去重。适用于专利关键词与布尔表达式检索、TACD 检索及按日期或相关性发现专利；用户未提及智慧芽但希望用检索式查专利时也适用。不适用于已知专利的完整著录、全文、法律状态、同族详情、PDF 获取或以图检索。
 ---
 
-# Zhihuiya Patent Expression Search
+# 智慧芽检索式专利检索
 
-This skill searches the Zhihuiya (PatSnap) patent database using an Analytics query expression (e.g. `TACD: virtual reality`), returning a list of matching patents with their patent IDs and publication numbers, plus the total hit count.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Expression-based patent search** uses Zhihuiya's Analytics query syntax to retrieve patents matching a field-scoped boolean expression. Unlike image-based search, this is a text query against the full patent corpus.
+通过文本检索式发现符合条件的专利，查看命中总数和当前页的专利基本资料。用户已有 Analytics 检索式，或希望将关键词组合成检索式时，使用本技能。
 
-**Query expression (`queryText`)** holds an Analytics expression. Common field-scoped syntax:
+**场景速查**
 
-| Syntax | Scope |
-|--------|-------|
-| `TACD: <term>` | Title + Abstract + Claims + Description |
-| `TAC: <term>` | Title + Abstract + Claims |
-| `TA: <term>` | Title + Abstract |
-| `AND` / `OR` / `NOT` | Boolean operators (combine terms/fields) |
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 检索 TACD: virtual reality 的专利 | 按指定检索式发现专利。 |
+| 用检索式查虚拟现实相关专利 | 根据用户意图准备文本检索式。 |
+| 查标题、摘要或权利要求中同时包含 drone 和 camera 的专利 | 字段限定与布尔组合检索。 |
+| 按公开日排序检索 | 按用户指定的日期排序。 |
+| 按简单同族去重，保留最新 | 按用户要求选取同族代表记录。 |
+| 翻到第 2 页 | 保持检索条件，查看下一页。 |
 
-> This skill returns a **list** of patents (`patentId` + `pn`). To retrieve detailed bibliographic data, full text, legal status, family, or images for a specific patent, feed the returned `patentId`/`pn` into the corresponding `linkfox-zhihuiya-bibliography` / `linkfox-zhihuiya-simple-bibliography` / `linkfox-zhihuiya-legal-status` / `linkfox-zhihuiya-patent-family` skills.
+### 边界
 
-## Data Fields
+用户已知专利 ID 或公开（公告）号并需要完整资料时，使用 `linkfox-zhihuiya-bibliography` 或 `linkfox-zhihuiya-simple-bibliography`；法律状态和同族详情分别转交 `linkfox-zhihuiya-legal-status`、`linkfox-zhihuiya-patent-family`。以图检索使用 `linkfox-zhihuiya-patent-image-search`；全文、图片和 PDF 获取使用对应专利详情技能。
 
-Each `data[]` item (one matching patent):
+## 前置条件
 
-| Field | Description |
-|-------|-------------|
-| patentId | Zhihuiya internal patent ID |
-| pn | Publication (announcement) number |
-| title | Patent title |
-| apdt | Application date (integer, YYYYMMDD) |
-| pbdt | Publication date (integer, YYYYMMDD) |
-| apno | Application number |
-| authority | Patent office / authority (e.g. `US`) |
-| inventor | Inventor(s), pipe-separated |
-| originalAssignee | Original applicant(s), pipe-separated |
-| currentAssignee | Current assignee(s), pipe-separated |
+**先确定检索意图**：明确用户要查的技术主题或检索式，以及需要的排序、去重和返回范围。完整语法、参数和使用限制见 `references/api.md`。
 
-Top-level fields:
+## 检索流程
 
-| Field | Description |
-|-------|-------------|
-| data | 专利列表（每项含上表 10 个字段） |
-| total | Number of records returned in this response |
-| allRecordsCount | Total hits matching the query expression |
-| costToken | Token cost for this query |
-| columns | Render metadata (display hints, not data records) |
-| type | Render style (e.g. `tableListWorkbenches`) |
-| errcode | `200` on success |
-| errmsg | `ok` on success |
+1. 根据用户提供的检索式或关键词明确检索范围，保留用户指定的字段和布尔关系；按 `references/api.md` 核对请求参数与分页范围。
+2. 未指定排序时，主动加入 `{"field":"SCORE","order":"DESC"}`；用户明确指定排序时遵从其要求。按需要设置去重规则。
+3. 按用户需要确定返回范围；范围未定时，可先用较小的 `limit` 验证命中。告知每次接口调用预计消耗 3 算力，扩大范围或翻页若需新增调用会产生额外消耗，由用户决定是否继续。同一会话、同一参数组合默认只执行一次，优先复用缓存。
+4. 按接口文档判断响应，提取真实专利列表与命中总数，再展示当前页结果。空结果或错误时停止，按接口文档解释原因；需要更改检索式或继续付费检索时先取得用户确认。
 
-> The top-level `columns` array is render metadata and may be longer than the real `data` list — do not treat it as data.
+## 执行方式
 
-## 调用方式
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_query_search_patent.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改检索式连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- **API 端点**：`POST /zhihuiya/querySearchPatent`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_query_search_patent.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改检索式连续试探；需要继续检索或翻页时先向用户说明会产生额外消耗。
+### 输出策略
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-retrieval-patent-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-retrieval-patent-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 执行规则
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或权限不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/No permission/API package quota/套餐到期/需充值/请充值"，或类似含义的内容。
+### 算力消耗预估
 
-## Parameter Guide
+每次接口调用预计消耗 3 算力，不按返回的 `data` 条数累乘。翻页或修改检索式后新增调用会产生额外消耗；必须提醒用户，由用户决定是否继续。
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| queryText | Yes | - | Analytics 检索式，最大 12000 字符 |
-| limit | No | 10 | 返回专利个数，1–1000 |
-| offset | No | 0 | 偏移量，0–19999；`limit + offset` ≤ 20000 |
-| sort | No | - | 排序数组，元素 `{field, order}` |
-| stemming | No | 0 | 截词检索：`1` 开启 / `0` 关闭，默认关闭 |
-| collapseType | No | ALL | 去重方式：ALL / APNO / DOCDB / INPADOC / EXTEND |
-| collapseBy | No | - | 去重排序字段：APD / PBD / AUTHORITY / SCORE |
-| collapseOrder | No | - | 去重排序顺序：OLDEST / LATEST |
-| collapseOrderAuthority | No | - | 受理局优先级数组（仅 `collapseBy=AUTHORITY` 时有效），按输入顺序保留对应专利 |
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### Sort object
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-| `field` | Meaning |
-|---------|---------|
-| PBDT_YEARMONTHDAY | Publication date |
-| APD_YEARMONTHDAY | Application date |
-| ISD | Issue / grant date |
-| SCORE | Query relevance |
+### 解决认证和算力问题
 
-`order`: `DESC` or `ASC`. Example: `[{"field":"SCORE","order":"DESC"}]`.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### Collapse (deduplication)
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-| `collapseType` | Description |
-|----------------|-------------|
-| ALL | No dedup |
-| APNO | By application number |
-| DOCDB | By simple family |
-| INPADOC | By INPADOC family |
-| EXTEND | By PatSnap extended family |
+### 约束与建议
 
-`collapseBy` selects which representative record to keep (APD/PBD/AUTHORITY/SCORE); `collapseOrder` picks OLDEST or LATEST.
+- **检索概念**：本技能使用字段限定的 Analytics 文本与布尔表达式检索专利库。检索字段、排序和同族去重选项的含义见 `references/api.md`。
+- **清晰展示数据**：用表格展示响应中实际存在的公开号、标题、申请日、公开日、发明人、当前申请人和受理局。将有效日期格式化为易读日期，多个人名或申请人可分项展示；不得补造缺失标题、日期或申请人。
+- **说明命中和分页**：总命中数与本页返回条数分别展示；标注本次请求的偏移区间与实际返回范围，最后一页不足请求条数时不夸大结果。
+- **区分记录和展示信息**：专利记录与列渲染信息不同，不能用列定义数组的长度统计专利条数。详细结构见 `references/api.md`。
+- **大量结果先概览**：先给摘要表和总数，按用户需要展开具体专利。需要完整著录、全文或法律信息时，将已返回的专利 ID 或公开号交给对应技能，不重复调用列表检索获取详情。
+- **优先处理套餐权限错误**：遇到无权限或套餐配额错误时，先按接口文档区分权限与余额问题，不直接套用充值路径。
 
-## Usage Examples
+## 使用示例
 
-**1. Basic expression search**
+### 基础检索
+
+用户：检索 TACD: virtual reality 的专利，返回 10 条。
+
+```json
+{"queryText":"TACD: virtual reality","limit":10,"sort":[{"field":"SCORE","order":"DESC"}]}
 ```
-检索 TACD: virtual reality 的专利，返回 10 条
+
+### 按相关性排序
+
+用户：用检索式 TACD: drone AND camera 查专利，按相关性排序。
+
+```json
+{"queryText":"TACD: drone AND camera","sort":[{"field":"SCORE","order":"DESC"}]}
 ```
-Action: `{"queryText": "TACD: virtual reality", "limit": 10}`
 
-**2. Sort by relevance**
+### 查看第二页
+
+用户：翻到第 2 页，每页 10 条。
+
+保留原检索式和排序，说明额外消耗并确认后查询。
+
+```json
+{"queryText":"TACD: virtual reality","offset":10,"limit":10,"sort":[{"field":"SCORE","order":"DESC"}]}
 ```
-用检索式 TACD: drone AND camera 查专利，按相关性排序
+
+### 按简单同族去重
+
+用户：检索 TACD: virtual reality，按简单同族去重，保留申请日最新的专利。
+
+```json
+{"queryText":"TACD: virtual reality","collapseType":"DOCDB","collapseBy":"APD","collapseOrder":"LATEST","sort":[{"field":"SCORE","order":"DESC"}]}
 ```
-Action: `{"queryText": "TACD: drone AND camera", "sort": [{"field": "SCORE", "order": "DESC"}]}`
 
-**3. Paginate**
-```
-翻到第 2 页，每页 10 条
-```
-Action: `{"queryText": "TACD: virtual reality", "offset": 10, "limit": 10}`
+## 使用反馈
 
-**4. Dedup by DOCDB family**
-```
-检索 TACD: virtual reality，按简单同族去重，保留最新
-```
-Action: `{"queryText": "TACD: virtual reality", "collapseType": "DOCDB", "collapseBy": "APD", "collapseOrder": "LATEST"}`
-
-## Display Rules
-
-1. **Present results as a table**: show `pn`, `title`, `apdt`/`pbdt` (format as dates), `inventor`, `currentAssignee`, `authority` per item.
-2. **Show totals**: always state `allRecordsCount` (total hits) and the current page range (`offset`–`offset+limit`).
-3. **Default sort**: if the user does not specify a sort, actively inject `{"field": "SCORE", "order": "DESC"}` so results are relevance-ordered; respect any sort the user explicitly requests.
-4. **Large result sets**: present a summary table first, note the total, and offer to expand specific patents.
-5. **Expand via sibling skills**: to get full metadata for a patent, direct the user to `linkfox-zhihuiya-bibliography` / `linkfox-zhihuiya-simple-bibliography`; do not re-query this search skill for details.
-6. **No fabrication**: only display fields actually present in the response; never invent titles, dates, or assignees not returned.
-
-## Important Limitations
-
-- **`queryText` is required** and must be a valid Analytics expression. Missing it returns `errcode 400`.
-- **Paging ceiling**: `limit + offset` must be ≤ 20000; `limit` max 1000; `offset` max 19999.
-- **List-only output**: this skill returns `patentId` + `pn` (and basic fields). Full bibliographic/full-text/legal data must be fetched via dedicated `linkfox-zhihuiya-*` skills.
-- **No auto-retry on empty/error**: if the query returns no hits or an error, do not automatically swap keywords or rewrite the expression; confirm with the user first (each call costs credits).
-- **Permission/quota**: a `501 "No permission or API package quota"` response means the current key lacks the query-search permission/quota. This is a permission/package issue (not merely low balance) and **cannot be resolved by recharging alone** — do not retry; surface it to the user to open/enable the query-search API package.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — Find patents by query expression:
-
-| User Says | Scenario |
-|-----------|----------|
-| "检索 TACD: virtual reality 的专利" | Basic expression search |
-| "用检索式查虚拟现实相关专利" | Expression search |
-| "检索式：TAC AND camera" | Boolean expression |
-| "按公开日排序检索" | Sorted search |
-| "按简单同族去重" | Deduplicated search |
-| "翻到第 2 页" | Pagination |
-
-**Not applicable** — Needs beyond expression search:
-
-- Bibliographic detail of a known patent ID/number (use `linkfox-zhihuiya-bibliography`)
-- Image-based patent search (use `linkfox-zhihuiya-patent-image-search`)
-- Legal status / family / full-text / PDF (use dedicated `linkfox-zhihuiya-*` skills)
-
-**Boundary judgment**: When the user already has a patent ID or publication number and wants its metadata → use the bibliography skill. When the user wants to **discover** patents matching a query expression → this skill.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 3 × 返回data条数。每条为 1 条检索式检索专利结果
-
-> **重要**：本技能的服务按倍数动态计算，返回条数越多消耗越大，必须提醒用户，由用户决定是否继续。优先用较小的 `limit` 验证检索式命中，确认后再决定是否扩大范围或翻页。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

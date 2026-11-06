@@ -1,28 +1,9 @@
-# Price — 接口文档索引
+# Temu 全球站价格接口文档索引
 
-每个 `type` 单独一份文档，经 `POST /temu/proxy` 调用。网关与鉴权见 [../api.md](../api.md)；目录与 `sub_menu_code` 见 [../partner-global-catalog.md](../partner-global-catalog.md)。
+- [推荐基础价/供货价估算（`temu.local.goods.baseprice.recommend`）](temu-local-goods-baseprice-recommend.md)
+- [推荐供货价查询（`temu.local.goods.recommendedprice.query`）](temu-local-goods-recommendedprice-query.md)
+- [定价单列表查询（`bg.local.goods.priceorder.query`）](bg-local-goods-priceorder-query.md)
+- [批量修改 SKU 基础价（`bg.local.goods.priceorder.change.sku.price`）](bg-local-goods-priceorder-change-sku-price.md)
+- [SKU 供货价列表查询（`bg.local.goods.sku.list.price.query`）](bg-local-goods-sku-list-price-query.md)
 
-## SKU 供货价查询（1）
-
-| type | 文档 |
-|------|------|
-| `bg.local.goods.sku.list.price.query` | [bg-local-goods-sku-list-price-query.md](./bg-local-goods-sku-list-price-query.md) |
-
-## 定价单查询（1）
-
-| type | 文档 |
-|------|------|
-| `bg.local.goods.priceorder.query` | [bg-local-goods-priceorder-query.md](./bg-local-goods-priceorder-query.md) |
-
-## 推荐 / 估算（2）
-
-| type | 文档 |
-|------|------|
-| `temu.local.goods.baseprice.recommend` | [temu-local-goods-baseprice-recommend.md](./temu-local-goods-baseprice-recommend.md) |
-| `temu.local.goods.recommendedprice.query` | [temu-local-goods-recommendedprice-query.md](./temu-local-goods-recommendedprice-query.md) |
-
-## 编辑 / 改价（1）
-
-| type | 文档 |
-|------|------|
-| `bg.local.goods.priceorder.change.sku.price` | [bg-local-goods-priceorder-change-sku-price.md](./bg-local-goods-priceorder-change-sku-price.md) |
+网关、认证、CLI 与加签下载见 [接口总览](../api.md)；Partner 菜单见 [目录](../partner-global-catalog.md)。

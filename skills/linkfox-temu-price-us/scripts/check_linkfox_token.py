@@ -46,6 +46,22 @@ def main():
         )
         sys.exit(1)
 
+    status = getattr(result, "transport_http_status", None)
+    errcode = result.get("errcode")
+    outer_ok = (errcode is None or (isinstance(errcode, str) and not errcode.strip()))
+    if not outer_ok and not isinstance(errcode, bool):
+        try:
+            number = float(errcode)
+            outer_ok = 200 <= number < 300 and number.is_integer()
+        except (TypeError, ValueError):
+            pass
+    if status is None or not 200 <= status < 300 or not outer_ok or result.get("error") or str(result.get("code")) == "1003":
+        print(json.dumps({"ok": False, "reason": "gateway_error",
+                          "gatewayReachable": status is not None,
+                          "httpStatus": status, "result": result},
+                         indent=2, ensure_ascii=False))
+        sys.exit(1)
+
     print(
         json.dumps(
             {

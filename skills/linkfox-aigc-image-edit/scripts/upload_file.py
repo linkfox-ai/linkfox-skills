@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read a file or download a source URL, then use the official Base64 upload entry."""
+"""读取文件或下载源素材，再通过内置 Base64 入口上传。"""
 import base64
 import importlib.util
 import json
@@ -79,15 +79,21 @@ def main():
     spec = importlib.util.spec_from_file_location("aigc_media_upload", entry)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.get_api_key()  # Check credentials before downloading source material.
+    from material_runtime import check_output_directory
+    check_output_directory()
+    module.get_api_key()  # 下载素材前检查凭证。
     name, content = read_source(params)
     payload = {"fileName": name, "base64": base64.b64encode(content).decode("ascii")}
     inline = "--inline" in sys.argv[2:]
     # File bytes stay in this process, outside the OS command line and request files.
+    previous_argv = sys.argv
     sys.argv = [str(entry), json.dumps(payload, ensure_ascii=False), "--no-cache"]
     if inline:
         sys.argv.append("--inline")
-    module.main()
+    try:
+        module.main()
+    finally:
+        sys.argv = previous_argv
 
 
 if __name__ == "__main__":

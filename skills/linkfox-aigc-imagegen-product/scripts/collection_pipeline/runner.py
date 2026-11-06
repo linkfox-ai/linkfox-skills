@@ -22,6 +22,7 @@ from .utils import (
     apply_script_paths,
     print_plan_phase_result,
     resolve_skill_scripts,
+    write_task_result,
 )
 
 
@@ -62,6 +63,8 @@ def main(argv: list[str] | None = None, *, variant: str, skill_root: str) -> int
             with open(args.state, encoding="utf-8") as f:
                 state = json.load(f)
             total = len(state["task_specs"])
+            if total < 1:
+                raise ValueError("state.task_specs 为空，不能调度")
             run_script = state["run_one_task_script"]
             saved_re = re.compile(r"Saved full response:\s*(.+?)\s*$", re.M)
 
@@ -86,7 +89,17 @@ def main(argv: list[str] | None = None, *, variant: str, skill_root: str) -> int
             with ThreadPoolExecutor(max_workers=total) as pool:
                 futures = {pool.submit(run_one, i): i for i in range(1, total + 1)}
                 for fut in as_completed(futures):
-                    i, images = fut.result()
+                    i = futures[fut]
+                    try:
+                        i, images = fut.result()
+                    except Exception as exc:
+                        # 子进程启动或读取失败也仅影响该任务，其余继续完成。
+                        spec = state["task_specs"][i - 1]
+                        write_task_result(
+                            state.get("datadir") or os.path.dirname(os.path.abspath(args.state)),
+                            {**spec, "status": "failed", "images": [], "error": str(exc)},
+                        )
+                        images = []
                     results[i] = images
             success_count = sum(1 for paths in results.values() if paths)
             dispatch_status = {

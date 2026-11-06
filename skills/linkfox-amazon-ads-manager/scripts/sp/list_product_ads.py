@@ -45,7 +45,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _common import (  # noqa: E402
     apply_client_side_filters,
     ensure_auth_skill_available,
-    get_access_token,
     list_sp_entities,
     parse_argv_params,
     require_fields,
@@ -95,11 +94,9 @@ def main() -> None:
             file=sys.stderr,
         )
 
-    access_token = get_access_token(profile_id)
     result = list_sp_entities(
         region=region,
         profile_id=profile_id,
-        access_token=access_token,
         entity_path=ENTITY_PATH,
         entity_content_type=ENTITY_CONTENT_TYPE,
         response_key=RESPONSE_KEY,
@@ -108,7 +105,13 @@ def main() -> None:
     )
 
     if "error" in result:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if client_filters:
+            partial = result.get(RESPONSE_KEY, [])
+            result['serverTotalBeforeClientFilter'] = len(partial)
+            result['clientSideFilters'] = client_filters
+            result[RESPONSE_KEY] = apply_client_side_filters(partial, client_filters)
+            result['total'] = len(result[RESPONSE_KEY])
+        emit_result(result, inline=lf_inline_flag())
         sys.exit(1)
 
     items = result.get("items", [])
@@ -127,7 +130,7 @@ def main() -> None:
         output["serverTotalBeforeClientFilter"] = server_total
         output["clientSideFilters"] = {k: v for k, v in client_filters.items()}
     inline = lf_inline_flag()
-    emit_result(output, inline)
+    emit_result(output, inline=inline)
 
     if client_filters:
         print(

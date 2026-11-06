@@ -108,6 +108,15 @@ def run_global_product_api(api_name: str, params: dict, caller: Optional[str] = 
     else:
         body = _build_post_body(params, spec)
 
+    # 在可能变更店铺数据之前完成本地解析，避免请求发出后才因格式错误中断。
+    parsed_body = None
+    if body is not None:
+        try:
+            parsed_body = json.loads(body)
+        except json.JSONDecodeError as exc:
+            print(f"请求体必须是有效 JSON：{exc}", file=sys.stderr)
+            sys.exit(1)
+
     shop_id = params.get("shopId")
     merchant_id = params.get("merchantId")
     if not shop_id and not merchant_id:
@@ -132,7 +141,7 @@ def run_global_product_api(api_name: str, params: dict, caller: Optional[str] = 
     if query_string:
         out["queryString"] = query_string
     if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
+        out["requestBody"] = parsed_body
 
     merge_shopee_body(out, proxy, response_key)
     return out

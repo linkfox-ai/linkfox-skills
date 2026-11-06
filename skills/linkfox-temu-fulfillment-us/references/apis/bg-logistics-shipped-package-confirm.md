@@ -1,44 +1,72 @@
-# 确认包裹已发货 — `bg.logistics.shipped.package.confirm`
+# 确认包裹已发货 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_buy_shipping_logistics_shipped_package_confirm.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=aa4f29c85bfe460a8666bb92025a1743 |
-| **网关** | `POST /temu/proxy`，`type`=`bg.logistics.shipped.package.confirm`，业务载荷放在 Body 的 `params` |
+## 公共规则
 
-**Description:** The `bg.logistics.shipped.package.confirm` interface is for sellers to support batch conversion of packages that have been fulfilled successfully by Temu-integrated channel but not shipped to shipped, and will be automatically converted to shipped if not converted within 48 hours.
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：确认包裹已发货（bg.logistics.shipped.package.confirm）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+**操作标识**：`type=bg.logistics.shipped.package.confirm`；**对应脚本**：`scripts/us_buy_shipping_logistics_shipped_package_confirm.py`。
+
+**Partner 文档**：https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=aa4f29c85bfe460a8666bb92025a1743
+
+### 请求参数
+
+#### 网关与脚本参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是；美国站脚本默认 | `us`；通用脚本支持 `cn`、`partner`、`us`、`global`、`eu`，本技能业务使用美国站。 |
+| managementType | string | 是；美国站脚本默认 | `semi-managed`；通用脚本还兼容 `full-managed`。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；显式传入时优先于本地存储。 |
+| storeKey | string | 与 accessToken 二选一 | 脚本按店铺、站点、托管类型和用途从本地令牌库读取，不发送给网关。 |
+| tokenPurpose | string | 否 | 美国站脚本本地选令牌默认 `order-shipping`；通用脚本默认 `default`。此字段不进入实际网关 Body。 |
+| type | string | 是；专用脚本固定 | 本节列出的 Temu 操作标识；上游路径为 `https://openapi-b-us.temu.com/openapi/router`，通过 type 区分操作，没有 developerProxy.path 字段。 |
+| params | object | 否 | 业务参数；有显式对象时原样转发，否则美国站脚本将非保留顶层字段收集为 params。 |
+| params.request | OBJECT | 否（Partner 表） | 本接口业务对象；子字段必填与实际使用要求见下文，不因外层选填而省略必要内容。专用脚本也接受顶层 request 并收进 params。 |
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox 密钥兼容别名，按列出顺序优先于环境变量；只用于请求头，不进入业务参数。 |
+| --inline | CLI flag | 否 | 完整打印并保存响应。 |
+| --no-cache | CLI flag | 否 | 保留可传选项；业务封装内部始终禁用缓存，既不读也不写响应缓存。 |
+
+美国站默认值、兼容认证头、参数提取和输出约定详见 [运行约定](../api.md#运行约定)。以下 Partner 字段表的路径均相对于 `params.request`；响应子表路径相对于解析后的 Temu 对象。
+
+#### 业务说明与前置限制
 
 （卖家将已通过 **Temu 集成物流** 成功履约、但状态仍为**未发货确认**的包裹，批量确认为**已发货**；若 **48 小时内**未手动确认，系统将自动转为已发货。）
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 **`request`**。建议使用 **`tokenPurpose=order-shipping`**。  
-> **前置依赖：**  
-> - **`packageSn`**、**`trackingNumber`** 通常来自 [**`bg.logistics.shipment.create`**](./bg-logistics-shipment-create.md) / [**`bg.logistics.shipment.result.get`**](./bg-logistics-shipment-result-get.md) 或 [**`bg.order.unshipped.package.get`**](./bg-order-unshipped-package-get.md)。  
-> - 打印面单后出库前调用；**`trackingNumber`** 须与 **`packageSn`** 匹配（错误码 **120014002**）。  
+> **前置依赖：**
+> - **`packageSn`**、**`trackingNumber`** 通常来自 [**`bg.logistics.shipment.create`**](./bg-logistics-shipment-create.md) / [**`bg.logistics.shipment.result.get`**](./bg-logistics-shipment-result-get.md) 或 [**`bg.order.unshipped.package.get`**](./bg-order-unshipped-package-get.md)。
+> - 打印面单后出库前调用；**`trackingNumber`** 须与 **`packageSn`** 匹配（错误码 **120014002**）。
 > - 合作仓包裹可能禁止手动确认发货（**120018087**）。
 
----
+符合条件的 Temu 集成物流包裹若在 **48 小时内**未确认，平台可能自动转为已发货；仍建议实际出库后主动确认，并核对 `packageDetail` 商品数量与运单。官方将外层 `request` 标为选填，但 `packageSendInfoList` 必填；经网关时使用 `params.request.packageSendInfoList`。
 
-## Request 结构（官方顶层）
-
-```text
-params
-└── request (OBJECT, 选填)
-    └── packageSendInfoList[] (OBJECT[], 必填)
-        ├── packageSn
-        ├── trackingNumber
-        └── packageDetail[] (OBJECT[])
-            ├── orderSn
-            ├── parentOrderSn
-            └── quantity
-```
-
-### `request` 内字段
+#### `request` 内字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | packageSendInfoList | OBJECT[] | **是** | This field is used to confirm the list of packages that have been transitioned to the shipped status（待确认为**已发货**状态的包裹列表；支持批量） |
 
-#### `packageSendInfoList[]` 元素字段
+##### `packageSendInfoList[]` 元素字段
 
 > Partner Request 表中 `packageSendInfoList` 子行在导出 HTML 中为折叠状态；下列字段来自 **Request Example** 与错误码说明。
 
@@ -48,7 +76,7 @@ params
 | trackingNumber | STRING | **是** | Tracking Number（物流运单号；须与 **`packageSn`** 对应，错误码 **120014002**） |
 | packageDetail | OBJECT[] | **是** | Package detail / order lines in this package（本包裹内要确认发货的商品行明细；数量须与包裹内实际一致，错误码 **120013002**） |
 
-##### `packageSendInfoList[].packageDetail[]` 元素字段
+###### `packageSendInfoList[].packageDetail[]` 元素字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -58,88 +86,25 @@ params
 
 > **不支持子包裹单独确认**（错误码 **120011046** Sub package not allowed）。已发货订单重复提交无效（**120012004**）。无匹配可发订单时返回 **120012012**。
 
-### 网关 `params` 写法
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "packageSendInfoList": [
-      {
-        "packageSn": "PKG-001",
-        "trackingNumber": "1Z999AA10123456784",
-        "packageDetail": [
-          {
-            "parentOrderSn": "PO-20260101001",
-            "orderSn": "O-20260101001-1",
-            "quantity": 1
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+#### LinkFox 外层与脚本解析字段
 
-```json
-{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "packageSendInfoList": [
-      {
-        "packageSn": "PKG-001",
-        "trackingNumber": "1Z999AA10123456784",
-        "packageDetail": [
-          {
-            "parentOrderSn": "PO-20260101001",
-            "orderSn": "O-20260101001-1",
-            "quantity": 2
-          },
-          {
-            "parentOrderSn": "PO-20260101001",
-            "orderSn": "O-20260101001-2",
-            "quantity": 1
-          }
-        ]
-      },
-      {
-        "packageSn": "PKG-002",
-        "trackingNumber": "9400111899223857123456",
-        "packageDetail": [
-          {
-            "parentOrderSn": "PO-20260101002",
-            "orderSn": "O-20260101002-1",
-            "quantity": 1
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| _http_status | integer / null | 脚本本地诊断字段，记录本次真实 HTTP 状态；连接失败时为 null，不是网关保证字段。先按此判断 HTTP 结果，401/402 转入 onboarding 引导，不以正文中的成功字段覆盖。 |
+| _raw_response | 以实际响应为准 | 仅当响应根不是对象，或上游已有同名 _http_status 时，脚本将完整原响应放在此字段，并在外层记录真实状态；此时从原响应读取业务内容。 |
+| errcode | integer / string / null | 若返回，按公共响应码基本规则判断；不将 `0` 或 `false` 当成空。 |
+| errmsg | string | 若返回，网关消息或错误说明。 |
+| code | integer | 网关业务错误码：`1002` 为参数或 LinkFox Token 问题，`1003` 为转发失败；不能据 HTTP 成功推断履约成功。 |
+| body | string | Temu 原始 JSON 字符串，保留原值。 |
+| temuBody | object / array / scalar | 脚本对可解析的非空 body 增加的解析结果；解析失败时不生成此字段，仍保留原始 body。 |
 
-> 官方 Request 表将顶层 **`request`** 标为选填（False），但 **`packageSendInfoList`** 为必填。Partner **Request Example** CURL 将 **`packageSendInfoList`** 写在顶层；经 LinkFox 网关时建议放在 **`params.request.packageSendInfoList`**。
-
----
-
-## Response（Temu `body` 解析后）
+以下为 Temu `body` 解析后的结构；Partner 表中的 `response` 可能是结构标注，实际响应也可能直接以 success 等字段为根，不强行增删层级。
 
 Partner **Response** 表顶层为 **`response`** 对象；网关解析后通常直接见到 `success` / `errorCode` / `errorMsg` / `result`。**`result`** 在导出 HTML 中为折叠状态，下列子层级按 **Response 表 + Response Example** 全部展开。
 
-```text
-response
-├── success
-├── errorCode
-├── errorMsg
-└── result (OBJECT)
-    └── warningMessage[] (OBJECT[])
-        ├── packageSn
-        └── warningMessage
-```
-
-### 顶层字段
+#### 顶层字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -148,13 +113,13 @@ response
 | errorMsg | STRING | error message（错误信息） |
 | result | OBJECT | result（业务结果对象） |
 
-### `result` 内字段
+#### `result` 内字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | warningMessage | OBJECT[] | Per-package warning messages（按包裹返回的警告信息；部分包裹确认成功、部分有提示时非空） |
 
-#### `warningMessage[]` 元素字段
+##### `warningMessage[]` 元素字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -163,95 +128,48 @@ response
 
 > 调用成功时先判断 **`response.success === true`**。若 **`result.warningMessage`** 非空，须逐条检查哪些 **`packageSn`** 未完全确认成功。无警告通常表示请求列表中的包裹均已处理完成（仍建议用 **`bg.order.unshipped.package.get`** 或订单接口复核状态）。
 
----
+### 响应码规则
 
-## 常见业务错误码（Partner Error Code）
+#### 基础规则
 
-| 错误码 | 错误信息（原文） | 处理建议 |
-|--------|------------------|----------|
-| 120018027 | The packageSn is invalid... | 核对 **`packageSn`** 与站点 |
-| 120014002 | The field trackingNumber {*} does not match packageSn {*}. | **`trackingNumber`** 与 **`packageSn`** 必须匹配 |
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 外层正常响应后，先排除网关 `code=1002/1003`，再解析 `body`；以 Temu 对象的 `success`、`errorCode`、`errorMsg` 和本接口结果字段判断业务结果。`success=true` 不等于异步履约或预约已经完成。
+- `1002`：修正参数与 LinkFox 密钥；`1003`：检查 Temu 令牌、用途、IP 白名单及转发错误。不自动重试写操作。
+
+| 错误码 | 错误信息（Partner） | 处理建议 |
+|---|---|---|
+| 120018027 | The packageSn is invalid. Please check the request area or if the packageSn is nonexistent etc. | 核对 **`packageSn`** 与站点 |
+| 120014002 | The field trackingNumber {*} does not match packageSn {*}. Please check the matching relationship between the two fields. | **`trackingNumber`** 与 **`packageSn`** 必须匹配 |
 | 120012004 | The order has been shipped. This submission is not effective for the shipped order. | 订单已发货，无需重复确认 |
 | 120012012 | There are no shippable orders matching the item. | 包裹内无可发订单行 |
 | 120013002 | Item quantity does not match. | **`packageDetail[].quantity`** 与包裹实际数量不一致 |
 | 120011046 | Sub package not allowed. | 不支持对子包裹单独确认 |
 | 120018087 | The current package {*} is shipped from a cooperative warehouse and manual confirmation of shipment is prohibited | 合作仓包裹禁止手动确认发货 |
 | 120011030 | Cooperative warehouse order fulfillment restricted. | 合作仓履约受限 |
-| 120018010 / 120018015 | The package(s) {*} have been canceled... | 包裹/订单已取消，需重新履约 |
-| 120012007 / 120012016 | The parentOrder or Order is invalid... | 父子订单号无效或不匹配 |
-| 120018025 | Orders exist after-sales applications... | 先处理售后申请 |
-| 120011072 | The request area is incorrect... US / global | 美国站请求区域须为 US |
+| 120018010 | The packages {*} have been canceled. Please fulfill again by Temu non-integrated logistics or Temu integrated logistics. | 包裹/订单已取消，需重新履约 |
+| 120018015 | The package has been canceled, please fulfill again by Temu non-integrated logistics or Temu integrated logistics. | 包裹/订单已取消，需重新履约 |
+| 120012007 | The parentOrder or Order is invalid. Please check if the parentOrder matches the Order, the parentOrder or Order is nonexistent etc. | 父子订单号无效或不匹配 |
+| 120012016 | The parentOrder or Order is invalid. Please check if the parentOrder matches the Order, the parentOrder or Order is nonexistent etc. | 父子订单号无效或不匹配 |
+| 120018025 | Orders exist after-sales applications, please complete the processing before operation | 先处理售后申请 |
+| 120011072 | The request area is incorrect. Please check the request area and replace it with the correct request area. The request area for the United States is US, and the request area for other non-European countries is global. | 美国站请求区域须为 US |
+| 120015026 | A large items template has been used for the items in this package. Only specified logistics providers can be used for shipping. | 根据错误消息核对业务条件，继续调用遵守成本约束。 |
+| 120015027 | A large items template has been used for the items in this package. Only special channels can be used for shipping. | 根据错误消息核对业务条件，继续调用遵守成本约束。 |
 
-<details>
-<summary>完整错误码列表（16 条，Partner 原文）</summary>
-
-| 错误码 | 错误信息 |
-|--------|----------|
-| 120018087 | The current package {*} is shipped from a cooperative warehouse and manual confirmation of shipment is prohibited |
-| 120018010 | The packages {*} have been canceled. Please fulfill again by Temu non-integrated logistics or Temu integrated logistics. |
-| 120014002 | The field trackingNumber {*} does not match packageSn {*}. Please check the matching relationship between the two fields. |
-| 120011030 | Cooperative warehouse order fulfillment restricted. |
-| 120018015 | The package has been canceled, please fulfill again by Temu non-integrated logistics or Temu integrated logistics. |
-| 120012012 | There are no shippable orders matching the item. |
-| 120012004 | The order has been shipped. This submission is not effective for the shipped order. |
-| 120013002 | Item quantity does not match. |
-| 120011046 | Sub package not allowed. |
-| 120015026 | A large items template has been used for the items in this package. Only specified logistics providers can be used for shipping. |
-| 120015027 | A large items template has been used for the items in this package. Only special channels can be used for shipping. |
-| 120018025 | Orders exist after-sales applications, please complete the processing before operation |
-| 120011072 | The request area is incorrect. Please check the request area and replace it with the correct request area. The request area for the United States is US, and the request area for other non-European countries is global. |
-| 120012007 | The parentOrder or Order is invalid. Please check if the parentOrder matches the Order, the parentOrder or Order is nonexistent etc. |
-| 120012016 | The parentOrder or Order is invalid. Please check if the parentOrder matches the Order, the parentOrder or Order is nonexistent etc. |
-| 120018027 | The packageSn is invalid. Please check the request area or if the packageSn is nonexistent etc. |
-
-</details>
-
----
-
-## 典型用法
-
-```text
-1. bg.logistics.shipment.create / result.get     → 购标成功，取得 packageSn、trackingNumber
-2. bg.logistics.shipment.document.get           → 打印面单
-3. bg.order.unshipped.package.get（可选）        → 列出待确认发货的包裹
-4. bg.logistics.shipped.package.confirm         → 批量确认已发货（本接口）
-5. linkfox-temu-order-us                        → 刷新订单状态
-```
-
-> 若 **48 小时内**未调用本接口，平台可能自动将符合条件的包裹转为已发货；仍建议在出库后主动确认，便于与 **`packageDetail`** 数量、运单一致。
-
----
-
-## 示例
+### curl 示例
 
 ```bash
-export LINKFOXAGENT_API_KEY="<key>"
-
-python scripts/us_buy_shipping_logistics_shipped_package_confirm.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "us",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
-  "request": {
-    "packageSendInfoList": [
-      {
-        "packageSn": "PKG-001",
-        "trackingNumber": "1Z999AA10123456784",
-        "packageDetail": [
-          {
-            "parentOrderSn": "PO-20260101001",
-            "orderSn": "O-20260101001-1",
-            "quantity": 1
-          }
-        ]
-      }
-    ]
-  }
-}'
-```
-
-```bash
-python scripts/temu_us_proxy.py '{
-  "accessToken": "TOKEN",
-  "tokenPurpose": "order-shipping",
   "type": "bg.logistics.shipped.package.confirm",
   "params": {
     "request": {
@@ -271,4 +189,20 @@ python scripts/temu_us_proxy.py '{
     }
   }
 }'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-fulfillment-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

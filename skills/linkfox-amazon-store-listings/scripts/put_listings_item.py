@@ -4,7 +4,7 @@ Amazon Store — Put Listings Item (SP-API Listings Items v2021-08-01)
 ===================================================================
 
 通过 LinkFox **POST /spApi/developerProxy** 转发 **PUT putListingsItem**，
-创建新刊登或对现有刊登做**全量**更新；与 get/patch 相同：先 **storeTokens**，再带 **body**（JSON 字符串）调用代理。
+创建新刊登或对现有刊登做**全量**更新；与 get/patch 相同：传入 sellerId + region，并带 **body**（JSON 字符串）调用代理。
 
 官方参考: https://developer-docs.amazon.com/sp-api/reference/putlistingsitem
 
@@ -28,123 +28,13 @@ Optional JSON:
 from typing import Any, Dict, List
 
 import json
-import os
-import subprocess
 import sys
-from pathlib import Path
 from urllib.parse import quote
-from urllib.error import HTTPError, URLError
 
-from _spapi_listings_common import emit_result, lf_inline_flag
-from urllib.request import Request, urlopen
+from _spapi_listings_common import ensure_auth_skill_available, run_proxy
 
 LISTINGS_API_VERSION = "2021-08-01"
 REQUIREMENTS_SET = frozenset({"LISTING", "LISTING_PRODUCT_ONLY", "LISTING_OFFER_ONLY"})
-
-API_BASE_URL = (
-    os.environ.get("LINKFOX_TOOL_GATEWAY")
-    or os.environ.get("STORE_API_BASE_URL")
-    or os.environ.get("SPAPI_BASE_URL", "https://tool-gateway.linkfox.com")
-)
-STORE_TOKENS_ENDPOINT = f"{API_BASE_URL.rstrip('/')}/spApi/storeTokens"
-DEVELOPER_PROXY_ENDPOINT = f"{API_BASE_URL.rstrip('/')}/spApi/developerProxy"
-
-REQUIRED_SKILL = "linkfox-amazon-store-auth"
-DEPENDENCY_EXIT_CODE = 42
-
-
-def ensure_auth_skill_available() -> None:
-    here = Path(__file__).resolve().parent
-    checker = here / "check_auth_dependency.py"
-    if not checker.exists():
-        payload = {
-            "missingSkill": REQUIRED_SKILL,
-            "reason": "check_auth_dependency.py not found next to put_listings_item.py",
-        }
-        print(f"DEPENDENCY_MISSING: {json.dumps(payload, ensure_ascii=False)}", file=sys.stderr)
-        sys.exit(DEPENDENCY_EXIT_CODE)
-    try:
-        result = subprocess.run(
-            [sys.executable, str(checker)],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except Exception as exc:  # pragma: no cover
-        payload = {"missingSkill": REQUIRED_SKILL, "reason": str(exc)}
-        print(f"DEPENDENCY_MISSING: {json.dumps(payload, ensure_ascii=False)}", file=sys.stderr)
-        sys.exit(DEPENDENCY_EXIT_CODE)
-    if result.stderr:
-        sys.stderr.write(result.stderr)
-        if not result.stderr.endswith("\n"):
-            sys.stderr.write("\n")
-    if result.returncode != 0:
-        sys.exit(DEPENDENCY_EXIT_CODE)
-
-
-def get_api_key() -> str:
-    """
-获取配置在环境变量的API Key。
-如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-"""
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
-
-
-def call_api(endpoint: str, params: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    req = Request(
-        endpoint,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
-
-
-def get_store_tokens(seller_id: str, region: str) -> dict:
-    return call_api(STORE_TOKENS_ENDPOINT, {"sellerId": seller_id, "region": region})
-
-
-def developer_proxy_put(
-    region: str,
-    path: str,
-    seller_id: str,
-    query_string: str,
-    body_obj: Dict[str, Any],
-) -> dict:
-    params: dict = {
-        "region": region,
-        "path": path,
-        "method": "PUT",
-        "sellerId": seller_id,
-        "queryString": query_string,
-        "body": json.dumps(body_obj, ensure_ascii=False),
-        "contentType": "application/json",
-    }
-    return call_api(DEVELOPER_PROXY_ENDPOINT, params)
 
 
 def _path_put(seller_id: str, sku: str) -> str:
@@ -210,6 +100,10 @@ def main() -> None:
         print(f"Invalid JSON: {e}", file=sys.stderr)
         sys.exit(1)
 
+    if not isinstance(params, dict):
+        print("JSON parameters must be an object", file=sys.stderr)
+        sys.exit(1)
+
     if not params.get("skipDepCheck"):
         ensure_auth_skill_available()
 
@@ -249,22 +143,8 @@ def main() -> None:
     }
 
     path = _path_put(seller_id, sku)
-    proxy = developer_proxy_put(region, path, seller_id, query_string, body_obj)
-
-    out: Dict[str, Any] = {
-        "developerProxy": proxy,
-        "resolvedPath": path,
-        "queryString": query_string,
-        "requestBody": body_obj,
-    }
-    if proxy.get("errcode") == 200 and proxy.get("httpStatus") == 200:
-        body_raw = proxy.get("body") or "{}"
-        try:
-            out["putResult"] = json.loads(body_raw)
-        except json.JSONDecodeError:
-            out["putResult"] = None
-            out["putResultRaw"] = body_raw
-    emit_result(out, lf_inline_flag())
+    run_proxy("putListingsItem", "PUT", region, path, seller_id, query_string,
+              result_field="putResult", body_obj=body_obj)
 
 
 if __name__ == "__main__":

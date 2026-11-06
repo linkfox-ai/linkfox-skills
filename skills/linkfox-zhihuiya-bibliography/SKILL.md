@@ -1,169 +1,126 @@
 ---
 name: linkfox-zhihuiya-bibliography
-description: 通过专利ID或公开号查询智慧芽专利数据库中的专利著录（书目）信息。当用户提到专利著录信息查询、专利书目信息、专利申请人查询、专利发明人查询、专利分类号、专利摘要获取、专利引用分析、专利优先权主张、专利申请引用、专利审查员信息、patent bibliographic data, inventor lookup, applicant lookup, patent classification, patent metadata, PatSnap, patent citations时触发此技能。即使用户未明确提及"著录信息"，只要其需求涉及通过专利ID或公开号查询特定专利的详细元数据，也应触发此技能。
+description: 通过专利 ID 或公开公告号查询智慧芽（PatSnap）专利著录与书目信息，获取标题、摘要、申请人、当前权利人、发明人、分类号、优先权、引用文献及预估到期日。适用于已知特定专利标识的元数据查询和多专利资料整理；不适用于关键词或语义全文检索、专利全景报告、估值、法律状态跟踪、自由实施或侵权判断，专利族查询须已有具体公开号。
 ---
 
-# Zhihuiya Patent Bibliography
+# 智慧芽专利著录信息查询
 
-This skill guides you on how to query patent bibliography (bibliographic) data from the Zhihuiya patent database, helping users retrieve detailed metadata for specific patents.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Patent bibliography data (also called bibliographic data) is the structured metadata associated with a patent document. It includes the patent title, applicants, inventors, classification codes, priority claims, cited references, abstracts, and more. This tool allows querying by **patent ID** or **publication number**, returning comprehensive bibliographic records for up to 100 patents per request.
+用户已有专利 ID 或公开公告号，希望查询特定专利的结构化元数据时使用，无需明确提及“著录信息”或智慧芽。
 
-**Patent types**: The `patentType` field indicates the type of patent document:
-- `APPLICATION` -- Invention application (published but not yet granted)
-- `PATENT` -- Granted invention patent
-- `UTILITY` -- Utility model
-- `DESIGN` -- Design patent
+**场景速查**
 
-## Data Fields
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查这件专利的详细信息或书目资料 | 单专利著录信息。 |
+| 这件专利的发明人是谁 | 发明人查询。 |
+| 谁申请了这件专利、目前归谁所有 | 原始申请人与当前权利人查询。 |
+| 查这件专利的 IPC、CPC 分类 | 分类号查询。 |
+| 给我这件专利的摘要 | 摘要提取。 |
+| 这件专利引用了哪些文献 | 专利及非专利文献引用查询。 |
+| 查优先权、申请资料或审查员 | 著录项目查询。 |
+| 这件专利预计何时到期 | 智慧芽预估到期日查询。 |
+| 整理这些专利的发明人和权利人 | 多专利资料整理。 |
 
-| Field | API Name | Description |
-|-------|----------|-------------|
-| Patent ID | patentId | Internal patent identifier |
-| Publication Number | pn | Publication/announcement number |
-| Invention Title | inventionTitle | Patent title with language info |
-| Abstracts | abstracts | Patent abstract text |
-| Patent Type | patentType | APPLICATION, PATENT, UTILITY, or DESIGN |
-| Applicants | applicants | Original applicant(s) |
-| Assignees | assignees | Current patent holder(s) / assignee(s) |
-| Inventors | inventors | Inventor(s) listed on the patent |
-| Agents | agents | Patent attorney / agent(s) |
-| Agency | agency | Filing agency / patent firm |
-| Examiners | examiners | Patent examiner(s) |
-| Priority Claims | priorityClaims | Priority right declarations |
-| Application Reference | applicationReference | Application filing data |
-| Publication Reference | publicationReference | Publication data |
-| Dates of Public Availability | datesOfPublicAvailability | Public availability dates |
-| IPC Classification | classificationIpcr | International Patent Classification |
-| CPC Classification | classificationCpc | Cooperative Patent Classification |
-| UPC Classification | classificationUpc | US Patent Classification |
-| LOC Classification | classificationLoc | Locarno Classification (designs) |
-| FI Classification | classificationFi | FI classification codes (Japan) |
-| F-term Classification | classificationFterm | F-term codes (Japan) |
-| GBC Classification | classificationGbc | GBC classification |
-| Cited Patents | referenceCitedPatents | Patent documents cited as references |
-| Cited Non-Patent Literature | referenceCitedOthers | Non-patent literature cited |
-| Related Documents | relatedDocuments | Divisional / continuation application info |
-| PCT Filing Data | pctOrRegionalFilingData | PCT or regional phase filing data |
-| PCT Publishing Data | pctOrRegionalPublishingData | PCT or regional phase publication data |
-| Estimated Expiry Date | exdt | Estimated patent expiration date (Zhihuiya) |
+### 边界
 
-## 调用方式
+“找某领域的专利”或“搜索与某主题相关的专利”属于检索任务。本技能不提供关键词或语义全文检索、专利全景分析、估值、法律状态跟踪、自由实施或侵权分析；专利族资料仅能在已有具体公开号时逐件查询。
 
-- **API 端点**：`POST /zhihuiya/bibliography`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_bibliography.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 前置条件
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-bibliography-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+先取得用户要查询的专利标识与所需资料范围。标识识别、组合方式和批量限制见 [接口说明](references/api.md#请求参数)。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 查询流程
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+1. 明确目标专利和用户所需资料；缺少标识时先补充，不把主题描述当作专利编号。
+2. 按 [接口说明](references/api.md) 识别标识类型并准备查询，先告知动态算力消耗，用户决定继续后再执行。
+3. 复用同一参数组合的有效缓存，取得并保存完整响应；批量查询按用户提供的范围执行，不自行扩展检索。
+4. 按接口公共规则判断响应，提取用户所需字段。错误或空结果时说明情况，提示核对专利 ID 或公开号，继续调用遵守成本约束。
+5. 单件资料按主题整理，多件资料先给汇总表，再按用户需要展开详情。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行方式
 
-## Parameter Guide
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_bibliography.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换专利标识或请求选项连续试探；需要再次请求时，先向用户说明额外消耗。
 
-The tool accepts two parameters. **At least one must be provided**; if both are supplied, `patentId` takes priority.
+### 输出策略
 
-| Parameter | When to Use | Format |
-|-----------|-------------|--------|
-| `patentId` | When the user provides an internal Zhihuiya patent ID | Comma-separated string, up to 100 IDs |
-| `patentNumber` | When the user provides a publication/announcement number | Comma-separated string, up to 100 numbers |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-bibliography-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Tips for Identifying Input Type
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-- If the user provides something like `US10123456B2`, `CN112345678A`, `EP3456789B1`, or `WO2023123456A1`, treat it as a **publication number** and use `patentNumber`.
-- If the user provides a purely numeric or opaque identifier that does not match standard publication number patterns, treat it as a **patent ID** and use `patentId`.
-- When the user provides multiple patents, join them with commas (no spaces around commas).
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-**1. Look up a single patent by publication number**
-```
-User: "Show me the bibliography for US10123456B2"
-Action: Call with patentNumber = "US10123456B2"
+预计每次接口请求消耗 3 算力，按请求次数估算；批量返回的记录条数不作为该预估的乘数。拆分成多个请求或额外重新查询时，按新增请求次数累计预估，最终以实际扣除为准。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **著录信息的含义**：著录信息是专利文献的结构化元数据，涵盖标题、申请人与权利人、发明人、分类、优先权、引用和摘要；完整字段定义集中在接口说明。
+- **清晰展示资料**：用表格或分节呈现结果。一般查询突出标题、申请人或权利人、发明人、申请与公开日期、分类号及摘要；用户只问某类资料时，只展示相关字段，完整响应仍保存。
+- **多专利先汇总**：先列每件专利的标识和所需资料，再按用户要求展开，不把多件记录混在一起。
+- **专利类型用中文展示**：依据接口说明中的枚举显示中文类型，同时保留原值以便核对。
+- **尊重原始记录**：标题和摘要保留语言信息；缺失字段如实说明，不补造申请人、日期或引用关系。原始申请人与当前权利人分别展示。
+- **仅陈述著录事实**：不据此推断法律有效性、可专利性、商业价值或侵权风险。预估到期日须标注“智慧芽预估”，不当作已确认的法律状态。
+
+## 使用示例
+
+### 按公开号查询单件专利
+
+用户：查询 US10123456B2 的著录信息。
+
+```json
+{"patentNumber": "US10123456B2"}
 ```
 
-**2. Look up multiple patents by publication number**
-```
-User: "Get bibliographic data for CN112345678A, EP3456789B1, and US20210012345A1"
-Action: Call with patentNumber = "CN112345678A,EP3456789B1,US20210012345A1"
-```
+### 按公开号查询多件专利
 
-**3. Look up a patent by internal ID**
-```
-User: "Query bibliography for patent ID 8fa3b2c1-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-Action: Call with patentId = "8fa3b2c1-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+用户：整理这三件专利的书目信息。
+
+```json
+{"patentNumber": "CN112345678A,EP3456789B1,US20210012345A1"}
 ```
 
-**4. Batch lookup of patents**
+### 按智慧芽内部 ID 查询
+
+用户：查这个智慧芽专利 ID 的资料。
+
+```json
+{"patentId": "8fa3b2c1-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
 ```
-User: "I have a list of 20 publication numbers, look up all their inventors and assignees"
-Action: Call with patentNumber = "<comma-separated list>"
-Then extract and present inventors and assignees from the results.
-```
 
-## Display Rules
+示例 ID 为占位值，实际执行时使用用户提供的标识。
 
-1. **Present data clearly**: Show query results in well-structured tables or organized sections. For each patent, highlight the most commonly needed fields: title, applicants/assignees, inventors, filing/publication dates, classification codes, and abstract.
-2. **Respect the query scope**: Only display the fields the user asked about. If they asked for "inventors", do not dump the entire bibliography unless requested.
-3. **Patent type labels**: Translate `patentType` codes into human-readable labels (APPLICATION = Invention Application, PATENT = Granted Invention, UTILITY = Utility Model, DESIGN = Design Patent).
-4. **Multi-patent results**: When results contain multiple patents, use a summary table first, then expand details per patent if the user wants more.
-5. **Error handling**: When a query returns an error or empty results, explain clearly and suggest the user verify their patent ID or publication number.
-6. **No subjective analysis**: Present factual bibliographic data without speculative legal or commercial interpretations.
-## User Expression & Scenario Quick Reference
+### 整理多件专利的指定资料
 
-**Applicable** -- Patent bibliography / metadata lookups:
+用户：我有 20 个公开号，只要发明人和当前权利人。
 
-| User Says | Scenario |
-|-----------|----------|
-| "Look up patent info for XX" | Single patent bibliography |
-| "Who are the inventors of patent XX" | Inventor lookup |
-| "Who owns patent XX", "current assignee" | Assignee / applicant query |
-| "What IPC/CPC class is patent XX" | Classification lookup |
-| "Show me the abstract of patent XX" | Abstract retrieval |
-| "What patents does XX cite" | Citation analysis |
-| "When does patent XX expire" | Expiry date query |
-| "Get bibliography for these patents: A, B, C" | Batch lookup |
-| "Patent details", "patent metadata" | General bibliography |
+在用户决定继续后按接口约定组织查询；从保存的结果提取所需资料，先给汇总表。
 
-**Not applicable** -- Needs beyond patent bibliography:
+## 使用反馈
 
-- Full-text patent search by keyword or semantic query
-- Patent landscape / analytics reports
-- Patent valuation or legal status tracking
-- Freedom-to-operate or infringement analysis
-- Patent family tree exploration (unless specific publication numbers are given)
-
-**Boundary judgment**: When users say "find patents about X" or "search for patents in field Y", that is a patent search task, not a bibliography lookup. This skill only applies when the user already has a patent ID or publication number and wants to retrieve its metadata.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利著录项结果
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,17 +1,31 @@
-# Kalodata-TikTok达人搜索与详情 API 参考
+# Kalodata TikTok 达人榜单与详情 接口说明
 
-## 调用规范
+## 公共规则
 
-- **请求地址（达人榜单）**：`${LINKFOX_TOOL_GATEWAY}/kalodata/creator/rank`
-- **请求地址（达人详情）**：`${LINKFOX_TOOL_GATEWAY}/kalodata/creator/detail`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 优先从环境变量 `LINKFOX_AGENT_API_KEY` 读取，回退 `LINKFOXAGENT_API_KEY`（如未配置，按 SKILL.md 的 **解决认证和算力问题** 处理）
-- **User-Agent**：`LinkFox-Skill/2.0`
-- **超时**：150s
+### 调用规范
 
-## 请求参数
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-### 达人榜单：`POST /kalodata/creator/rank`
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：达人榜单
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/kalodata/creator/rank`
+
+### 请求参数
 
 POST Body（JSON），所有参数均可选：
 
@@ -33,7 +47,119 @@ POST Body（JSON），所有参数均可选：
 
 > 默认按 `revenue`（GMV）降序排列。可用排序字段以网关实际接受的为准；若传入不支持的排序字段，回退默认排序，不要尝试其它绕过逻辑。
 
-### 达人详情：`POST /kalodata/creator/detail`
+#### 脚本选项与运行约定
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| JSON 参数 | JSON object | 是 | 首个位置参数为请求体 JSON；字段见本接口参数表。 |
+| --inline | CLI flag | 否 | 强制全量打印，仍保存完整响应。 |
+| --no-cache | CLI flag | 否 | 禁用业务脚本的 24 小时缓存，强制重新请求，不读取也不写入该缓存。 |
+
+业务封装提供单层 24 小时本地缓存；调用公共 `call_api.run` 时固定加入 `--no-cache`，避免重复缓存。缓存位于 `<cwd>/linkfox/.cache/linkfox-kalodata-tiktok-creator/`，按接口路径和规范化参数生成键，隔离榜单与详情。缓存文件以版本化封装保存原始 HTTP 状态和响应体；不符合缓存封装版本、缺少 HTTP 状态、过期或损坏的缓存不复用，命中时标记 `_cache.hit`。错误响应也会缓存；需要重试时使用业务 CLI 的 `--no-cache`，避免再次命中已缓存的结果。
+
+响应始终保存到当前工作目录的会话数据路径；禁止回退到 `/tmp`、家目录或其他工作区，请求前检查实际会话数据目录是否可写，不可写时报错。保持 `SESSION_ID` 聚合与会话 `_meta.json`、`index.jsonl` 索引。小响应全量输出、大响应摘要及 `--inline` 行为见 SKILL.md。
+
+#### 使用限制
+
+- 榜单不是关键词搜索，只按市场、时间及支持的条件浏览排行榜。
+- 需要分页时，在已明确的任务范围与消耗预期内继续请求，直到返回条数少于 `pageSize` 或达到第 5 页；没有 `total` 或总页数，不能推算完整总量。失败或空结果不得自动翻页或更改筛选连续试探。
+- 数据可能存在 T+1 统计延迟，展示和比较时保持请求窗口与币种一致。
+
+### 响应结构
+
+#### 顶层字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer | 业务状态码，200 表示成功 |
+| data | array | 达人榜单数据 |
+| costToken | integer | 本次调用扣费 token，通常为 14000 |
+| errmsg | string | 状态消息，成功时为 `ok` |
+
+#### data 数组元素
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| creator_nickname | string | 达人昵称 |
+| creator_handle | string | TikTok 主页名，例如 `@based` |
+| creator_id | string | 达人唯一 ID，字符串格式以避免大整数精度丢失 |
+| creator_followers | string | 粉丝数，以字符串返回 |
+| content_views | string | 内容总观看数，以字符串返回 |
+| sales_volumn | integer | 销量，字段拼写为 `volumn` |
+| revenue | number | 总销售额 / GMV，按请求的 `currency` 返回 |
+| video_revenue | number | 短视频带货销售额 |
+| live_revenue | number | 直播带货销售额 |
+| revenue_growth_rate | number | 销售额增长率（%），可正可负 |
+
+> `outputSchema` 可能声明 `total` 字段，但真实响应不包含 `total`，也没有总页数等分页元数据；分页停止条件见本接口使用限制。
+
+#### 脚本输出补充
+
+| 字段 / 输出 | 类型 | 说明 |
+|---|---|---|
+| _cache.hit | boolean | 缓存命中时为 true；其余业务字段保持响应值。 |
+| _cache.raw | any | 仅当响应自带的 `_cache` 不是对象时保留其原值，避免输出器误用该字段。 |
+| error / rawResponse | string / any | 仅当响应 JSON 不是对象时，用 error 说明结构异常，rawResponse 完整保留原值，不补造达人数据。 |
+| stderr HTTP 状态码 | integer / 无 | 本次请求或已缓存请求的原始 HTTP 状态；连接失败时为无，不用 errcode 代替 HTTP 状态。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- `errcode:501` 可能表示上游调用失败或参数无效；若 `errmsg` 包含 Kalodata HTTP 554，可在说明额外消耗后用相同参数重试 1–2 次，不自动更换参数，也不无限重试。脚本不自动重试；经用户决定重试时须加 `--no-cache`。
+
+### curl 示例
+
+```bash
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/kalodata/creator/rank" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+    "region": "US",
+    "dateRange": "last7Day",
+    "pageSize": 10,
+    "pageNumber": 1,
+    "currency": "USD"
+  }'
+```
+
+### 响应示例
+
+```json
+{
+  "errcode": 200,
+  "data": [
+    {
+      "revenue_growth_rate": 1.36,
+      "revenue": 389817.79,
+      "video_revenue": 238900.7,
+      "sales_volumn": 14781,
+      "content_views": "79192665",
+      "creator_followers": "3700000",
+      "creator_id": "7153432386608251946",
+      "creator_handle": "@based",
+      "creator_nickname": "BASED",
+      "live_revenue": 150857.09
+    }
+  ],
+  "costToken": 14000,
+  "errmsg": "ok"
+}
+```
+
+## 接口：达人详情
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/kalodata/creator/detail`
+
+### 请求参数
 
 POST Body（JSON）：
 
@@ -49,35 +175,35 @@ POST Body（JSON）：
 
 > `creatorId` 为必填。本接口不支持按关键词/昵称搜索达人；需先用达人榜单接口发现达人并获取 `creator_id`，再用 `creatorId` 查询详情。
 
-## 响应结构
+#### 脚本选项与运行约定
 
-### 共有顶层字段
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| JSON 参数 | JSON object | 是 | 首个位置参数为请求体 JSON；字段见本接口参数表。 |
+| --inline | CLI flag | 否 | 强制全量打印，仍保存完整响应。 |
+| --no-cache | CLI flag | 否 | 禁用业务脚本的 24 小时缓存，强制重新请求，不读取也不写入该缓存。 |
+
+业务封装提供单层 24 小时本地缓存；调用公共 `call_api.run` 时固定加入 `--no-cache`，避免重复缓存。缓存位于 `<cwd>/linkfox/.cache/linkfox-kalodata-tiktok-creator/`，按接口路径和规范化参数生成键，隔离榜单与详情。缓存文件以版本化封装保存原始 HTTP 状态和响应体；不符合缓存封装版本、缺少 HTTP 状态、过期或损坏的缓存不复用，命中时标记 `_cache.hit`。错误响应也会缓存；需要重试时使用业务 CLI 的 `--no-cache`，避免再次命中已缓存的结果。
+
+响应始终保存到当前工作目录的会话数据路径；禁止回退到 `/tmp`、家目录或其他工作区，请求前检查实际会话数据目录是否可写，不可写时报错。保持 `SESSION_ID` 聚合与会话 `_meta.json`、`index.jsonl` 索引。小响应全量输出、大响应摘要及 `--inline` 行为见 SKILL.md。
+
+#### 使用限制
+
+- 单次查询一个 `creatorId`；不能只用昵称或 handle 定位达人，也不支持关键词搜索。
+- 数据可能存在 T+1 统计延迟，展示和比较时保持请求窗口与币种一致。
+
+### 响应结构
+
+#### 顶层字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | errcode | integer | 业务状态码，200 表示成功 |
-| data | array | 榜单或详情数据 |
+| data | array | 单个达人的详情数据，固定为 1 元素数组（有效编号通常返回一条） |
 | costToken | integer | 本次调用扣费 token，通常为 14000 |
 | errmsg | string | 状态消息，成功时为 `ok` |
 
-### 达人榜单字段（`data` 数组中的每个元素）
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| creator_nickname | string | 达人昵称 |
-| creator_handle | string | TikTok 主页名，例如 `@based` |
-| creator_id | string | 达人唯一 ID，字符串格式以避免大整数精度丢失 |
-| creator_followers | string | 粉丝数，以字符串返回 |
-| content_views | string | 内容总观看数，以字符串返回 |
-| sales_volumn | integer | 销量，字段拼写为 `volumn` |
-| revenue | number | 总销售额 / GMV，按请求的 `currency` 返回 |
-| video_revenue | number | 短视频带货销售额 |
-| live_revenue | number | 直播带货销售额 |
-| revenue_growth_rate | number | 销售额增长率（%），可正可负 |
-
-> `outputSchema` 可能声明 `total` 字段，但真实响应不包含 `total`，也没有总页数等分页元数据。需要翻页时持续请求下一页，直到某页返回条数少于 `pageSize`。
-
-### 达人详情字段（`data` 固定为 1 元素数组）
+#### data 数组元素
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -113,33 +239,42 @@ POST Body（JSON）：
 
 > `data` 对于有效 `creatorId` 通常为 1 元素数组。详情响应不包含 `total` 字段。
 
-## 真实响应示例
+#### 脚本输出补充
 
-### 达人榜单
+| 字段 / 输出 | 类型 | 说明 |
+|---|---|---|
+| _cache.hit | boolean | 缓存命中时为 true；其余业务字段保持响应值。 |
+| _cache.raw | any | 仅当响应自带的 `_cache` 不是对象时保留其原值，避免输出器误用该字段。 |
+| error / rawResponse | string / any | 仅当响应 JSON 不是对象时，用 error 说明结构异常，rawResponse 完整保留原值，不补造达人数据。 |
+| stderr HTTP 状态码 | integer / 无 | 本次请求或已缓存请求的原始 HTTP 状态；连接失败时为无，不用 errcode 代替 HTTP 状态。 |
 
-```json
-{
-  "errcode": 200,
-  "data": [
-    {
-      "revenue_growth_rate": 1.36,
-      "revenue": 389817.79,
-      "video_revenue": 238900.7,
-      "sales_volumn": 14781,
-      "content_views": "79192665",
-      "creator_followers": "3700000",
-      "creator_id": "7153432386608251946",
-      "creator_handle": "@based",
-      "creator_nickname": "BASED",
-      "live_revenue": 150857.09
-    }
-  ],
-  "costToken": 14000,
-  "errmsg": "ok"
-}
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- `errcode:501` 可能表示上游调用失败或参数无效；若 `errmsg` 包含 Kalodata HTTP 554，可在说明额外消耗后用相同参数重试 1–2 次，不自动更换参数，也不无限重试。脚本不自动重试；经用户决定重试时须加 `--no-cache`。
+- 若错误源于 `creatorId` 缺失或无效，核对编号是否来自榜单响应的 `creator_id`，不要用昵称代替。
+
+### curl 示例
+
+```bash
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/kalodata/creator/detail" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+    "creatorId": "7153432386608251946",
+    "region": "US",
+    "dateRange": "last7Day",
+    "currency": "USD"
+  }'
 ```
 
-### 达人详情
+### 响应示例
 
 ```json
 {
@@ -178,78 +313,18 @@ POST Body（JSON）：
 }
 ```
 
-## 错误码
+## Feedback
 
-正常情况下，接口 HTTP 状态码为 200，业务成功与否通过响应体中的 `errcode` 字段区分。未授权等情况可能返回 HTTP 401，且对应 `errcode` 也是 401。
-
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析业务字段 |
-| 401 | 认证失败 | HTTP 401 或 authorized error；按 SKILL.md 的 **解决认证和算力问题** 处理 |
-| 402 | 算力不足 | 按 SKILL.md 的 **解决认证和算力问题** 处理 |
-| 501 | 上游调用失败 / 参数无效 | 若 `errmsg` 包含 Kalodata HTTP 554，用相同参数重试 1-2 次；若因 `creatorId` 缺失或无效，核对 ID 是否来自榜单结果 |
-| 其他非 200 值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
-
-错误响应示例：
-
-```json
-{
-  "errcode": 401,
-  "errmsg": "authorized error"
-}
-```
-
-## curl 示例
-
-### 达人榜单
-
-```bash
-curl -X POST ${LINKFOX_TOOL_GATEWAY}/kalodata/creator/rank \
-  -H "Authorization: $LINKFOX_AGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/2.0" \
-  -d '{
-    "region": "US",
-    "dateRange": "last7Day",
-    "pageSize": 10,
-    "pageNumber": 1,
-    "currency": "USD"
-  }'
-```
-
-### 达人详情
-
-```bash
-curl -X POST ${LINKFOX_TOOL_GATEWAY}/kalodata/creator/detail \
-  -H "Authorization: $LINKFOX_AGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "User-Agent: LinkFox-Skill/2.0" \
-  -d '{
-    "creatorId": "7153432386608251946",
-    "region": "US",
-    "dateRange": "last7Day",
-    "currency": "USD"
-  }'
-```
-
-## Feedback API
-
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
   "skillName": "linkfox-kalodata-tiktok-creator",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter (`linkfox-kalodata-tiktok-creator`)
-- `sentiment`: Choose ONE - `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE - `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

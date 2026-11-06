@@ -1,4 +1,4 @@
-# Cancel Order — 接口文档索引（EU）
+# 取消订单 — 接口文档索引（EU）
 
 每个 `type` 单独一份文档，经 `POST /temu/proxy` 调用（`site=eu`）。
 

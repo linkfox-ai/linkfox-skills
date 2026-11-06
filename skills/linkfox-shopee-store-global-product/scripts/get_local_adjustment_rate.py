@@ -13,14 +13,18 @@ import json
 import sys
 
 from _global_product_api_runner import run_global_product_api
+from _shopee_global_product_common import emit_result, lf_inline_flag
 
 
 def main() -> None:
+    if "--help" in sys.argv[1:] or "-h" in sys.argv[1:]:
+        print("用法: get_local_adjustment_rate.py '<JSON>' [--inline] [--no-cache]")
+        return
     if len(sys.argv) < 2:
         print("Usage: get_local_adjustment_rate.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_global_product_api("get_local_adjustment_rate", params, "get_local_adjustment_rate.py"), indent=2, ensure_ascii=False))
+    emit_result(run_global_product_api("get_local_adjustment_rate", params, "get_local_adjustment_rate.py"), slug="linkfox-shopee-store-global-product-get_local_adjustment_rate", inline=lf_inline_flag())
 
 
 if __name__ == "__main__":

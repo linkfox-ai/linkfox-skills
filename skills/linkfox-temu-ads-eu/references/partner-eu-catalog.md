@@ -57,3 +57,5 @@ Partner Platform for EU 菜单：**Ads / 电商广告**（Search & Recommend 广
 ## Token 说明
 
 建议使用 **`tokenPurpose=product-inventory`**。详见 [access-token.md](./access-token.md)。
+
+加签文件下载为第 8 个操作，完整定义见 [api.md](api.md#接口加签文件下载)。

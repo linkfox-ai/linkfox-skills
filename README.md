@@ -70,7 +70,7 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-amazon-reviews-list` | Amazon Reviews List |
 | `linkfox-amazon-search` | Search Amazon products by keyword with real-time ranking data |
 | `linkfox-amazon-search-by-image` | Find similar Amazon products using image-based search |
-| `linkfox-amazon-store-aplus-content` | Amazon Store Aplus Content |
+| `linkfox-amazon-store-aplus-content` | Manage Standard and Premium A+ content, Brand Stories, ASIN associations, approvals, and media for authorized Amazon stores |
 | `linkfox-amazon-store-auth` | Amazon Store Auth |
 | `linkfox-amazon-store-catalog` | Amazon Store Catalog |
 | `linkfox-amazon-store-customer-feedback` | Amazon Store Customer Feedback |
@@ -83,7 +83,7 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-amazon-store-orders` | Amazon Store Orders |
 | `linkfox-amazon-store-pricing` | Amazon Store Pricing |
 | `linkfox-amazon-store-report` | Amazon Store Report |
-| `linkfox-amazon-store-uploads` | Amazon Store Uploads |
+| `linkfox-amazon-store-uploads` | Prepare Amazon A+ and Messaging files, create upload destinations, and upload to presigned destinations with PUT or multipart POST |
 
 ### 1688
 

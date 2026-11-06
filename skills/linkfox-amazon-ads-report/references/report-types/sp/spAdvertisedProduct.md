@@ -13,24 +13,24 @@ dateRange:
   dataRetentionDays: 95
 ---
 
-# SP Advertised Product
+# SP 投放商品
 
-Advertised product reports contain performance data for products that are advertised as part of your campaigns.
+投放商品报告提供活动所推广商品的效果数据。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | spAdvertisedProduct |
-| Maximum date range | 31 days |
-| Data retention | 95 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 95 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | advertiser |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | date |
 | startDate |
@@ -89,19 +89,21 @@ Advertised product reports contain performance data for products that are advert
 | roasClicks7d |
 | roasClicks14d |
 
-## Group by advertiser
+## 分组：advertiser
 
-Additional metrics: N/A
+无附加指标。
 
-## Filters
+## 筛选
 
-- adCreativeStatus (values: ENABLED, PAUSED, ARCHIVED)
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| adCreativeStatus | array[string] | ENABLED, PAUSED, ARCHIVED |
 
-## Sample call
+## 配置示例
 
-**Endpoint**: `POST https://advertising-api.amazon.com/reporting/reports`
+**上游端点（由网关转发）**：`POST https://advertising-api.amazon.com/reporting/reports`
 
-**Headers**:
+**上游请求头示意（由服务端处理，不要求用户提供原始 token）**：
 ```
 Content-Type: application/vnd.createasyncreportrequest.v3+json
 Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxx
@@ -109,7 +111,7 @@ Amazon-Advertising-API-Scope: xxxxxxx
 Authorization: Bearer Atza|xxxxxxxxxxxxx
 ```
 
-**Body**:
+**配置请求体示例**：
 ```json
 {
     "name": "SP advertised product report 7/5-7/10",

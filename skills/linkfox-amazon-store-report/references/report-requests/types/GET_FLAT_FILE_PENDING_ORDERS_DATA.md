@@ -1,20 +1,20 @@
 # `GET_FLAT_FILE_PENDING_ORDERS_DATA`
 
-> **分类**：9. Order Reports  
-> **说明**：Pending orders (flat file)  
-> **可用范围**：Seller only
+> **分类**：9. 订单报告  
+> **说明**：待处理订单（平面文件）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Order Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#flat-file-pending-orders-report)（章节：**Flat File Pending Orders Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [订单报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#flat-file-pending-orders-report)（章节：**Flat File Pending Orders Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking)
+- **角色**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking)
 - **Order Fulfillment Channel**：MFN
-- **Availability**：Sellers
-- **Requested/scheduled**：Requested or scheduled
-- **Report output type**：Tab-delimited flat file
-- **要点**：Contains all pending orders.
+- **可用范围**：卖家
+- **按需/计划**：Requested or scheduled
+- **输出格式**：制表符分隔的平面文件
+- **要点**：包含全部待处理订单。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-order#flat-file-pending-orders-report>
 

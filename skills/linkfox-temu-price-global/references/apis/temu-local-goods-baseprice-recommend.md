@@ -1,190 +1,165 @@
-# 推荐基础价/供货价估算 — `temu.local.goods.baseprice.recommend`
+# 推荐基础价/供货价估算 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/global_price_baseprice_recommend.py` |
-| **Partner 文档** | https://partner-global.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a 以 Partner 后台该接口页为准） |
-| **网关** | `POST /temu/proxy`，`type`=`temu.local.goods.baseprice.recommend`，业务载荷放在 Body 的 `params` |
+网关与脚本运行约定见 [总览](../api.md)。
 
-**Description:** Recommend baseprice（根据类目、规格、站外售价、尺寸重量等信息推荐/估算供货价）。
+## 公共规则
 
-> **网关鉴权字段**（`type`、`app_key`、`access_token`、`sign`、`timestamp` 等）由本 skill 网关脚本处理，**不要**放进业务脚本的 `params`；业务参数见下方 `request`。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Request 结构（官方业务参数）
+### 响应码基本规则
 
-```text
-params
-└── request (OBJECT, 选填)
-    ├── language (STRING, 否)
-    └── supplierPriceEstimateQry (OBJECT, 必填)
-        ├── trademarkInfo (OBJECT, 否)
-        │   ├── brandId (LONG, 否)
-        │   └── trademarkId (LONG, 否)
-        ├── goodsBasicInfo (OBJECT, 必填)
-        │   ├── catId (LONG, 必填)
-        │   ├── taxCode (STRING, 否)
-        │   └── costTemplateId (STRING, 否)
-        └── supplierPriceEstimateSkuQryList[] (OBJECT[], 必填)
-            ├── specIdList[] (LONG[], 必填)
-            ├── externPlatformPriceInfo (OBJECT, 必填)
-            │   ├── amount (STRING, 否)
-            │   └── currency (STRING, 否)
-            └── productDimensionsInfo (OBJECT, 否)
-                ├── weight (STRING, 否)
-                ├── weightUnit (STRING, 否)
-                ├── length (STRING, 否)
-                ├── width (STRING, 否)
-                ├── height (STRING, 否)
-                └── dimensionUnit (STRING, 否)
-```
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-### `request`
+## 接口：推荐基础价/供货价估算（temu.local.goods.baseprice.recommend）
+
+Partner 文档：<https://partner-global.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a>（未提供子菜单编号时以后台对应接口页为准）。
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
 
 | 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| language | STRING | 否 | Language |
-| supplierPriceEstimateQry | OBJECT | **是** | Supplier price estimate query |
+|---|---|---|---|
+| site | string | 是；脚本有默认值 | `global`；通用多站点入口接受 `cn` / `partner` / `us` / `global` / `eu`，必须小写。 |
+| managementType | string | 是；脚本有默认值 | `semi-managed`；通用入口兼容 `full-managed`，必须小写。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；业务脚本优先使用直接令牌，否则从本地 `storeKey` 读取后注入此字段。 |
+| storeKey | string | 与 accessToken 二选一 | 本地店铺键；脚本通过 site、managementType、tokenPurpose 在 ~/.linkfox/temu-access-tokens.json 解析后只发送 accessToken。 |
+| tokenPurpose | string | 否 | 建议 product-inventory；业务脚本用于本地令牌检索，不发送此字段。 |
+| type | string | 是 | Temu 操作名称，取本接口标题中的值；专用脚本自动填入。 |
+| params | object | 否 | 业务参数对象；本技能定价操作的业务块为 `params.request`。 |
 
-### `supplierPriceEstimateQry`
+上游统一资源 path 为 `/openapi/router`，通过 Body `type=temu.local.goods.baseprice.recommend` 区分操作；紫鸟转发路径为 `/temu-proxy/{site}/{managementType}`，不将 type 拼入 LinkFox URL。LinkFox 双头鉴权与脚本参数兼容见 [运行约定](../api.md#脚本运行约定)。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| trademarkInfo | OBJECT | 否 | Brand information; if provided, will assist merchants in suggesting more accurate prices. |
-| goodsBasicInfo | OBJECT | **是** | Goods basic information |
-| supplierPriceEstimateSkuQryList | OBJECT[] | **是** | Supplier price estimate need info (per SKU/spec) |
-
-### `trademarkInfo`
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| brandId | LONG | 否 | Brand ID |
-| trademarkId | LONG | 否 | Trademark ID |
-
-### `goodsBasicInfo`
+#### `params` 内业务字段
 
 | 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| catId | LONG | **是** | The ID of the category of this product. It must be a **leaf category** that corresponds to the category tree type specified in the category_version property. |
-| taxCode | STRING | 否 | Product Tax code |
-| costTemplateId | STRING | 否 | The ID of the delivery options available for your product, delimited by commas. Sellers can create ship configurations based on business needs; when listing product to create offer, seller selects one ship configuration for the product. The ship configuration will be used to retrieve the valid ship options on the website. |
+|---|---|---|---|
+| request | OBJECT | 否 | 业务参数容器。 |
+| request.language | STRING | 否 | 语言。 |
+| request.supplierPriceEstimateQry | OBJECT | 是 | 供货价估算信息。 |
+| request.supplierPriceEstimateQry.trademarkInfo | OBJECT | 否 | 品牌信息；提供后有助于估算更准确的价格。 |
+| request.supplierPriceEstimateQry.trademarkInfo.brandId | LONG | 否 | 品牌 ID。 |
+| request.supplierPriceEstimateQry.trademarkInfo.trademarkId | LONG | 否 | 商标 ID。 |
+| request.supplierPriceEstimateQry.goodsBasicInfo | OBJECT | 是 | 商品基础信息。 |
+| request.supplierPriceEstimateQry.goodsBasicInfo.catId | LONG | 是 | 商品类目 ID，必须为与 `category_version` 指定类目树类型对应的叶子类目。 |
+| request.supplierPriceEstimateQry.goodsBasicInfo.taxCode | STRING | 否 | 商品税码。 |
+| request.supplierPriceEstimateQry.goodsBasicInfo.costTemplateId | STRING | 否 | 可用配送配置 ID，以逗号分隔；卖家按业务需要创建配置，发品创建报价时选择，平台据此取得有效配送选项。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList | OBJECT[] | 是 | 按 SKU / 规格提供的估算信息。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].specIdList | LONG[] | 是 | 规格 ID 列表。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].externPlatformPriceInfo | OBJECT | 是 | 其他平台售价。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].externPlatformPriceInfo.amount | STRING | 否 | 其他平台售价金额。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].externPlatformPriceInfo.currency | STRING | 否 | 币种代码。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].productDimensionsInfo | OBJECT | 否 | 商品尺寸与重量。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].productDimensionsInfo.weight | STRING | 否；巴西必填 | 商品重量。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].productDimensionsInfo.weightUnit | STRING | 否；巴西必填 | 美国为 `lb`，其他国家为 `kg`。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].productDimensionsInfo.length | STRING | 否；巴西必填 | 长度，保留两位小数。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].productDimensionsInfo.width | STRING | 否；巴西必填 | 宽度，保留两位小数。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].productDimensionsInfo.height | STRING | 否；巴西必填 | 高度，保留两位小数。 |
+| request.supplierPriceEstimateQry.supplierPriceEstimateSkuQryList[].productDimensionsInfo.dimensionUnit | STRING | 否；巴西必填 | 美国为 `inch`，其他国家为 `cm`。 |
 
-### `supplierPriceEstimateSkuQryList[]` 元素
+#### 参数约束与使用限制
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| specIdList | LONG[] | **是** | Specification ID List |
-| externPlatformPriceInfo | OBJECT | **是** | The selling price of the product on other platforms |
-| productDimensionsInfo | OBJECT | 否 | Product dimensions message |
+签名字段 `type`、`app_key`、`access_token`、`sign`、`timestamp` 由网关处理，不放入业务 `params`。尺寸和重量单位按目标国家选择：美国使用 `lb` / `inch`，其他国家使用 `kg` / `cm`；巴西必填要求见字段表，不能将美国单位推广到全球区。
 
-### `externPlatformPriceInfo`
+### 响应结构
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| amount | STRING | 否 | The selling price of the product on other platforms |
-| currency | STRING | 否 | Currency Code |
+#### 网关与脚本输出
 
-### `productDimensionsInfo`
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| errcode | integer / string / null | 网关状态码，按公共规则判断。 |
+| errmsg | string | 网关错误说明。 |
+| code | integer | 网关错误码：1002 参数或 Token 错误，1003 转发失败。 |
+| body | string | Temu 原始 JSON 字符串；代理脚本保留原值并解析为 `temuBody`。 |
+| temuBody | object / array / scalar | 脚本附加的解析结果；body 非 JSON 或为空时不添加，不代表业务成功。 |
+| transportHttpStatus | integer / null | 业务适配层附加的 LinkFox HTTP 状态；连接失败为 null。 |
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| weight | STRING | 否 | The weight of the product. (**Brazil site is mandatory.**) |
-| weightUnit | STRING | 否 | The unit of the weight. The weight unit for product in the **United States** is **`lb`** while in other countries it is **`kg`**. (**Brazil site is mandatory.**) |
-| length | STRING | 否 | The length of the product. Length should be input with two decimal places. (**Brazil site is mandatory.**) |
-| width | STRING | 否 | The width of the product. Width should be input with two decimal places. (**Brazil site is mandatory.**) |
-| height | STRING | 否 | The height of the product. Height should be input with two decimal places. (**Brazil site is mandatory.**) |
-| dimensionUnit | STRING | 否 | Dimension unit. The dimension unit for product in the **United States** is **`inch`** while in other countries it is **`cm`**. (**Brazil site is mandatory.**) |
+#### Temu `body` 解析后的字段
 
-### 网关 `params` 写法
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| success | BOOLEAN | Temu 当前请求是否成功。 |
+| errorCode | INTEGER | Temu 业务错误码；与外层 errcode 分开判断，不套用外层响应码规则。 |
+| errorMsg | STRING | Temu 错误信息。 |
+| result | OBJECT | 具体业务结果。 |
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "language": "en-US",
-    "supplierPriceEstimateQry": {
-      "trademarkInfo": {
-        "brandId": 10001,
-        "trademarkId": 20002
-      },
-      "goodsBasicInfo": {
-        "catId": 12345,
-        "taxCode": "TAX001",
-        "costTemplateId": "100,101"
-      },
-      "supplierPriceEstimateSkuQryList": [
-        {
-          "specIdList": [9001, 9002],
-          "externPlatformPriceInfo": {
-            "amount": "29.99",
-            "currency": "USD"
-          },
-          "productDimensionsInfo": {
-            "weight": "1.20",
-            "weightUnit": "lb",
-            "length": "10.00",
-            "width": "8.00",
-            "height": "2.50",
-            "dimensionUnit": "inch"
-          }
-        }
-      ]
-    }
-  }
-}
-```
+`result` 返回推荐价/估算结果，具体子字段以 Partner 文档和实际返回为准，不预设字段结构。
 
-> 全球站尺寸/重量单位建议：`weightUnit=lb`、`dimensionUnit=inch`；`goodsBasicInfo.catId` 须为**叶子类目**。
+### 响应码规则
 
----
+#### 基础规则
 
-## Response（Temu `body` 解析后）
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-官方 Response 字段表尚未提供；解析顺序与通用 Manage 接口一致：
+#### 业务规则
 
-```text
-response
-├── success
-├── errorCode
-├── errorMsg
-└── result
-    └── （推荐价/估算结果字段以 Partner 文档与实网返回为准）
-```
+- 外层正常响应后，检查网关 `code`，再解析 `body`，根据 Temu 的 `success`、`errorCode`、`errorMsg` 和 `result` 判断业务结果；保留原错误，不将可解析的 body 当作成功。
+- 网关 `code=1002` 时核对参数和 LinkFox Token；`code=1003` 时核对 Temu Token、权限白名单和网络。
 
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | Success |
-| errorCode | INTEGER | Error code |
-| errorMsg | STRING | Error message |
-| result | OBJECT | Result payload（具体子字段待官方 Response 表补充） |
-
----
-
-## 示例
+### curl 示例
 
 ```bash
-python scripts/global_price_baseprice_recommend.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "language": "en-US",
-    "supplierPriceEstimateQry": {
-      "goodsBasicInfo": { "catId": 12345 },
-      "supplierPriceEstimateSkuQryList": [
-        {
-          "specIdList": [9001],
-          "externPlatformPriceInfo": { "amount": "19.99", "currency": "USD" },
-          "productDimensionsInfo": {
-            "weight": "0.50",
-            "weightUnit": "lb",
-            "length": "6.00",
-            "width": "4.00",
-            "height": "1.00",
-            "dimensionUnit": "inch"
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '
+{
+  "site": "global",
+  "managementType": "semi-managed",
+  "accessToken": "<TEMU_ACCESS_TOKEN>",
+  "type": "temu.local.goods.baseprice.recommend",
+  "params": {
+    "request": {
+      "supplierPriceEstimateQry": {
+        "goodsBasicInfo": {
+          "catId": 12345
+        },
+        "supplierPriceEstimateSkuQryList": [
+          {
+            "specIdList": [
+              9001
+            ],
+            "externPlatformPriceInfo": {
+              "amount": "19.99",
+              "currency": "USD"
+            }
           }
-        }
-      ]
+        ]
+      }
     }
   }
 }'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-price-global",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

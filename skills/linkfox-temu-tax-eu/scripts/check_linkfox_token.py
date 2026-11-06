@@ -11,7 +11,10 @@ Usage:
 import json
 import sys
 
-from _temu_common import PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error, load_json_arg
+from _temu_common import (
+    PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error,
+    load_json_arg, transport_http_status,
+)
 
 def main():
     params = load_json_arg(sys.argv) if len(sys.argv) >= 2 else {}
@@ -44,6 +47,26 @@ def main():
                 ensure_ascii=False,
             )
         )
+        sys.exit(1)
+
+    status = transport_http_status(result)
+    errcode = result.get("errcode")
+    if isinstance(errcode, str):
+        errcode = errcode.strip()
+    normal_code = (errcode is None or errcode == "" or
+                   (type(errcode) in (int, float) and 200 <= errcode < 300 and errcode % 1 == 0) or
+                   (isinstance(errcode, str) and errcode.isascii() and
+                    errcode.isdigit() and 200 <= int(errcode) < 300))
+    if (status is None or not 200 <= status < 300 or not normal_code
+            or "_rawGatewayResponse" in result):
+        billing = status == 402 or errcode in (402, "402")
+        print(json.dumps({
+            "ok": False,
+            "reason": "billing_error" if billing else "gateway_probe_failed",
+            "gatewayReachable": status is not None,
+            "message": result,
+            "hint": "按 references/onboarding.md 处理认证或算力问题。" if billing else "保留错误，不自动重试探测。",
+        }, indent=2, ensure_ascii=False))
         sys.exit(1)
 
     print(

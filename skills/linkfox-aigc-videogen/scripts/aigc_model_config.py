@@ -1,10 +1,4 @@
-"""Query-only public AIGC catalog. Never validate or rewrite generation requests.
-
-Canonical source: linkfox-skills-repository skills/linkfox-aigc-imagegen/scripts/aigc_model_config.py.
-Deploy a byte-for-byte
-copy and aigc_model_fallbacks.json beside each generation script; no cross-skill imports.
-Only the public config host receives GETs, never gateway credentials or session headers.
-"""
+"""只查询公共模型目录，不校验或重写生成请求；配置请求不发送网关身份头。"""
 from __future__ import annotations
 
 import argparse
@@ -16,12 +10,12 @@ import time
 from pathlib import Path
 from http.client import HTTPException
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from _aigc_runtime import request
 
 # Production default only; resolve LINKFOX_AI_API_URL separately for each query.
 CONFIG_BASE_URL = "https://ai-api.linkfox.com"
 CONFIG_TIMEOUT = 5
-# Effective input capacity of the unchanged imageGenAsync entry, not a model whitelist.
+# Effective input capacity of the imageGenAsync entry, not a model whitelist.
 IMAGE_ENTRY_REF_IMAGE_LIMIT = 10
 IMAGE_ALIASES = {
     "BANANA": "LF_BN_1", "BANANA_2": "LF_BN_2", "BANANA_PRO": "LF_BN_3",
@@ -131,10 +125,12 @@ def load_catalog(kind, allowed_models=None):
     endpoint = "/image/model/config/list" if kind == "image" else "/image/video/model/config/list"
     catalog = {"source": "remote", "bizType": biz_type, "entry": kind}
     try:
-        request = Request(get_config_base_url() + endpoint + "?bizType=" + str(biz_type),
-                          headers={"Referer": "https://wiki.linkfox.com/", "User-Agent": "LinkFox-Skill/2.0"}, method="GET")
-        with urlopen(request, timeout=CONFIG_TIMEOUT) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        payload = request(endpoint, "linkfox-aigc-videogen-model-config", {"bizType": biz_type},
+                          timeout=CONFIG_TIMEOUT,
+                          public_url=get_config_base_url() + endpoint + "?bizType=" + str(biz_type),
+                          raise_transport_errors=True)
+        if isinstance(payload, dict) and payload.get("error"):
+            raise ValueError("模型目录查询失败：" + str(payload["error"]))
         if not isinstance(payload, dict) or payload.get("code") not in (200, "200") or not isinstance(payload.get("data"), list):
             raise ValueError("模型列表响应状态或结构错误")
         # [] and all-maintenance are valid successes: do NOT revive static models.

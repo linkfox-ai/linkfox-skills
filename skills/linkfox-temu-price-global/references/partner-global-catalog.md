@@ -1,4 +1,4 @@
-# Partner Global — Price 接口目录
+# Temu 全球站价格接口目录
 
 Partner Platform for **Global（全球区，非 US/EU）** 菜单：**Product** 下与**价格/供货价**相关的接口。
 
@@ -37,3 +37,14 @@ Partner Platform for **Global（全球区，非 US/EU）** 菜单：**Product** 
 | **本 skill** | `bg.local.goods.priceorder.*` / `temu.local.goods.*price*` / `bg.local.goods.sku.list.price.query` | 定价单、推荐价、SKU 供货价、批量改价 |
 | `linkfox-temu-manage-product-global` | 商品管理域 | `site=global` |
 | `linkfox-temu-add-product-us` | `temu.goods.price.list.get` | 发品侧（Global 调用时 `site=global`） |
+
+## 其他相关场景
+
+以下场景转交对应技能，仅在用户确实需要相应区域的业务时使用，不作为全球站价格管理的默认步骤。
+
+| 场景 | 技能 |
+|---|---|
+| 全球站订单查询、发货、物流 | `linkfox-temu-order-global` |
+| 美国站买家或卖家取消订单 | `linkfox-temu-cancel-order-us` |
+| 美国站履约、发货及自发货 | `linkfox-temu-fulfillment-us` |
+| 美国站发品、类目、V2 add | `linkfox-temu-add-product-us` |

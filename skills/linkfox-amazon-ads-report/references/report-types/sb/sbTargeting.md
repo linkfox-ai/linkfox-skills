@@ -17,34 +17,34 @@ dateRange:
   dataRetentionDays: 60
 ---
 
-# SB Targeting
+# SB 定向
 
-Targeting reports contain performance metrics broken down by both targeting expressions and keywords.
+定向报告按定向表达式与关键词拆分效果指标。
 
-> **Note**
-> Targeting reports are not supported for Sponsored TV non-endemic advertisers.
+> **说明**
+> 定向报告不支持 Sponsored TV 的非 Amazon 站内销售商品广告主（non-endemic advertisers）。
 
-## Requesting keywords vs. targets
+## 关键词与定向表达式选择
 
-To see only targeting expressions, set the keywordType filter to TARGETING_EXPRESSION and TARGETING_EXPRESSION_PREDEFINED. To see only keywords, set the keywordType filter to BROAD, PHRASE, and EXACT.
+仅查看定向表达式时，将 `keywordType` 设为 `TARGETING_EXPRESSION` 与 `TARGETING_EXPRESSION_PREDEFINED`；仅查看关键词时设为 `BROAD`、`PHRASE`、`EXACT`。
 
-> **Note**
-> This report currently available in preview. During the preview period, data related to Sponsored Brands campaigns with flag isMultiAdGroupsEnabled=False won't be available. Once version 3 reporting supports all Sponsored Brands campaigns, we will announce general availability in the release notes.
+> **说明**
+> 报告预览期不提供 `isMultiAdGroupsEnabled=False` 的 SB 活动数据。v3 报告支持全部 SB 活动的正式可用状态以 Amazon 版本说明为准，不能假定此限制已解除。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | sbTargeting |
-| Maximum date range | 31 days |
-| Data retention | 60 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 60 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | targeting |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | addToCart |
 | addToCartClicks |
@@ -108,58 +108,56 @@ To see only targeting expressions, set the keywordType filter to TARGETING_EXPRE
 | topOfSearchImpressionShare |
 | unitsSold |
 
-## Group by targeting
+## 分组：targeting
 
-**Additional metrics**: N/A
+无附加指标。
 
-**Filters**:
-- adKeywordStatus (values: ENABLED, PAUSED, ARCHIVED)
-- keywordType (values: BROAD, PHRASE, EXACT, TARGETING_EXPRESSION, TARGETING_EXPRESSION_PREDEFINED, THEME)
+**筛选**：
 
-## Sample call
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| adKeywordStatus | array[string] | ENABLED, PAUSED, ARCHIVED |
+| keywordType | array[string] | BROAD, PHRASE, EXACT, TARGETING_EXPRESSION, TARGETING_EXPRESSION_PREDEFINED, THEME |
 
-### Keywords only
+## 配置示例
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxx' \
---data '{
-    "name": "SB keywords report 9/5-9/10",
-    "startDate": "2023-09-05",
-    "endDate": "2023-09-10",
-    "configuration": {
-        "adProduct": "SPONSORED_BRANDS",
-        "groupBy": [
-            "targeting"
-        ],
-        "columns": [
-            "adGroupId",
-            "campaignId",
-            "keywordId",
-            "matchType",
-            "keywordText",
-            "impressions",
-            "clicks",
-            "cost",
-            "startDate",
-            "endDate"
-        ],
-        "filters": [
-            {
-                "field": "keywordType",
-                "values": [
-                    "BROAD",
-                    "PHRASE",
-                    "EXACT"
-                ]
-            }
-        ],
-        "reportTypeId": "sbTargeting",
-        "timeUnit": "SUMMARY",
-        "format": "GZIP_JSON"
-    }
-}'
+### 仅关键词
+
+```json
+{
+  "name": "SB keywords report 9/5-9/10",
+  "startDate": "2023-09-05",
+  "endDate": "2023-09-10",
+  "configuration": {
+    "adProduct": "SPONSORED_BRANDS",
+    "groupBy": [
+      "targeting"
+    ],
+    "columns": [
+      "adGroupId",
+      "campaignId",
+      "keywordId",
+      "matchType",
+      "keywordText",
+      "impressions",
+      "clicks",
+      "cost",
+      "startDate",
+      "endDate"
+    ],
+    "filters": [
+      {
+        "field": "keywordType",
+        "values": [
+          "BROAD",
+          "PHRASE",
+          "EXACT"
+        ]
+      }
+    ],
+    "reportTypeId": "sbTargeting",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

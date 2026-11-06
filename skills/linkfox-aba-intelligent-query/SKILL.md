@@ -1,172 +1,156 @@
 ---
 name: linkfox-aba-intelligent-query
-description: 亚马逊ABA（品牌分析）搜索词数据的查询与分析，涵盖15个站点近3年的周维度数据。当用户提到ABA数据、亚马逊搜索词分析、关键词挖掘、搜索排名趋势、市场机会分析、季节性关键词、高点击低转化分析、蓝海词发现、竞品关键词分析、ABA data, search term report, keyword mining, search ranking trends, blue ocean keywords, click share, conversion share, seasonal keywords, market opportunity analysis, competitor keywords时触发此技能。即使用户未明确提及"ABA"，只要其需求涉及亚马逊搜索词数据和排名分析，也应触发此技能。
+description: 查询与分析亚马逊 ABA（品牌分析）搜索词数据，覆盖搜索热度排名趋势、关键词挖掘、季节性、新兴需求、点击份额与转化份额及关键词下的竞品流量分布，支持 15 个站点近 3 年的周维度数据。适用于搜索词层面的市场机会、蓝海词与高点击低转化查询；不适用于广告投放策略、评论分析、Listing 文案、ASIN 销量估算、利润定价、综合市场报告或本地 ABA 文件处理。
 ---
 
-# ABA Data Explorer
+# 亚马逊 ABA 智能查询
 
-This skill guides you on how to query and analyze ABA search term data, helping Amazon sellers extract valuable insights from ABA search term reports.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-ABA (Amazon Brand Analytics) Search Term Report is official Amazon search behavior data that reflects real consumer search activity on Amazon. This tool holds nearly 3 years of **weekly-granularity** data across 15 Amazon marketplaces.
+查询亚马逊消费者搜索行为及搜索词下的商品点击、转化分布。无需明确提及 ABA；当需求实际是搜索词数据和排名分析时，使用本技能。
 
-**Ranking logic**: A smaller `searchFrequencyRank` value means higher search popularity. Rank 1 is the most popular search term. This is an easy point of confusion - when a user says "ranking improved," it means the numeric value decreased; "ranking dropped" means the value increased.
+**场景速查**
 
-## Data Fields
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 某个关键词的搜索量、热度怎么样 | 搜索热度排名趋势；排名不能直接等同于搜索量。 |
+| 最近走红的关键词、新出现的词 | 黑马关键词、新词和新兴需求发现。 |
+| 蓝海词、竞争小的词 | 搜索词层面的市场机会与点击集中度查询。 |
+| 哪些关键词转化好、高转化长尾词 | 高转化份额长尾词及对应 ASIN 查询。 |
+| 旺季哪些词会涨、季节性关键词 | 季节与节日搜索词查询。 |
+| 谁拿走了流量、是否有垄断 | 关键词下的点击份额及竞品分布。 |
+| 哪些 ASIN 点击高却转化低 | 高点击低转化份额 ASIN 查询。 |
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| Search Term | searchTerm | Consumer search keyword | rimel loreal |
-| Report Start Date | reportStartDate | Week start date for data collection | 2025-10-26 |
-| Region | region | Amazon marketplace code | US |
-| Search Frequency Rank | searchFrequencyRank | Search popularity rank (lower = better) | 82135 |
-| Clicked ASIN | clickedAsin | ASIN of the clicked product | B0XXXXXXXX |
-| Clicked Item Name | clickedItemName | Name of the clicked product | xxx |
-| Click Share Rank | clickShareRank | This ASIN's click share rank for the search term | 1 |
-| Click Share | clickShare | Click share captured by this ASIN (0~1) | 0.28 |
-| Conversion Share | conversionShare | Conversion share captured by this ASIN (0~1) | 0.3333 |
+### 边界
 
-## Supported Marketplaces
+“选品”“竞品分析”“市场机会”若落到搜索词层面的蓝海词或竞品流量分布查询，适用本技能；利润率、定价策略和综合市场报告不在范围内。广告/PPC 出价及策略、评论、Listing 文案、ASIN 销量估算与已有本地 ABA 文件处理也不适用。
 
-US (United States), DE (Germany), BR (Brazil), CA (Canada), AU (Australia), JP (Japan), AE (United Arab Emirates), ES (Spain), FR (France), IT (Italy), SA (Saudi Arabia), TR (Turkey), MX (Mexico), SE (Sweden), NL (Netherlands) 
+## 前置条件
 
-Default marketplace is **US**. Use US when the user doesn't specify a marketplace.
+按查询场景明确筛选条件和时间范围；用户未指定市场时使用 US。种子词、比较目标和去重要求按场景确定，趋势比较须明确比较基准，同一搜索词与 ASIN 有多条记录且需要取舍时须明确保留规则。若相关条件含糊，先澄清影响结果的条件；支持站点及数据范围见 `references/api.md`。
 
-## 调用方式
+## 查询流程
 
-- **API 端点**：`POST /aba/intelligentQuery`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/aba_query.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+1. 确认查询场景，忠实记录用户目标，不擅自扩展需求。
+2. 编写精确的自然语言查询描述，并依次核对六项原则：
+   - **站点明确**：以“筛选美国站”等市场说明开头，与用户所选站点保持一致。
+   - **条件精确**：使用具体数值区间，例如“排名在 5 万以内”，避免“排名较好”。
+   - **时间具体**：说明“过去 12 周”“2024 年 1—9 月”“近 3 个月”等时间范围。
+   - **比较基准清楚**：涉及趋势比较时，例如“4 周前的排名比 8 周前提升 30%”，明确比较时点和比例含义。
+   - **去重逻辑明确**：同一搜索词与 ASIN 有多条记录时，说明保留最新记录还是按指定比例选取。
+   - **忠实用户意图**：不误解、不扩大用户请求，不自行补造比较基准。
+3. 按 `references/api.md` 准备请求；涉及下载或导出时遵守其中的下载约定。执行前说明本技能可能一次消耗大量算力，由用户决定是否继续。
+4. 取得响应后先看摘要，再按需提取保存的数据；依接口定义判断结果、空数据和错误，并按下方建议展示。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-aba-intelligent-query-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/aba_query.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按“算力消耗预估”中的动态公式计费。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 输出策略
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-aba-intelligent-query-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- UTF-8 序列化结果不超过 8,000 字节：保存后，将完整 JSON 打印到标准输出。
+- UTF-8 序列化结果超过 8,000 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## How to Build Queries
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-The key parameter when calling this tool is `analysisDescription` - a natural language description of the data you want to query. This description is converted into a structured query on the backend, so it needs to be **precise and specific**.
+## 执行规则
 
-### Principles for Writing analysisDescription
+### 算力消耗预估
 
-1. **Specify the marketplace**: Always state the marketplace at the beginning, e.g., "筛选美国站" (Filter US marketplace)
-2. **Use precise filter criteria**: Use specific numeric ranges rather than vague descriptions. "排名在5万以内" (rank within 50,000) is far more effective than "排名较好" (good ranking)
-3. **Specify time ranges**: Use concrete time descriptions, e.g., "过去12周" (past 12 weeks), "2024年1-9月" (Jan-Sep 2024), "近3个月" (last 3 months)
-4. **Specify comparison baselines**: For trend analysis, clearly state the time points being compared, e.g., "4周前的排名比8周前提升30%" (rank 4 weeks ago improved 30% vs 8 weeks ago)
-5. **Handle deduplication logic**: When there are multiple records for the same search term + ASIN combination, specify which to keep, e.g., "相同搜索词相同ASIN值保留最新的一个" (keep only the latest for identical search term + ASIN)
-6. **Stay faithful to user intent**: Don't misinterpret or overextend the user's query - reflect exactly what they want
+按动态规则计费：消耗算力 = 初始 SQL 生成算力 + Σ(各成功任务执行_重试算力) + round(CSV 文件大小 MB × 0.075)。各项 token 均指 inputTokens + outputTokens；仅成功任务计费；若无成功任务则为 0。
 
-### analysisDescription Examples for Common Scenarios
+**重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
 
-**1. Search Term Popularity Trend**
-```
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解 ABA**：ABA（Amazon Brand Analytics）搜索词报告是亚马逊官方搜索行为数据，反映消费者实际搜索活动。覆盖范围和周粒度限制见 `references/api.md`。
+- **解释排名方向**：`searchFrequencyRank` 越小越热门，1 为最热门。排名“提升”表示数值减小，“下降”表示数值增大；展示排名时提醒用户。
+- **区分份额与比率**：点击份额和转化份额是分配占比，不将转化份额直接解释为商品转化率，也不凭搜索排名推算搜索量或广告 ROAS。
+- **清晰展示数据**：用表格呈现搜索词、统计周、站点、排名、ASIN、商品名称、点击份额排名、点击份额和转化份额等实际返回指标，不附加主观经营建议；完整字段含义见 `references/api.md`。
+- **交付完整数据**：数据量大时先展示核心数据，明确告知可通过下载链接取得完整数据；返回下载地址时清楚提供给用户。用户需要完整数据但尚未要求下载时，主动建议生成链接，后续请求遵守成本约束。
+- **解释失败原因**：依据接口定义及返回消息说明失败原因，建议用户调整查询条件，不自动连续尝试。
+- **处理示例歧义**：高 ROAS 示例的两侧比较量均写为“平均转化占比”，不能构成明确基准，执行前先澄清；历史年份示例按具体年份理解，实际查询时与用户确认日期，不将示例年份自动视为当前“去年”。
+
+## 使用示例
+
+以下为自然语言查询描述示例；请求字段与运行选项见 `references/api.md`。
+
+### 1. 搜索词热度趋势
+
+```text
 筛选美国站，关键词"gift"在过去12周的搜索热度排名。
 ```
 
-**2. Rising Dark Horse Keywords**
-```
+### 2. 黑马关键词发现
+
+```text
 筛选美国站，关键词包含"gift"，2025年Q1和全年的平均搜索排名都大于50万，但最新排名冲进5万-10万的搜索词。
 ```
 
-**3. Sustained Growth Trend Discovery**
-```
+### 3. 持续增长趋势发现
+
+```text
 筛选美国站，最新排名在20万以内，且4周前的排名比8周前提升30%，本周的排名比4周前提升30%的搜索词。
 ```
 
-**4. Market Opportunity Discovery (High Search Volume, Low Monopoly)**
-```
+### 4. 市场机会发现：高搜索热度、低垄断
+
+```text
 筛选美国站，筛选当前搜索排名在20000以内，近三个月点击占比Top 1的Asin的转化率占比低于5%的搜索词。相同搜索词相同Asin值保留最新的一个。
 ```
 
-**5. Seasonal / Holiday Keyword Targeting**
-```
+### 5. 季节性与节日关键词
+
+```text
 筛选美国站，包含"cup"的关键词中，去年（2024年）1-9月份排名未进入50万，10-11月份连续进入20万的词。
 ```
 
-**6. High-Click Low-Conversion ASIN Mining**
-```
+### 6. 高点击低转化 ASIN 挖掘
+
+```text
 筛选美国站关键词包含"hat"的，最新搜索排名在5万-20万之间，且近3个月来点击占比大于20%，转化占比小于10%的ASIN。相同搜索词和ASIN仅保留点击占比和转化占比的比例最小数据。
 ```
 
-**7. High-ROAS Long-Tail Blue Ocean Keywords**
-```
+### 7. 高 ROAS 长尾蓝海关键词：比较基准需澄清
+
+```text
 筛选美国站，关键词包含"charger"的，当前排名在20万开外的，近2个月的平均转化占比大于平均转化占比1.5倍的关键词，以及相应的ASIN。
 ```
 
-**8. New Market Terms & Emerging Demand Detection**
-```
+### 8. 新市场词与新兴需求发现
+
+```text
 找到美国站"charger"的长尾词中，近一个月才进入排名榜单，且当前排名在50万以内的所有词。
 ```
 
-**9. Niche Trend / Variant Growth Capture**
-```
+### 9. 细分趋势与变体增长捕捉
+
+```text
 筛选美国站中"table"的长尾词中，排名在10万-30万之间，且近4周的搜索排名增长50%以上的搜索词。
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data only**: Show query results in clear tables without subjective business advice
-2. **Ranking clarification**: When showing ranking data, remind users that lower values mean better rankings
-3. **Volume notice**: When results are large, show core data and remind users they can get the full dataset via the download link
-4. **Download guidance**: If the response includes a `downloadUrl`, clearly inform the user of the download address; if the user needs full data but hasn't requested a download, proactively suggest generating a download link
-5. **Error handling**: When a query fails, explain the reason based on the `msg` field and suggest adjusting query criteria
-## Important Limitations
-
-- **Result cap**: Download links contain a maximum of 10,000 records
-- **Data granularity**: Data is at weekly granularity, not daily
-- **Data range**: Approximately 3 years of historical data
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** - Data queries around Amazon search terms:
-
-| User Says | Scenario |
-|-----------|----------|
-| "How's the search volume/popularity for XX keyword" | Ranking trend |
-| "Recently trending keywords", "newly emerging terms" | Dark horse / new term detection |
-| "Blue ocean keywords", "low competition terms" | Market opportunity discovery |
-| "Which keywords convert well", "high-conversion long-tail" | High-ROAS keyword library |
-| "Seasonal keywords", "what terms surge in peak season" | Seasonal keywords |
-| "Who's capturing the traffic", "any monopoly" | Click share / monopoly analysis |
-| "ASINs with high clicks but low conversion" | High-click low-conversion diagnosis |
-
-**Not applicable** - Needs beyond ABA search term data:
-- Advertising / PPC (bids, campaign strategy)
-- Product reviews, listing copywriting
-- ASIN sales estimation
-- User already has local ABA files to process
-
-**Boundary judgment**: When users say "product research", "competitor analysis", or "is there market opportunity", if it boils down to search-term-level data queries (finding blue ocean keywords, analyzing competitor traffic distribution under keywords), then this skill applies. If they're asking about profit margins, pricing strategy, or comprehensive market reports, it does not apply.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 初始SQL生成算力 + Σ(各成功任务执行_重试算力) + round(CSV文件大小MB × 0.075)。各项 token 均指 inputTokens + outputTokens；仅成功任务计费；若无成功任务则为 0。
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

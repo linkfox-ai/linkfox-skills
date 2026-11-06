@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload source media, create once, poll the shared task query, and save media."""
+"""上传源素材、创建一次、轮询已有任务并保存生成媒体。"""
 import argparse
 import json
 import os
@@ -15,9 +15,9 @@ VIDEO = False
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("parameters", nargs="?", help="JSON parameters, or '-' to read JSON from stdin")
+    parser.add_argument("parameters", nargs="?", help="JSON 参数，或用 '-' 从标准输入读取 JSON")
     parser.add_argument("--params-file", type=Path)
-    parser.add_argument("--task-id", help="Resume querying an accepted task; never upload or create again")
+    parser.add_argument("--task-id", help="继续查询已接受的任务，不重新上传或创建")
     parser.add_argument("--member-id")
     parser.add_argument("--timeout", type=float, default=1200 if VIDEO else 600)
     parser.add_argument("--poll-interval", type=float, default=10)

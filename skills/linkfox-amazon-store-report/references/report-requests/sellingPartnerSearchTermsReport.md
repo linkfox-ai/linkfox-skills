@@ -2,12 +2,12 @@
 
 > 上游 JSON Schema 来自 Amazon [selling-partner-api-models/schemas/reports](https://github.com/amzn/selling-partner-api-models/tree/main/schemas/reports)。
 
-- **Raw**：[sellingPartnerSearchTermsReport.json](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/sellingPartnerSearchTermsReport.json)
+- **源文件**：[sellingPartnerSearchTermsReport.json](https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/schemas/reports/sellingPartnerSearchTermsReport.json)
 - **目录浏览**：https://github.com/amzn/selling-partner-api-models/tree/main/schemas/reports
 
 ## Schema 摘要
 
-The Search Terms report shares data on the top-3 clicked ASINs by search keyword and department for a marketplace. Data is available at different date range aggregation levels: DAY, WEEK, MONTH, QUARTER. Requests cannot span multiple periods. For example, a request at WEEK level could not start on 2021-06-06 and end on 2021-06-19 as this would span two weeks.
+搜索词报告按站点、关键词和部门提供点击量前三的 ASIN。支持 DAY、WEEK、MONTH、QUARTER；请求不可跨多个周期。例如 WEEK 不能从 2021-06-06 到 2021-06-19，因为跨了两周。
 
 ## 对应 `reportType`（从 schema 中提取）
 
@@ -31,10 +31,13 @@ LinkFox 网关通过 `developerProxy` 转发时，`body` 为 JSON 字符串，�
 }
 ```
 
-- **`reportType`** / **`marketplaceIds`**：必填（多数报告）。
-- **`dataStartTime`** / **`dataEndTime`**：ISO 8601；部分报告 schema 使用 **仅日期** `YYYY-MM-DD`（Amazon 忽略时间分量），以本文件「官方示例」为准。
-- **`reportOptions`**：对象，键名/枚举因报告而异；Brand Analytics 等 **必填**，见下节。
-- **`lastUpdatedDate`**：部分 Vendor 报告使用（见 schema `reportSpecification`），需与 `dataStartTime`/`dataEndTime` 按官方要求组合。
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| reportType | string | 是 | 报告类型枚举。 |
+| marketplaceIds | array[string] | 多数报告是 | 目标站点。 |
+| dataStartTime / dataEndTime | string | 视报告 | ISO 8601；部分 Schema 仅使用 YYYY-MM-DD，忽略时间分量，以本页官方示例为准。 |
+| reportOptions | object | 视报告 | 键名和枚举因报告而异；Brand Analytics 等必填，见下节。 |
+| lastUpdatedDate | string | 视报告 | 部分 Vendor 报告使用，须按 Schema 要求与其他日期字段组合。 |
 
 本仓库脚本 `scripts/get_report.py` 已支持：在 JSON 参数中传入 **`reportOptions`**（对象）以及 **`lastUpdatedDate`**（字符串），会合并进创建请求体。
 

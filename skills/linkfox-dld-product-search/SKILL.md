@@ -1,211 +1,119 @@
 ---
 name: linkfox-dld-product-search
-description: 在中国1688批发平台（阿里巴巴国内B2B市场）上搜索和分析商品，用于找货源、供应商发现和选品。当用户提到1688商品搜索、1688找货源、在1688上找供应商、批发商品查询、工厂货源、一件代发供应商搜索、1688关键词选品、批发价格对比、按销量筛选、任何1688平台上的选品调研、1688 search, 1688 product selection, find suppliers, factory lookup, wholesale pricing, supplier search, domestic sourcing, 1688 products时触发此技能。即使用户未明确说"1688"，只要其需求涉及搜索批发商品、寻找国内供应商或从国内市场采购，也应触发此技能。
+description: 搜索和分析中国 1688 批发商品，结合关键词、商品链接或商品编号发现货源，比较批发价、代发价、销量、供应商资质与履约服务。适用于 1688 选品、工厂和一件代发供应商发现、价格对比、新品及跨境货源研究；未明确平台但需要寻找国内批发货源时也可使用。不适用于其他平台商品研究、店铺流量或排名分析、广告策略、评论分析、运费估算、下单交易及已有本地商品数据分析。
 ---
 
-# 1688 Product Search (DianLeiDa)
+# 店雷达 1688 商品搜索
 
-This skill guides you on how to search and analyze products on the 1688 wholesale platform, helping e-commerce sellers and sourcing professionals find quality suppliers and profitable products.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool provides keyword-based product search on 1688 (China's largest B2B wholesale marketplace). It aggregates product listings with sales data, pricing tiers, supplier credentials, and fulfillment options. Data is sourced from DianLeiDa (store radar analytics) and covers real-time product listings with 7-day and 30-day sales metrics.
+在 1688 批发平台查找具体商品及其供应商，结合价格、销售表现、供应商类型和服务条件开展选品与货源比较。数据来自店雷达（DianLeiDa），包含实时商品信息及近 7 天、近 30 天销售指标。
+用户说“找货源”“找供应商”或“批发商品”时，只要目标是国内 1688 商品检索，也适用。
 
-**Key terminology**:
-- **Wholesale price** (`price`): The price per unit when ordering at the minimum batch quantity
-- **Dropship price** (`consignPrice`): The price per unit for single-item dropshipping (typically higher than wholesale)
-- **TrustPass years** (`tpYear`): The number of years the supplier has held Alibaba's TrustPass membership, indicating business longevity
-- **Sales count** (`salesQuantity`): Total units sold in the selected time period
-- **Order count** (`salesOrderCount`): Total number of separate orders in the selected time period
-- **Estimated sales volume** (`estimatedSalesAmount`): Estimated revenue in the selected time period
+**场景速查**
 
-## Data Fields
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 在 1688 找某类商品的供应商 | 关键词商品与货源发现。 |
+| 1688 上什么卖得好 | 按销量、订单数或预估销售额发现热销商品。 |
+| 找价格便宜的工厂货源 | 工厂筛选及批发价格对比。 |
+| 找支持一件代发的供应商 | 对比代发价格及代发权益。 |
+| 比较不同供应商的报价 | 同类商品的批发价、代发价和价格阶梯比较。 |
+| 找最近上架的新品 | 新品发现及上架时间排序。 |
+| 找适合跨境销售的商品 | 跨境商品货源检索。 |
+| 找能在 24 小时内发货的供应商 | 按履约速度筛选。 |
+| 找超级工厂或实力商家 | 按供应商资质筛选。 |
+| 查这个 1688 商品链接或商品编号 | 定位指定商品。 |
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| Product Title | title | Full product listing title | ... |
-| Product ID | offerId | Unique 1688 product identifier | 805578065498 |
-| Product URL | asinUrl | Direct link to the product listing | https://detail.1688.com/... |
-| Image URL | imageUrl | Product main image | https://cbu01.alicdn.com/... |
-| Wholesale Price | price | Unit price at batch quantity (CNY) | 12.50 |
-| Dropship Price | consignPrice | Unit price for single-piece dropship (CNY) | 18.90 |
-| Price Tiers | quantityPrices | Volume-based pricing breakdown | ... |
-| Min Order Qty | quantityBegin | Minimum order quantity | 2 |
-| Sales Order Count | salesOrderCount | Number of orders in the period | 350 |
-| Sales Quantity | salesQuantity | Units sold in the period | 1200 |
-| Est. Sales Amount | estimatedSalesAmount | Estimated revenue in the period | 45000 |
-| Delivery Time | deliveryTime | Promised shipping time | 24h |
-| Listing Date | availableDate | When the product was first listed | 2025-03-15 |
-| Category | levelName | Product category path | ... |
-| Shop Name | company | Supplier/store name | ... |
-| Shop ID | shopId | Unique store identifier | ... |
-| Shop URL | shopUrl | Link to the supplier's store | https://shop... |
-| Currency | currency | Price currency (always CNY) | CNY |
-| Data Type | dataType | Period indicator: weeklyData or monthlyData | monthlyData |
+### 边界
 
-## Parameter Guide
+本技能仅做 1688 商品搜索及基于返回数据的货源比较。不用于 Amazon 等其他平台选品、1688 店铺流量与排名、广告推广、评论与评分分析、物流成本或运费估算、下单及交易处理；已有本地商品数据文件的分析也不属于本技能范围。
 
-### Search Keyword
+## 前置条件
 
-The most important parameter. **Keywords must be in Chinese.** If the user provides an English term, translate it to Chinese before querying.
+确定待找商品或已有的商品链接、编号，以及用户关心的价格、统计周期、供应商和服务条件。具体字段、枚举、组合限制及脚本选项见 `references/api.md`。
 
-- `keyWord` (string, max 50 chars): The Chinese search term
-- `searchType`: 1 = fuzzy match (default), 3 = exact match
-- `goodsUrl`: Search by product URL instead of keyword
-- `productIds`: Search by specific product IDs (comma-separated, max 20)
+## 商品检索流程
 
-### Time Period
+1. 明确找品目标，选择关键词检索或指定商品定位；英文商品词先译为中文，并在结果中说明实际采用的译词。
+2. 根据用户需求整理统计周期、排序、价格、销量、供应商资质、上架时间及履约条件；按 `references/api.md` 核对参数后检索，不擅自扩大检索范围。
+3. 先查看返回摘要，再按需从已保存的完整响应提取商品与供应商数据；按下方展示规则整理结果。空结果或报错时解释原因，后续检索遵守成本约束。
 
-- `cycle`: `"7"` for last 7 days, `"30"` for last 30 days
+## 执行方式
 
-### Sorting
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/dld_product_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口调用消耗 9 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改筛选条件连续试探；需要继续检索时，先向用户说明额外消耗。
 
-- `sortField`: Field to sort by. Default: `orderCount30d`
-  - `orderCount7d` / `orderCount30d` -- order count
-  - `saleCount7d` / `saleCount30d` -- units sold
-  - `saleVolume7d` / `saleVolume30d` -- estimated revenue
-  - `offerCreateTime` -- listing date
-  - `price` -- wholesale price
-  - `consignPrice` -- dropship price
-- `sortType`: `"desc"` (default) or `"asc"`
+### 输出策略
 
-### Price Filters
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-dld-product-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-- `beginPrice` / `endPrice`: Wholesale price range (CNY)
-- `beginConsignPrice` / `endConsignPrice`: Dropship price range (CNY)
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### Sales Filters
+## 执行规则
 
-- `beginOrderCount` / `endOrderCount`: Order count range
-- `beginSaleCount` / `endSaleCount`: Units sold range
-- `beginSaleVolume` / `endSaleVolume`: Revenue range (CNY)
+### 算力消耗预估
 
-### Supplier Filters
+9 算力 / 次
 
-- `companyType`: 0 = any (default), 1 = store, 2 = factory
-- `shiLiType`: Seller tier. Comma-separated multi-select:
-  - `superFactory` -- Super Factory
-  - `Power` -- Power Merchant
-  - `TrustPass` -- TrustPass members only
-- `beginTpYear` / `endTpYear`: TrustPass membership year range
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### Product Tags
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-- `offerType`: 0 = any, 2 = new product, 3 = 1688 Select, 4 = cross-border, 5 = customizable, 6 = top store pick
+### 解决认证和算力问题
 
-### Fulfillment & Services
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-- `sendTime`: Shipping speed. Comma-separated: `"24"`, `"48"`, `"72"`
-- `faceToFaceSupport`: Platform face-sheet support. Comma-separated:
-  - `441218` (Taobao), `386434` (Douyin), `422914` (Pinduoduo), `422978` (Xiaohongshu), `386370` (Kuaishou)
-- `proxyRights`: Dropship benefits. Comma-separated:
-  - `4360897` (free shipping dropship), `449154` (buy now pay later)
-- `shopService`: Seller services. Comma-separated:
-  - `4057409` (worry-free purchase), `888777` (deep verification report)
-- `buyerProtections`: Buyer guarantees. Comma-separated Chinese strings:
-  - `商品包邮` (free shipping), `7天包退货` (7-day returns), `支持运费险` (shipping insurance)
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-### Listing Date Filter
+### 约束与建议
 
-- `beginOfferCreateTime` / `endOfferCreateTime`: Date range in `YYYY-MM-DD` format
+- **区分价格口径**：批发价是在起批数量下的单位价格；代发价是单件代发的单位价格，通常更高。两种价格都有时同时展示，并结合价格阶梯和起批量比较，金额以人民币（CNY）标明。
+- **理解供应商资质**：诚信通年限（TrustPass years，`tpYear`）表示供应商持有阿里巴巴诚信通会员的年数，可辅助了解经营持续时间，不把它当作当前响应必然包含的字段。
+- **区分销售指标**：销量是销售件数，订单数是独立订单笔数，预估销售额是所选周期的估算收入，三者不可混用；明确标注本次为 7 天或 30 天数据。
+- **清晰展示商品与供应商**：用表格呈现商品标题、两种价格、销量指标、供应商及履约信息，附商品链接；有商品图片时展示图片，并展示可用的店铺链接、价格阶梯、起批量、类目和上架时间。
+- **说明翻译**：用户使用英文商品词时，说明中文检索词，方便核对语义是否准确；关键词规范见接口定义。
+- **说明分页情况**：总记录数超过本页返回数量时，告知总数和可继续查看其他页；不要隐瞒仅返回当前页，也不要自动连续翻页。
+- **解释空结果与错误**：根据实际消息说明问题，可建议核对译词、关键词拼写或放宽筛选；按接口定义处理认证、算力和其他错误，后续调用遵守成本约束。
 
-### Pagination
+## 使用示例
 
-- `pageIndex`: Page number, starting from 1 (default: 1)
-- `pageSize`: Results per page, 10-100 (default: 20)
+### 找近一个月热销的瑜伽垫
 
-### Example Queries
+用户：找 1688 最近一个月销量高的瑜伽垫。
 
-**1. Basic keyword search -- top sellers for "yoga mat"**
-```json
-{"keyWord": "瑜伽垫", "cycle": "30", "sortField": "saleCount30d", "sortType": "desc", "pageSize": 20}
-```
+按近 30 天销售件数降序查询，展示批发价、代发价、起批量、销量及供应商。
 
-**2. Factory-only search with price range**
-```json
-{"keyWord": "蓝牙耳机", "companyType": 2, "beginPrice": 10, "endPrice": 50, "cycle": "30", "sortField": "orderCount30d"}
-```
+### 按条件找工厂或代发货源
 
-**3. Cross-border products with dropship support**
-```json
-{"keyWord": "手机壳", "offerType": 4, "proxyRights": "4360897", "cycle": "7", "sortField": "saleVolume7d"}
-```
+用户：找 10 到 50 元的蓝牙耳机工厂，或者支持一件代发包邮的跨境手机壳。
 
-**4. New products listed recently, sorted by listing date**
-```json
-{"keyWord": "夏季连衣裙", "offerType": 2, "sortField": "offerCreateTime", "sortType": "desc", "pageSize": 50}
-```
+分别按用户指定的商品与供应商、价格或服务条件准备查询，不将两类检索条件混为一组。具体请求组合见 `references/api.md`。
 
-**5. High-volume products from Super Factories**
-```json
-{"keyWord": "数据线", "shiLiType": "superFactory", "beginSaleCount": 1000, "cycle": "30", "sortField": "saleCount30d"}
-```
+### 找新品或高销量供应商
 
-**6. Search by product URL**
-```json
-{"goodsUrl": "https://detail.1688.com/offer/805578065498.html", "cycle": "30"}
-```
+用户：找最近上架的夏季连衣裙，或近一个月销量至少 1000 件的数据线超级工厂。
 
-## Display Rules
+根据任务选择新品与上架时间排序，或供应商资质与销量筛选，展示实际返回的数据及统计周期。
 
-1. **Present data clearly**: Show results in structured tables with product title, price, sales metrics, and supplier info. Include product URLs so users can visit listings directly.
-2. **Price context**: Always show both wholesale price and dropship price when available, so users can compare margins.
-3. **Sales metrics**: Clearly label whether metrics are 7-day or 30-day figures based on the `cycle` parameter used.
-4. **Image display**: When `imageUrl` is available, display product images to help users visually identify products.
-5. **Pagination notice**: When `total` exceeds the returned page size, inform users of the total result count and that they can request additional pages.
-6. **Error handling**: If a query returns an error, explain the issue and suggest adjusting parameters (e.g., broadening filters, checking keyword spelling).
-7. **Keyword translation**: If the user provides English product terms, translate to Chinese before calling the API, and note this translation in your response.
-## Applicable Scenarios
+### 定位指定商品
 
-| User Says | Scenario |
-|-----------|----------|
-| "Find suppliers for XX on 1688" | Keyword product search |
-| "What's selling well on 1688" | Top-selling product discovery |
-| "Find cheap XX from factories" | Factory sourcing with price filters |
-| "1688 dropshipping suppliers for XX" | Dropship-enabled product search |
-| "Compare prices for XX on 1688" | Price comparison across suppliers |
-| "New products on 1688 for XX" | New product discovery |
-| "Find 1688 products for cross-border" | Cross-border product sourcing |
-| "Which 1688 suppliers ship within 24h" | Fulfillment speed filtering |
-| "Top factories for XX" | Super Factory / Power Merchant search |
-| "Find this 1688 product" (with URL or ID) | Direct product lookup |
+用户：查一下这个 1688 商品链接的近一个月销售情况。
 
-## Not Applicable
+按链接定位商品，展示所选统计周期内的销售指标、价格和供应商信息。
 
-- Amazon or other non-1688 platform product research
-- 1688 store/shop-level analytics (store traffic, store rankings)
-- 1688 advertising or promotion strategies
-- Product review or rating analysis
-- Logistics cost calculation or freight estimation
-- Order placement or transaction processing
-- User already has local product data files to analyze
+## 使用反馈
 
-**Boundary judgment**: When users say "sourcing", "find suppliers", or "wholesale products", if it involves searching for specific products on the 1688 platform with filters like price, sales, or supplier type, this skill applies. If they need store-level analytics, advertising optimization, or operations beyond product search, it does not apply.
-
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## 算力消耗规则
-
-消耗 9 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

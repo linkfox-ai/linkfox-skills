@@ -19,7 +19,7 @@ from _spapi_feeds_common import (
     emit_result,
     encode_path_segment,
     ensure_auth_skill_available,
-        lf_inline_flag,
+    lf_inline_flag,
     load_cli_params,
     require_seller_region,
 )
@@ -47,7 +47,7 @@ def main() -> None:
     proxy = developer_proxy_call(region, path, "DELETE", seller_id)
     out: dict = {"developerProxy": proxy, "resolvedPath": path}
     inline = lf_inline_flag()
-    emit_result(out, inline)
+    emit_result(out, inline=inline)
 
 
 if __name__ == "__main__":

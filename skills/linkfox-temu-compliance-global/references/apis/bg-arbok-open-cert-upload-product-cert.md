@@ -1,244 +1,214 @@
-# 上传商品资质 — `bg.arbok.open.cert.uploadProductCert`
+# 上传商品资质 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/global_compliance_arbok_cert_upload_product_cert.py` |
-| **Partner 文档** | https://partner-global.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=56de04bcafae45509b21edeab57c9fdb |
-| **网关** | `POST /temu/proxy`，`type`=`bg.arbok.open.cert.uploadProductCert`，业务载荷放在 Body 的 `params` |
+[返回接口总览](../api.md)；[认证与算力指引](../onboarding.md)。Partner 官方文档：https://partner-global.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=56de04bcafae45509b21edeab57c9fdb
 
-**Description:** Upload product certification / qualification documents.
+## 公共规则
 
-> 默认 **`site=global`**、**`tokenPurpose=product-inventory`**。入参来自 Partner **Request** 表；出参来自 **Response** 表 + **Response Example** 展开。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Request 结构（Partner Request 表）
+### 响应码基本规则
 
-```text
-params
-└── request (OBJECT)
-    └── productCatCertReqList (OBJECT[])
-    └── productCatCertReqList[].authCode (STRING)
-    └── productCatCertReqList[].authCodes (OBJECT[])
-    └── productCatCertReqList[].authCodes[].authCode (STRING)
-    └── productCatCertReqList[].authCodes[].effectiveTime (INTEGER)
-    └── productCatCertReqList[].authCodes[].expireTime (INTEGER)
-    └── productCatCertReqList[].authCodes[].fileName (STRING)
-    └── productCatCertReqList[].authCodes[].fileUrl (STRING)
-    └── productCatCertReqList[].authCodes[].showCustomer (BOOLEAN)
-    └── productCatCertReqList[].certType (INTEGER)
-    └── productCatCertReqList[].inspectReportFiles (OBJECT[])
-    └── productCatCertReqList[].inspectReportFiles[].authCode (STRING)
-    └── productCatCertReqList[].inspectReportFiles[].effectiveTime (INTEGER)
-    └── productCatCertReqList[].inspectReportFiles[].expireTime (INTEGER)
-    └── productCatCertReqList[].inspectReportFiles[].fileName (STRING)
-    └── productCatCertReqList[].inspectReportFiles[].fileUrl (STRING)
-    └── productCatCertReqList[].inspectReportFiles[].showCustomer (BOOLEAN)
-    └── productCatCertReqList[].productCertFiles (OBJECT[])
-    └── productCatCertReqList[].productCertFiles[].authCode (STRING)
-    └── productCatCertReqList[].productCertFiles[].effectiveTime (INTEGER)
-    └── productCatCertReqList[].productCertFiles[].expireTime (INTEGER)
-    └── productCatCertReqList[].productCertFiles[].fileName (STRING)
-    └── productCatCertReqList[].productCertFiles[].fileUrl (STRING)
-    └── productCatCertReqList[].productCertFiles[].showCustomer (BOOLEAN)
-    └── productCatCertReqList[].supplementaryMaterials (OBJECT[])
-    └── productCatCertReqList[].supplementaryMaterials[].authCode (STRING)
-    └── productCatCertReqList[].supplementaryMaterials[].effectiveTime (INTEGER)
-    └── productCatCertReqList[].supplementaryMaterials[].expireTime (INTEGER)
-    └── productCatCertReqList[].supplementaryMaterials[].fileName (STRING)
-    └── productCatCertReqList[].supplementaryMaterials[].fileUrl (STRING)
-    └── productCatCertReqList[].supplementaryMaterials[].showCustomer (BOOLEAN)
-    └── productId (LONG **必填**)
-    └── realPictures (OBJECT[])
-    └── realPictures[].imageUrl (STRING)
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：上传商品资质（bg.arbok.open.cert.uploadProductCert）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关与脚本参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是 | 全球站业务脚本默认 `global`，上游为 `https://openapi-b-global.temu.com/openapi/router`；通用入口允许 `cn` / `partner` / `us` / `global` / `eu`。 |
+| managementType | string | 是 | 全球站脚本默认 `semi-managed`；通用入口允许 `full-managed` / `semi-managed`。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；脚本优先使用此值。 |
+| storeKey | string | 与 accessToken 二选一 | 脚本本地令牌键；发送前解析为 accessToken，不发送到网关。 |
+| tokenPurpose | string | 否 | 本技能默认 `product-inventory`，用于本地令牌定位；通用脚本默认 `default`。 |
+| token / linkfoxToken / linkfox_token | string | 否 | 仅脚本 JSON 兼容参数；依次取第一个非空值覆盖环境密钥，设置同值 Authorization + Token 请求头，不进入业务 params。 |
+| type | string | 是 | 本接口的 Temu 操作名，见本节；业务脚本固定此值，不从用户 JSON 覆盖。 |
+| params | object | 否 | 业务对象；本接口使用 `params.request`。脚本优先使用对象形式的 params，否则提取顶层业务字段；认证和路由字段不进入业务对象。 |
+| params.request | OBJECT | 按业务要求 | Partner 请求对象，全部业务字段定义见下表。子字段的必填性见下表；容器本身的必填性未单独声明。 |
+
+本接口 `type` 固定为 `bg.arbok.open.cert.uploadProductCert`。业务脚本为 `scripts/global_compliance_arbok_cert_upload_product_cert.py`；认证与 CLI 兼容约定见 [运行约定](../api.md#脚本兼容与运行约定)。
+
+#### params.request 内字段
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| productCatCertReqList | OBJECT[] | 否 | 商品类目资质请求列表 |
+| productCatCertReqList[].authCode | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].authCodes | OBJECT[] | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].authCodes[].authCode | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].authCodes[].effectiveTime | INTEGER | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].authCodes[].expireTime | INTEGER | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].authCodes[].fileName | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].authCodes[].fileUrl | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].authCodes[].showCustomer | BOOLEAN | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].certType | INTEGER | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].inspectReportFiles | OBJECT[] | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].inspectReportFiles[].authCode | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].inspectReportFiles[].effectiveTime | INTEGER | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].inspectReportFiles[].expireTime | INTEGER | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].inspectReportFiles[].fileName | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].inspectReportFiles[].fileUrl | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].inspectReportFiles[].showCustomer | BOOLEAN | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].productCertFiles | OBJECT[] | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].productCertFiles[].authCode | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].productCertFiles[].effectiveTime | INTEGER | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].productCertFiles[].expireTime | INTEGER | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].productCertFiles[].fileName | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].productCertFiles[].fileUrl | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].productCertFiles[].showCustomer | BOOLEAN | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].supplementaryMaterials | OBJECT[] | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].supplementaryMaterials[].authCode | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].supplementaryMaterials[].effectiveTime | INTEGER | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].supplementaryMaterials[].expireTime | INTEGER | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].supplementaryMaterials[].fileName | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].supplementaryMaterials[].fileUrl | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productCatCertReqList[].supplementaryMaterials[].showCustomer | BOOLEAN | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+| productId | LONG | **是** | 商品 ID |
+| realPictures | OBJECT[] | 否 | 商品实拍图列表 |
+| realPictures[].imageUrl | STRING | — | 来自 Partner 请求示例（CURL `-d` 展开）；请求表未列出子级，必填性未声明 |
+
+`—` 表示必填性未声明；不等同于“否”。
+
+### 响应结构
+
+#### 网关与脚本解析字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 若返回，按公共响应码基本规则判断；不得把 0 或 false 当作空值。 |
+| errmsg | string | 网关消息；按实际响应保留。 |
+| code | integer | 网关错误码：1002 表示参数或 LinkFox Token 问题，1003 表示转发失败。 |
+| body | string | Temu 原始 JSON 字符串；先判断网关状态，再读取内部业务结果。 |
+| temuBody | JSON 值 | 脚本在 body 为有效非空 JSON 字符串时添加的解析结果，业务正常结构通常为 object；解析失败时保留原 body，不补造此字段。 |
+
+#### 脚本本地附加字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| _http_status | integer / null | 业务封装记录的实际 HTTP 状态码；连接失败未收到响应时为 null。随完整响应保存，不是网关业务字段；HTTP 401 / 402 按认证与算力指引处理，不以 JSON 内的成功字段覆盖 HTTP 错误。 |
+
+#### Temu body / temuBody 顶层字段
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| success | BOOLEAN | 业务是否成功 |
+| errorCode | INTEGER | 业务错误码 |
+| errorMsg | STRING | 业务错误消息 |
+| result | OBJECT | 业务结果；未展开的子字段以实际响应为准 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关 `code=1002`：核对参数和 LinkFox Token；`code=1003`：检查 Temu token、IP 白名单及网络。不要把未说明的 code 数值推断为成功。
+- 网关正常后，解析 `body`，根据 Temu `success`、`errorCode`、`errorMsg` 和 `result` 判断业务结果；仅 HTTP 成功不代表 Temu 业务成功。errorCode 的统一成功值及完整业务枚举未定义，不自行推断。
+- `body` 解析失败时展示响应原始文本与解析失败事实；不将空结果、缺失字段或已提交请求解释为审核通过。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "global",
+  "managementType": "semi-managed",
+  "accessToken": "TOKEN",
+  "type": "bg.arbok.open.cert.uploadProductCert",
+  "params": {
+    "request": {
+      "productId": 1,
+      "productCatCertReqList": [
+        {
+          "authCodes": [
+            {
+              "fileName": "test",
+              "fileUrl": "test",
+              "showCustomer": true,
+              "expireTime": 1,
+              "authCode": "test",
+              "effectiveTime": 1
+            }
+          ],
+          "productCertFiles": [
+            {
+              "fileName": "test",
+              "fileUrl": "test",
+              "showCustomer": true,
+              "expireTime": 1,
+              "authCode": "test",
+              "effectiveTime": 1
+            }
+          ],
+          "supplementaryMaterials": [
+            {
+              "fileName": "test",
+              "fileUrl": "test",
+              "showCustomer": true,
+              "expireTime": 1,
+              "authCode": "test",
+              "effectiveTime": 1
+            }
+          ],
+          "certType": 1,
+          "inspectReportFiles": [
+            {
+              "fileName": "test",
+              "fileUrl": "test",
+              "showCustomer": true,
+              "expireTime": 1,
+              "authCode": "test",
+              "effectiveTime": 1
+            }
+          ],
+          "authCode": "test"
+        }
+      ],
+      "realPictures": [
+        {
+          "imageUrl": "test"
+        }
+      ]
+    }
+  }
+}'
 ```
 
-### `request` 内字段（Partner Request 表 + 未展开子级自 Request Example 补充）
+## Feedback
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| productCatCertReqList | OBJECT[] | 否 | productCatCertReqList |
-| productCatCertReqList[].authCode | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].authCodes | OBJECT[] | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].authCodes[].authCode | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].authCodes[].effectiveTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].authCodes[].expireTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].authCodes[].fileName | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].authCodes[].fileUrl | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].authCodes[].showCustomer | BOOLEAN | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].certType | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].inspectReportFiles | OBJECT[] | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].inspectReportFiles[].authCode | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].inspectReportFiles[].effectiveTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].inspectReportFiles[].expireTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].inspectReportFiles[].fileName | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].inspectReportFiles[].fileUrl | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].inspectReportFiles[].showCustomer | BOOLEAN | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].productCertFiles | OBJECT[] | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].productCertFiles[].authCode | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].productCertFiles[].effectiveTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].productCertFiles[].expireTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].productCertFiles[].fileName | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].productCertFiles[].fileUrl | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].productCertFiles[].showCustomer | BOOLEAN | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].supplementaryMaterials | OBJECT[] | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].supplementaryMaterials[].authCode | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].supplementaryMaterials[].effectiveTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].supplementaryMaterials[].expireTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].supplementaryMaterials[].fileName | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].supplementaryMaterials[].fileUrl | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productCatCertReqList[].supplementaryMaterials[].showCustomer | BOOLEAN | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| productId | LONG | **是** | productId |
-| realPictures | OBJECT[] | 否 | realPictures |
-| realPictures[].imageUrl | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
-#### `productCatCertReqList[].authCodes[]`
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| authCode | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| effectiveTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| expireTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| fileName | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| fileUrl | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| showCustomer | BOOLEAN | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-
-#### `productCatCertReqList[].inspectReportFiles[]`
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| authCode | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| effectiveTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| expireTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| fileName | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| fileUrl | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| showCustomer | BOOLEAN | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-
-#### `productCatCertReqList[].productCertFiles[]`
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| authCode | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| effectiveTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| expireTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| fileName | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| fileUrl | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| showCustomer | BOOLEAN | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-
-#### `productCatCertReqList[].supplementaryMaterials[]`
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| authCode | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| effectiveTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| expireTime | INTEGER | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| fileName | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| fileUrl | STRING | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-| showCustomer | BOOLEAN | — | Partner Request Example（CURL `-d` 展开；Request 表未列出子级时补充） |
-
-### 网关 `params` 写法
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "accessToken": "TOKEN",
-  "site": "global",
-  "tokenPurpose": "product-inventory",
-  "request": {
-    "productId": 1,
-    "productCatCertReqList": [
-      {
-        "authCodes": [
-          {
-            "fileName": "test",
-            "fileUrl": "test",
-            "showCustomer": true,
-            "expireTime": 1,
-            "authCode": "test",
-            "effectiveTime": 1
-          }
-        ],
-        "productCertFiles": [
-          {
-            "fileName": "test",
-            "fileUrl": "test",
-            "showCustomer": true,
-            "expireTime": 1,
-            "authCode": "test",
-            "effectiveTime": 1
-          }
-        ],
-        "supplementaryMaterials": [
-          {
-            "fileName": "test",
-            "fileUrl": "test",
-            "showCustomer": true,
-            "expireTime": 1,
-            "authCode": "test",
-            "effectiveTime": 1
-          }
-        ],
-        "certType": 1,
-        "inspectReportFiles": [
-          {
-            "fileName": "test",
-            "fileUrl": "test",
-            "showCustomer": true,
-            "expireTime": 1,
-            "authCode": "test",
-            "effectiveTime": 1
-          }
-        ],
-        "authCode": "test"
-      }
-    ],
-    "realPictures": [
-      {
-        "imageUrl": "test"
-      }
-    ]
-  }
+  "skillName": "linkfox-temu-compliance-global",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
-```
-
-> Partner **Request Example** 为 CURL，业务字段可能在顶层；经 LinkFox 网关请放在 **`params.request`**（或脚本接受的顶层 `request`）。
-
----
-
-## Response（Partner Response 表 + 全量展开）
-
-```text
-response
-├── success (BOOLEAN)
-├── errorCode (INTEGER)
-├── errorMsg (STRING)
-└── result (OBJECT)
-```
-
-> Partner **Response** 表仅含顶层字段；`result` 下全部子字段按 **Response 表层级** 与 **Response Example** 合并展开。
-
-### Partner Response 表（HTML 导出可见行）
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | success |
-| errorCode | INTEGER | error code |
-| errorMsg | STRING | error message |
-| result | OBJECT | result |
-
-### `result` 及下级（全部展开）
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| errorCode | INTEGER | error code |
-| errorMsg | STRING | error message |
-| result | OBJECT | result |
-| success | BOOLEAN | success |
-
----
-
-## 脚本
-
-```bash
-export LINKFOXAGENT_API_KEY="<key>"
-python scripts/global_compliance_arbok_cert_upload_product_cert.py '{   "accessToken": "TOKEN",   "site": "global",   "tokenPurpose": "product-inventory",   "request": {     "productId": 1,     "productCatCertReqList": [       {         "authCodes": [           {             "fileName": "test",             "fileUrl": "test",             "showCustomer": true,             "expireTime": 1,             "authCode": "test",             "effectiveTime": 1           }         ],         "productCertFiles": [           {             "fileName": "test",             "fileUrl": "test",             "showCustomer": true,             "expireTime": 1,             "authCode": "test",             "effectiveTime": 1           }         ],         "supplementaryMaterials": [           {             "fileName": "test",             "fileUrl": "test",             "showCustomer": true,             "expireTime": 1,             "authCode": "test",             "effectiveTime": 1           }         ],         "certType": 1,         "inspectReportFiles": [           {             "fileName": "test",             "fileUrl": "test",             "showCustomer": true,             "expireTime": 1,             "authCode": "test",             "effectiveTime": 1           }         ],         "authCode": "test"       }     ],     "realPictures": [       {         "imageUrl": "test"       }     ]   } }'
 ```

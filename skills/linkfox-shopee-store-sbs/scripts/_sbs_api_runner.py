@@ -5,16 +5,10 @@ from __future__ import annotations
 import json
 import sys
 from typing import Any, List, Optional
+import call_api as api
 
 from _sbs_endpoints import LIST_QUERY_FIELDS, SBS_ENDPOINTS, RESERVED_PARAM_KEYS
-from _shopee_sbs_common import (
-    developer_proxy_call,
-    emit_result,
-    ensure_auth_skill_available,
-    lf_inline_flag,
-    merge_shopee_body,
-    qs_add,
-)
+from _shopee_sbs_common import developer_proxy_call, ensure_auth_skill_available, merge_shopee_body, qs_add
 
 
 def _comma_join_list(val: object, field: str, max_items: int) -> str:
@@ -116,7 +110,23 @@ def run_sbs_api(api_name: str, params: dict, caller: Optional[str] = None) -> di
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    def build_result(status, proxy):
+        out: dict = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = json.loads(body) if body else None
+        if (type(status) is int and 200 <= status < 300
+                and api._is_cacheable(200, proxy)):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
         path,
         method,
         shop_id=shop_id,
@@ -124,17 +134,5 @@ def run_sbs_api(api_name: str, params: dict, caller: Optional[str] = None) -> di
         query_string=query_string or None,
         body=body,
         content_type=content_type,
+        response_transform=build_result,
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

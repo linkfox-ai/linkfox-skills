@@ -25,6 +25,7 @@ edge id 拼写、edgeLabel 缺失、运行时占位被写死)。
 from __future__ import annotations
 
 import copy
+import datetime
 import json
 import keyword
 import re
@@ -161,10 +162,11 @@ NODE_SPECS: dict[str, NodeSpec] = {
     ),
     # ---- LinkFox 自定义 8 个 ----
     "businessStartAgentflow": NodeSpec(
-        "BusinessStart", 1.8, "#8B5CF6", ["Start"], "agentFlow",
+        "BusinessStart", 1.9, "#8B5CF6", ["Start"], "agentFlow",
         ["businessStartAgentflow"],
-        # 手动启动时 question 恒为 "";storeAuthorization / tableRecordTrigger 各多一个
-        # 同名字段(那是**订阅配置的静态回显**,不是本次变更的数据)。
+        # 手动启动时 question 恒为 "";tableRecordTrigger 多一个同名字段(那是**订阅配置的
+        # 静态回显**,不是本次变更的数据)。2026-10-30 起 storeAuthorization 触发被删除,
+        # 存量 flowData 里残留的 key 也不再产生 output。
         # 注意:BusinessStart 没有 startState,所以没有 ephemeralMemory / persistState。
         #
         # 后三个只在 tableRecordTrigger **且真的收到了变更载荷**时出现(手动点「启动任务」
@@ -173,7 +175,7 @@ NODE_SPECS: dict[str, NodeSpec] = {
         #   rows         同一行翻成 name-keyed 的数组,可直接接 WriteFile
         #   recordRows   rows + recordId + tableId + keyedBy(+ droppedComputedFields / warnings)
         outputs=(
-            "question", "storeAuthorization", "tableRecordTrigger",
+            "question", "tableRecordTrigger",
             "recordEvent", "rows", "recordRows",
         ),
     ),
@@ -185,7 +187,7 @@ NODE_SPECS: dict[str, NodeSpec] = {
         ),
     ),
     "dataReaderAgentflow": NodeSpec(
-        "DataReader", 1.0, "#0F766E", ["DataReader"], "agentFlow",
+        "DataReader", 1.1, "#0F766E", ["DataReader"], "agentFlow",
         ["data"], edge_label="Data",
         outputs=("content", "status", "rowCount", "truncated"),
         outputs_open=True,  # 外加动态字段 <outputVariableName>(默认 tableData)
@@ -216,7 +218,7 @@ NODE_SPECS: dict[str, NodeSpec] = {
     #   result   `result` 原样保留类型(未赋值为 null)—— 按字段取值走这里
     #   logs     print() 的输出;stderr 不视为失败
     "customPythonFunctionAgentflow": NodeSpec(
-        "CustomPythonFunction", 1.0, "#4B8BBE", ["CustomPythonFunction"], "agentFlow",
+        "CustomPythonFunction", 1.1, "#4B8BBE", ["CustomPythonFunction"], "agentFlow",
         ["customPythonFunctionAgentflow"],
         outputs=("content", "result", "logs", "stderr"),
     ),
@@ -280,6 +282,28 @@ PLACEHOLDER_FIELDS = {
     "amazonStore", "expertId", "executeFlowSelectedFlow",
     "FLOWISE_CREDENTIAL_ID", "documentStore",
 }
+
+# DataReader 亚马逊授权店铺分支(节点 1.1,2026-10-30 改走店铺助手三个只读查询接口)。
+# 枚举、日期口径、文本长度上限逐条对齐 components/nodes/agentflow/DataReader 与
+# services/validation/dataReader.ts:写错的话服务端保存 400、或运行时白跑一次。
+# 售后订单 / FBA 库存 / 移除订单三个值已删除(新接口没有对应数据域),存量流程里残留会报错。
+AMAZON_DATA_TYPES = ("listing", "orders", "ads")
+AMAZON_REMOVED_DATA_TYPES = ("orderList", "afterSalesOrder", "fbaInventory", "removalOrder")
+AMAZON_ADS_MAX_RANGE_DAYS = 90
+AMAZON_ASIN_MAX_LENGTH = 32
+AMAZON_SKU_MAX_LENGTH = 160
+# 关键词 / 标题是 Listing 专用入参(2026-11-02 起节点暴露),都是字面包含匹配。
+AMAZON_KEYWORD_MAX_LENGTH = 500
+AMAZON_TITLE_MAX_LENGTH = 500
+AMAZON_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}")
+# 行数上限:通用硬上限 2000(`tableData.clampRowLimit`)、接口单页上界 200。
+# ads 分支只请求一页,所以它的实际上限就是单页大小,与 maxRows 无关。
+AMAZON_MAX_ROWS = 2000
+AMAZON_ADS_PAGE_SIZE = 200
+# 高级设置的分页参数(2026-11-02 起节点暴露):起始页从 1 起算,每页条数 1..200。
+# 逐页读全量靠 `Iteration` 把页号喂进 `amazonStartPage`,见
+# references/nodes-linkfox-custom.md 的「逐页读取」。
+AMAZON_PAGE_SIZE_MAX = 200
 
 # 选多维表的槽位:两级下拉(多维表格容器 `nbk` → 数据表 `tbl`)。散表的第一级是合成容器
 # `__loose__`;存量流程的 notebookId 可能为空,只要 tableId 有值照样能读写。
@@ -576,6 +600,7 @@ def validate(flow: dict) -> tuple[list[str], list[str]]:
     _check_output_field_refs(nodes, node_by_id, errors, warnings)
     _check_state_writes(nodes, errors, warnings)
     _check_linkfox_http_body(nodes, errors, warnings)
+    _check_amazon_reader_preference(nodes, warnings)
     _check_expert_prompt(nodes, errors, warnings)
     _check_condition_inputs(nodes, errors)
     _check_python_function(nodes, node_by_id, errors, warnings)
@@ -586,6 +611,9 @@ def validate(flow: dict) -> tuple[list[str], list[str]]:
     _check_record_trigger_consumption(nodes, edges, errors, warnings)
     _check_table_slots(nodes, errors, warnings)
     _check_record_trigger_config(nodes, errors, warnings)
+    _check_data_reader_amazon(nodes, errors, warnings)
+    _check_data_reader_rows(nodes, errors, warnings)
+    _check_amazon_reader_downstream(nodes, edges, name_by_id, errors)
     _check_schedule_table_context(nodes, errors, warnings)
     _check_condition_value_types(nodes, warnings)
     _check_exclusive_branch_merge(edges, name_by_id, warnings)
@@ -1043,6 +1071,312 @@ def _check_record_trigger_config(nodes: list, errors: list[str], warnings: list[
                 )
 
 
+def _amazon_literal_date(value: Any) -> str | None:
+    """日期字段里能静态判定的部分:空 / 模板变量返回 None(运行时才知道值)。
+
+    模板变量(`{{ ... }}`)不算错:值在运行时才填,静态校验看不到。
+    """
+    if _is_blank_param(value):
+        return None
+    text = str(value).strip()
+    if _ANY_VAR_RE.search(text):
+        return None
+    return text
+
+
+def _parse_iso_date(value: str | None) -> datetime.date | None:
+    """`yyyy-MM-dd…` → date;空 / 解析不了返回 None(调用方决定报不报错)。"""
+    if not value:
+        return None
+    try:
+        return datetime.date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def _check_data_reader_rows(nodes: list, errors: list[str], warnings: list[str]) -> None:
+    """DataReader 的行数上限,对齐 `tableData.clampRowLimit` 与亚马逊分支的分页实现。
+
+    两件事在运行时都是**静默**的,只看 flowData 发现不了,所以在这里说:
+
+    - `maxRows` 超过 2000 会被静默夹到 2000(`clampRowLimit`)—— 用户以为设 5000 就能读 5000。
+    - 亚马逊的 `ads` 分支**只请求一页 200 条、不翻页**,且 `truncated` 恒为 false、`total` 恒为
+      null:超过 200 条的数据被静默丢掉,下游会把部分数据当全量。`orders` / `listing` 内部会
+      翻页到 `maxRows`,超限时 `truncated` / `total` 是可靠的,不在此列 —— 要读得更多只能靠
+      `amazonStartPage` 往后挪(见 `_check_amazon_pagination`)。
+    """
+    for raw in nodes:
+        n = _as_dict(raw)
+        data = _as_dict(n.get("data"))
+        if data.get("name") != "dataReaderAgentflow":
+            continue
+        nid = n.get("id") or "<dataReader>"
+        inputs = _as_dict(data.get("inputs"))
+
+        raw_limit = inputs.get("maxRows")
+        limit: float | None
+        if _is_blank_param(raw_limit):
+            limit = None
+        else:
+            try:
+                limit = float(raw_limit)
+            except (TypeError, ValueError):
+                limit = None
+                errors.append(f"{nid} maxRows={raw_limit!r} 不是数字;它必须是 1..2000 的整数")
+            if limit is not None and limit > AMAZON_MAX_ROWS:
+                errors.append(
+                    f"{nid} maxRows={raw_limit!r} 超过硬上限 {AMAZON_MAX_ROWS};"
+                    "运行时会被静默夹到 2000,设更大没有意义"
+                )
+            if limit is not None and limit < 1:
+                errors.append(f"{nid} maxRows={raw_limit!r} 必须大于 0")
+
+        if (
+            inputs.get("sourceType") == "amazonStore"
+            and str(inputs.get("amazonDataType") or "orders") == "ads"
+            and limit is not None
+            and limit > AMAZON_ADS_PAGE_SIZE
+        ):
+            warnings.append(
+                f"{nid} amazonDataType='ads' 但 maxRows={raw_limit!r}:广告表现只请求一页 "
+                f"{AMAZON_ADS_PAGE_SIZE} 条且不翻页,多出的部分拿不到,而且 truncated 恒为 false、"
+                "total 恒为 null(静默丢数据)。要全量就按日期区间切批(见 nodes-linkfox-custom.md"
+                " 的「逐页读取 → 处理 → 落盘 → 下一页」),别靠调大 maxRows"
+            )
+
+
+def _check_data_reader_amazon(nodes: list, errors: list[str], warnings: list[str]) -> None:
+    """DataReader 亚马逊授权店铺分支的筛选项,对齐节点 1.1 与服务端 `validateDataReaderInputs`。
+
+    这些规则错了的后果分两档,所以分级也不同:
+
+    - 服务端保存直接 400 / 节点运行时必然报错 → error:`amazonDataType` 不在三种之内(已删除的
+      售后 / 库存 / 移除订单尤其要拦)、店铺值还是旧版 `sellerId|region|...`、广告缺日期、
+      订单只给一个日期、ASIN / SKU 超长、关键词 / 标题超长、日期格式不是 `yyyy-MM-dd`、
+      广告区间超 90 天、起始页不是正整数、每页条数不在 1..200。
+    - 不报错但会被静默忽略 → warning:不属于当前数据类型的筛选(节点只按 `amazonDataType`
+      决定读不读,残留值不会发出去,用户却以为在筛):Listing 下的日期、广告下的 ASIN / SKU /
+      关键词 / 标题、订单下的关键词 / 标题;以及「起始页写死成 >1」和「广告下起始页无效」。
+    """
+    for raw in nodes:
+        n = _as_dict(raw)
+        data = _as_dict(n.get("data"))
+        inputs = _as_dict(data.get("inputs"))
+        if data.get("name") != "dataReaderAgentflow" or inputs.get("sourceType") != "amazonStore":
+            continue
+        nid = n.get("id") or "<dataReader>"
+
+        dtype = str(inputs.get("amazonDataType") or "orders")
+        if dtype in AMAZON_REMOVED_DATA_TYPES:
+            errors.append(
+                f"{nid} amazonDataType={dtype!r} 已删除(店铺助手接口没有这个数据域),"
+                f"节点会报「不支持的数据类型」;只能 {' / '.join(AMAZON_DATA_TYPES)}"
+            )
+            continue
+        if dtype not in AMAZON_DATA_TYPES:
+            errors.append(
+                f"{nid} amazonDataType={dtype!r} 非法,只能 {' / '.join(AMAZON_DATA_TYPES)}"
+            )
+            continue
+
+        store = inputs.get("amazonStore")
+        if (
+            isinstance(store, str)
+            and "|" in store
+            and not _ANY_VAR_RE.search(store)
+        ):
+            errors.append(
+                f"{nid} amazonStore={store!r} 是旧版本值(<sellerId>|<region>|<marketplaceIds>);"
+                "新接口按 storeId 选店铺,旧值里没有 storeId 无法迁移 —— "
+                "用 listAuthorizedStoreOptions 那套下拉重新选一个店铺,留 \"\" 让用户选"
+            )
+
+        start_raw, end_raw = inputs.get("amazonStartDate"), inputs.get("amazonEndDate")
+        start_blank, end_blank = _is_blank_param(start_raw), _is_blank_param(end_raw)
+        if dtype == "ads":
+            if start_blank or end_blank:
+                errors.append(
+                    f"{nid} amazonDataType='ads' 必须同时填 amazonStartDate / amazonEndDate"
+                    "(服务端保存返回 400)"
+                )
+        elif dtype == "orders":
+            if start_blank != end_blank:
+                errors.append(
+                    f"{nid} 订单的 amazonStartDate / amazonEndDate 必须成对:要么都给,"
+                    "要么都留空(留空 = 查全部已同步历史)"
+                )
+        elif not (start_blank and end_blank):
+            warnings.append(
+                f"{nid} amazonDataType='listing' 不接受日期,amazonStartDate / amazonEndDate "
+                "运行时不读(不会发出去):删掉它们,别让用户以为在按日期筛"
+            )
+
+        start = _amazon_literal_date(start_raw)
+        end = _amazon_literal_date(end_raw)
+        for label, value in (("amazonStartDate", start), ("amazonEndDate", end)):
+            if value is not None and not AMAZON_DATE_PATTERN.match(value):
+                errors.append(
+                    f"{nid} {label}={value!r} 格式必须是 yyyy-MM-dd(节点运行时才报,先在这里拦)"
+                )
+        start_day = _parse_iso_date(start)
+        end_day = _parse_iso_date(end)
+        # 正则过得去不代表日期存在:2026-02-31 会被 Date 顺延成 3 月,节点也拦。
+        for label, value, day in (
+            ("amazonStartDate", start, start_day),
+            ("amazonEndDate", end, end_day),
+        ):
+            if value is not None and AMAZON_DATE_PATTERN.match(value) and day is None:
+                errors.append(f"{nid} {label}={value!r} 不是合法日期(如 2026-02-31)")
+        if start_day and end_day:
+            if end_day < start_day:
+                errors.append(f"{nid} amazonEndDate {end} 不能早于 amazonStartDate {start}")
+            elif dtype == "ads":
+                days = (end_day - start_day).days + 1
+                if days > AMAZON_ADS_MAX_RANGE_DAYS:
+                    errors.append(
+                        f"{nid} 广告表现日期区间最多 {AMAZON_ADS_MAX_RANGE_DAYS} 天,"
+                        f"当前 {days} 天({start} → {end})"
+                    )
+
+        # ASIN / SKU 在 Listing 与订单下都生效(2026-11-02 起),只有广告分支不读。
+        for field, label, limit in (
+            ("amazonAsin", "ASIN", AMAZON_ASIN_MAX_LENGTH),
+            ("amazonSku", "SKU", AMAZON_SKU_MAX_LENGTH),
+        ):
+            value = inputs.get(field)
+            if _is_blank_param(value) or _ANY_VAR_RE.search(str(value)):
+                continue
+            text = str(value).strip()
+            if len(text) > limit:
+                errors.append(f"{nid} {label}({field})最长 {limit} 个字符,当前 {len(text)}")
+            if dtype == "ads":
+                warnings.append(
+                    f"{nid} {label}({field})在 listing / orders 下生效,广告分支运行时不读"
+                    "(不会发出去)"
+                )
+
+        # 关键词 / 标题只有 Listing 有这两个入参;订单接口虽然也收,节点不展示也不下发。
+        for field, label, limit in (
+            ("amazonKeyword", "关键词", AMAZON_KEYWORD_MAX_LENGTH),
+            ("amazonTitle", "标题", AMAZON_TITLE_MAX_LENGTH),
+        ):
+            value = inputs.get(field)
+            if _is_blank_param(value) or _ANY_VAR_RE.search(str(value)):
+                continue
+            text = str(value).strip()
+            if len(text) > limit:
+                errors.append(f"{nid} {label}({field})最长 {limit} 个字符,当前 {len(text)}")
+            if dtype != "listing":
+                warnings.append(
+                    f"{nid} {label}({field})只在 listing 下生效,{dtype} 分支运行时不读"
+                    "(不会发出去);订单侧要模糊查只能走 LinkfoxHTTP"
+                )
+
+        _check_amazon_pagination(nid, dtype, inputs, n, errors, warnings)
+
+
+def _check_amazon_pagination(
+    nid: str,
+    dtype: str,
+    inputs: dict,
+    node: dict,
+    errors: list[str],
+    warnings: list[str],
+) -> None:
+    """高级设置的分页参数(`amazonStartPage` / `amazonPageSize`)。
+
+    `maxRows` 是**本次执行**的上限、不是能读到的最深处:要读 2000 行以后的数据,只有把起始页
+    往后挪,而页号要么由 `Iteration` 喂进来、要么每次手工改。写死成 >1 又没有变量来源时,
+    流程每次执行都只读那一段,前面的页永远读不到 —— 不报错,但数据是残的,所以这里要提醒。
+    """
+    raw_start = inputs.get("amazonStartPage")
+    start_value: int | None = None
+    if not _is_blank_param(raw_start):
+        is_var = bool(_ANY_VAR_RE.search(str(raw_start)))
+        parsed = _amazon_positive_int(raw_start)
+        if not is_var:
+            if parsed is None:
+                errors.append(
+                    f"{nid} amazonStartPage={raw_start!r} 必须是 ≥1 的正整数"
+                    "(节点在发请求前就报「起始页必须是正整数」)"
+                )
+            else:
+                start_value = parsed
+    if start_value is not None and start_value > 1:
+        # 子节点靠 `parentNode` 挂在 Iteration 下(flow-structure.md)。
+        if not node.get("parentNode"):
+            warnings.append(
+                f"{nid} amazonStartPage={start_value} 写死在 {nid} 上、又不在 Iteration 里:"
+                "每次执行都从第 "
+                f"{start_value} 页开始,前 {start_value - 1} 页永远读不到。要逐页读全量就用 "
+                "Iteration 把页号喂进 amazonStartPage(见 nodes-linkfox-custom.md 的「逐页读取」)"
+            )
+        if dtype == "ads":
+            warnings.append(
+                f"{nid} amazonDataType='ads' 下 amazonStartPage 不生效:广告接口不按 page "
+                "改变返回内容,翻页只会拿到同一份 unmappedMetrics"
+            )
+
+    raw_size = inputs.get("amazonPageSize")
+    if not _is_blank_param(raw_size) and not _ANY_VAR_RE.search(str(raw_size)):
+        parsed = _amazon_positive_int(raw_size)
+        if parsed is None or not 1 <= parsed <= AMAZON_PAGE_SIZE_MAX:
+            errors.append(
+                f"{nid} amazonPageSize={raw_size!r} 必须在 1..{AMAZON_PAGE_SIZE_MAX} 之间"
+                "(接口的 pageSize 上界)"
+            )
+
+
+def _amazon_positive_int(value: Any) -> int | None:
+    """分页参数的静态取值:只认正整数字面量(`2` / `"2"` / `2.0`),其它返回 None。
+
+    与节点侧的 `normalizeAmazonPageValue` 对齐:它 `String(raw).trim()` 后做 `/^\\d+$/`,
+    所以 JS 里的 `2.0` 会变成 `"2"` 并通过;这里按同样的口径认,不把合法值误判成错。
+    """
+    if isinstance(value, bool):  # bool 是 int 的子类,别让 True 变成 1
+        return None
+    if isinstance(value, int):
+        return value if value >= 1 else None
+    if isinstance(value, float):
+        return int(value) if value.is_integer() and value >= 1 else None
+    text = str(value).strip()
+    return int(text) if re.fullmatch(r"\d+", text) else None
+
+
+def _check_amazon_reader_downstream(
+    nodes: list, edges: list, name_by_id: dict[str, str], errors: list[str]
+) -> None:
+    """亚马逊分支的输出不是 `rows`,直接接 `WriteFile` 会写进去一条聚合记录。
+
+    节点链路:WriteFile 只认上一步 `output.content` 里的 `{rows: [...]}` / `{records: [...]}`。
+    亚马逊分支透出的是接口结构(`orders` / `listings` + 一堆元信息),取不到 `rows` 时
+    WriteFile 退化成「整份对象当成一条记录」:多维表里会多出一张 `dataType / storeId /
+    orders(一大段 JSON)` 的表,行数据一条都没有,而且运行时不报错。
+    """
+    for raw in edges:
+        e = _as_dict(raw)
+        src, dst = e.get("source"), e.get("target")
+        if not isinstance(src, str) or not isinstance(dst, str):
+            continue
+        if name_by_id.get(dst) != "writeFileAgentflow":
+            continue
+        src_node = next((n for n in nodes if _as_dict(n).get("id") == src), None)
+        if src_node is None:
+            continue
+        src_data = _as_dict(_as_dict(src_node).get("data"))
+        if src_data.get("name") != "dataReaderAgentflow":
+            continue
+        src_inputs = _as_dict(src_data.get("inputs"))
+        if src_inputs.get("sourceType") != "amazonStore":
+            continue
+        errors.append(
+            f"{dst} 直接接在亚马逊 DataReader({src}) 后面:这一分支输出的是 orders / listings,"
+            "没有 rows;WriteFile 会把整份聚合结果当成一条记录写进去(列变成 dataType / "
+            "storeId / orders…),行数据全丢。中间加一个 CustomFunction 把 items 映射成 "
+            "{rows: [...]} 再写(见 nodes-linkfox-custom.md 的「逐页读取」)"
+        )
+
+
 def start_trigger_changes(baseline: dict, flow: dict) -> list[str]:
     """对比服务端基线与新片段的开始节点,返回触发配置的变更列表(空 = 没动)。
 
@@ -1161,6 +1495,17 @@ def _check_node_contracts(nodes: list, errors: list[str], warnings: list[str]) -
                 f"{nid} inputs.executeFlowBaseURL 是 v1.x 已删除的字段,运行时不读;"
                 "删掉它,地址取 linkfoxAgentApi 凭据里的 baseUrl"
             )
+        # 2026-10-30 删掉「店铺授权」触发:服务端仍放行存量 flowData(否则用户连改启动方式都存不下去),
+        # 但那个分支不请求任何平台、也不会自己跑。refine 存量流不拦,只提示;新流程不该再写它。
+        if (
+            name == REQUIRED_START_NAME
+            and _as_dict(data.get("inputs")).get("startInputType") == "storeAuthorization"
+        ):
+            warnings.append(
+                f"{nid} startInputType='storeAuthorization'(店铺授权事件)已下线:这条流不会自己触发。"
+                "新流程用 scheduleInput(定时)+ DataReader 轮询,或手工/manual 启动;"
+                "要改这条流就按用户要求换成其它三种之一"
+            )
         if not isinstance(_as_dict(n.get("position")).get("x"), (int, float)):
             warnings.append(f"{nid} 缺 position.x/position.y,画布上会堆在原点")
 
@@ -1261,7 +1606,9 @@ def _check_credential_value(
       上绑好的凭据;把它当缺陷提示会诱导 agent 去"修正"成空串,反而清掉用户的配置。
       首次生成留空占位这条规则由生成侧的检查清单管,不在这里拦。
     - `credential` 与 `inputs.FLOWISE_CREDENTIAL_ID` 一有一无 → warning(两处指同一个
-      凭据,只填一处通常是漏改)。
+      凭据,只填一处通常是漏改)。**只在 `inputs` 里真的出现该键时才判**:HTTP /
+      LinkfoxHTTP 这类节点的凭据只落在 `data.credential`,它们的 `inputs` 从来不带这个键,
+      按"缺失"报警会把用户绑定凭据的正常改动误报成缺陷。
     """
     credential = data.get("credential")
     cred = credential.strip() if isinstance(credential, str) else ""
@@ -1274,9 +1621,10 @@ def _check_credential_value(
         )
         return
 
-    cred_input_id = _as_dict(data.get("inputs")).get("FLOWISE_CREDENTIAL_ID")
+    cred_input = _as_dict(data.get("inputs"))
+    cred_input_id = cred_input.get("FLOWISE_CREDENTIAL_ID")
     fid = cred_input_id.strip() if isinstance(cred_input_id, str) else ""
-    if bool(cred) != bool(fid):
+    if "FLOWISE_CREDENTIAL_ID" in cred_input and bool(cred) != bool(fid):
         filled, empty = (
             ("data.credential", "inputs.FLOWISE_CREDENTIAL_ID")
             if cred
@@ -1389,6 +1737,80 @@ def _check_linkfox_http_body(nodes: list, errors: list[str], warnings: list[str]
             warnings.append(
                 f"{nid} inputs.body 里的参数 {blank} 值为空;"
                 "如果它们是必填参数,运行时会报 `xxx 为必填参数`,需要接上游字段"
+            )
+
+
+def _check_amazon_reader_preference(nodes: list, warnings: list[str]) -> None:
+    """亚马逊店铺数据默认走 `DataReader`,不要用 `LinkfoxHTTP` 重写一遍。
+
+    三个查询接口里,只有 `storeName` / `countryCode` / `orderId` 和订单侧的 `keyword` /
+    `title` 是 DataReader 不透传的;其余筛选、凭证注入、`total` / `truncated` 判定、分页
+    (`amazonStartPage` / `amazonPageSize`)DataReader 全都有。用 `LinkfoxHTTP` 直调等于是
+    自己重写一遍取数逻辑,还丢掉 `truncated` / 真实 `total` —— 典型症状是分页请求失败被当成
+    「这页没数据」,最后写进表里的行数悄悄少了一截。
+
+    所以:body 里**没有任何** DataReader 不透传的参数时给 warning(不是 error —— 用户点名要
+    自己控制请求体时仍允许);`body` 里带 `page` / `pageSize` 的额外点名「逐页读全量改用
+    `amazonStartPage`」,那是纯分页,DataReader 做得更完整。
+    """
+    # path → (amazonDataType, 只能靠 LinkfoxHTTP 的参数)
+    targets = {
+        "/store-assistant/v1/listings/search": (
+            "listing",
+            {"storeName", "countryCode"},
+        ),
+        "/store-assistant/v1/orders/search": (
+            "orders",
+            {"storeName", "countryCode", "orderId", "keyword", "title"},
+        ),
+        "/store-assistant/v1/ads/performance": (
+            "ads",
+            {"storeName", "countryCode"},
+        ),
+    }
+    for node in nodes:
+        n = _as_dict(node)
+        data = _as_dict(n.get("data"))
+        if data.get("name") != "linkfoxHttpAgentflow":
+            continue
+        inputs = _as_dict(data.get("inputs"))
+        path = inputs.get("path")
+        if not isinstance(path, str):
+            continue
+        normalized = path.strip().split("?")[0].rstrip("/")
+        hit = targets.get(normalized)
+        if hit is None:
+            continue
+        data_type, only_http = hit
+
+        body = inputs.get("body")
+        parsed: dict = {}
+        if isinstance(body, str) and body.strip():
+            try:
+                candidate = json.loads(body)
+                parsed = candidate if isinstance(candidate, dict) else {}
+            except (json.JSONDecodeError, ValueError):
+                parsed = {}
+        elif isinstance(body, list):
+            parsed = {
+                _as_dict(item).get("key"): _as_dict(item).get("value")
+                for item in body
+            }
+
+        nid = n.get("id") or "<linkfoxHttp>"
+        if not (set(parsed) & only_http):
+            warnings.append(
+                f"{nid} 直调 {normalized} 但 body 里没有 DataReader 不透传的参数 "
+                f"({sorted(only_http)}):亚马逊店铺数据默认用 DataReader"
+                f"(sourceType=amazonStore, amazonDataType={data_type}),它自带凭证注入、"
+                "total / truncated 判定与分页;用 LinkfoxHTTP 直调会丢掉这些,"
+                "分页失败也看不出来。确实要自己控制请求体时才保留本节点"
+            )
+        if {"page", "pageSize"} & set(parsed):
+            warnings.append(
+                f"{nid} body 里手写了 page / pageSize:逐页读全量改用 DataReader 的 "
+                "amazonStartPage / amazonPageSize + Iteration(见 nodes-linkfox-custom.md"
+                " 的「逐页读取」),不要把页码拼进 LinkfoxHTTP 的 body"
             )
 
 
@@ -1904,14 +2326,15 @@ def _check_edge_metadata(
                     )
 
 
-_LAYOUT_X_STEP = 300
-_LAYOUT_Y_STEP = 160
+_LAYOUT_DEPTH_GAP = 220   # 竖向主干:层与层之间的竖直间距
+_LAYOUT_SIBLING_GAP = 360  # 同一层的并行分支之间的水平间距
+_LAYOUT_CHILD_GAP = 140    # Iteration 多个子节点之间的竖直间距
 
 
 def _compute_layout(nodes: list, edges: list) -> dict[str, dict[str, int]]:
-    """按 edge 拓扑给节点算画布坐标:x 随深度递增,同层节点在 y 轴错开。
+    """按 edge 拓扑给节点算画布坐标:y 随深度递增(竖排),同层节点在 x 轴错开。
 
-    为什么不能简单 `x = 250 * index`:那样并行分支会被画成一条水平直线,
+    为什么不能简单 `y = 250 * index`:那样并行分支会被画成一条竖直直线,
     画布上跟串行结构长得一模一样。用户改完并行看不出任何变化,只能反馈
     "没生效",然后 agent 又白改一轮。深度分层能让分叉在视觉上真的分叉。
 
@@ -1975,21 +2398,22 @@ def _compute_layout(nodes: list, edges: list) -> dict[str, dict[str, int]]:
 
     layout: dict[str, dict[str, int]] = {}
     for d, members in by_depth.items():
-        # 同层多个节点(并行分支)以 0 为中心上下对称展开,视觉上更像分叉。
-        offset = -((len(members) - 1) * _LAYOUT_Y_STEP) // 2
+        # 同层多个节点(并行分支)以 0 为中心左右对称展开,视觉上更像分叉。
+        offset = -((len(members) - 1) * _LAYOUT_SIBLING_GAP) // 2
         for k, nid in enumerate(members):
             layout[nid] = {
-                "x": d * _LAYOUT_X_STEP,
-                "y": offset + k * _LAYOUT_Y_STEP,
+                "x": offset + k * _LAYOUT_SIBLING_GAP,
+                "y": d * _LAYOUT_DEPTH_GAP,
             }
 
     for nid, parent in parent_of.items():
         base = layout.get(parent, {"x": 0, "y": 0})
         siblings = [c for c, p in parent_of.items() if p == parent]
         k = siblings.index(nid)
+        # 子节点不参与主干分层,摆在父节点右侧、向下依次排开,避免压住下一层节点。
         layout[nid] = {
-            "x": base["x"] + 80,
-            "y": base["y"] + 100 + k * _LAYOUT_Y_STEP,
+            "x": base["x"] + _LAYOUT_SIBLING_GAP,
+            "y": base["y"] + 80 + k * _LAYOUT_CHILD_GAP,
         }
 
     return layout
@@ -2131,10 +2555,10 @@ def normalize(flow: dict) -> list[str]:
             n["type"] = spec.top_type
             filled.append(f"{nid}.type={spec.top_type}")
         if "position" not in n:
-            # 按 edge 拓扑分层摆放:x 随深度递增,同层的并行分支在 y 轴错开。
-            # 纯线性的 (250*i, 0) 会把并行结构画成一条直线,用户在画布上看不出分叉,
+            # 按 edge 拓扑分层摆放:y 随深度递增(竖排),同层的并行分支在 x 轴错开。
+            # 纯线性的 (0, 250*i) 会把并行结构画成一条直线,用户在画布上看不出分叉,
             # 会误判"改并行没生效"。用户仍可随意拖动。
-            n["position"] = layout.get(nid) or {"x": 250 * node_index, "y": 0}
+            n["position"] = layout.get(nid) or {"x": 0, "y": _LAYOUT_DEPTH_GAP * node_index}
             filled.append(f"{nid}.position")
         if "positionAbsolute" not in n and isinstance(n.get("position"), dict):
             n["positionAbsolute"] = dict(n["position"])

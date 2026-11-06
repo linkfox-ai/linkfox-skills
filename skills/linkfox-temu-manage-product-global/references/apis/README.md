@@ -45,3 +45,7 @@
 | `bg.local.compliance.goods.list.query` | [bg-local-compliance-goods-list-query.md](./bg-local-compliance-goods-list-query.md) |
 | `bg.local.goods.compliance.edit` | [bg-local-goods-compliance-edit.md](./bg-local-goods-compliance-edit.md) |
 | `bg.local.goods.videocoverimage.get` | [bg-local-goods-videocoverimage-get.md](./bg-local-goods-videocoverimage-get.md) |
+
+## 加签文件下载（1）
+
+接口定义见 [../api.md](../api.md#接口加签文件下载)。

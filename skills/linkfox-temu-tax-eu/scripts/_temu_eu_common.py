@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
-"""EU / Partner tax API helpers; local gateway helpers."""
+"""EU 税务默认值、业务字段提取及工作流封装。"""
 
 import json
 
-from _temu_common import (
-    FILE_DOWNLOAD_URL,
-    PROXY_URL,
-    call_temu_api,
-    emit_result,
-    lf_inline_flag,
-    load_json_arg,
-    parse_nested_body,
-    resolve_access_token,
-)
+from _temu_common import FILE_DOWNLOAD_URL, PROXY_URL, call_temu_api, emit_result, lf_inline_flag, parse_nested_body, resolve_access_token
 
 # Partner EU 税务（Tax）接口：默认欧洲站半托管 + 商品/库存类 token（具体以 Partner 文档为准）
 DEFAULT_SITE = "eu"
@@ -45,11 +36,11 @@ def build_eu_proxy_body(params: dict, api_type: str, business=None) -> dict:
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
-    if "tokenPurpose" not in params and params.get("storeKey") and not params.get("accessToken"):
-        params = dict(params)
+    params = dict(params)
+    params["site"] = site
+    params["managementType"] = management_type
+    if params.get("storeKey") and not params.get("accessToken"):
         params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
-        params.setdefault("site", site)
-        params.setdefault("managementType", management_type)
 
     body = {
         "site": site,
@@ -67,8 +58,8 @@ def eu_proxy_call(params: dict, api_type: str, business=None, timeout: int = 150
     return call_temu_api(PROXY_URL, body, timeout=timeout, linkfox_params=params)
 
 def eu_file_download_call(params: dict, timeout: int = 150) -> dict:
-    if "tokenPurpose" not in params and params.get("storeKey") and not params.get("accessToken"):
-        params = dict(params)
+    params = dict(params)
+    if params.get("storeKey") and not params.get("accessToken"):
         params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
 
     from _temu_common import require_text  # noqa: E402
@@ -78,6 +69,8 @@ def eu_file_download_call(params: dict, timeout: int = 150) -> dict:
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
+    params["site"] = site
+    params["managementType"] = management_type
     body = {
         "site": site,
         "managementType": management_type,

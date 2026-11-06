@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""GeekBI Temu API wrapper - LinkFox Skill.
+"""极鲸云 Temu 图搜业务封装。
 
 调用 /geekbi/temu/goodsImageSearch 接口。
 
-Usage:
+用法：
   python geekbi_temu_goods_image_search.py '<JSON parameters>'
   python geekbi_temu_goods_image_search.py '<JSON parameters>' --inline
 
@@ -17,8 +17,7 @@ import os
 import secrets
 import sys
 import time
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from _linkfox_transport import request, is_success
 
 _SESSION_CACHE: dict[str, str] = {}
 
@@ -125,11 +124,7 @@ API_PATH = "/geekbi/temu/goodsImageSearch"
 SLUG = "linkfox-geekbi-temu-search-by-image"
 SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
-_LAST_CALL_WAS_HTTP_ERROR = False
-
-
-def get_api_url():
-    return get_api_base() + API_PATH
+_LAST_HTTP_STATUS = None
 
 
 def get_api_key():
@@ -146,40 +141,10 @@ def get_api_key():
 
 
 def call_api(params):
-    global _LAST_CALL_WAS_HTTP_ERROR
-    _LAST_CALL_WAS_HTTP_ERROR = False
-    req = Request(
-        get_api_url(),
-        data=json.dumps(params).encode("utf-8"),
-        headers={
-            "Authorization": get_api_key(),
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": (os.environ.get("SESSION_ID") or "").strip(),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            raw = response.read().decode("utf-8")
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                return {"error": "Invalid JSON response", "details": raw[:500]}
-    except HTTPError as exc:
-        _LAST_CALL_WAS_HTTP_ERROR = True
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        try:
-            return json.loads(body) if body else {"error": f"HTTP {exc.code}: {exc.reason}"}
-        except json.JSONDecodeError:
-            return {"error": f"HTTP {exc.code}: {exc.reason}", "details": body[:500]}
-    except URLError as exc:
-        return {"error": f"Connection failed: {exc.reason}"}
-    except TimeoutError:
-        return {"error": "Connection timed out"}
+    global _LAST_CALL_WAS_HTTP_ERROR, _LAST_HTTP_STATUS
+    _LAST_HTTP_STATUS, result = request(API_PATH, SLUG, params)
+    _LAST_CALL_WAS_HTTP_ERROR = _LAST_HTTP_STATUS is None or not 200 <= _LAST_HTTP_STATUS < 300
+    return result
 
 
 def _cache_key(params):
@@ -212,7 +177,8 @@ def _load_cache(path):
     try:
         with open(path, encoding="utf-8") as file:
             payload = json.load(file)
-        return payload
+        # 读取缓存时核对业务成功条件，不复用 errcode=0 等失败响应。
+        return payload if _is_success_payload(200, payload) else None
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -226,20 +192,19 @@ def _save_cache(path, payload):
 
 
 def _is_success_result(result):
-    if _LAST_CALL_WAS_HTTP_ERROR:
+    return _is_success_payload(_LAST_HTTP_STATUS, result)
+
+
+def _is_success_payload(status, result):
+    if not is_success(status, result) or result.get("error"):
         return False
-    if not isinstance(result, dict) or result.get("error"):
-        return False
-    has_success_marker = result.get("success") is True
     if result.get("success") is False:
         return False
-    for key in ("errcode", "errorCode", "code"):
-        if key not in result:
-            continue
-        has_success_marker = True
-        if str(result[key]).lower() not in ("0", "200", "ok", "success"):
+    # 核对其他业务失败标记；errcode 按公共基础规则判断。
+    for key in ("errorCode", "code"):
+        if key in result and str(result[key]).lower() not in ("0", "200", "ok", "success"):
             return False
-    return has_success_marker
+    return True
 
 
 def _find_main_list(obj):
@@ -313,24 +278,28 @@ def main():
         print("Invalid parameter format: top-level JSON must be an object", file=sys.stderr)
         sys.exit(1)
 
-    cache_path = _cache_path(params) if use_cache else None
-    result = _load_cache(cache_path) if cache_path else None
-    cache_hit = result is not None
-    if result is None:
-        result = call_api(params)
-        if cache_path and _is_success_result(result):
-            _save_cache(cache_path, result)
-    serialized = json.dumps(result, ensure_ascii=False, indent=2)
-    serialized_bytes = serialized.encode("utf-8")
-    out_path = resolve_data_path(SLUG, time.time())
+    get_api_key()  # 请求前检查认证；--no-cache 同样输出认证提示。
     try:
+        out_path = resolve_data_path(SLUG, time.time())
+        # 先实际打开目标文件，当前目录或 data 目录不可写时不产生付费请求。
         with open(out_path, "w", encoding="utf-8") as file:
+            cache_path = _cache_path(params) if use_cache else None
+            result = _load_cache(cache_path) if cache_path else None
+            cache_hit = result is not None
+            if result is None:
+                result = call_api(params)
+                if cache_path and _is_success_result(result):
+                    _save_cache(cache_path, result)
+            serialized = json.dumps(result, ensure_ascii=False, indent=2)
+            serialized_bytes = serialized.encode("utf-8")
             file.write(serialized)
-        print(f"Saved full response: {out_path} ({len(serialized_bytes)} bytes)")
-        if cache_hit:
-            print(f"Cache hit: {cache_path}")
     except OSError as exc:
-        print(f"Failed to save to {out_path}: {exc}", file=sys.stderr)
+        print(f"Failed to save response in current directory: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Saved full response: {out_path} ({len(serialized_bytes)} bytes)")
+    if cache_hit:
+        print(f"Cache hit: {cache_path}")
 
     if inline or len(serialized_bytes) <= SMALL_THRESHOLD:
         if cache_hit:

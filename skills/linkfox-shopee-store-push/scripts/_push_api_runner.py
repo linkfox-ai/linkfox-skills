@@ -12,6 +12,7 @@ from _shopee_push_common import (
     ensure_auth_skill_available,
     merge_shopee_body,
     qs_add,
+    response_ok,
 )
 
 
@@ -114,25 +115,32 @@ def run_push_api(api_name: str, params: dict, caller: Optional[str] = None) -> d
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
-        path,
-        method,
-        shop_id=shop_id,
-        merchant_id=merchant_id,
-        query_string=query_string or None,
-        body=body,
-        content_type=content_type,
+    # 请求体须在写入前可解析，避免提交后才出现本地 JSON 解析错误。
+    request_body = None
+    if body:
+        try:
+            request_body = json.loads(body)
+        except json.JSONDecodeError as exc:
+            print(f"Invalid JSON body: {exc}", file=sys.stderr)
+            raise SystemExit(1)
+
+    def transform(status, proxy):
+        out = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = request_body
+        if response_ok(status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
+        path, method, shop_id=shop_id, merchant_id=merchant_id,
+        query_string=query_string or None, body=body, content_type=content_type,
+        transform=transform, operation=api_name,
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

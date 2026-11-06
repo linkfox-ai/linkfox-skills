@@ -1,137 +1,162 @@
 ---
 name: linkfox-amazon-store-fulfillment-inbound
-description: 亚马逊 FBA 入仓与 Fulfillment Inbound 全流程管理。用于创建和管理 inbound plan，处理装箱、placement、shipment、货件内容更新、送达窗口、自配送预约、运输方案、商品合规、预处理、箱唛标签、提单及异步操作状态。用户提到 FBA 入库计划、Send to Amazon、创建入仓计划、packing option、placement option、transportation option、货件箱唛、入仓标签、送仓预约、shipmentConfirmationId、createInboundPlan、Fulfillment Inbound API、v2024-03-20 或 v0 入仓接口时触发。即使未明确说“Fulfillment Inbound”，只要希望把库存发往亚马逊运营中心并完成建仓、装箱、分仓、运输或交仓步骤，也应触发此技能。
+description: 管理已授权亚马逊店铺的 FBA 入仓全流程，支持入库计划、装箱、分仓、货件内容更新、运输方案、送达窗口、自配送预约、商品合规与预处理，以及箱唛、商品标签、交货单、提单和异步状态查询。适用于 Send to Amazon 入仓准备、执行与状态恢复；不适用于前台竞品研究、店铺刊登维护或已废弃的旧版建仓与运输写入。
 ---
+# Amazon 店铺 FBA 入仓管理
 
-# Amazon 店铺 Fulfillment Inbound
+## 适用范围
 
-本 Skill 覆盖 Amazon Fulfillment Inbound `v2024-03-20` 的 45 个 operation，以及仍需配合新流程使用的 6 个 `v0` 查询/文档 operation。所有请求继续使用 Amazon Store 系列的生产链路：`POST /spApi/developerProxy`，由服务端通过 `sellerId + region` 解析授权。
+### 适用
 
-## Prerequisites（必须先读）
+将库存发往亚马逊运营中心，或恢复已有入库计划和货件的执行进度。覆盖 v2024-03-20 的 45 个操作及配合新流程使用的 6 个 v0 查询和文档操作。
 
-1. 本 Skill 依赖 **`linkfox-amazon-store-auth`**。先运行 `python scripts/check_auth_dependency.py`；若 exit code 为 `42` 且 stderr 含 `DEPENDENCY_MISSING:`，先安装或加载该依赖。
-2. 通过 auth Skill 选定店铺，取得 `sellerId` 与 `region`。`region` 仅允许 `NA`、`EU`、`FE`。
-3. 不接收、存储或透传 `amzAccessToken`、`accessToken`、`refreshToken`。不要让调用方覆盖 Amazon `path`、`method` 或网关 `queryString`。
-4. 先读与任务匹配的分组文档；完整契约入口见 [references/api.md](references/api.md)。
+**场景速查**
 
-## 调用方式
+| 用户表达 | 处理场景 |
+|---|---|
+| 按这批 SKU 创建 FBA 入库计划 | 建立计划并推进装箱、分仓和运输。 |
+| 比较这些分仓和运输方案 | 展示货件划分、运费、折扣、有效期及前置条件。 |
+| 改一下货件内容、地址或追踪信息 | 核对当前阶段，准备相应变更或内容预览。 |
+| 安排送仓或印度自配送预约 | 读取送达窗口、预约槽与现有预约。 |
+| 下载箱唛、商品标签或提单 | 核对货件标识并及时获取文档。 |
+| 入库操作超时，查一下是否完成 | 查询异步状态或只读恢复计划和货件。 |
 
-- **API 端点**：`POST /spApi/developerProxy`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<operation_script>.py '<JSON 参数>' [--inline] [--no-cache]`
-- **调用约束**：本工具沿用 Amazon Store Skill 的统一免费配置；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换参数、翻页或连续试探；需要继续调用时先征得用户同意。
+## 接口清单
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-fulfillment-inbound-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，`<session>` 取自环境变量 `SESSION_ID`；禁止写入 `/tmp`，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数、最大列表字段长度及前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-- 加 `--no-cache` 强制本次读/生成操作访问网关；只在用户要求刷新或已确认外部状态变化时使用
+LinkFox 外层统一为 POST；下表端点中的方法表示转发给 Amazon 的方法。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需抽取，避免整份 JSON 进入上下文。
+| 接口 | 端点 | 接口文档 | 对应脚本 | 说明 |
+|---|---|---|---|---|
+| 列出入库计划（`listInboundPlans`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans` | [references/apis/inbound-plans.md](references/apis/inbound-plans.md) | `scripts/list_inbound_plans.py` | 同步读取或处理结果。 |
+| 创建入库计划（`createInboundPlan`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans` | [references/apis/inbound-plans.md](references/apis/inbound-plans.md) | `scripts/create_inbound_plan.py` | 发起异步操作，需续查状态。 |
+| 获取入库计划（`getInboundPlan`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}` | [references/apis/inbound-plans.md](references/apis/inbound-plans.md) | `scripts/get_inbound_plan.py` | 同步读取或处理结果。 |
+| 列出计划箱信息（`listInboundPlanBoxes`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/boxes` | [references/apis/inbound-plans.md](references/apis/inbound-plans.md) | `scripts/list_inbound_plan_boxes.py` | 同步读取或处理结果。 |
+| 取消入库计划（`cancelInboundPlan`） | PUT `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/cancellation` | [references/apis/inbound-plans.md](references/apis/inbound-plans.md) | `scripts/cancel_inbound_plan.py` | 发起异步操作，需续查状态。 |
+| 列出计划商品（`listInboundPlanItems`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/items` | [references/apis/inbound-plans.md](references/apis/inbound-plans.md) | `scripts/list_inbound_plan_items.py` | 同步读取或处理结果。 |
+| 修改计划名称（`updateInboundPlanName`） | PUT `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/name` | [references/apis/inbound-plans.md](references/apis/inbound-plans.md) | `scripts/update_inbound_plan_name.py` | 同步读取或处理结果。 |
+| 列出装箱组箱信息（`listPackingGroupBoxes`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingGroups/{packingGroupId}/boxes` | [references/apis/packing.md](references/apis/packing.md) | `scripts/list_packing_group_boxes.py` | 同步读取或处理结果。 |
+| 列出装箱组商品（`listPackingGroupItems`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingGroups/{packingGroupId}/items` | [references/apis/packing.md](references/apis/packing.md) | `scripts/list_packing_group_items.py` | 同步读取或处理结果。 |
+| 提交装箱信息（`setPackingInformation`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingInformation` | [references/apis/packing.md](references/apis/packing.md) | `scripts/set_packing_information.py` | 发起异步操作，需续查状态。 |
+| 列出装箱方案（`listPackingOptions`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions` | [references/apis/packing.md](references/apis/packing.md) | `scripts/list_packing_options.py` | 同步读取或处理结果。 |
+| 生成装箱方案（`generatePackingOptions`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions` | [references/apis/packing.md](references/apis/packing.md) | `scripts/generate_packing_options.py` | 发起异步操作，需续查状态。 |
+| 确认装箱方案（`confirmPackingOption`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions/{packingOptionId}/confirmation` | [references/apis/packing.md](references/apis/packing.md) | `scripts/confirm_packing_option.py` | 发起异步操作，需续查状态。 |
+| 列出计划托盘（`listInboundPlanPallets`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/pallets` | [references/apis/packing.md](references/apis/packing.md) | `scripts/list_inbound_plan_pallets.py` | 同步读取或处理结果。 |
+| 列出分仓方案（`listPlacementOptions`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions` | [references/apis/placement.md](references/apis/placement.md) | `scripts/list_placement_options.py` | 同步读取或处理结果。 |
+| 生成分仓方案（`generatePlacementOptions`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions` | [references/apis/placement.md](references/apis/placement.md) | `scripts/generate_placement_options.py` | 发起异步操作，需续查状态。 |
+| 确认分仓方案（`confirmPlacementOption`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions/{placementOptionId}/confirmation` | [references/apis/placement.md](references/apis/placement.md) | `scripts/confirm_placement_option.py` | 发起异步操作，需续查状态。 |
+| 获取货件（`getShipment`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}` | [references/apis/shipments.md](references/apis/shipments.md) | `scripts/get_shipment.py` | 同步读取或处理结果。 |
+| 列出货件箱信息（`listShipmentBoxes`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/boxes` | [references/apis/shipments.md](references/apis/shipments.md) | `scripts/list_shipment_boxes.py` | 同步读取或处理结果。 |
+| 列出内容更新预览（`listShipmentContentUpdatePreviews`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/contentUpdatePreviews` | [references/apis/shipment-content-updates.md](references/apis/shipment-content-updates.md) | `scripts/list_shipment_content_update_previews.py` | 同步读取或处理结果。 |
+| 生成内容更新预览（`generateShipmentContentUpdatePreviews`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/contentUpdatePreviews` | [references/apis/shipment-content-updates.md](references/apis/shipment-content-updates.md) | `scripts/generate_shipment_content_update_previews.py` | 发起异步操作，需续查状态。 |
+| 获取内容更新预览（`getShipmentContentUpdatePreview`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/contentUpdatePreviews/{contentUpdatePreviewId}` | [references/apis/shipment-content-updates.md](references/apis/shipment-content-updates.md) | `scripts/get_shipment_content_update_preview.py` | 同步读取或处理结果。 |
+| 确认内容更新预览（`confirmShipmentContentUpdatePreview`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/contentUpdatePreviews/{contentUpdatePreviewId}/confirmation` | [references/apis/shipment-content-updates.md](references/apis/shipment-content-updates.md) | `scripts/confirm_shipment_content_update_preview.py` | 发起异步操作，需续查状态。 |
+| 获取交货单（`getDeliveryChallanDocument`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryChallanDocument` | [references/apis/delivery-windows-and-documents.md](references/apis/delivery-windows-and-documents.md) | `scripts/get_delivery_challan_document.py` | 同步读取或处理结果。 |
+| 列出送达窗口（`listDeliveryWindowOptions`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions` | [references/apis/delivery-windows-and-documents.md](references/apis/delivery-windows-and-documents.md) | `scripts/list_delivery_window_options.py` | 同步读取或处理结果。 |
+| 生成送达窗口（`generateDeliveryWindowOptions`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions` | [references/apis/delivery-windows-and-documents.md](references/apis/delivery-windows-and-documents.md) | `scripts/generate_delivery_window_options.py` | 发起异步操作，需续查状态。 |
+| 确认送达窗口（`confirmDeliveryWindowOptions`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions/{deliveryWindowOptionId}/confirmation` | [references/apis/delivery-windows-and-documents.md](references/apis/delivery-windows-and-documents.md) | `scripts/confirm_delivery_window_options.py` | 发起异步操作，需续查状态。 |
+| 列出货件商品（`listShipmentItems`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/items` | [references/apis/shipments.md](references/apis/shipments.md) | `scripts/list_shipment_items.py` | 同步读取或处理结果。 |
+| 修改货件名称（`updateShipmentName`） | PUT `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/name` | [references/apis/shipments.md](references/apis/shipments.md) | `scripts/update_shipment_name.py` | 同步读取或处理结果。 |
+| 列出货件托盘（`listShipmentPallets`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/pallets` | [references/apis/shipments.md](references/apis/shipments.md) | `scripts/list_shipment_pallets.py` | 同步读取或处理结果。 |
+| 取消自配送预约（`cancelSelfShipAppointment`） | PUT `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/selfShipAppointmentCancellation` | [references/apis/self-ship-appointments.md](references/apis/self-ship-appointments.md) | `scripts/cancel_self_ship_appointment.py` | 发起异步操作，需续查状态。 |
+| 获取自配送预约槽（`getSelfShipAppointmentSlots`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/selfShipAppointmentSlots` | [references/apis/self-ship-appointments.md](references/apis/self-ship-appointments.md) | `scripts/get_self_ship_appointment_slots.py` | 同步读取或处理结果。 |
+| 生成自配送预约槽（`generateSelfShipAppointmentSlots`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/selfShipAppointmentSlots` | [references/apis/self-ship-appointments.md](references/apis/self-ship-appointments.md) | `scripts/generate_self_ship_appointment_slots.py` | 发起异步操作，需续查状态。 |
+| 预约或改期自配送（`scheduleSelfShipAppointment`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/selfShipAppointmentSlots/{slotId}/schedule` | [references/apis/self-ship-appointments.md](references/apis/self-ship-appointments.md) | `scripts/schedule_self_ship_appointment.py` | 同步读取或处理结果。 |
+| 修改货件发货地址（`updateShipmentSourceAddress`） | PUT `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/sourceAddress` | [references/apis/shipments.md](references/apis/shipments.md) | `scripts/update_shipment_source_address.py` | 发起异步操作，需续查状态。 |
+| 更新货件追踪信息（`updateShipmentTrackingDetails`） | PUT `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/trackingDetails` | [references/apis/shipments.md](references/apis/shipments.md) | `scripts/update_shipment_tracking_details.py` | 发起异步操作，需续查状态。 |
+| 列出运输方案（`listTransportationOptions`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions` | [references/apis/transportation.md](references/apis/transportation.md) | `scripts/list_transportation_options.py` | 同步读取或处理结果。 |
+| 生成运输方案（`generateTransportationOptions`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions` | [references/apis/transportation.md](references/apis/transportation.md) | `scripts/generate_transportation_options.py` | 发起异步操作，需续查状态。 |
+| 确认运输方案（`confirmTransportationOptions`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions/confirmation` | [references/apis/transportation.md](references/apis/transportation.md) | `scripts/confirm_transportation_options.py` | 发起异步操作，需续查状态。 |
+| 列出商品合规信息（`listItemComplianceDetails`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/items/compliance` | [references/apis/prep-compliance-labels.md](references/apis/prep-compliance-labels.md) | `scripts/list_item_compliance_details.py` | 同步读取或处理结果。 |
+| 更新商品合规信息（`updateItemComplianceDetails`） | PUT `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/items/compliance` | [references/apis/prep-compliance-labels.md](references/apis/prep-compliance-labels.md) | `scripts/update_item_compliance_details.py` | 发起异步操作，需续查状态。 |
+| 生成商品标签（`createMarketplaceItemLabels`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/items/labels` | [references/apis/prep-compliance-labels.md](references/apis/prep-compliance-labels.md) | `scripts/create_marketplace_item_labels.py` | 同步读取或处理结果。 |
+| 列出预处理信息（`listPrepDetails`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/items/prepDetails` | [references/apis/prep-compliance-labels.md](references/apis/prep-compliance-labels.md) | `scripts/list_prep_details.py` | 同步读取或处理结果。 |
+| 设置预处理信息（`setPrepDetails`） | POST `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/items/prepDetails` | [references/apis/prep-compliance-labels.md](references/apis/prep-compliance-labels.md) | `scripts/set_prep_details.py` | 发起异步操作，需续查状态。 |
+| 获取异步操作状态（`getInboundOperationStatus`） | GET `/spApi/developerProxy` -> path：`inbound/fba/2024-03-20/operations/{operationId}` | [references/apis/asynchronous-operations.md](references/apis/asynchronous-operations.md) | `scripts/get_inbound_operation_status.py` | 同步读取或处理结果。 |
+| 获取旧版预处理说明（`getPrepInstructions`） | GET `/spApi/developerProxy` -> path：`fba/inbound/v0/prepInstructions` | [references/apis/legacy-v0.md](references/apis/legacy-v0.md) | `scripts/get_prep_instructions.py` | 同步读取或处理结果。 |
+| 获取箱唛标签（`getLabels`） | GET `/spApi/developerProxy` -> path：`fba/inbound/v0/shipments/{shipmentId}/labels` | [references/apis/legacy-v0.md](references/apis/legacy-v0.md) | `scripts/get_labels.py` | 同步读取或处理结果。 |
+| 获取提单（`getBillOfLading`） | GET `/spApi/developerProxy` -> path：`fba/inbound/v0/shipments/{shipmentId}/billOfLading` | [references/apis/legacy-v0.md](references/apis/legacy-v0.md) | `scripts/get_bill_of_lading.py` | 同步读取或处理结果。 |
+| 查询旧版货件（`getShipments`） | GET `/spApi/developerProxy` -> path：`fba/inbound/v0/shipments` | [references/apis/legacy-v0.md](references/apis/legacy-v0.md) | `scripts/get_shipments.py` | 同步读取或处理结果。 |
+| 按旧版货件查询商品（`getShipmentItemsByShipmentId`） | GET `/spApi/developerProxy` -> path：`fba/inbound/v0/shipments/{shipmentId}/items` | [references/apis/legacy-v0.md](references/apis/legacy-v0.md) | `scripts/get_shipment_items_by_shipment_id.py` | 同步读取或处理结果。 |
+| 查询旧版货件商品（`getShipmentItems`） | GET `/spApi/developerProxy` -> path：`fba/inbound/v0/shipmentItems` | [references/apis/legacy-v0.md](references/apis/legacy-v0.md) | `scripts/get_shipment_items.py` | 同步读取或处理结果。 |
 
-## 工作方式
+## 前置条件
 
-每个公开脚本只代表一个固定 operation，并且一次执行最多调用一次网关。统一执行器负责：
+**先完成店铺授权并确定操作目标**：依赖 `linkfox-amazon-store-auth` 选店与完成授权。运行 `python scripts/check_auth_dependency.py` 检查本地依赖；缺失时先安装依赖，不在本技能实现授权或令牌逻辑。按 [接口参考](references/api.md#业务前置条件) 核对授权角色与商品入库资格。
 
-- 校验公共字段、path/query/body、枚举、分页上限和关键嵌套约束；
-- 对 path segment 与 query 参数进行百分号编码；
-- 将 v0 CLI 的 lowerCamelCase 参数映射为 Amazon 要求的 PascalCase wire 名称；
-- 识别 200/201/202/204 成功响应并解析 JSON；
-- 对异步响应返回显式 `nextAction`，但不自动轮询；
-- 保存完整响应，大响应只在 stdout 展示摘要。
+先阅读 [接口参考](references/api.md) 及任务对应的分组文档。依赖检测、认证兼容与字段要求均在接口参考中说明。
 
-调用格式：
+## 入仓执行流程
 
-```bash
-python scripts/<operation_script>.py '<JSON parameters>' [--inline] [--no-cache]
-```
+1. 确认目标店铺、工作流阶段及已有标识。已有计划或货件时先只读恢复，避免重复创建；根据 [工作流](references/workflows.md) 选择已知箱规、Pack Later、India 或内容更新路径。
+2. 写操作前核对用户意图和目标。取消计划、确认装箱、确认分仓、确认内容预览、确认送达窗口、取消或安排预约、确认运输这八类提交操作，须先展示关键选择并取得明确确认；确认运输前展示各货件方案、费用、币种、时效及有效期，不默认选择收费项。
+3. 已知箱规按“创建计划 → 装箱 → 分仓 → 运输”推进；Pack Later 与 India 的装箱和分仓顺序不同，按工作流执行。每步异步操作只在状态成功后进入下游。
+4. 异步发起后保留任务标识并显式查询状态。进行中则停止本轮推进，失败则展示问题并停止下游写入；本技能不自动轮询、翻页、换参数试探或重放写请求。响应不确定时先查状态或只读恢复。
+5. 取得货件确认标识后获取标签或提单，用户需要文件时立即下载当次响应中的文档链接。下载与跨版本要求见 [接口参考](references/api.md)。
 
-公共参数：
+## 执行方式
 
-| 参数 | 必填 | 说明 |
-|---|---|---|
-| `sellerId` | 是 | 已授权 Seller ID |
-| `region` | 是 | `NA` / `EU` / `FE` |
-| path/query 参数 | 条件 | 使用各 operation 文档中的 lowerCamelCase 名称 |
-| `requestBody` | 条件 | Amazon JSON body；推荐显式传此对象，也兼容将 body 字段放在顶层 |
-| `confirmWrite` | 提交类操作必填 | 用户明确确认目标和选择后传布尔值 `true`；8 个确定性提交操作缺少该值时脚本会在网关调用前拒绝 |
-| `skipDepCheck` | 否 | 仅本地调试使用 |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：本工具不消耗算力 （限时）。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时成功读取/生成缓存，写入与提交不缓存。失败或空结果时，不得自动换参数、翻页或连续试探；需要继续调用时先征得用户同意。
 
-示例：
+### 输出策略
 
-```bash
-python scripts/get_inbound_plan.py '{"sellerId":"A1...","region":"NA","inboundPlanId":"wf12345678-1234-1234-1234-123456789012"}'
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-fulfillment-inbound-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、结果中已有的常见计数字段（如 `total`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-python scripts/create_inbound_plan.py '{"sellerId":"A1...","region":"NA","requestBody":{"destinationMarketplaces":["ATVPDKIKX0DER"],"items":[{"labelOwner":"AMAZON","msku":"SKU-1","prepOwner":"SELLER","quantity":10}],"sourceAddress":{"name":"Warehouse","addressLine1":"1 Main St","city":"Seattle","countryCode":"US","phoneNumber":"+1-206-555-0100","postalCode":"98101","stateOrProvinceCode":"WA"}}}'
-
-python scripts/get_labels.py '{"sellerId":"A1...","region":"NA","shipmentConfirmationId":"FBA...","pageType":"PackageLabel_Letter_2","labelType":"UNIQUE"}'
-```
-
-## 选择 operation
-
-| 分组 | 用途 | 详细参数与脚本 |
-|---|---|---|
-| Inbound Plans | 创建、读取、取消、改名、查看 plan 内容 | [inbound-plans.md](references/apis/inbound-plans.md) |
-| Packing | 生成/确认装箱方案、提交箱规、查看 packing group | [packing.md](references/apis/packing.md) |
-| Placement | 生成、列出、确认分仓方案 | [placement.md](references/apis/placement.md) |
-| Shipments | 读取货件、箱/件/托盘、名称和地址、tracking | [shipments.md](references/apis/shipments.md) |
-| Content Updates | 预览并确认已建货件内容变更 | [shipment-content-updates.md](references/apis/shipment-content-updates.md) |
-| Delivery | delivery window 与 delivery challan | [delivery-windows-and-documents.md](references/apis/delivery-windows-and-documents.md) |
-| Self-Ship | India 自配送预约槽与预约 | [self-ship-appointments.md](references/apis/self-ship-appointments.md) |
-| Transportation | 生成、比较、确认运输方案 | [transportation.md](references/apis/transportation.md) |
-| Prep / Compliance / Labels | 预处理、合规和商品标签 | [prep-compliance-labels.md](references/apis/prep-compliance-labels.md) |
-| Async Status | 查询 `operationId` 的执行状态 | [asynchronous-operations.md](references/apis/asynchronous-operations.md) |
-| Retained v0 | prep instructions、箱唛、BOL、旧货件查询 | [legacy-v0.md](references/apis/legacy-v0.md) |
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
 ## 执行规则
 
-1. 先确认当前工作流阶段及已有 ID；ID 的来源和跨版本映射见 [references/identifiers.md](references/identifiers.md)。已有 plan/shipment 时优先只读恢复，不重复创建。
-2. 写操作前确认用户意图和目标店铺。以下 8 个确定性提交操作必须在执行前向用户展示关键选择并取得明确确认：`cancelInboundPlan`、`confirmPackingOption`、`confirmPlacementOption`、`confirmShipmentContentUpdatePreview`、`confirmDeliveryWindowOptions`、`cancelSelfShipAppointment`、`scheduleSelfShipAppointment`、`confirmTransportationOptions`。
-3. `confirmTransportationOptions` 可能接受运输费用；确认前展示每个 shipment 的 option、费用、币种、时效与 expiration。不得替用户默认选择收费项。
-4. 19 个异步发起 operation 返回 `operationId` 后，只调用 `get_inbound_operation_status.py` 查询。`IN_PROGRESS` 时停止并告知稍后再查；`FAILED` 时展示 `operationProblems`，不得进入下游写步骤；仅 `SUCCESS` 可继续。
-5. 脚本层不自动翻页、轮询、换参数试探或重放 POST/PUT。现有网关仅在识别到 token 过期时会刷新 token 并透明重试一次；429/500/503 或超时造成结果不确定时，优先通过 status/read operation 恢复状态。
-6. `updateInboundPlanName`、`updateShipmentName` 的 204 空 body 是成功，不当作解析失败。
-7. `getLabels` / `getBillOfLading` 必须使用 `getShipment` 返回的 `shipmentConfirmationId`；脚本同时接受该别名。下载 URL 可能很快过期，应在取得后立即下载，不要长期保存 URL。
+### 算力消耗预估
 
-完整标准路径、Pack Later、India、自有承运人和 shipment content update 流程见 [references/workflows.md](references/workflows.md)。市场限制见 [references/marketplace-constraints.md](references/marketplace-constraints.md)。
+不消耗算力（以网关实际计费为准） （限时）。
 
-## 输出与错误处理
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-- 完整响应保存到 `linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-fulfillment-inbound-<timestamp>.json`；stdout 会打印实际路径。
-- 响应不超过 8 KB 时打印完整 JSON；更大时打印摘要；`--inline` 强制打印完整 JSON。
-- 始终先判断 `developerProxy.errcode`，再判断 `httpStatus`，最后读取 operation 结果字段。
-- 401/402、API Key、授权、算力或余额问题按 [references/onboarding.md](references/onboarding.md) 处理。
-- Amazon 返回 400/403/404/409/413/415/422 时，修正输入或流程状态后由用户决定是否再次调用。
+### 解决认证和算力问题
 
-## 参考路由
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-- 字段、响应、分页、错误语义：读 [references/api.md](references/api.md)。
-- 业务流程选择：读 [references/workflows.md](references/workflows.md)。
-- ID 产生和 v2024/v0 映射：读 [references/identifiers.md](references/identifiers.md)。
-- 国家/市场差异：读 [references/marketplace-constraints.md](references/marketplace-constraints.md)。
-- 某个 operation 的 method/path/body/script：只读对应的 `references/apis/*.md` 分组文档。
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-问题反馈使用 `skillName: linkfox-amazon-store-fulfillment-inbound`，并附脱敏后的 operation、关联 ID 与 `developerProxy` 响应。
+### 约束与建议
 
-## Amazon SP-API 接口保护与重试指引
+- **清晰展示状态**：注明店铺、区域、市场、工作流阶段和关联标识，用表格展示方案、货件划分、费用、币种、有效期及执行结果。区分请求被接受、异步执行成功和货件后续状态。
+- **区分标识**：计划、异步任务、装箱组、方案、货件和标签标识不可混用；来源与跨版本关系见 [标识参考](references/identifiers.md)。
+- **展示关键选择**：装箱确认展示组别、支持配置和激励；分仓确认展示全部货件、费用或折扣；预约展示 FC、货件、日期时间、预约槽与当前预约；内容更新展示新旧差异、运输影响和有效期。
+- **保留执行进度**：逐步保留计划、货件及异步任务标识；方案重新生成后重新核对选择，不按列表序号默认确认。
+- **保护店铺**：错误处理按 [接口参考](references/api.md) 和 [店铺保护与重试](references/spapi-protection.md) 执行。先向用户说明店铺保护，再给出原因、处理动作和等待时间，保留已取得的数据。
+- **说明结果边界**：仅展示实际返回字段；空箱或托盘结果可能与当前流程阶段有关。市场与流程差异见 [市场限制](references/marketplace-constraints.md)，详细执行路径见 [工作流](references/workflows.md)。
 
-同一店铺连续收到 Amazon SP-API 的 400、403、404 或 429 时，网关会返回 450、453、454 或 459 并短暂冷却。这些自定义状态码不是 Amazon 原生状态，也不表示封号；目的是避免持续异常或高频调用扩大店铺风险。
+## 使用示例
 
-| 状态与 message | 范围 | 触发与冷却 | 处理 |
-|---|---|---|---|
-| `450`：`400，请求异常，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：20 分钟 | 停止原参数重试，检查必填字段、marketplace、ID、日期和请求体 |
-| `453`：`403，店铺未授权，请先授权` | 店铺全部接口 | 60 秒内超过 2 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 停止该店铺调用，检查授权、权限、店铺归属和区域 |
-| `454`：`404，资源不存在，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 确认资源 ID、所属店铺/站点、资源状态和接口路径 |
-| `459`：`429限流中，请降低频率` | 店铺+接口 | 首次：15 秒；2 分钟内超过 2 次：30 秒；3 分钟内超过 4 次：2 分钟 | 降低并发、分页和轮询频率并逐级退避 |
+### 新建入仓计划
 
-- 立即停止自动或并发重试，不得通过换脚本或重复创建任务绕过保护；优先遵循 `retryAfter`、`blockedUntil`，没有时按表中时长说明。
-- 450/453/454 必须先修正参数、授权或资源标识，冷却后最多谨慎重试一次；再次触发则停止调用。453 期间停止该店铺全部 SP-API。
-- 保留已有 `reportId`、`feedId` 等任务 ID；写操作结果不确定时先查询状态，不直接重放。
-- 向用户先说明店铺保护，再给原因、处理和等待时间。可回复：“为保护您的亚马逊店铺安全，检测到 Amazon SP-API 连续返回{原因}，当前已进入短暂保护。请先{处理动作}，预计{等待时间}后再试；这不代表封号，也不是套餐或算力限制。”不要只说“LinkFox 限流”或“服务器繁忙”。
+用户：按这批 SKU 和箱规安排发往亚马逊仓库。
 
-## 算力消耗规则
+核对已授权店铺与商品准备状态，创建计划并逐步查询异步结果，展示装箱、分仓和运输方案，按用户确认推进提交。
 
-不消耗算力（以网关实际计费为准）。
+### 恢复已有货件
+
+用户：刚才确认运输超时了，看看是否已经成功。
+
+使用已保留的任务标识查询状态，必要时读取计划和货件，说明当前结果后再判断下一步。
+
+### 获取标签与提单
+
+用户：下载这个入库货件的箱唛和提单。
+
+从货件读取正确的标签标识，取得当次文档链接并及时下载，返回文件及其关联货件。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*更多跨境 Skill：[LinkFox Skills](https://skill.linkfox.com/)*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

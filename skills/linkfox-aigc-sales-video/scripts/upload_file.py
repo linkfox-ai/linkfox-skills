@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read a file or download a source URL, then use the official Base64 upload entry."""
+"""读取本地文件或下载源素材，再调用内置 Base64 上传入口。"""
 import base64
 import importlib.util
 import json
@@ -18,34 +18,34 @@ MIME_EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".we
 def read_source(params):
     local, remote = params.get("filePath"), params.get("url")
     if bool(local) == bool(remote):
-        raise SystemExit("Supply exactly one of filePath or url")
+        raise SystemExit("filePath 和 url 必须且只能提供一个")
     if local:
         if not isinstance(local, str):
-            raise SystemExit("filePath must be a string")
+            raise SystemExit("filePath 必须是字符串")
         source = Path(local).expanduser().resolve()
         if not source.is_file():
-            raise SystemExit("Media file does not exist")
+            raise SystemExit("素材文件不存在")
         name = source.name
         if source.suffix.lower() not in EXTENSIONS:
-            raise SystemExit("Supported extensions: jpg/jpeg/png/webp/mp4/mov")
+            raise SystemExit("支持的扩展名：jpg/jpeg/png/webp/mp4/mov")
         with source.open("rb") as media:
             content = media.read(MAX_BYTES + 1)
     else:
         if not isinstance(remote, str):
-            raise SystemExit("url must be a string")
+            raise SystemExit("url 必须是字符串")
         parsed = urlsplit(remote)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise SystemExit("Source URL must use HTTP(S)")
+            raise SystemExit("素材 URL 必须使用 HTTP(S)")
         try:
-            # API credentials are sent only to the upload API, never the source host.
+            # API 凭证仅发送给上传接口，不发送给素材来源。
             with urlopen(Request(remote, headers={"User-Agent": "LinkFox-Skill/2.0"}), timeout=150) as response:
                 if urlsplit(response.geturl()).scheme not in {"http", "https"}:
-                    raise SystemExit("Source redirect must use HTTP(S)")
+                    raise SystemExit("素材重定向必须使用 HTTP(S)")
                 name = Path(unquote(urlsplit(response.geturl()).path)).name
                 declared_type = response.headers.get_content_type()
                 content = response.read(MAX_BYTES + 1)
         except (URLError, OSError, ValueError):
-            raise SystemExit("Source download failed; no upload or generation was submitted")
+            raise SystemExit("素材下载失败，未提交上传或生成任务")
         if Path(name).suffix.lower() not in EXTENSIONS:
             ext = MIME_EXTENSIONS.get(declared_type)
             if not ext:
@@ -54,36 +54,36 @@ def read_source(params):
                 elif content[:4] == b"RIFF" and content[8:12] == b"WEBP": ext = ".webp"
                 elif content[4:8] == b"ftyp": ext = ".mov" if content[8:12] == b"qt  " else ".mp4"
             if not ext:
-                raise SystemExit("Cannot identify supported media; supply fileName with its actual extension")
+                raise SystemExit("无法识别受支持的素材；请提供带真实扩展名的 fileName")
             name = "media" + ext
     if not content or len(content) > MAX_BYTES:
-        raise SystemExit("File must be nonempty and at most 10MB")
+        raise SystemExit("文件须非空且不超过 10MB")
     file_name = params.get("fileName") or name
     if not isinstance(file_name, str) or Path(file_name).suffix.lower() not in EXTENSIONS:
-        raise SystemExit("fileName requires a supported media extension")
+        raise SystemExit("fileName 须含受支持的媒体扩展名")
     if Path(file_name).suffix.lower().replace(".jpeg", ".jpg") != Path(name).suffix.lower().replace(".jpeg", ".jpg"):
-        raise SystemExit("fileName must keep the source media format")
+        raise SystemExit("fileName 必须保留源素材格式")
     return Path(file_name).name, content
 
 
 def main():
     if len(sys.argv) < 2:
-        raise SystemExit("Usage: upload_file.py '<JSON with filePath or url>' [--inline]")
+        raise SystemExit("用法：upload_file.py '<含 filePath 或 url 的 JSON>' [--inline]")
     try:
         params = json.loads(sys.argv[1])
     except json.JSONDecodeError:
-        raise SystemExit("Invalid JSON parameters")
+        raise SystemExit("JSON 参数无效")
     if not isinstance(params, dict):
-        raise SystemExit("Parameters must be a JSON object")
+        raise SystemExit("参数必须是 JSON 对象")
     entry = Path(__file__).resolve().with_name("upload_by_base64.py")
     spec = importlib.util.spec_from_file_location("aigc_media_upload", entry)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.get_api_key()  # Check credentials before downloading source material.
+    module.get_api_key()  # 下载源素材前先检查凭证。
     name, content = read_source(params)
     payload = {"fileName": name, "base64": base64.b64encode(content).decode("ascii")}
     inline = "--inline" in sys.argv[2:]
-    # File bytes stay in this process, outside the OS command line and request files.
+    # 文件内容仅留在进程内，不进入操作系统命令行或请求文件。
     sys.argv = [str(entry), json.dumps(payload, ensure_ascii=False), "--no-cache"]
     if inline:
         sys.argv.append("--inline")

@@ -10,18 +10,11 @@ GET `orders/2026-01-01/orders/{orderId}`，可选 includedData 数据集。
 
 from __future__ import annotations
 
-import json
 import sys
 from typing import List
 from urllib.parse import quote
 
-from _spapi_orders_common import (
-    developer_proxy_call,
-    emit_result,
-    ensure_auth_skill_available,
-        lf_inline_flag,
-    merge_json_body,
-)
+from _spapi_orders_common import run_proxy, ensure_auth_skill_available, load_cli_params, require_fields
 
 
 def _str_list(val: object, name: str) -> List[str]:
@@ -55,19 +48,12 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
-    try:
-        params = json.loads(sys.argv[1])
-    except json.JSONDecodeError as e:
-        print(f"Invalid JSON: {e}", file=sys.stderr)
-        sys.exit(1)
+    params = load_cli_params()
 
     if not params.get("skipDepCheck"):
         ensure_auth_skill_available("get_order.py")
 
-    for f in ("sellerId", "region", "orderId"):
-        if f not in params:
-            print(f"Missing required field: {f}", file=sys.stderr)
-            sys.exit(1)
+    require_fields(params, ("sellerId", "region", "orderId"))
 
     seller_id = str(params["sellerId"])
     region = str(params["region"])
@@ -75,11 +61,8 @@ def main() -> None:
     path = _path(order_id)
     qs = _query(_str_list(params.get("includedData"), "includedData"))
 
-    proxy = developer_proxy_call(region, path, "GET", seller_id, query_string=qs)
-    out: dict = {"developerProxy": proxy, "resolvedPath": path, "queryString": qs}
-    merge_json_body(out, proxy, "order")
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy("getOrder", region, path, "GET", seller_id,
+              query_string=qs, result_field="order")
 
 
 if __name__ == "__main__":

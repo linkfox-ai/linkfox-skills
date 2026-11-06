@@ -1,0 +1,16 @@
+[
+  {
+    "name": "happyhorse-v2",
+    "requestValue": "happyhorse-v2",
+    "documentedCapabilities": [
+      "按时长：**39**"
+    ]
+  },
+  {
+    "name": "doubao-seedance-2-5",
+    "requestValue": "doubao-seedance-2-5",
+    "documentedCapabilities": [
+      "按时长：支持有声 71"
+    ]
+  }
+]

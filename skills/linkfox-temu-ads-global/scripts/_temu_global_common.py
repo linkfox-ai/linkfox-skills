@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""Global / Partner Ads API helpers; local gateway helpers."""
-
-import json
+"""全球站广告默认参数、业务载荷与文件下载封装。"""
 
 from _temu_common import (
-    emit_result,
-    lf_inline_flag,
     FILE_DOWNLOAD_URL,
     PROXY_URL,
     call_temu_api,
-    load_json_arg,
-    parse_nested_body,
     resolve_access_token,
 )
 
@@ -45,11 +39,10 @@ def build_global_proxy_body(params: dict, api_type: str, business=None) -> dict:
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
-    if "tokenPurpose" not in params and params.get("storeKey") and not params.get("accessToken"):
-        params = dict(params)
-        params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
-        params.setdefault("site", site)
-        params.setdefault("managementType", management_type)
+    params = dict(params)
+    params["site"] = site
+    params["managementType"] = management_type
+    params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
 
     body = {
         "site": site,
@@ -67,10 +60,6 @@ def global_proxy_call(params: dict, api_type: str, business=None, timeout: int =
     return call_temu_api(PROXY_URL, body, timeout=timeout, linkfox_params=params)
 
 def global_file_download_call(params: dict, timeout: int = 150) -> dict:
-    if "tokenPurpose" not in params and params.get("storeKey") and not params.get("accessToken"):
-        params = dict(params)
-        params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
-
     from _temu_common import require_text  # noqa: E402
 
     site = str(params.get("site", DEFAULT_SITE)).strip().lower() or DEFAULT_SITE
@@ -78,6 +67,10 @@ def global_file_download_call(params: dict, timeout: int = 150) -> dict:
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
+    params = dict(params)
+    params["site"] = site
+    params["managementType"] = management_type
+    params.setdefault("tokenPurpose", DEFAULT_TOKEN_PURPOSE)
     body = {
         "site": site,
         "managementType": management_type,
@@ -87,5 +80,4 @@ def global_file_download_call(params: dict, timeout: int = 150) -> dict:
     return call_temu_api(FILE_DOWNLOAD_URL, body, timeout=timeout, linkfox_params=params)
 
 def run_and_print(params: dict, api_type: str, business=None) -> None:
-    result = parse_nested_body(global_proxy_call(params, api_type, business))
-    emit_result(result, inline=lf_inline_flag())
+    global_proxy_call(params, api_type, business)

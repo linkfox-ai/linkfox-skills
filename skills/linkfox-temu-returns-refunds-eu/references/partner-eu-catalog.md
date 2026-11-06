@@ -62,3 +62,7 @@ Partner Platform for EU 菜单：**Return and Refund / 退货与退款**（与 U
 ## Token 说明
 
 建议使用 **`tokenPurpose=order-shipping`**。详见 [access-token.md](./access-token.md)。
+
+## 后续接口接入维护
+
+收到完整 Partner 文档（type、sub_menu_code、URL、请求和响应参数表）后，再补充对应接口文件与专用 CLI；专用 CLI 复用 `_eu_returns_refunds_script.run_cli`，并同步本目录索引、接口清单与本目录表。未提供的 sub_menu_code 保持未确认，不猜测。

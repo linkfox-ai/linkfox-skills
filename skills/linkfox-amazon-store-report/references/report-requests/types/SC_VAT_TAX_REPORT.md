@@ -1,19 +1,19 @@
 # `SC_VAT_TAX_REPORT`
 
-> **分类**：15. Tax Reports  
-> **说明**：Seller Central VAT tax report  
-> **可用范围**：Seller only
+> **分类**：15. 税务报告  
+> **说明**：Seller Central VAT 税务报告  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Tax Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#amazon-vat-calculation-report)（章节：**Amazon VAT Calculation Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [税务报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#amazon-vat-calculation-report)（章节：**Amazon VAT Calculation Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Comma-separated flat file
-- **Store availability**：Ireland, Spain, United Kingdom, France, Belgium, Netherlands, Germany, Italy, Sweden, and Poland
-- **要点**：Provides detailed value-added tax (VAT) calculation information for buyer shipments, returns, and refunds.
+- **角色**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：逗号分隔的平面文件
+- **店铺范围**：Ireland, Spain, United Kingdom, France, Belgium, Netherlands, Germany, Italy, Sweden, and Poland
+- **要点**：提供买家货件、退货与退款的 VAT 计算明细。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#amazon-vat-calculation-report>
 

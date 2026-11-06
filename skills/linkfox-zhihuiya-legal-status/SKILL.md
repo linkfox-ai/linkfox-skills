@@ -1,145 +1,116 @@
 ---
 name: linkfox-zhihuiya-legal-status
-description: 从智慧芽（PatSnap）数据库查询专利法律状态信息。当用户提到专利法律状态、专利有效性核查、专利状态查询、专利事件历史、简单法律状态、转让、许可、质押、异议、诉讼、复审等法律事件、patent legal status, patent validity, patent events, transfer/license/pledge, PatSnap, patent status lookup时触发此技能。当用户询问专利是否处于有效、无效、审中、过期、授权、撤回或撤销状态，或想通过专利ID或公开号查询法律状态时也应触发。
+description: 查询智慧芽（PatSnap）专利法律状态，展示简单法律状态、详细生命周期状态、法律事件和状态更新日期。适用于按专利 ID 或公开（公告）号核查有效、失效、审中、到期或撤销状态，以及转让、许可、质押、异议、诉讼和复审等事件；不适用于关键词检索专利、全文或权利要求获取、专利估值、自由实施（FTO）分析、同族或引用分析。
 ---
 
-# Zhihuiya Patent Legal Status
+# 智慧芽专利法律状态查询
 
-This skill guides you on how to query patent legal status information via the Zhihuiya (PatSnap) platform, helping users quickly determine the current legal standing and event history of one or more patents.
+## 适用范围
 
-## 调用方式
+### 适用
 
-- **API 端点**：`POST /zhihuiya/legalStatus`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_legal_status.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+查看一个或多个已知专利的法律状态和法律事件。用户希望确认专利是否仍然有效、是否到期或撤销，或核对转让、许可、质押和诉讼等事件时，使用本技能。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-legal-status-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+**场景速查**
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个专利还有效吗 | 有效性核查：优先展示有效、失效或审中状态。 |
+| 查一下这个专利现在的法律状态 | 生命周期查询：展示详细法律状态。 |
+| 这个专利有没有转让、许可或质押 | 法律事件核查：展示实际返回的事件。 |
+| 这些专利是否已经过期 | 批量核查：汇总各专利的状态和返回数量。 |
+| 这个专利涉及诉讼吗 | 事件核查：检查诉讼等返回标签。 |
+| 查询 CN115000000A 或内部专利 ID | 已知标识查询：按用户提供的标识准备查询。 |
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 前置条件
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+**先确定专利标识**：取得用户提供的专利 ID 或公开（公告）号。参数约定、优先级和批量限制见 `references/api.md`。
 
-## Core Concepts
+## 查询流程
 
-The Zhihuiya Patent Legal Status tool returns three layers of legal information for each patent:
+1. 明确用户要核查当前有效性、详细状态还是法律事件，整理已有专利标识；按 `references/api.md` 选择相应参数。
+2. 查询前按下方“算力消耗预估”估算费用，并落实其中的消耗提醒与用户决定要求。
+3. 根据接口定义发起查询，同一参数组合优先使用本地缓存；不因失败或空结果自动改参数继续试探。
+4. 按公共响应规则判断结果，先查看落盘摘要，再按需提取状态和事件；解释异常或空结果并提示核对输入。
+5. 按下方展示建议输出汇总表、关键状态和更新日期，说明数据覆盖范围。
 
-1. **Simple Legal Status** -- A high-level summary of the patent's current standing (e.g., Active, Inactive, Pending, Undetermined, PCT designated period, PCT designated expiration).
-2. **Legal Status** -- A detailed status describing the patent's lifecycle stage (e.g., Published, Examining, Granted, Abandoned, Withdrawn, Rejected, Expired, Revoked, Ceased, Restoration, etc.).
-3. **Legal Events** -- Specific legal actions that have occurred on the patent (e.g., Transfer, License, Pledge, Opposition, Litigation, Re-examination, Customs, Preservation, Invalid-procedure, Oral-procedure, Declassification, Double application, Trust).
+## 执行方式
 
-**Patent identification**: Patents can be looked up by either patent ID or publication (announcement) number. When both are provided, patent ID takes priority. Multiple values can be submitted in a single request (comma-separated, up to 100).
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_legal_status.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按请求次数预估费用，口径见“算力消耗预估”。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换专利标识或请求选项连续试探；需要再次请求时，先向用户说明额外消耗。
 
-## Parameter Guide
+### 输出策略
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| patentId | Conditionally | Patent ID. At least one of patentId or patentNumber must be provided. Comma-separated for multiple values, up to 100. |
-| patentNumber | Conditionally | Publication (announcement) number. At least one of patentId or patentNumber must be provided. Comma-separated for multiple values, up to 100. |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-legal-status-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-- If the user provides a publication number (e.g., CN115xxxxxxA, US11xxxxxxB2, EP3xxxxxxA1), use `patentNumber`.
-- If the user provides an internal patent ID, use `patentId`.
-- When both are supplied, `patentId` takes precedence.
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## Response Fields
+## 执行规则
 
-| Field | Description |
-|-------|-------------|
-| patentId | The patent's internal ID |
-| pn | Publication (announcement) number |
-| simpleLegalStatus | High-level status: Active, Inactive, Pending, Undetermined, PCT designated period, PCT designated expiration |
-| legalStatus | Detailed lifecycle status (Published, Examining, Granted, Abandoned, Withdrawn, Rejected, Expired, Revoked, Ceased, etc.) |
-| eventStatus | Legal events (Transfer, License, Pledge, Opposition, Litigation, Re-examination, etc.) |
-| legalDate | Date of the most recent legal status update |
+### 算力消耗预估
 
-## Usage Examples
+预计每次接口请求消耗 3 算力，按请求次数估算；批量返回的记录条数不作为该预估的乘数。拆分成多个请求或额外重新查询时，按新增请求次数累计预估，最终以实际扣除为准。
 
-**1. Check whether a single patent is still active**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **区分三层信息**：简单法律状态概括当前是否有效、失效、审中、未确认或处于 PCT 指定期；详细法律状态描述公开、实审、授权、放弃、撤回、驳回、到期、撤销、权利终止或恢复等生命周期阶段；法律事件描述转让、许可、质押、信托、异议、复审、海关备案、诉讼、保全、无效程序、口头审理、国防解密和一案双申等事项。全部原始枚举见 `references/api.md`。
+- **清晰展示结果**：用表格列出公开（公告）号、简单法律状态、详细法律状态和法律事件；批量查询先给汇总表，并注明实际返回的专利数量。
+- **翻译并保留原值**：按用户语言显示状态名称，并在括号中保留规范英文值；状态字段可能有多个值，应完整呈现。
+- **突出关键发现**：核查有效性时，在答复开头明确各专利的有效（Active）、失效（Inactive）或审中（Pending）状态；缺失或未确认时如实说明，不推断为有效或失效。
+- **注明数据时点**：返回 `legalDate` 时展示更新日期；时间戳单位以实际数据为准，不猜测未给出的精度。仅凭事件标签不能补造事件发生日期、顺序或完整历史。
+- **解释空结果与错误**：按 `references/api.md` 判断响应；可能原因包括公开号格式有误或数据库未收录，提示用户核对标识，继续请求遵守成本约束。
+- **说明覆盖边界**：数据依赖智慧芽（PatSnap）数据库覆盖范围，近期申请或变更可能尚未反映；当前标签不能替代完整法律判断，也不据未返回的事件认定事件从未发生。
+
+## 使用示例
+
+### 核查单个专利是否仍然有效
+
+用户：查询 CN115000000A 的法律状态。
+
+```json
+{"patentNumber": "CN115000000A"}
 ```
-Query the legal status for patent publication number CN115000000A.
+
+### 批量核查到期、撤销和有效状态
+
+用户：核查 US11000000B2、EP3000000A1 和 CN115000001A。
+
+```json
+{"patentNumber": "US11000000B2,EP3000000A1,CN115000001A"}
 ```
 
-**2. Batch-check legal status for multiple patents**
-```
-Look up the legal status for patents US11000000B2, EP3000000A1, and CN115000001A.
-```
+### 查看法律事件
 
-**3. Identify legal events on a patent**
-```
-Has patent CN115000000A been involved in any litigation, transfer, or pledge events?
-```
+用户：CN115000000A 是否涉及诉讼、转让或质押？
 
-**4. Determine if a patent has expired or been revoked**
-```
-Check if patent US10000000B1 is expired, revoked, or still in force.
+查询后从实际返回的法律事件中提取相关标签，连同当前法律状态和可用更新日期一起展示。
+
+### 通过内部专利 ID 查询
+
+```json
+{"patentId": "abc123,def456"}
 ```
 
-**5. Look up patents by patent ID**
-```
-Query the legal status for patent IDs abc123, def456.
-```
+## 使用反馈
 
-## Display Rules
-
-1. **Present data clearly**: Show results in a structured table. Include the publication number, simple legal status, detailed legal status, and legal events for each patent.
-2. **Translate status values**: When the user's language preference is clear, present status labels in that language while keeping the canonical English value in parentheses for precision.
-3. **Highlight key findings**: If the user is checking validity, prominently state whether each patent is Active, Inactive, or Pending at the top of the response.
-4. **Legal date context**: When `legalDate` is available, include it so users know how recent the status information is.
-5. **Error handling**: If the query fails or returns no results, explain the possible reasons (invalid patent number format, patent not found in database) and suggest the user double-check the input.
-6. **Volume notice**: When querying many patents, present a summary table and note the total count returned.
-## Important Limitations
-
-- **Up to 100 patents per request**: The maximum number of patent IDs or publication numbers in a single call is 100.
-- **At least one identifier required**: Either `patentId` or `patentNumber` must be provided; the request will fail if both are empty.
-- **Patent ID priority**: When both `patentId` and `patentNumber` are provided, the system uses `patentId` and ignores `patentNumber`.
-- **Data coverage**: Results depend on the Zhihuiya (PatSnap) database coverage; some very recent filings may not yet be reflected.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Queries about patent legal standing and events:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Is this patent still valid/active" | Simple legal status check |
-| "What is the legal status of patent XX" | Detailed status lookup |
-| "Has this patent been transferred or licensed" | Legal event query |
-| "Check if these patents are expired" | Batch validity check |
-| "Any litigation on this patent" | Legal event filtering |
-| "Patent legal status for CN115XXXXXXA" | Direct publication number lookup |
-
-**Not applicable** -- Needs beyond patent legal status:
-
-- Patent search by keyword, classification, or applicant name
-- Patent full-text or claims retrieval
-- Patent valuation or commercial analysis
-- Freedom-to-operate (FTO) analysis
-- Patent family or citation analysis
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利法律状态结果
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

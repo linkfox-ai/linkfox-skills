@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Amazon Image-Based Search - LinkFox Skill
+亚马逊以图搜图 - LinkFox 技能
 调用 /amazon/searchByImage 接口。
 
-Usage:
-  python amazon_search_by_image.py '<JSON parameters>'           # 自动：小结果全量；大结果写文件+摘要
-  python amazon_search_by_image.py '<JSON parameters>' --inline  # 强制全量打印到 stdout
+用法:
+  python amazon_search_by_image.py '<JSON 参数>' [--inline] [--no-cache]
 
 输出策略（脚本默认行为）：
   - **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-search-by-image-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
@@ -20,73 +19,24 @@ import os
 import sys
 import time
 import secrets
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
+from _api_runner import run_response
 
 
 API_PATH = "/amazon/searchByImage"
 SLUG = "linkfox-amazon-search-by-image"
 
-# 响应小于等于该字节数时，直接全量输出，不落文件
+# 响应不超过该 UTF-8 字节数时，落盘后全量输出
 SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
 
 _SESSION_CACHE: dict[str, str] = {}
 
-def get_api_base() -> str:
-    """网关基础地址：env LINKFOX_TOOL_GATEWAY 优先，缺省回退正式地址。"""
-    return (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
 
-def get_api_url():
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
-    return get_api_base() + API_PATH
-
-
-def get_api_key():
-    """
-获取配置在环境变量的API Key。
-如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-"""
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
-
-
-def call_api(params):
-    api_url = get_api_url()
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": os.environ.get("SESSION_ID", ""),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(
-        api_url,
-        data=data,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        try:
-            return json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
-        except Exception:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+def call_api(params, output_path=None):
+    """通过公共 run 调用；缓存仍由本业务入口管理。"""
+    output_path = output_path or _resolve_output_path(time.time())
+    _, result = run_response(API_PATH, SLUG, params, output_path)
+    return result
 
 
 def _cache_key(params):
@@ -144,11 +94,11 @@ def _find_main_list(obj):
 def summarize(result):
     """打印紧凑摘要。"""
     if not isinstance(result, dict):
-        print(f"Response type: {type(result).__name__}")
+        print(f"响应类型: {type(result).__name__}")
         print(json.dumps(result, ensure_ascii=False)[:500])
         return
 
-    print(f"Top-level keys: {list(result.keys())}")
+    print(f"顶层字段: {list(result.keys())}")
 
     for k in ("errcode", "errorCode", "code", "errmsg", "msg",
               "total", "totalCount", "count", "currentPage", "perPage",
@@ -160,9 +110,9 @@ def summarize(result):
 
     list_path, main_list = _find_main_list(result)
     if list_path is not None and main_list:
-        print(f"\nMain list field: `{list_path}` (length={len(main_list)})")
+        print(f"\n主要列表字段: `{list_path}`（条数={len(main_list)}）")
         sample = main_list[:3]
-        print(f"Sample (first {len(sample)} of {len(main_list)}):")
+        print(f"样本（共 {len(main_list)} 条中的前 {len(sample)} 条）:")
         print(json.dumps(sample, indent=2, ensure_ascii=False))
 
 def _ensure_meta(root: str, session_dir: str, date_str: str, sid: str, ts: float) -> None:
@@ -199,50 +149,14 @@ def _ensure_meta(root: str, session_dir: str, date_str: str, sid: str, ts: float
         pass
 
 def _linkfox_root() -> str:
-    """选择可写的 linkfox 根目录。
-
-    优先级：
-      1. $ACPX_WORKSPACES 第一个路径下的 linkfox/（真实的工作目录）
-      2. 当前工作目录下的 linkfox/
-      3. ~/linkfox/
-      4. $TMPDIR/linkfox/
-
-    当某路径只读（如 cwd 为 /tmp 或只读目录）时，自动回退到后序选项。
-    选定结果在进程内缓存，保证同一次运行内所有落盘路径稳定一致。
-    """
-    cached = _SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    # 1. ACPX_WORKSPACES（真实的工作目录，优先级最高）
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    # 2. 当前工作目录
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    # 3. 家目录
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    # 4. 临时目录
+    """按技能落盘约定仅使用当前目录；不可写时直接报错。"""
+    root = os.path.abspath(os.path.join(os.getcwd(), "linkfox"))
+    os.makedirs(root, exist_ok=True)
     import tempfile
-    candidates.append(os.path.join(tempfile.gettempdir(), "linkfox"))
+    with tempfile.TemporaryFile(dir=root):
+        pass
+    return root
 
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _SESSION_CACHE["_root"] = fallback
-    return fallback
 
 def _format_iso(ts: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(ts))
@@ -299,7 +213,6 @@ def resolve_data_path(slug: str, ts: float, ext: str = "json") -> str:
 
 def _resolve_output_path(ts):
     """落到 <cwd>/linkfox/<日期>/<session>/data/<slug>-<ts>.json，按 SESSION_ID 聚合到同一会话。"""
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "_shared"))
     return resolve_data_path(SLUG, ts)
 
 
@@ -316,7 +229,7 @@ def main():
 
     if not argv:
         print(
-            "Usage: amazon_search_by_image.py '<JSON parameters>' [--inline]",
+            "用法: amazon_search_by_image.py '<JSON 参数>' [--inline] [--no-cache]",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -324,39 +237,43 @@ def main():
     try:
         params = json.loads(argv[0])
     except json.JSONDecodeError as e:
-        print(f"Invalid parameter format: {e}", file=sys.stderr)
+        print(f"JSON 参数格式无效: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not isinstance(params, dict):
+        print("JSON 参数必须是对象", file=sys.stderr)
         sys.exit(1)
 
     if "aggregateByKeepaData" in params:
         params.pop("aggregateByKeepaData")
         print(
-            "Warning: aggregateByKeepaData is deprecated and was ignored; "
-            "query Keepa separately by ASIN.",
+            "警告: aggregateByKeepaData 已废弃并被忽略；请按 ASIN 单独查询 Keepa。",
             file=sys.stderr,
         )
 
+    ts = time.time()
+    out_path = _resolve_output_path(ts)
     cache_path = _cache_path(params)
     result = _load_cache(cache_path) if use_cache else None
     if result is None:
-        result = call_api(params)
+        result = call_api(params, output_path=out_path)
         if use_cache:
             _save_cache(cache_path, result)
 
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
-    ts = int(time.time())
-    out_path = _resolve_output_path(ts)
     try:
-        with open(out_path, "w") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             f.write(serialized)
-        print(f"Saved full response: {out_path} ({len(serialized)} bytes)")
-        if result.get("_cache", {}).get("hit"):
-            print(f"Cache hit: {cache_path}")
+        print(f"完整响应已保存: {out_path}（{len(serialized.encode('utf-8'))} 字节）")
+        if isinstance(result, dict) and result.get("_cache", {}).get("hit"):
+            print(f"缓存命中: {cache_path}")
     except OSError as e:
-        print(f"Failed to save to {out_path}: {e}", file=sys.stderr)
+        print(f"保存响应失败: {out_path}: {e}", file=sys.stderr)
+        sys.exit(1)
 
     if inline or len(serialized.encode("utf-8")) <= SMALL_THRESHOLD:
-        if result.get("_cache", {}).get("hit"):
-            print(f"Cache hit: {cache_path}", file=sys.stderr)
+        if isinstance(result, dict) and result.get("_cache", {}).get("hit"):
+            print(f"缓存命中: {cache_path}", file=sys.stderr)
         print(serialized)
     else:
         summarize(result)

@@ -1,19 +1,19 @@
 # `GET_VAT_TRANSACTION_DATA`
 
-> **分类**：15. Tax Reports  
-> **说明**：VAT transaction data  
-> **可用范围**：Seller only
+> **分类**：15. 税务报告  
+> **说明**：VAT 交易数据  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Tax Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#amazon-vat-transactions-report)（章节：**Amazon VAT Transactions Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [税务报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#amazon-vat-transactions-report)（章节：**Amazon VAT Transactions Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：是（相邻 Note 标明 restricted：下载结果需 RDT，参见官方 Tokens API）
-- **Role**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
-- **Requested/scheduled**：This report can only be requested and is available from the third of each month. If you request the report before the third of the month, then Amazon returns a status of FATAL.
-- **Report output type**：Tab-delimited flat file
-- **Store availability**：Germany, Spain, Italy, France, and UK.
-- **要点**：📘NoteThis reports ignores the marketplaceId parameter and will return data for all available stores. Provides detailed information for sales, returns, refunds, cross border inbound, and cross border fulfillment center transfers.
+- **角色**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
+- **按需/计划**：仅可按需请求，每月 3 日起可用；3 日前请求会返回 FATAL。
+- **输出格式**：制表符分隔的平面文件
+- **店铺范围**：Germany, Spain, Italy, France, and UK.
+- **要点**：忽略 marketplaceId 参数，返回所有可用站点的数据。提供销售、退货、退款、跨境入库与跨境仓库调拨明细。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#amazon-vat-transactions-report>
 

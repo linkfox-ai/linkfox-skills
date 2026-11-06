@@ -20,27 +20,27 @@ dateRange:
   dataRetentionDays: 95
 ---
 
-# SP Campaigns
+# SP 广告活动
 
-Campaign reports contain performance data broken down at the campaign level. Campaign reports include all campaigns of the requested sponsored ad type that have performance activity for the requested days. For example, a Sponsored Products campaign report returns performance data for all Sponsored Products campaigns that received impressions on the chosen dates. Campaign reports can also be grouped by ad group and placement for more granular data.
+活动报告按活动展示效果，覆盖指定广告类型在请求日期内有投放活动的全部活动。例如，SP 活动报告返回所选日期收到展示的全部 SP 活动数据。活动报告也可按广告组和广告位细分，具体可用分组以本文件配置为准。
 
-> **Note**
-> You can only use a filter that is supported by all groupBy values included in a report configuration. For campaign reports, this means that filters are only supported when you include a single groupBy value.
+> **说明**
+> 筛选器必须由请求中的全部 `groupBy` 值共同支持。对于活动报告，只有包含单个 `groupBy` 值时才支持筛选。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | spCampaigns |
-| Maximum date range | 31 days |
-| Data retention | 95 days |
-| timeUnit | SUMMARY or DAILY |
-| groupBy | campaign, adGroup, or campaignPlacement |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 95 天 |
+| timeUnit | SUMMARY / DAILY |
+| groupBy | campaign, adGroup, / campaignPlacement |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | impressions |
 | addToList |
@@ -82,105 +82,170 @@ Campaign reports contain performance data broken down at the campaign level. Cam
 | clickThroughRate |
 | spend |
 
-## Group by campaign
+## 分组：campaign
 
-**Additional metrics**: campaignName, campaignId, campaignStatus, campaignBudgetAmount, campaignBudgetType, campaignRuleBasedBudgetAmount, campaignApplicableBudgetRuleId, campaignApplicableBudgetRuleName, campaignBudgetCurrencyCode, topOfSearchImpressionShare
+附加指标：
 
-**Filters**:
-- campaignStatus (values: ENABLED, PAUSED, ARCHIVED)
+| 字段 |
+|---|
+| campaignName |
+| campaignId |
+| campaignStatus |
+| campaignBudgetAmount |
+| campaignBudgetType |
+| campaignRuleBasedBudgetAmount |
+| campaignApplicableBudgetRuleId |
+| campaignApplicableBudgetRuleName |
+| campaignBudgetCurrencyCode |
+| topOfSearchImpressionShare |
 
-## Group by adGroup
+**筛选**：
 
-**Additional metrics**: adGroupName, adGroupId, adStatus
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| campaignStatus | array[string] | ENABLED, PAUSED, ARCHIVED |
 
-**Filters**:
-- adStatus (values: ENABLED, PAUSED, ARCHIVED)
+## 分组：adGroup
 
-## Group by campaignPlacement
+附加指标：
 
-**Additional metrics**: placementClassification, campaignName, campaignId, campaignStatus, campaignBudgetAmount, campaignBudgetType, campaignRuleBasedBudgetAmount, campaignApplicableBudgetRuleId, campaignApplicableBudgetRuleName, campaignBudgetCurrencyCode, topOfSearchImpressionShare
+| 字段 |
+|---|
+| adGroupName |
+| adGroupId |
+| adStatus |
 
-**Filters**:
-- campaignSite (values: AmazonBusiness)
+**筛选**：
 
-> **Note**
-> Amazon Business performance data is available starting 9/5/2024 onwards only.
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| adStatus | array[string] | ENABLED, PAUSED, ARCHIVED |
+
+## 分组：campaignPlacement
+
+附加指标：
+
+| 字段 |
+|---|
+| placementClassification |
+| campaignName |
+| campaignId |
+| campaignStatus |
+| campaignBudgetAmount |
+| campaignBudgetType |
+| campaignRuleBasedBudgetAmount |
+| campaignApplicableBudgetRuleId |
+| campaignApplicableBudgetRuleName |
+| campaignBudgetCurrencyCode |
+| topOfSearchImpressionShare |
+
+**筛选**：
+
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| campaignSite | array[string] | AmazonBusiness |
+
+> **说明**
+> Amazon Business 效果数据仅从 2024-09-05 起可用。
 >
-> The Amazon Business Bid Adjustment and Reporting for Sponsored Products will be coming soon to Bulksheets.
+> SP 的 Amazon Business 竞价调整与报告属于 Bulksheets 的计划支持内容，实际可用性需单独确认。
 >
-> Other groupBy parameters apart from campaignPlacement are not supported.
+> Amazon Business 筛选场景仅支持 `campaignPlacement` 分组。
 
-## Sample calls
+## 配置示例
 
-### Campaign daily report grouped by campaign and ad group
+### campaign + adGroup 分组
 
-```bash
-curl --location --request POST 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxx' \
---data-raw '{
-    "name":"SP campaigns report 7/5-7/10",
-    "startDate":"2022-07-05",
-    "endDate":"2022-07-10",
-    "configuration":{
-        "adProduct":"SPONSORED_PRODUCTS",
-        "groupBy":["campaign","adGroup"],
-        "columns":["impressions","clicks","cost","campaignId","adGroupId","date"],
-        "reportTypeId":"spCampaigns",
-        "timeUnit":"DAILY",
-        "format":"GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SP campaigns report 7/5-7/10",
+  "startDate": "2022-07-05",
+  "endDate": "2022-07-10",
+  "configuration": {
+    "adProduct": "SPONSORED_PRODUCTS",
+    "groupBy": [
+      "campaign",
+      "adGroup"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "adGroupId",
+      "date"
+    ],
+    "reportTypeId": "spCampaigns",
+    "timeUnit": "DAILY",
+    "format": "GZIP_JSON"
+  }
+}
 ```
 
-### Campaign summary report grouped by campaign and placement
+### campaign + campaignPlacement 分组
 
-```bash
-curl --location --request POST 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxxx' \
---data-raw '{
-    "name":"SP campaigns report 7/5-7/10",
-    "startDate":"2022-07-05",
-    "endDate":"2022-07-10",
-    "configuration":{
-        "adProduct":"SPONSORED_PRODUCTS",
-        "groupBy":["campaign","campaignPlacement"],
-        "columns":["impressions","clicks","cost","campaignId","placementClassification","startDate","endDate"],
-        "reportTypeId":"spCampaigns",
-        "timeUnit":"SUMMARY",
-        "format":"GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SP campaigns report 7/5-7/10",
+  "startDate": "2022-07-05",
+  "endDate": "2022-07-10",
+  "configuration": {
+    "adProduct": "SPONSORED_PRODUCTS",
+    "groupBy": [
+      "campaign",
+      "campaignPlacement"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "placementClassification",
+      "startDate",
+      "endDate"
+    ],
+    "reportTypeId": "spCampaigns",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```
 
-### Campaign summary report grouped by placement for Amazon Business
+### campaignPlacement 分组（campaignSite=AmazonBusiness）
 
-```bash
-curl --location --request POST 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxxx' \
---data-raw '{
-     "name":"SP campaigns report 9/07-9/10",
-     "startDate":"2024-09-07",
-     "endDate":"2024-09-10",
-     "configuration":{
-         "adProduct":"SPONSORED_PRODUCTS",
-         "groupBy":["campaignPlacement"],
-         "columns":["impressions","clicks","cost","campaignId","placementClassification","startDate","endDate"],
-         "filters": [{"field":"campaignSite","values":["AmazonBusiness"]}],
-         "reportTypeId":"spCampaigns",
-         "timeUnit":"SUMMARY",
-         "format":"GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SP campaigns report 9/07-9/10",
+  "startDate": "2024-09-07",
+  "endDate": "2024-09-10",
+  "configuration": {
+    "adProduct": "SPONSORED_PRODUCTS",
+    "groupBy": [
+      "campaignPlacement"
+    ],
+    "columns": [
+      "impressions",
+      "clicks",
+      "cost",
+      "campaignId",
+      "placementClassification",
+      "startDate",
+      "endDate"
+    ],
+    "filters": [
+      {
+        "field": "campaignSite",
+        "values": [
+          "AmazonBusiness"
+        ]
+      }
+    ],
+    "reportTypeId": "spCampaigns",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```
 
-> **Note**
-> Grouping by campaignPlacement will generate the same report as grouping by campaign and campaignPlacement.
+> **说明**
+> 仅按 `campaignPlacement` 分组，与同时按 `campaign` 和 `campaignPlacement` 分组会生成相同报告。

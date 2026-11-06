@@ -11,24 +11,24 @@ dateRange:
   dataRetentionDays: 95
 ---
 
-# SP Purchased Product
+# SP 购买商品
 
-Sponsored Products purchased product reports contain performance data for products that were purchased, but were not advertised as part of a campaign. The purchased product report contains both targeting expressions and keyword IDs. After you have received your report, you can filter on keywordType to distinguish between targeting expressions and keywords.
+SP 购买商品报告提供被购买但未在该活动推广的商品效果，包含定向表达式与关键词 ID。下载后可按 `keywordType` 在本地筛选，区分定向表达式和关键词。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | spPurchasedProduct |
-| Maximum date range | 31 days |
-| Data retention | 95 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 95 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | asin |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | date |
 | startDate |
@@ -79,31 +79,39 @@ Sponsored Products purchased product reports contain performance data for produc
 | kindleEditionNormalizedPagesRead14d |
 | kindleEditionNormalizedPagesRoyalties14d |
 
-## Group by asin
+## 分组：asin
 
-**Additional metrics**: N/A
+无附加指标。
 
-**Filters**: N/A
+**筛选**： 无
 
-## Sample call
+## 配置示例
 
-```bash
-curl --location --request POST 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxxx' \
---data-raw '{
-    "name":"SP purchased product report 7/5-7/10",
-    "startDate":"2022-07-05",
-    "endDate":"2022-07-10",
-    "configuration":{
-        "adProduct":"SPONSORED_PRODUCTS",
-        "groupBy":["asin"],
-        "columns":["purchasedAsin","advertisedAsin","adGroupName","campaignName","sales14d","campaignId","adGroupId","keywordId","keywordType","keyword"],
-        "reportTypeId":"spPurchasedProduct",
-        "timeUnit":"SUMMARY",
-        "format":"GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SP purchased product report 7/5-7/10",
+  "startDate": "2022-07-05",
+  "endDate": "2022-07-10",
+  "configuration": {
+    "adProduct": "SPONSORED_PRODUCTS",
+    "groupBy": [
+      "asin"
+    ],
+    "columns": [
+      "purchasedAsin",
+      "advertisedAsin",
+      "adGroupName",
+      "campaignName",
+      "sales14d",
+      "campaignId",
+      "adGroupId",
+      "keywordId",
+      "keywordType",
+      "keyword"
+    ],
+    "reportTypeId": "spPurchasedProduct",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

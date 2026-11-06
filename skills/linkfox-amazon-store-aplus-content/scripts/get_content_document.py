@@ -19,12 +19,9 @@ from urllib.parse import quote
 from _spapi_aplus_common import (
     APLUS_PATH_PREFIX,
     ensure_auth_skill_available,
-        developer_proxy_get,
+    run_proxy,
     resolve_marketplace_id,
     encode_path_segment,
-    merge_success_json,
-    emit_result,
-    lf_inline_flag,
 )
 
 
@@ -38,8 +35,8 @@ def _norm_str_list(val: object, field: str) -> list[str]:
 
 def _build_query(marketplace_id: str, included_data_set: list[str]) -> str:
     parts = [f"marketplaceId={quote(marketplace_id, safe='')}"]
-    for item in included_data_set:
-        parts.append(f"includedDataSet={quote(item, safe='')}")
+    # 上游只保留重复键的首项；CSV 才能同时回读内容与元数据。
+    parts.append(f"includedDataSet={quote(','.join(included_data_set), safe=',')}")
     return "&".join(parts)
 
 
@@ -56,6 +53,10 @@ def main() -> None:
         params = json.loads(sys.argv[1])
     except json.JSONDecodeError as e:
         print(f"Invalid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not isinstance(params, dict):
+        print("JSON parameters must be an object", file=sys.stderr)
         sys.exit(1)
 
     if not params.get("skipDepCheck"):
@@ -88,15 +89,8 @@ def main() -> None:
     seller_id = str(params["sellerId"])
     region = str(params["region"])
 
-    proxy = developer_proxy_get(region, path, seller_id, query_string)
-    out: dict = {
-        "developerProxy": proxy,
-        "resolvedPath": path,
-        "queryString": query_string,
-    }
-    merge_success_json(out, proxy, "getContentDocumentResponse")
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy("getContentDocument", "GET", region, path, seller_id,
+              query_string, result_field="getContentDocumentResponse")
 
 
 if __name__ == "__main__":

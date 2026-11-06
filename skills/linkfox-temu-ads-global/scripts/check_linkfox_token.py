@@ -9,6 +9,8 @@ Usage:
 """
 
 import json
+import io
+from contextlib import redirect_stdout
 import sys
 
 from _temu_common import PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error, load_json_arg
@@ -29,16 +31,37 @@ def main():
         "accessToken": "probe",
         "type": "probe",
     }
-    result = call_temu_api(PROXY_URL, probe_body, timeout=150, linkfox_params=params)
+    response_meta = {}
+    with redirect_stdout(io.StringIO()):
+        result = call_temu_api(
+            PROXY_URL, probe_body, timeout=150, linkfox_params=params,
+            response_meta=response_meta,
+        )
 
-    if is_linkfox_auth_error(result):
+    status = response_meta.get("httpStatus")
+    errcode = str(result.get("errcode", "")).strip()
+    auth_error = status == 401 or errcode == "401" or is_linkfox_auth_error(result)
+    billing_error = status == 402 or errcode == "402"
+    if auth_error or not response_meta.get("normalResponse") or result.get("error"):
+        if auth_error:
+            reason = "linkfox_token_invalid"
+        elif billing_error:
+            reason = "linkfox_billing_error"
+        else:
+            reason = "gateway_probe_failed"
         print(
             json.dumps(
                 {
                     "ok": False,
-                    "reason": "linkfox_token_invalid",
-                    "message": result.get("message") or result,
-                    "hint": "Set LINKFOXAGENT_API_KEY or pass token in JSON.",
+                    "reason": reason,
+                    "message": result.get("message") or result.get("errmsg") or result.get("error") or result,
+                    "hint": (
+                        "Set LINKFOXAGENT_API_KEY or pass token in JSON; see references/onboarding.md."
+                        if auth_error else
+                        "See references/onboarding.md for billing errors."
+                        if billing_error else
+                        "Check the gateway response and network; do not automatically retry."
+                    ),
                 },
                 indent=2,
                 ensure_ascii=False,

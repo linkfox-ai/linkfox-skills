@@ -17,10 +17,10 @@ from _fbs_api_runner import run_fbs_api
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("Usage: query_br_shop_invoice_error.py '<JSON>'", file=sys.stderr)
+        print("Usage: query_br_shop_invoice_error.py '<JSON>' [--inline] [--no-cache]", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_fbs_api("query_br_shop_invoice_error", params, "query_br_shop_invoice_error.py"), indent=2, ensure_ascii=False))
+    run_fbs_api("query_br_shop_invoice_error", params, "query_br_shop_invoice_error.py")
 
 
 if __name__ == "__main__":

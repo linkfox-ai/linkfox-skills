@@ -1,4 +1,4 @@
-"""Run any Shopee Ads module API via developerProxy."""
+"""Shopee 广告参数映射、请求体校验与兼容结果加工。"""
 
 from __future__ import annotations
 
@@ -8,10 +8,12 @@ from typing import Any, List, Optional
 
 from _ads_endpoints import LIST_QUERY_FIELDS, ADS_ENDPOINTS, RESERVED_PARAM_KEYS
 from _shopee_ads_common import (
-    developer_proxy_call,
+    build_proxy_params,
     ensure_auth_skill_available,
+    is_normal_response,
     merge_shopee_body,
     qs_add,
+    run_proxy,
 )
 
 
@@ -81,7 +83,11 @@ def _build_post_body(params: dict, spec: dict) -> str:
     return json.dumps(body_obj, ensure_ascii=False, separators=(",", ":"))
 
 
-def run_ads_api(api_name: str, params: dict, caller: Optional[str] = None) -> dict:
+def run_ads_api(api_name: str, params: dict, caller: Optional[str] = None, *, emit: bool = False, inline: bool = False) -> dict:
+    if not isinstance(params, dict):
+        raise ValueError("JSON 参数必须为对象")
+    if "accessToken" in params or "appType" in params:
+        raise ValueError("禁止向 developerProxy 传 accessToken 或 appType；请先确认 AD 授权")
     if api_name not in ADS_ENDPOINTS:
         print(f"Unknown api: {api_name}. Valid: {', '.join(sorted(ADS_ENDPOINTS))}", file=sys.stderr)
         sys.exit(1)
@@ -107,6 +113,10 @@ def run_ads_api(api_name: str, params: dict, caller: Optional[str] = None) -> di
         query_string = _build_get_query(params)
     else:
         body = _build_post_body(params, spec)
+        # 发送前解析，避免广告写入已发生才因非法 JSON 退出。
+        body_obj = json.loads(body)
+        if isinstance(body_obj, dict) and ({"accessToken", "appType"} & body_obj.keys()):
+            raise ValueError("广告 body 禁止包含 accessToken 或 appType")
 
     shop_id = params.get("shopId")
     merchant_id = params.get("merchantId")
@@ -114,7 +124,7 @@ def run_ads_api(api_name: str, params: dict, caller: Optional[str] = None) -> di
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    request = build_proxy_params(
         path,
         method,
         shop_id=shop_id,
@@ -124,15 +134,44 @@ def run_ads_api(api_name: str, params: dict, caller: Optional[str] = None) -> di
         content_type=content_type,
     )
 
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
+    def transform(http_status, proxy):
+        out = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": http_status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = body_obj
+        if is_normal_response(http_status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
 
-    merge_shopee_body(out, proxy, response_key)
-    return out
+    return run_proxy(request, api_name, transform, emit=emit, inline=inline)
+
+
+def cli_main(api_name: Optional[str] = None) -> None:
+    """独立脚本和通用入口共享 JSON CLI，并支持统一输出选项。"""
+    args = sys.argv[1:]
+    if "--help" in args or "-h" in args:
+        print("用法：python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]")
+        if api_name is None:
+            print("通用入口必须提供 api；可用值：" + ", ".join(sorted(ADS_ENDPOINTS)))
+        return
+    params_args = [arg for arg in args if arg not in ("--inline", "--no-cache")]
+    if len(params_args) != 1:
+        print("用法：python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]", file=sys.stderr)
+        raise SystemExit(1)
+    try:
+        params = json.loads(params_args[0])
+        if not isinstance(params, dict):
+            raise ValueError("JSON 参数必须为对象")
+        selected = api_name or params.get("api")
+        if not selected:
+            raise ValueError("Missing required field: api")
+        run_ads_api(str(selected), params, sys.argv[0], emit=True, inline="--inline" in args)
+    except (ValueError, TypeError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1)

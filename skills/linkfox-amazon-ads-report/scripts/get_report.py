@@ -3,8 +3,7 @@
 Amazon Ads Report Retrieval - LinkFox Skill (linkfox-amazon-ads-report)
 =======================================================================
 
-Requests an Amazon Advertising report (SP/SB/SD/ST/DSP) via v3 API (two-stage:
-create → poll; the poll response carries the download URL, GZIP_JSON/CSV).
+获取 Amazon Ads SP / SB / SD 的 v3 异步报告：创建、轮询、下载与解压。
 
 脚本仅做"异步报告执行器"：带着调用方给的入参请求 Amazon，轮询到完成后下载解压。
 `adProduct` / `groupBy` / `columns` 由调用方（agent）在 `references/report-types/`
@@ -22,8 +21,8 @@ Usage:
 Required parameters:
   - profileId         number
   - region            NA / EU / FE
-  - reportTypeId      e.g. spCampaigns / sbAdGroup（见 references/report-types/<sp|sb>/）
-  - adProduct         SPONSORED_PRODUCTS / SPONSORED_BRANDS（来源 frontmatter）
+  - reportTypeId      e.g. spCampaigns / sbAdGroup（见 references/report-types/<sp|sb|sd>/）
+  - adProduct         SPONSORED_PRODUCTS / SPONSORED_BRANDS / SPONSORED_DISPLAY（来源 frontmatter）
   - groupBy           list（来源 frontmatter）
   - columns           list（来源 Base metrics 表）
   - startDate / endDate  YYYY-MM-DD
@@ -31,7 +30,8 @@ Required parameters:
 Optional parameters:
   - name              报告显示名（默认按 reportTypeId + 时间窗自动生成）
   - timeUnit          DAILY / SUMMARY，默认 SUMMARY
-  - format            默认 GZIP_JSON（DSP 等类型支持 CSV）
+  - format            默认 GZIP_JSON（部分类型支持 CSV / XLSX）
+  - filters           筛选数组，字段与取值从报告规格提取
   - pollInterval      默认 30 秒
   - maxAttempts       默认 15
   - skipDepCheck      跳过依赖检查（默认 false）
@@ -53,8 +53,12 @@ import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
 from pathlib import Path
+from urllib.parse import quote
+from contextlib import contextmanager, redirect_stdout
+import io
+
+import call_api as api
 
 
 # 生产默认走 tool-gateway.linkfox.com；开发/测试期可 export AMAZON_ADS_BASE_URL=<url> 覆盖
@@ -130,60 +134,113 @@ def ensure_auth_skill_available() -> None:
     sys.exit(DEPENDENCY_EXIT_CODE)
 
 
-def get_api_key():
-    """
-    获取配置在环境变量的API Key。
-    如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-    """
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
+SLUG = "linkfox-amazon-ads-report"
+
+
+@contextmanager
+def local_output_context():
+    """固定落盘于 cwd，支持 LINKFOX_TOOL_GATEWAY 和 AMAZON_ADS_BASE_URL 网关环境变量。"""
+    root = Path.cwd() / "linkfox"
+    root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryFile(dir=root):
+        pass
+    old_root = api._SESSION_CACHE.get("_root")
+    old_gateway = os.environ.get("LINKFOX_TOOL_GATEWAY")
+    old_resolver = api._resolve_output_path
+    api._SESSION_CACHE["_root"] = str(root)
+    os.environ["LINKFOX_TOOL_GATEWAY"] = old_gateway or os.environ.get("AMAZON_ADS_BASE_URL") or API_BASE_URL
+    # 轮询可在同秒完成，使用微秒文件名避免相互覆盖。
+    api._resolve_output_path = lambda slug, _ts: api.resolve_data_path(slug, time.time())
+    try:
+        yield
+    finally:
+        api._resolve_output_path = old_resolver
+        if old_root is None:
+            api._SESSION_CACHE.pop("_root", None)
+        else:
+            api._SESSION_CACHE["_root"] = old_root
+        if old_gateway is None:
+            os.environ.pop("LINKFOX_TOOL_GATEWAY", None)
+        else:
+            os.environ["LINKFOX_TOOL_GATEWAY"] = old_gateway
+
+
+def gateway_ok(http_status, payload):
+    """与公共响应码基本规则一致；不混用外层 HTTP 和上游 httpStatus。"""
+    if http_status is None or not 200 <= http_status < 300 or not isinstance(payload, dict):
+        return False
+    code = payload.get("errcode")
+    if code is None:
+        return True
+    if isinstance(code, str):
+        code = code.strip()
+        if not code:
+            return True
+        if len(code) != 3 or not code.isascii() or not code.isdigit():
+            return False
+        code = int(code)
+    return type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
 
 
 def call_api(endpoint: str, params: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    req = Request(
-        endpoint,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+    """由 run 执行 HTTP 与原始响应落盘；捕获返回值供异步业务编排使用。"""
+    transport = api.call_api
+    captured = {}
+
+    def capture(api_path, request_params):
+        status, payload = transport(api_path, request_params)
+        captured.update(status=status, payload=payload)
+        # 公共 runner 只处理对象；保留异常正文，避免其 .get() 中断落盘与报错。
+        runner_payload = payload if isinstance(payload, dict) else {
+            "error": "LinkFox 响应必须为 JSON 对象",
+            "details": payload,
+        }
+        return status, runner_payload
+
+    operation = "create" if params["method"] == "POST" else "status"
+    with local_output_context():
+        api.call_api = capture
+        try:
+            # 报告请求禁用响应缓存；强制完整的内部输出以兼容 runner，日志转入 stderr。
+            output = io.StringIO()
+            with redirect_stdout(output):
+                api.run("/amazonAds/developerProxy", f"{SLUG}-{operation}",
+                        argv=[json.dumps(params, ensure_ascii=False), "--no-cache", "--inline"])
+            saved_line = output.getvalue().splitlines()
+            if saved_line:
+                print(saved_line[0], file=sys.stderr)
+        finally:
+            api.call_api = transport
+    status, payload = captured["status"], captured["payload"]
+    result = dict(payload) if isinstance(payload, dict) else {"details": payload}
+    result["transportHttpStatus"] = status
+    if not gateway_ok(status, payload):
+        result.setdefault("error", result.get("errmsg") or f"LinkFox HTTP {status}: 未正常响应")
+    return result
+
+
+
+def parse_profile_id(value) -> int:
+    """校验正数 Long；数字字符串可规范化，布尔和小数不可转成账号ID。"""
+    if isinstance(value, str):
+        value = value.strip()
+        if not value.isascii() or not value.isdecimal():
+            raise ValueError("profileId 必须为Long范围内的正整数或数字字符串")
+        value = int(value)
+    if type(value) is not int or not 0 < value <= 9223372036854775807:
+        raise ValueError("profileId 必须为Long范围内的正整数或数字字符串")
+    return value
 
 
 def developer_proxy_call(region: str, path: str, method: str, profile_id: int,
                          query_string: str = None, body: str = None,
-                         content_type: str = "application/json",
-                         access_token: str = "") -> dict:
+                         content_type: str = "application/json") -> dict:
     params = {
         "region": region,
         "path": path,
         "method": method,
-        "profileId": profile_id,
+        "profileId": parse_profile_id(profile_id),
     }
-    if access_token:
-        params["amzAccessToken"] = access_token
     if query_string:
         params["queryString"] = query_string
     if body:
@@ -196,8 +253,8 @@ def developer_proxy_call(region: str, path: str, method: str, profile_id: int,
 def create_report(region: str, profile_id: int,
                   report_type_id: str, start_date: str, end_date: str,
                   name: str, ad_product: str, group_by: list, columns: list,
-                  time_unit: str, fmt: str) -> dict:
-    print(f"📊 Requesting SP report: {report_type_id} ({start_date} ~ {end_date})", file=sys.stderr)
+                  time_unit: str, fmt: str, filters=None) -> dict:
+    print(f"📊 Requesting Ads report: {report_type_id} ({start_date} ~ {end_date})", file=sys.stderr)
     body = {
         "name": name,
         "startDate": start_date,
@@ -211,6 +268,8 @@ def create_report(region: str, profile_id: int,
             "format": fmt,
         },
     }
+    if filters is not None:
+        body["configuration"]["filters"] = filters
     return developer_proxy_call(
         region=region,
         path="reporting/reports",
@@ -224,7 +283,7 @@ def create_report(region: str, profile_id: int,
 def get_report_status(region: str, profile_id: int, report_id: str) -> dict:
     return developer_proxy_call(
         region=region,
-        path=f"reporting/reports/{report_id}",
+        path=f"reporting/reports/{quote(str(report_id), safe='')}",
         method="GET",
         profile_id=profile_id,
     )
@@ -320,6 +379,10 @@ def main():
         print(f"❌ Invalid JSON: {e}", file=sys.stderr)
         sys.exit(1)
 
+    if not isinstance(params, dict):
+        print("参数必须为 JSON 对象", file=sys.stderr)
+        sys.exit(1)
+
     if not params.get("skipDepCheck"):
         ensure_auth_skill_available()
 
@@ -354,7 +417,11 @@ def main():
             )
         sys.exit(1)
 
-    profile_id = int(params["profileId"])
+    try:
+        profile_id = parse_profile_id(params["profileId"])
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
     region = params["region"]
     report_type_id = params.get("reportTypeId")
     start_date = params.get("startDate")
@@ -386,7 +453,9 @@ def main():
     poll_interval = params.get("pollInterval", DEFAULT_POLL_INTERVAL)
     max_attempts = params.get("maxAttempts", DEFAULT_MAX_ATTEMPTS)
 
-    # Step 1: 取令牌
+    # 预先确认当前工作目录可写，不回退系统临时目录。
+    with local_output_context():
+        pass
 
     # Step 2: 获取待轮询的 reportId —— 两种来源
     #   (a) 调用方直接传 reportId（例如上次超时但报告仍在跑）
@@ -397,7 +466,8 @@ def main():
     else:
         create_result = create_report(region, profile_id,
                                       report_type_id, start_date, end_date,
-                                      name, ad_product, group_by, columns, time_unit, fmt)
+                                      name, ad_product, group_by, columns, time_unit, fmt,
+                                      filters=params.get("filters"))
         if "error" in create_result:
             print(f"❌ Failed to create report: {create_result}", file=sys.stderr)
             sys.exit(1)
@@ -428,6 +498,9 @@ def main():
             except Exception as e:
                 print(f"❌ Failed to parse create response body: {e}", file=sys.stderr)
                 sys.exit(1)
+            if not isinstance(body, dict):
+                print(f"❌ 创建响应 body 必须为 JSON 对象: {raw_body}", file=sys.stderr)
+                sys.exit(1)
             report_id = body.get("reportId")
             if not report_id:
                 print(f"❌ No reportId in create response: {body}", file=sys.stderr)
@@ -454,6 +527,9 @@ def main():
         except Exception as e:
             print(f"❌ Failed to parse status body: {e}", file=sys.stderr)
             sys.exit(1)
+        if not isinstance(status_body, dict):
+            print(f"❌ 查询响应 body 必须为 JSON 对象: {status_result.get('body')}", file=sys.stderr)
+            sys.exit(1)
         status = (status_body.get("status") or "").upper()
         last_status = status
         print(f"[{attempt}/{max_attempts}] Status: {status}", file=sys.stderr)
@@ -474,7 +550,7 @@ def main():
                 "failureReason": failure_reason,
                 "pollAttempts": attempt,
             }
-            print(json.dumps(failure_result, indent=2, ensure_ascii=False))
+            emit_result(failure_result, lf_inline_flag())
             print(f"❌ Report generation failed: {failure_reason or status}", file=sys.stderr)
             sys.exit(1)
         elif status in ("PENDING", "PROCESSING", "IN_QUEUE", "IN_PROGRESS"):
@@ -520,7 +596,7 @@ def main():
                 },
             },
         }
-        print(json.dumps(timeout_result, indent=2, ensure_ascii=False))
+        emit_result(timeout_result, lf_inline_flag())
         print(
             f"⏳ 客户端轮询 {max_attempts} 次（~{elapsed}s）仍未完成，报告本身未坏。"
             f"stdout 已输出 reportId 与续跑参数。Agent 应询问用户是否继续等待"
@@ -530,7 +606,9 @@ def main():
         sys.exit(2)
 
     # Step 4: 下载 + 解压
-    temp_dir = tempfile.mkdtemp(prefix="amazon_ads_report_")
+    with local_output_context():
+        data_dir = Path(api.resolve_data_path(SLUG, time.time())).parent
+        temp_dir = tempfile.mkdtemp(prefix="amazon_ads_report_", dir=data_dir)
     print(f"📁 Temporary directory: {temp_dir}", file=sys.stderr)
     download_path = os.path.join(temp_dir, "report_download")
     if not download_report(download_url, download_path):
@@ -627,183 +705,23 @@ def main():
             print("✓ Local HTTP server stopped.", file=sys.stderr)
 
 
-if __name__ == "__main__":
-    main()
+def lf_inline_flag() -> bool:
+    return "--inline" in sys.argv[1:]
 
 
-# ===== LinkFox 统一输出层（落盘 + 摘要，无缓存）=====
-# 本块追加到共享模块（_xxx_common.py）末尾，供各入口脚本调用 emit_result()。
-# 依赖：json, os, sys, time, secrets, tempfile（共享模块通常已 import json/os/sys；
-#       若缺 time/secrets/tempfile，请在文件顶部补 import）。
-
-import time as _lf_time
-import secrets as _lf_secrets
-import tempfile as _lf_tempfile
-
-LF_SMALL_THRESHOLD = 8000
-_LF_SESSION_CACHE: dict = {}
-
-SLUG = "linkfox-amazon-ads-report"
-
-
-def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
-
-
-def _lf_iso(ts: float) -> str:
-    return _lf_time.strftime("%Y-%m-%dT%H:%M:%S%z", _lf_time.localtime(ts))
-
-
-def _lf_session_id(ts: float) -> str:
-    env = os.environ.get("SESSION_ID")
-    if env:
-        return env.strip()
-    if "_auto" not in _LF_SESSION_CACHE:
-        _LF_SESSION_CACHE["_auto"] = (
-            _lf_time.strftime("%H%M%S", _lf_time.localtime(ts)) + "-" + _lf_secrets.token_hex(3)
-        )
-    return _LF_SESSION_CACHE["_auto"]
-
-
-def _lf_find_main_list(obj):
-    best = (None, None, -1)
-
-    def walk(node, path):
-        nonlocal best
-        if isinstance(node, list):
-            if len(node) > best[2]:
-                best = (path, node, len(node))
-        elif isinstance(node, dict):
-            for k, v in node.items():
-                walk(v, f"{path}.{k}" if path else k)
-
-    walk(obj, "")
-    return best[0], best[1]
-
-
-def _lf_summarize(result) -> None:
-    if not isinstance(result, dict):
-        print(f"Response type: {type(result).__name__}")
-        print(json.dumps(result, ensure_ascii=False)[:500])
-        return
-    print(f"Top-level keys: {list(result.keys())}")
-    for k in ("errcode", "errorCode", "code", "errmsg", "msg",
-              "total", "totalCount", "count", "currentPage", "perPage",
-              "costToken", "costTime", "success"):
-        if k in result:
-            v = result[k]
-            if isinstance(v, (int, float, bool, str)):
-                print(f"  {k}: {v}")
-    list_path, main_list = _lf_find_main_list(result)
-    if list_path is not None and main_list:
-        print(f"\nMain list field: `{list_path}` (length={len(main_list)})")
-        sample = main_list[:3]
-        print(f"Sample (first {len(sample)} of {len(main_list)}):")
-        print(json.dumps(sample, indent=2, ensure_ascii=False))
-
-
-def _lf_ensure_meta(root: str, session_dir: str, date_str: str, sid: str, ts: float) -> None:
-    meta_path = os.path.join(session_dir, "_meta.json")
-    if os.path.exists(meta_path):
-        return
-    meta = {
-        "session_id": sid,
-        "date": date_str,
-        "started_at": _lf_iso(ts),
-        "skills_called": [],
-        "deliverables": [],
-        "data_files": [],
-        "media_files": [],
-    }
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
-    try:
-        with open(os.path.join(root, "index.jsonl"), "a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "session_id": sid,
-                        "date": date_str,
-                        "path": os.path.relpath(session_dir, root),
-                        "started_at": _lf_iso(ts),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except OSError:
-        pass
-
-
-def _lf_update_meta(session_dir: str, *, skill: str, file_rel: str, ts: float) -> None:
-    meta_path = os.path.join(session_dir, "_meta.json")
-    try:
-        with open(meta_path, encoding="utf-8") as f:
-            meta = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return
-    if skill and skill not in meta.setdefault("skills_called", []):
-        meta["skills_called"].append(skill)
-    files = meta.setdefault("data_files", [])
-    if file_rel not in files:
-        files.append(file_rel)
-    meta["last_used_at"] = _lf_iso(ts)
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
-
-
-def emit_result(result, slug=SLUG, inline=False):
-    """落盘完整响应到 linkfox/<date>/<session>/data/<slug>-<ts>.json；大响应只打印摘要。无缓存。"""
+def emit_result(result, inline=False):
+    """最终业务结果完整落盘；小响应全量打印，大响应沿用公共摘要。"""
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
-    ts = _lf_time.time()
-    date_str = _lf_time.strftime("%Y-%m-%d", _lf_time.localtime(ts))
-    sid = _lf_session_id(ts)
-    root = _lf_root()
-    session_dir = os.path.join(root, date_str, sid)
-    os.makedirs(session_dir, exist_ok=True)
-    _lf_ensure_meta(root, session_dir, date_str, sid, ts)
-    data_dir = os.path.join(session_dir, "data")
-    os.makedirs(data_dir, exist_ok=True)
-    out = os.path.join(data_dir, f"{slug}-{int(ts * 1_000_000)}.json")
-    try:
-        with open(out, "w", encoding="utf-8") as f:
-            f.write(serialized)
-        print(f"Saved full response: {out} ({len(serialized)} bytes)")
-    except OSError as e:
-        print(f"Failed to save to {out}: {e}", file=sys.stderr)
-    _lf_update_meta(session_dir, skill=slug, file_rel=os.path.relpath(out, session_dir), ts=ts)
-    if inline or len(serialized.encode("utf-8")) <= LF_SMALL_THRESHOLD:
+    with local_output_context():
+        out = Path(api.resolve_data_path(SLUG, time.time()))
+        out.write_text(serialized, encoding="utf-8")
+    print(f"Saved full response: {out} ({len(serialized.encode('utf-8'))} bytes)")
+    if inline or len(serialized.encode("utf-8")) <= api.SMALL_THRESHOLD:
         print(serialized)
     else:
-        _lf_summarize(result)
+        api.summarize(result)
+    sys.stdout.flush()
 
 
-def lf_inline_flag() -> bool:
-    """入口脚本用：从 sys.argv 判断是否 --inline。"""
-    return "--inline" in sys.argv
+if __name__ == "__main__":
+    main()

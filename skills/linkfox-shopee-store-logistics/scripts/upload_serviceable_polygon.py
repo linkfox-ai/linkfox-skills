@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: upload_serviceable_polygon.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_logistics_api("upload_serviceable_polygon", params, "upload_serviceable_polygon.py"), indent=2, ensure_ascii=False))
+    run_logistics_api("upload_serviceable_polygon", params, "upload_serviceable_polygon.py")
 
 
 if __name__ == "__main__":

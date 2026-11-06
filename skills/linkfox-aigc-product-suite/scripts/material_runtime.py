@@ -1,4 +1,4 @@
-"""Shared orchestration; HTTP API calls and response storage stay in official entries."""
+"""商品套图编排、素材去重与下载；LinkFox 调用交给公共执行器。"""
 import contextlib
 import importlib.util
 import io
@@ -62,7 +62,8 @@ def invoke(path, params, no_cache=False):
 
 
 def api_error(result):
-    return bool(result.get("error")) or result.get("errcode") not in (None, 0, 200, "0", "200") or result.get("code") not in (None, 0, 200, "0", "200")
+    from _aigc_runtime import is_error
+    return is_error(result)
 
 
 def prepare_media(params, scripts):
@@ -109,7 +110,10 @@ def download_results(result, scripts):
                     record[key] = item[key]
             items.append(record)
             url = item.get("url")
-            if item.get("status") not in (None, 1) or not isinstance(url, str) or not url:
+            if item.get("status") not in (None, 1):
+                continue
+            if not isinstance(url, str) or not url:
+                record["downloadError"] = "生成结果缺少有效下载地址；保留查询响应，不重新生成"
                 continue
             temporary = media / (".download-" + str(time.time_ns()))
             try:

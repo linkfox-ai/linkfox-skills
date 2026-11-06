@@ -1,152 +1,104 @@
 ---
 name: linkfox-tsearch-search
-description: 网络搜索、在线检索、实时信息查询、搜索引擎搜索、Reddit等社区平台讨论、外部站点帖子和热门话题。当用户需要搜索网络上的最新信息、查找近期新闻或趋势、查询实时数据、通过搜索引擎调研话题、浏览Reddit或社区讨论、发现外部站点帖子和热门话题、获取任何在线内容、web search, online lookup, real-time information, news search, Reddit, trending topics, search engine时触发此技能。即使用户未明确说"搜索"，只要其意图涉及获取实时网络信息或核实当前事实，也应触发此技能。
+description: 搜索实时网络信息并提取结果页面正文，用于近期新闻、热点趋势、当前事实核实、Reddit 等社区讨论、外部站点帖子、产品评价及竞品或品牌调研。用户需要获取当前外部网络信息时适用，无需明确说“搜索”。不适用于内部数据库或结构化数据集查询、本地上传文件分析、已有数据计算转换、无需外部资料的创作或 Amazon ABA 数据查询。
 ---
 
-# Web Search & Online Retrieval
+# 网页搜索与在线信息检索
 
-This skill performs web searches and automatically extracts content from the results. It returns unstructured content ready for direct summarization — no sandbox analysis is needed.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool acts as an intelligent web search engine that both searches and extracts page content in a single call. When you use this tool, it automatically:
+检索当前外部网络信息，并根据搜索结果中已提取的页面正文直接概述。
+用户表达“查一下”“了解一下”或“调研”时，先判断其需要的是当前网络信息，还是内部数据、历史数据库或本地文件。
 
-1. Performs a web search using the provided keyword
-2. Extracts and returns content from the top results
+**场景速查**
 
-**Important**: Because content extraction is built-in, there is no need to separately call a browser/web-extract tool after using this search. The returned content is unstructured text — summarize it directly rather than attempting structured data analysis.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 搜索一下、查找资料、Google 一下 | 直接网页搜索或一般信息检索。 |
+| 最近有什么新闻、今天发生了什么 | 近期新闻与突发事件。 |
+| Reddit 上大家怎么评价、外站有哪些热门帖子 | 社区讨论、论坛帖子及用户观点。 |
+| 现在流行什么 | 社交媒体热点与趋势。 |
+| 核实目前价格或最新事实 | 实时数据查询与事实核实。 |
+| 找产品或服务的评价 | 公开评价与使用体验。 |
+| 调研竞品或比较品牌 | 从公开网页获取竞争信息。 |
 
-## Response Data Fields
+### 边界
 
-| Field | Description | Type | Example |
-|-------|-------------|------|---------|
-| searchList | Array of search results | array | (see below) |
-| searchList[].score | Relevance score of the result | number | 0.95 |
-| searchList[].title | Page title of the result | string | "Best wireless chargers 2026" |
-| searchList[].url | URL of the source page | string | "https://example.com/article" |
-| searchList[].content | Extracted page content | string | "Full text of the article..." |
-| costToken | Tokens consumed by this request | integer | 1500 |
+内部数据库、结构化数据集和 Amazon ABA 数据应使用对应数据查询工具；本地文件分析、已有数据计算转换及无需外部资料的创作不属于本技能范围。
 
-## Parameter Guide
+## 前置条件
 
-This tool accepts a single parameter:
+确定用户要核实的主题，以及必要的年份、地区、站点和目标语言。完整参数与使用限制见 `references/api.md`。
 
-| Parameter | Type | Required | Max Length | Description |
-|-----------|------|----------|------------|-------------|
-| keyword | string | Yes | 1000 chars | The search query keyword(s) |
+## 搜索与内容提取流程
 
-### Tips for Effective Keywords
+1. 围绕用户问题组织明确的搜索关键词，按需加入年份、地区、领域或社区名称。
+2. 执行搜索；工具会在同一次调用中搜索并自动提取靠前结果的页面正文。
+3. 按 `references/api.md` 判断响应，阅读已提取正文并直接概述，结合来源标题、链接和时效回答用户。
+4. 多角度调研可分别组织不同关键词，按用户范围和成本约束继续。空结果或内容不相关时，提出更具体的替代搜索词，不自动连续试探。
 
-1. **Be specific**: "best budget wireless earbuds 2026" works better than "earbuds"
-2. **Use natural language or key phrases**: Both "what is the capital of France" and "capital France" are valid
-3. **Include context when needed**: Add qualifiers like year, region, or domain to narrow results
-4. **Combine terms for precision**: "iPhone 16 Pro Max battery life review" targets more relevant pages than "iPhone battery"
-5. **Use English or the target language**: Match the language to the content you want to find
+## 执行方式
 
-### Keyword Examples by Scenario
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/tsearch_web_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口请求消耗 6 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**Current events / News**
-```
-latest AI regulation policy 2026
-```
+### 输出策略
 
-**Product research**
-```
-best robot vacuum cleaner under $300 Reddit
-```
+- 始终保存完整响应，目标路径为 `<输出根目录>/<YYYY-MM-DD>/<session>/data/linkfox-tsearch-search-<timestamp>.json`。输出根目录优先选择 `ACPX_WORKSPACES` 第一个路径下可写的 `linkfox/`，其次选择 `<cwd>/linkfox/`；`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`；请求前检查输出目录及响应文件是否可创建，预检失败时报错退出，不发请求。详见 `references/api.md`。
+- 序列化后的响应体不超过 8000 个 UTF-8 字节：保存后，将完整 JSON 打印到标准输出。
+- 序列化后的响应体超过 8000 个 UTF-8 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**Technical lookup**
-```
-Python asyncio tutorial beginner guide
-```
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**Community discussions / Reddit**
-```
-Reddit best budget mechanical keyboard 2026
-```
+## 执行规则
 
-**Trending topics**
-```
-trending topics on social media this week
-```
+### 算力消耗预估
 
-**Fact checking / Real-time data**
-```
-current Bitcoin price USD
-```
+6 算力 / 次
 
-**Competitor or brand research**
-```
-Anker vs Baseus portable charger comparison
-```
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## Display Rules
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-1. **Summarize directly**: The returned content is unstructured text. Provide a clear, concise summary rather than dumping raw content.
-2. **Cite sources**: Always include the title and URL of each result so the user can verify information.
-3. **Present multiple perspectives**: When results contain diverse viewpoints, present them fairly.
-4. **Indicate freshness**: Note when information appears to be very recent or potentially outdated.
-5. **Handle empty results**: If the search returns no results or irrelevant content, suggest refining the keyword and offer alternative search terms.
-6. **No sandbox analysis**: Never route the output to a data analysis sandbox. Summarize inline.
-## Important Limitations
+### 解决认证和算力问题
 
-- **Unstructured output**: Results are free-form text, not structured data tables. Do not attempt SQL-like processing.
-- **No persistent storage**: Search results are not saved to any database for later querying.
-- **Single keyword input**: The tool takes one keyword string per call. For multi-faceted research, make multiple calls with different keywords.
-- **Content extraction included**: Do not call a separate web-extract tool on these results — extraction is already done.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## User Expression & Scenario Quick Reference
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**Applicable** — Any task requiring live web information:
+### 约束与建议
 
-| User Says | Scenario |
-|-----------|----------|
-| "Search for...", "Look up...", "Google..." | Direct web search |
-| "What's the latest news on..." | Current events lookup |
-| "Find information about..." | General information retrieval |
-| "What are people saying about... on Reddit" | Community discussion research |
-| "What's trending right now" | Trending topic discovery |
-| "Check the current price of..." | Real-time data lookup |
-| "Find reviews for..." | Product/service review search |
-| "What happened with... today" | Breaking news / recent events |
-| "Research competitors for..." | Competitive intelligence via web |
-| "External site posts about...", "Hot threads on..." | Forum and community content |
+- **搜索与正文提取一体完成**：结果已经包含页面内容，不再对这些结果另行调用浏览器或网页提取工具。
+- **直接概述正文**：正文是非结构化文本，给出清晰简洁的归纳，不倾倒原文，不送入数据分析沙箱，也不做 SQL 式处理。外层 JSON 仅用于读取结果和来源。
+- **逐项注明来源**：展示每条结果的页面标题与 URL，便于用户核实。
+- **公平呈现观点**：结果包含不同观点时，如实呈现，不把社区讨论当作一致结论。
+- **说明信息时效**：指出内容是否较新或可能过时，不将缓存结果描述为刚获取的信息；缓存与刷新约定见 `references/api.md`。
+- **提高搜索精度**：使用具体主题和组合词，例如产品型号与“电池续航评测”；自然语言问题和关键词短语均可，按目标内容选择英文或对应语言。
+- **解释空结果**：无结果或内容不相关时，建议细化关键词并给出备选表达，继续调用遵守成本约束。
+- **区分文件缓存与数据库**：搜索结果不写入数据库供后续查询；脚本的本地 JSON 落盘与缓存用于复用本次结果。
 
-**Not applicable** — Tasks that don't need web search:
+## 使用示例
 
-- Querying internal databases or structured datasets (use appropriate data query tools)
-- Analyzing files the user has already uploaded locally
-- Performing calculations or data transformations on existing data
-- Generating creative content without needing external references
-- Tasks involving Amazon ABA data (use the ABA data explorer instead)
+| 场景 | 搜索关键词示例 |
+|------|----------------|
+| 近期新闻 | `latest AI regulation policy 2026` |
+| 产品评价 | `best robot vacuum cleaner under $300 Reddit` |
+| 技术资料 | `Python asyncio tutorial beginner guide` |
+| 社区讨论 | `Reddit best budget mechanical keyboard 2026` |
+| 热门话题 | `trending topics on social media this week` |
+| 实时数据核实 | `current Bitcoin price USD` |
+| 品牌比较 | `Anker vs Baseus portable charger comparison` |
 
-**Boundary judgment**: When users say "find out about" or "research", if they need current, external web information, this skill applies. If they are referring to internal data, historical databases, or local file analysis, it does not apply.
+## 使用反馈
 
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## 算力消耗规则
-
-消耗 6 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

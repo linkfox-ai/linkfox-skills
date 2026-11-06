@@ -1,26 +1,15 @@
 #!/usr/bin/env python3
-"""
-Shopee Store — upload_shipping_proof
+"""Shopee 店铺 — 上传退货运单凭证（upload_shipping_proof）。
 
-官方: https://open.shopee.com/documents/v2/v2.returns.upload_shipping_proof?module=102&type=1
-
-入参说明见 references/apis/upload-shipping-proof.md。
+官方：https://open.shopee.com/documents/v2/v2.returns.upload_shipping_proof?module=102&type=1
+入参与响应见 references/apis/upload-shipping-proof.md。
 """
 
-from __future__ import annotations
-
-import json
-import sys
-
-from _returns_api_runner import run_returns_api
+from _returns_api_runner import run_cli
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: upload_shipping_proof.py '<JSON>'", file=sys.stderr)
-        sys.exit(1)
-    params = json.loads(sys.argv[1])
-    print(json.dumps(run_returns_api("upload_shipping_proof", params, "upload_shipping_proof.py"), indent=2, ensure_ascii=False))
+    run_cli("upload_shipping_proof")
 
 
 if __name__ == "__main__":

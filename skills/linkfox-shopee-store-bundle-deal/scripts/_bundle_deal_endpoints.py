@@ -1,10 +1,9 @@
-"""Shopee Bundle Deal module API registry (v2.bundle_deal.*)."""
+"""Shopee Bundle Deal 模块操作注册表（v2.bundle_deal.*）。"""
 
 from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-SHOPEE_DOC_MODULE = "110"
 
 class BundleDealEndpoint(TypedDict, total=False):
     path: str
@@ -19,61 +18,61 @@ BUNDLE_DEAL_ENDPOINTS: dict[str, BundleDealEndpoint] = {
         "path": "api/v2/bundle_deal/add_bundle_deal",
         "method": "POST",
         "response_key": "addBundleDeal",
-        "notes": 'Create bundle deal promotion; pass full body',
+        "notes": '创建套装优惠；传入完整请求体',
     },
     "add_bundle_deal_item": {
         "path": "api/v2/bundle_deal/add_bundle_deal_item",
         "method": "POST",
         "response_key": "addBundleDealItem",
-        "notes": 'Add items to bundle deal',
+        "notes": '添加参与套装优惠的商品',
     },
     "get_bundle_deal_list": {
         "path": "api/v2/bundle_deal/get_bundle_deal_list",
         "method": "GET",
         "response_key": "getBundleDealList",
-        "notes": 'List bundle deals; pagination/status filters',
+        "notes": '查询套装优惠列表；支持分页和状态筛选',
     },
     "get_bundle_deal": {
         "path": "api/v2/bundle_deal/get_bundle_deal",
         "method": "GET",
         "response_key": "getBundleDeal",
-        "notes": 'Bundle deal detail by bundle_deal_id',
+        "notes": '按 bundle_deal_id 查询活动详情',
     },
     "get_bundle_deal_item": {
         "path": "api/v2/bundle_deal/get_bundle_deal_item",
         "method": "GET",
         "response_key": "getBundleDealItem",
-        "notes": 'Items in bundle deal',
+        "notes": '查询活动内商品',
     },
     "update_bundle_deal": {
         "path": "api/v2/bundle_deal/update_bundle_deal",
         "method": "POST",
         "response_key": "updateBundleDeal",
-        "notes": 'Update bundle deal settings',
+        "notes": '更新套装优惠设置',
     },
     "update_bundle_deal_item": {
         "path": "api/v2/bundle_deal/update_bundle_deal_item",
         "method": "POST",
         "response_key": "updateBundleDealItem",
-        "notes": 'Update bundle deal item settings',
+        "notes": '更新活动商品设置',
     },
     "end_bundle_deal": {
         "path": "api/v2/bundle_deal/end_bundle_deal",
         "method": "POST",
         "response_key": "endBundleDeal",
-        "notes": 'End bundle deal early',
+        "notes": '提前结束套装优惠',
     },
     "delete_bundle_deal": {
         "path": "api/v2/bundle_deal/delete_bundle_deal",
         "method": "POST",
         "response_key": "deleteBundleDeal",
-        "notes": 'Delete bundle deal',
+        "notes": '删除套装优惠',
     },
     "delete_bundle_deal_item": {
         "path": "api/v2/bundle_deal/delete_bundle_deal_item",
         "method": "POST",
         "response_key": "deleteBundleDealItem",
-        "notes": 'Remove items from bundle deal',
+        "notes": '移除活动商品',
     },
 }
 
@@ -83,11 +82,4 @@ RESERVED_PARAM_KEYS = frozenset({
 
 LIST_QUERY_FIELDS = frozenset()
 
-def official_doc_url(api_name: str) -> str:
-    return (
-        f"https://open.shopee.com/documents/v2/v2.bundle_deal.{api_name}"
-        f"?module={SHOPEE_DOC_MODULE}&type=1"
-    )
 
-def list_api_names() -> list[str]:
-    return sorted(BUNDLE_DEAL_ENDPOINTS.keys())

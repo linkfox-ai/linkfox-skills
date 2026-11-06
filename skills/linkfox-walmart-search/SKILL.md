@@ -1,178 +1,137 @@
 ---
 name: linkfox-walmart-search
-description: 按关键词、品类、价格区间等条件搜索和浏览沃尔玛商品listing。当用户提到Walmart商品搜索、沃尔玛商品listing、沃尔玛价格对比、沃尔玛竞品分析、沃尔玛选品调研、沃尔玛市场数据、在沃尔玛上查找商品、Walmart search, Walmart products, Walmart product selection, Walmart pricing, Walmart competitors, Walmart market时触发此技能。即使用户未明确提及"Walmart搜索"，只要其需求涉及在沃尔玛上搜索商品、查看商品可售状态、对比沃尔玛价格或分析沃尔玛商品listing，也应触发此技能。
+description: 按关键词、类目和价格区间搜索沃尔玛当前商品列表，查看价格、评分、评论数、卖家、配送和可售状态，支持商品浏览、价格对比、竞品发现和选品调研。不适用于卖家账号或广告管理、订单和购买历史、评论正文分析、历史价格与销量趋势、联盟或密钥管理。
 ---
 
-# Walmart Product Search
+# Walmart 商品搜索
 
-This skill enables you to search and retrieve Walmart product listing data, helping e-commerce sellers and researchers extract actionable insights from Walmart's marketplace.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Walmart Product Search retrieves real-time product listing data from Walmart's marketplace. It supports keyword-based search, category browsing, price filtering, sorting options, and device-specific results. This is a direct search tool that returns current product listings as they appear on Walmart.com.
+搜索和浏览 Walmart.com 当前商品列表，按用户需求比较价格、评分、卖家、库存与配送信息。沃尔玛选品或竞品研究涉及当前商品列表时，使用本技能。
 
-**Search modes**: You can search by keyword, by category ID, or by combining both. At least one of `keyword` or `categoryId` must be provided.
+**场景速查**
 
-**Sorting options**: Results can be sorted by `best_seller`, `best_match`, `price_low` (price ascending), or `price_high` (price descending). When no sort is specified, the default relevance-based ranking applies.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 在沃尔玛找一下这个商品 | 关键词搜索。 |
+| 看这个类目的商品 | 类目浏览，也可结合关键词缩小范围。 |
+| 找便宜的、低于 50 美元的商品 | 价格区间筛选与价格比较。 |
+| 看畅销商品或最匹配的结果 | 使用接口支持的排序方式。 |
+| 这个商品在指定门店有货吗 | 查看指定门店返回的可售状态。 |
+| 找评分高的同类竞品 | 比较本次返回商品的评分与评论数，不宣称全站评分排名。 |
+| 看手机端结果或配送条件 | 按设备或配送需求检索。 |
 
-**Pagination**: Results are paginated with a default of page 1. The maximum page number is 100.
+本技能不处理卖家账号与广告运营、订单跟踪和购买历史、评论正文、历史价格或销量数据、联盟及密钥管理。
 
-## Parameter Guide
+## 前置条件
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| keyword | string | No* | Search keyword (max 1024 chars). *At least one of keyword or categoryId must be provided |
-| categoryId | string | No* | Category ID for browsing. *At least one of keyword or categoryId must be provided. Use `0` for all departments |
-| sort | string | No | Sort order: `best_seller`, `best_match`, `price_low`, `price_high` |
-| page | integer | No | Page number (1-100, default 1) |
-| minPrice | number | No | Minimum price filter |
-| maxPrice | number | No | Maximum price filter |
-| spelling | boolean | No | Enable spelling correction (default true) |
-| softSort | boolean | No | Sort by relevance (default true). Set to false to disable |
-| storeId | string | No | Store ID for store-specific results |
-| device | string | No | Device type: `desktop` (default), `tablet`, `mobile` |
-| facet | string | No | Filter facets in `key:value` format, separated by `\|\|` |
-| nextDayEnabled | boolean | No | Show only NextDay delivery results (default false) |
-| jsonRestrictor | string | No | JSON field restrictor to limit returned fields |
+确定用户要找的商品或类目，以及本次需要的价格、门店、设备和配送范围。完整字段与使用限制见 `references/api.md`。
 
-## Product Data Fields
+## 查询流程
 
-| Field | Description |
-|-------|-------------|
-| productId | Walmart product ID |
-| usItemId | US item ID |
-| title | Product title |
-| description | Product description |
-| price | Current price |
-| wasPrice | Original price before discount |
-| currency | Currency code |
-| minPrice | Minimum price (for multi-option products) |
-| pricePerUnitAmount | Per-unit price amount |
-| pricePerUnit | Per-unit price label |
-| rating | Average rating score |
-| reviews | Total number of reviews |
-| sellerName | Seller name |
-| sellerId | Seller ID |
-| imageUrl | Product thumbnail URL |
-| productPageUrl | Product detail page URL |
-| sponsored | Whether the listing is a sponsored ad |
-| outOfStock | Whether the product is out of stock |
-| freeShipping | Whether free shipping is available |
-| twoDayShipping | Whether two-day shipping is available |
-| freeShippingWithWalmartPlus | Free shipping with Walmart Plus membership |
-| shippingPrice | Shipping cost |
-| multipleOptionsAvailable | Whether the product has multiple variants |
-| variantSwatches | List of variant options with names and images |
+1. 根据用户目标选择关键词搜索、类目浏览或组合检索；按需加入价格、排序、门店、设备和其他筛选，具体约定见 `references/api.md`。
+2. 执行本次查询，先查看摘要和返回范围，再从保存的完整响应提取所需商品字段。
+3. 用表格展示商品与对比结果，说明库存、赞助标识和分页情况。空结果或失败时解释原因，后续检索遵守成本约束。
 
-## Usage Examples
+## 执行方式
 
-**1. Basic keyword search**
-Search for products matching a keyword:
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/walmart_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次接口调用消耗 15 算力，脚本提供 24 小时本地缓存，重复查询优先复用已保存的数据。用户已明确指定的多页或多条件检索按其范围执行；失败或空结果时，不擅自更换条件、翻页或重复调用连续试探。超出已明确的检索范围或需要绕过缓存刷新时，先说明额外消耗；高频调用按下方付费提醒处理。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-walmart-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+15 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解数据范围**：结果是 Walmart.com 当前商品列表快照，可能随门店、设备和筛选条件变化；不是历史价格、历史销量或订单数据。
+- **清晰展示数据**：表格包含标题、价格、评分、评论数和卖家，并附 `productPageUrl` 商品链接。用户未要求分析时，不附加主观购买建议。
+- **标明币种和折扣**：价格带货币符号；返回 `wasPrice` 时同时展示现价与原价，不把它解释为历史价格序列。
+- **提供评分背景**：评分与评论数一起展示，例如“4.5 分，1,230 条评价”；不能据评分和数量推断评论正文或用户痛点。
+- **标明可售与广告状态**：明确标记缺货商品和赞助商品，区分自然与付费展示；配送、运费、会员免运费和多选项信息按实际返回说明。
+- **说明分页情况**：展示返回的 `total` 和本次商品范围；记录数较大时提示可继续翻页，额外查询遵守成本约束。
+- **解释错误原因**：依据接口文档判断响应，清楚说明失败原因，可建议扩大关键词或调整筛选，但不得自动连续试探；未返回的价格、库存或其他字段不补造。
+
+## 使用示例
+
+### 基础关键词搜索
+
 ```json
 {"keyword": "wireless earbuds"}
 ```
 
-**2. Price-filtered search**
-Find products within a specific price range:
+### 限定价格区间
+
 ```json
 {"keyword": "laptop stand", "minPrice": 10, "maxPrice": 50}
 ```
 
-**3. Best sellers in a category**
-Browse top-selling products sorted by popularity:
+### 查看畅销商品
+
 ```json
 {"keyword": "coffee maker", "sort": "best_seller"}
 ```
 
-**4. Budget shopping -- lowest price first**
-Find the cheapest options for a product:
+### 按价格从低到高浏览
+
 ```json
 {"keyword": "phone case", "sort": "price_low"}
 ```
 
-**5. Category browsing with pagination**
-Browse a specific category across multiple pages:
+### 查看类目下一页
+
 ```json
 {"categoryId": "976759_976787", "page": 2}
 ```
 
-**6. Store-specific inventory check**
-Search products available at a specific Walmart store:
+### 查看指定门店结果
+
 ```json
 {"keyword": "tent", "storeId": "1862"}
 ```
 
-**7. Mobile results simulation**
-See results as they appear on mobile devices:
+### 查看移动端结果
+
 ```json
 {"keyword": "water bottle", "device": "mobile"}
 ```
 
-**8. Combined filters**
-Apply multiple filters for precise results:
+### 组合价格与匹配排序
+
 ```json
 {"keyword": "running shoes", "minPrice": 30, "maxPrice": 80, "sort": "best_match"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data clearly**: Show search results in well-structured tables with key fields (title, price, rating, reviews, seller). Do not add subjective buying recommendations unless the user asks for analysis.
-2. **Price formatting**: Always display prices with the currency symbol. When `wasPrice` is present, show both current and original prices to highlight discounts.
-3. **Rating context**: Display ratings alongside review counts so users can judge credibility (e.g., "4.5 stars from 1,230 reviews").
-4. **Stock status**: Clearly flag out-of-stock items so users do not overlook availability issues.
-5. **Sponsored labeling**: Mark sponsored products so users can distinguish organic from paid placements.
-6. **Pagination guidance**: When results have a large total count, inform the user of the total and suggest paginating with the `page` parameter to see more.
-7. **Error handling**: When a query fails, explain the error clearly and suggest adjusting parameters (e.g., broadening the keyword, changing filters).
-8. **Product links**: When showing results, include `productPageUrl` so users can navigate directly to the Walmart product page.
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Walmart product listing queries:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Search Walmart for XX" | Keyword search |
-| "Find cheap XX on Walmart" | Price-filtered search |
-| "What's the best-selling XX on Walmart" | Best-seller sort |
-| "Compare prices for XX on Walmart" | Price comparison |
-| "Is XX in stock at Walmart" | Availability check |
-| "Show me Walmart products under $50" | Price-range browse |
-| "What are the top-rated XX on Walmart" | Rating-based filtering |
-| "Walmart competitor products for XX" | Competitive research |
-
-**Not applicable** -- Needs beyond Walmart product listings:
-- Walmart seller account management or advertising
-- Walmart order tracking or purchase history
-- Product reviews text analysis (only rating/count is available)
-- Historical price tracking or price trend analysis
-- Walmart affiliate or API key management
-
-**Boundary judgment**: When users say "product research" or "competitor analysis" in the context of Walmart, if their need involves searching for current product listings, prices, ratings, or seller information, then this skill applies. If they are asking about advertising strategy, account metrics, or historical sales data, it does not apply.
-
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## 算力消耗规则
-
-消耗 15 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -31,12 +31,22 @@ def main():
     }
     result = call_temu_api(PROXY_URL, probe_body, timeout=150, linkfox_params=params)
 
-    if is_linkfox_auth_error(result):
+    status = result.get("transportHttpStatus")
+    errcode = result.get("errcode")
+    errcode_empty = errcode is None or isinstance(errcode, str) and not errcode.strip()
+    errcode_ok = errcode_empty or (
+        type(errcode) in (int, float) and 200 <= errcode < 300 and errcode % 1 == 0
+    ) or (
+        isinstance(errcode, str) and errcode.strip().isascii()
+        and errcode.strip().isdigit() and 200 <= int(errcode.strip()) < 300
+    )
+    transport_ok = type(status) is int and 200 <= status < 300 and errcode_ok and not result.get("error")
+    if is_linkfox_auth_error(result) or not transport_ok:
         print(
             json.dumps(
                 {
                     "ok": False,
-                    "reason": "linkfox_token_invalid",
+                    "reason": "linkfox_token_invalid" if is_linkfox_auth_error(result) else "gateway_probe_failed",
                     "message": result.get("message") or result,
                     "hint": "Set LINKFOXAGENT_API_KEY or pass token in JSON.",
                 },
@@ -51,7 +61,7 @@ def main():
             {
                 "ok": True,
                 "linkfoxToken": masked,
-                "gatewayReachable": True,
+                "gatewayReachable": transport_ok,
                 "note": "LinkFox user Token accepted by gateway.",
             },
             indent=2,

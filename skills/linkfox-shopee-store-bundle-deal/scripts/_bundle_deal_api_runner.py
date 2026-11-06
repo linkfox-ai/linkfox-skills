@@ -1,4 +1,4 @@
-"""Run any Shopee Bundle Deal module API via developerProxy."""
+"""经 developerProxy 编排 Shopee Bundle Deal 操作，封装查询参数和请求体。"""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import sys
 from typing import Any, List, Optional
 
 from _bundle_deal_endpoints import LIST_QUERY_FIELDS, BUNDLE_DEAL_ENDPOINTS, RESERVED_PARAM_KEYS
+import _shopee_bundle_deal_common as common
 from _shopee_bundle_deal_common import (
     developer_proxy_call,
     ensure_auth_skill_available,
@@ -107,6 +108,11 @@ def run_bundle_deal_api(api_name: str, params: dict, caller: Optional[str] = Non
         query_string = _build_get_query(params)
     else:
         body = _build_post_body(params, spec)
+        try:
+            json.loads(body)
+        except (json.JSONDecodeError, TypeError):
+            print("POST body / requestBody 必须是有效 JSON", file=sys.stderr)
+            sys.exit(1)
 
     shop_id = params.get("shopId")
     merchant_id = params.get("merchantId")
@@ -128,6 +134,7 @@ def run_bundle_deal_api(api_name: str, params: dict, caller: Optional[str] = Non
         "api": api_name,
         "developerProxy": proxy,
         "resolvedPath": path,
+        "transportHttpStatus": common.LAST_HTTP_STATUS,
     }
     if query_string:
         out["queryString"] = query_string
@@ -136,3 +143,34 @@ def run_bundle_deal_api(api_name: str, params: dict, caller: Optional[str] = Non
 
     merge_shopee_body(out, proxy, response_key)
     return out
+
+
+def script_main(api_name: Optional[str] = None) -> None:
+    """专用脚本和通用脚本共用 JSON CLI，统一保存加工结果。"""
+    label = f"{api_name}.py" if api_name else "bundle_deal_api.py"
+    usage = f"用法: {label} '<JSON 参数>' [--inline] [--no-cache]"
+    if not api_name:
+        usage += "\n可用 api: " + ", ".join(sorted(BUNDLE_DEAL_ENDPOINTS))
+    args = sys.argv[1:]
+    if "--help" in args or "-h" in args:
+        print(usage)
+        return
+    inline = "--inline" in args
+    positional = [a for a in args if a not in ("--inline", "--no-cache")]
+    if len(positional) != 1:
+        print(usage, file=sys.stderr)
+        sys.exit(1)
+    try:
+        params = json.loads(positional[0])
+    except json.JSONDecodeError as exc:
+        print(f"JSON 参数格式错误: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(params, dict):
+        print("JSON 参数必须为对象", file=sys.stderr)
+        sys.exit(1)
+    name = api_name or params.get("api")
+    if not name:
+        print("Missing required field: api", file=sys.stderr)
+        sys.exit(1)
+    result = run_bundle_deal_api(str(name), params, label)
+    common.emit_result(result, slug=common.SLUG + "-" + str(name), inline=inline)

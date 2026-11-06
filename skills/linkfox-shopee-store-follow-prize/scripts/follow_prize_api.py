@@ -16,7 +16,6 @@ import sys
 
 from _follow_prize_api_runner import run_follow_prize_api
 from _follow_prize_endpoints import list_api_names
-from _shopee_follow_prize_common import emit_result, lf_inline_flag
 
 
 def main() -> None:
@@ -27,8 +26,7 @@ def main() -> None:
     if not params.get("api"):
         print("Missing required field: api", file=sys.stderr)
         sys.exit(1)
-    inline = lf_inline_flag()
-    emit_result(run_follow_prize_api(str(params["api"]), params, "follow_prize_api.py"), inline)
+    run_follow_prize_api(str(params["api"]), params, "follow_prize_api.py")
 
 
 if __name__ == "__main__":

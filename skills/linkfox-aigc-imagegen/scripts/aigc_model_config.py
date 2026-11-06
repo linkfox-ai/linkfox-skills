@@ -1,9 +1,7 @@
-"""Query-only public AIGC catalog. Never validate or rewrite generation requests.
+"""仅查询公开 AIGC 目录，不校验或改写生成请求。
 
-Canonical source: linkfox-skills-repository skills/linkfox-aigc-imagegen/scripts/aigc_model_config.py.
-Deploy a byte-for-byte
-copy and aigc_model_fallbacks.json beside each generation script; no cross-skill imports.
-Only the public config host receives GETs, never gateway credentials or session headers.
+模型模块和静态兜底文件随本技能独立分发，不跨技能导入。
+配置域名仅接收公共 GET，不接收生成密钥或会话身份请求头。
 """
 from __future__ import annotations
 
@@ -16,7 +14,7 @@ import time
 from pathlib import Path
 from http.client import HTTPException
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from _aigc_api import request_json
 
 # Production default only; resolve LINKFOX_AI_API_URL separately for each query.
 CONFIG_BASE_URL = "https://ai-api.linkfox.com"
@@ -131,10 +129,11 @@ def load_catalog(kind, allowed_models=None):
     endpoint = "/image/model/config/list" if kind == "image" else "/image/video/model/config/list"
     catalog = {"source": "remote", "bizType": biz_type, "entry": kind}
     try:
-        request = Request(get_config_base_url() + endpoint + "?bizType=" + str(biz_type),
-                          headers={"Referer": "https://wiki.linkfox.com/", "User-Agent": "LinkFox-Skill/2.0"}, method="GET")
-        with urlopen(request, timeout=CONFIG_TIMEOUT) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        status, payload = request_json(endpoint, {}, "linkfox-aigc-imagegen-model-config",
+                                       timeout=CONFIG_TIMEOUT,
+                                       public_url=get_config_base_url() + endpoint + "?bizType=" + str(biz_type))
+        if status is None or not 200 <= status < 300 or payload.get("error"):
+            raise ValueError("模型列表 HTTP 或协议响应异常")
         if not isinstance(payload, dict) or payload.get("code") not in (200, "200") or not isinstance(payload.get("data"), list):
             raise ValueError("模型列表响应状态或结构错误")
         # [] and all-maintenance are valid successes: do NOT revive static models.
@@ -154,6 +153,7 @@ def parse_model_args(argv):
     parser.add_argument("--list-models", action="store_true")
     parser.add_argument("--allowed-models")
     parser.add_argument("--inline", action="store_true")
+    parser.add_argument("--no-cache", action="store_true")
     options, remaining = parser.parse_known_args(argv)
     try:
         allowed = None if options.allowed_models is None else json.loads(options.allowed_models)

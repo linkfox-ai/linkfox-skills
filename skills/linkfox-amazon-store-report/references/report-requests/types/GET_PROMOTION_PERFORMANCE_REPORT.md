@@ -1,19 +1,19 @@
 # `GET_PROMOTION_PERFORMANCE_REPORT`
 
-> **分类**：11. Performance Reports  
-> **说明**：Promotion performance  
-> **可用范围**：Both
+> **分类**：11. 绩效报告  
+> **说明**：促销表现  
+> **可用范围**：卖家与 Vendor
 
 ## 官方索引（Report type values）
 
 - **Schema 专页（请求体、`reportOptions`、结果 JSON）**：[`promotionReport.md`](../promotionReport.md)
-- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[Performance Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-performance#promotions-performance-report)（章节：**Promotions Performance Report**）
+- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[绩效报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-performance#promotions-performance-report)（章节：**Promotions Performance Report**）
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Selling Partner Insights](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#selling-partner-insights), [Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
-- **Availability**：Sellers who have the Selling Partner Insights Selling Partner API role and vendors who have the Brand Analytics Selling Partner API role who are also registered in Amazon's Brand Registry.
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：JSON
+- **角色**：[Selling Partner Insights](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#selling-partner-insights), [Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
+- **可用范围**：具备 Selling Partner Insights 角色的卖家，以及具备 Brand Analytics 角色且已参加 Amazon 品牌备案的 Vendor。
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：JSON
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-performance#promotions-performance-report>
 

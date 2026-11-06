@@ -27,7 +27,7 @@
 
 **代码节点默认 JS**：两者都能实现时用 `CustomFunction`（JS）。只有下游要按字段取结果、要 pandas / 解析 PDF·Word·Excel·PPT·HTML、或用户明确要 Python 时才用 `CustomPythonFunction`（引用 `output.result.<字段>`）；延时 sleep 永远用 JS。两者都跑在沙箱里、单次执行上限默认 30 分钟（部署配置 `E2B_SANDBOX_TIMEOUT`，不是无限），选型细则见 `nodes-integration-and-output.md` 末尾。
 
-选择规则：涉及亚马逊授权店铺 / 业务定时启动 / 邮件、飞书、钉钉通知 / 跨境专家平台 / Linkfox 多维表 / CSV / Excel 读取等场景时，**优先使用 LinkFox 自定义节点**，不要用原生 HTTP + CustomFunction 手工模拟。调 Linkfox 工具网关（`tool-gateway.linkfox.com`）或其他 Linkfox 内部服务时用 `LinkfoxHTTP`（只填相对路径，认证头自动注入），只有调第三方外部 API 才用原生 `HTTP`。
+选择规则：涉及亚马逊授权店铺 / 业务定时启动 / 邮件、飞书、钉钉通知 / 跨境专家平台 / Linkfox 多维表 / CSV / Excel 读取等场景时，**优先使用 LinkFox 自定义节点**，不要用原生 HTTP + CustomFunction 手工模拟。**亚马逊店铺数据默认 `DataReader`**（Listing / 订单 / 广告表现、含全量逐页读）；只有它不透传的五个参数（`storeName`、`countryCode`、`orderId`、订单侧 `keyword` / `title`）才用 `LinkfoxHTTP` 直调，不要自己用 `LinkfoxHTTP` 重写这三个查询接口。调 Linkfox 工具网关（`tool-gateway.linkfox.com`）或其他 Linkfox 内部服务时用 `LinkfoxHTTP`（只填相对路径，认证头自动注入），只有调第三方外部 API 才用原生 `HTTP`。
 
 **涉及模型 / AI 推理的场景（对话生成、语言理解判断、动态分支等）优先使用 `CrossBorderExpert`**（调用跨境专家平台已配置的专家，见 `nodes-linkfox-custom.md`），**不要默认生成原生 `Agent` / `LLM` / `ConditionAgent`**。仅当需求确实依赖 `CrossBorderExpert` 不支持的能力——Tool 调用、RAG 知识库检索、Structured Output，或需要节点内直接由 LLM 做动态自然语言分支判断——才允许使用原生 `Agent` / `LLM` / `ConditionAgent` 兜底，并在方案里点明兜底原因（"因为需要 XX 能力所以用原生节点，不是默认选择"）。`Tool` / `Retriever` 不受此限制：它们是确定性调用 / 检索，不是"调用模型做推理"。
 

@@ -1,234 +1,108 @@
 ---
 name: linkfox-ebay-search
-description: 在多个eBay国际站点上搜索和浏览商品listing。当用户提到eBay商品搜索、eBay listing查询、eBay价格对比、eBay市场浏览、eBay已售商品、eBay拍卖搜索、eBay选品调研、eBay search, eBay products, eBay pricing, eBay competitors, sold items, eBay auctions, eBay market analysis时触发此技能。即使用户未明确提及"eBay"，只要其需求涉及在eBay上搜索商品、对比eBay价格、查找已成交listing或分析eBay市场数据，也应触发此技能。
+description: 在多个 eBay 国际站点搜索和浏览商品，按关键词、价格、成色、购买方式、地区和类目筛选，查看商品价格、运费、卖家评价、已售数量和竞拍信息。适用于 eBay 找品、竞品研究、价格对比、已售商品与拍卖检索；不适用于卖家账号管理、店铺经营分析、刊登编辑、订单追踪、购买历史、广告管理或跨平台比价。
 ---
 
-# eBay Product Search
+# eBay 商品搜索
 
-This skill guides you on how to search and retrieve eBay product listing data, helping e-commerce sellers and buyers find products, compare prices, and analyze market trends across eBay's global marketplaces.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-eBay Product Search provides access to eBay's front-end product listing data. It supports keyword-based search with rich filtering options including price range, item condition, buying format, sort order, seller location, and more. Results include product details such as title, price, shipping info, seller rating, sold quantity, and item condition.
+搜索 eBay 前台商品，比较当前刊登、已售或已结束刊登的可用数据。
+用户希望找商品、核对价格、查看拍卖或研究特定国家市场时使用，无需明确说出“商品搜索”。
 
-**Marketplace logic**: The `ebayDomain` parameter controls which regional eBay site is searched. The default is `ebay.com` (US). When a user refers to a country or region, map it to the corresponding eBay domain (e.g., UK -> `ebay.co.uk`, Germany -> `ebay.de`).
+**场景速查**
 
-**Buying format**: eBay supports multiple buying formats -- `Auction` for bid-based listings, `BIN` (Buy It Now) for fixed-price listings, and `BO` (Best Offer) for negotiable listings.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 在 eBay 上找无线耳机 | 关键词商品检索。 |
+| 这个型号在 eBay 卖多少钱 | 已售或已结束刊登的价格研究。 |
+| 找最便宜的全新商品，最好包邮 | 结合成色、运费和价格排序比较。 |
+| 看看即将结束的古董手表拍卖 | 拍卖检索与竞拍信息展示。 |
+| 看英国或德国站有哪些商品 | 按目标站点和卖家所在地浏览。 |
+| 找这个类目的翻新商品或下一页结果 | 按类目、成色或用户指定页码检索。 |
 
-## Parameter Guide
+## 前置条件
 
-| Parameter | Type | Required | Description | Default |
-|-----------|------|----------|-------------|---------|
-| keyword | string | No | Search keyword, up to 1024 characters | - |
-| ebayDomain | string | No | eBay marketplace domain | ebay.com |
-| page | integer | No | Page number for pagination | 1 |
-| pageSize | integer | No | Results per page: 25, 50, 100, or 200 | 50 |
-| orderBy | string | No | Sort order (see Sort Options below) | 12 (Best Match) |
-| priceMin | number | No | Minimum price filter | - |
-| priceMax | number | No | Maximum price filter | - |
-| itemCondition | string | No | Item condition code(s), pipe-separated (e.g., `1000\|3000`) | - |
-| buyingFormat | string | No | Buying format: Auction, BIN, or BO | - |
-| showOnly | string | No | Display filters, comma-separated (e.g., `Sold,Complete`) | - |
-| location | integer | No | Seller location country code | - |
-| prefLoc | string | No | Preferred location scope: 1=Domestic, 2=Regional, 3=Worldwide | - |
-| zipCode | string | No | ZIP/postal code for regional delivery filtering | - |
-| categoryId | integer | No | eBay category ID | - |
-| noCache | boolean | No | Bypass cache for fresh results | false |
+确认用户的搜索目标和目标国家或地区；将用户表达的站点、价格、成色、购买方式等意图映射为筛选条件，具体定义见 `references/api.md`。
 
-### Sort Options
+## 检索流程
 
-| Code | Meaning |
-|------|---------|
-| 12 | Best Match (default) |
-| 1 | Time: ending soonest |
-| 10 | Time: newly listed |
-| 15 | Price + Shipping: lowest first |
-| 16 | Price + Shipping: highest first |
-| 2 | Price: lowest first |
-| 3 | Price: highest first |
-| 7 | Distance: nearest first |
-| 18 | Condition: new first |
-| 19 | Condition: used first |
+1. 明确用户需要当前商品、已售价格研究还是拍卖信息，确认站点及必要筛选条件。
+2. 按 `references/api.md` 准备一次检索，优先复用同一参数组合的已有结果。
+3. 先读取摘要，再从落盘文件提取所需字段，按用户目标比较商品。
+4. 说明结果覆盖范围；失败、空结果或需要更多页时，解释原因和额外消耗，由用户决定是否继续。
 
-### Item Condition Codes
+## 执行方式
 
-| Code | Condition |
-|------|-----------|
-| 1000 | New |
-| 1500 | New other (see details) |
-| 1750 | New with defects |
-| 2000 | Certified Refurbished |
-| 2010 | Excellent - Refurbished |
-| 2020 | Very Good - Refurbished |
-| 2030 | Good - Refurbished |
-| 2500 | Seller refurbished / Remanufactured |
-| 2750 | Like New |
-| 3000 | Used / Pre-owned |
-| 7000 | For parts or not working |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/ebay_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具每次调用消耗 15 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### showOnly Filter Values
+### 输出策略
 
-| Value | Meaning |
-|-------|---------|
-| Complete | Completed listings |
-| Sold | Sold listings only |
-| FR | Free returns |
-| RPA | Returns accepted |
-| AS | Authorized seller |
-| Savings | Deals & savings |
-| SaleItems | Sale items |
-| Lots | Lots |
-| FS | Free shipping |
-| LPickup | Local pickup |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ebay-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Supported eBay Domains
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| Domain | Country |
-|--------|---------|
-| ebay.com | United States (default) |
-| ebay.co.uk | United Kingdom |
-| ebay.de | Germany |
-| ebay.fr | France |
-| ebay.it | Italy |
-| ebay.es | Spain |
-| ebay.ca | Canada |
-| ebay.com.au | Australia |
-| ebay.nl | Netherlands |
-| ebay.at | Austria |
-| ebay.ch | Switzerland |
-| ebay.pl | Poland |
-| ebay.ie | Ireland |
-| ebay.com.hk | Hong Kong |
-| ebay.com.my | Malaysia |
-| ebay.com.sg | Singapore |
+## 执行规则
 
-## 调用方式
+### 算力消耗预估
 
-- **API 端点**：`POST /ebay/search`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/ebay_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+15 算力 / 次
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ebay-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 解决认证和算力问题
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## Usage Examples
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**1. Basic Keyword Search**
-Search for "wireless earbuds" on the US eBay marketplace:
-```json
-{"keyword": "wireless earbuds"}
-```
+### 约束与建议
 
-**2. Search Sold Listings for Price Research**
-Find sold listings for "iPhone 15 Pro" to gauge market value:
-```json
-{"keyword": "iPhone 15 Pro", "showOnly": "Sold,Complete", "orderBy": "10"}
-```
+- **区分市场与卖家位置**：站点决定搜索的区域市场，卖家所在地与配送区域是不同维度；根据用户意图分别理解。
+- **区分购买方式**：拍卖通过竞价成交，一口价按固定标价购买，最佳报价支持议价。具体参数见接口定义。
+- **清晰展示商品**：用表格展示标题、价格、成色、卖家和运费，附商品链接；有促销、退货信息时按需补充。
+- **标明币种和价格区间**：使用响应币种及货币符号展示价格；多规格价格以区间呈现。价格比较同时考虑运费。
+- **突出已售和竞拍数据**：研究已售商品时突出成交价格与已售数量；拍卖商品展示当前价格及竞拍数量。
+- **展示卖家信任信息**：存在卖家好评率和评价数量时一并展示，供用户判断可靠性。
+- **标记推广商品**：明确标注赞助或推广刊登，便于用户识别自然结果与广告。
+- **说明分页范围**：总数超过当前页时说明总量、本页范围和可继续查看的页；后续调用遵守成本约束。
+- **解释数据边界和错误**：数据时效、已售筛选和使用限制见 `references/api.md`。查询失败时说明原因并建议调整参数，不自动连续试探。
 
-**3. Search on a Specific Marketplace with Price Range**
-Find new laptops priced between $500 and $1000 on eBay UK:
-```json
-{"keyword": "laptop", "ebayDomain": "ebay.co.uk", "priceMin": 500, "priceMax": 1000, "itemCondition": "1000"}
-```
+## 使用示例
 
-**4. Auction Items Ending Soon**
-Find active auctions for "vintage watch" ending soonest:
-```json
-{"keyword": "vintage watch", "buyingFormat": "Auction", "orderBy": "1"}
-```
+### 查找商品并比较到手价
 
-**5. Find the Cheapest New Items**
-Find the cheapest new "USB-C cable" with free shipping:
-```json
-{"keyword": "USB-C cable", "itemCondition": "1000", "orderBy": "15", "showOnly": "FS"}
-```
+用户：在 eBay 美国站找全新的 USB-C 线，优先看含运费最便宜的商品。
 
-**6. Paginated Results**
-Get page 3 of results with 100 items per page for "running shoes":
-```json
-{"keyword": "running shoes", "page": 3, "pageSize": 100}
-```
+结合关键词、成色、免运费偏好和含运费排序检索，展示价格、运费、卖家信息与商品链接。
 
-**7. Category-Specific Search**
-Search within a specific eBay category:
-```json
-{"keyword": "mechanical keyboard", "categoryId": 33963}
-```
+### 研究已售价格
 
-**8. Location-Filtered Search**
-Find products located in Germany on the German eBay site:
-```json
-{"keyword": "Kopfhoerer", "ebayDomain": "ebay.de", "location": 77}
-```
+用户：看看 iPhone 15 Pro 在 eBay 的已售价格。
 
-## Display Rules
+按已售及已结束刊登筛选，突出成交价格、币种和已售数量，说明这是搜索页可用数据。
 
-1. **Present data clearly**: Show search results in well-formatted tables including key fields such as title, price, condition, seller info, and shipping
-2. **Price formatting**: Always display prices with their currency symbol. When showing price ranges (minPrice to maxPrice), format as a range
-3. **Sold/completed data**: When showing sold items, highlight the sold price and quantity to help users with pricing research
-4. **Seller trust indicators**: When available, show seller feedback percentage and review count to help users evaluate seller reliability
-5. **Pagination notice**: When total results exceed the current page, inform the user of the total count and suggest pagination to see more
-6. **Sponsored items**: Clearly mark sponsored listings so users can distinguish organic results from promoted ones
-7. **Error handling**: When a query fails, explain the issue and suggest adjusting search parameters
-8. **Link presentation**: Provide product links so users can view full details on eBay
-## Important Limitations
+### 浏览区域市场和拍卖
 
-- **No historical data**: This tool returns current live listings only, not historical pricing trends
-- **Result cap**: Maximum 200 results per page
-- **Rate limiting**: Excessive requests may be throttled; use `noCache: true` sparingly
-- **Currency**: Prices are returned in the local currency of the eBay domain being searched
+用户：找德国站本地卖家的耳机；或者看看即将结束的古董手表拍卖。
 
-## User Expression & Scenario Quick Reference
+按用户目标选择站点与卖家所在地，或选择拍卖及即将结束排序；列出商品、成色、卖家或竞拍信息。
 
-**Applicable** -- Product search and listing data on eBay:
+## 使用反馈
 
-| User Says | Scenario |
-|-----------|----------|
-| "Search eBay for XX" | Basic product search |
-| "How much does XX sell for on eBay" | Sold listing price research |
-| "Find cheapest XX on eBay" | Price comparison / lowest price |
-| "eBay auctions for XX" | Auction listing search |
-| "What's selling on eBay UK/Germany" | Regional marketplace browsing |
-| "New XX under $50 on eBay" | Filtered search by condition and price |
-| "eBay sold prices for XX" | Completed/sold listing analysis |
-| "Find refurbished XX on eBay" | Condition-specific search |
-
-**Not applicable** -- Needs beyond eBay product listings:
-- eBay seller account management or store analytics
-- eBay listing creation or editing
-- eBay order tracking or purchase history
-- Cross-platform price comparison (eBay vs Amazon vs others)
-- eBay advertising or promoted listing management
-
-## 算力消耗规则
-
-消耗 15 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

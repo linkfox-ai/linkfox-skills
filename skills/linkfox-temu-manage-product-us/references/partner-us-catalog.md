@@ -14,7 +14,7 @@ Partner Platform for US 菜单：**Product > Manage Product**（`menu_code=fb16b
 | `87a0d398417049bfbeb5b190f68a22b2` | `bg.local.goods.sku.list.query` | `us_manage_sku_list_query.py` | [apis/bg-local-goods-sku-list-query.md](./apis/bg-local-goods-sku-list-query.md) |
 | `9775b60761c54bf38022c77c717183a9` | `temu.local.sku.list.retrieve` | `us_manage_sku_list_retrieve.py` | [apis/temu-local-sku-list-retrieve.md](./apis/temu-local-sku-list-retrieve.md) |
 | `1d70452c1eba40a2b2382fb08833ae4e` | `bg.local.goods.publish.status.get` | `us_manage_publish_status_get.py` | [apis/bg-local-goods-publish-status-get.md](./apis/bg-local-goods-publish-status-get.md) |
-| `f14a3f28b654441b80f90e76a0a77c6e` | `temu.local.goods.sku.stock.query` | `us_manage_sku_stock_query.py` | [apis/temu-local-goods-sku-stock-query.md](./temu-local-goods-sku-stock-query.md) |
+| `f14a3f28b654441b80f90e76a0a77c6e` | `temu.local.goods.sku.stock.query` | `us_manage_sku_stock_query.py` | [apis/temu-local-goods-sku-stock-query.md](./apis/temu-local-goods-sku-stock-query.md) |
 | `429ffa60b265451d9421cd5a2004eeef` | `bg.local.goods.stock.edit` | `us_manage_stock_edit.py` | [apis/bg-local-goods-stock-edit.md](./apis/bg-local-goods-stock-edit.md) |
 | `6de74ed5afe74f89966b3ff23dfd7498` | `bg.local.goods.partial.update` | `us_manage_partial_update.py` | [apis/bg-local-goods-partial-update.md](./apis/bg-local-goods-partial-update.md) |
 | `b05f4b7598fb4dc7ac47c864aa5d5fc4` | `bg.local.goods.update` | `us_manage_goods_update.py` | [apis/bg-local-goods-update.md](./apis/bg-local-goods-update.md) |
@@ -64,14 +64,14 @@ Partner Platform for US 菜单：**Product > Manage Product**（`menu_code=fb16b
 | `temu.local.goods.pre.sale.status.edit` | 同上 |
 | `bg.local.goods.videocoverimage.get` | 同上 |
 
-> **说明**：属性/合规/上下架等 11 个接口在您提供的清单中指向同一 `sub_menu_code=2a343c65a03d42d380e9ad835aa7b54b`（Partner 后台可能为同一文档分区下的多 `type`）。以 **`type` 字段** 区分调用，勿仅依赖 `sub_menu_code`。
+> **说明**：属性/合规/上下架等 11 个接口指向同一 `sub_menu_code=2a343c65a03d42d380e9ad835aa7b54b`（Partner 后台可能为同一文档分区下的多 `type`）。以 **`type` 字段** 区分调用，勿仅依赖 `sub_menu_code`。
 
-| 全球站商品管理 | `linkfox-temu-manage-product-global` |
+全球站商品管理使用 `linkfox-temu-manage-product-global`。
 
 ## 与 `linkfox-temu-add-product-us` 的关系
 
 | 能力 | skill |
 |------|--------|
 | V2 发品、类目映射、半托 `temu.goods.*` / `bg.goods.*` | `linkfox-temu-add-product-us` |
-| 本 skill：`bg.local.*` / `temu.local.*` 商品管理（查、改、删、库存、价格、合规） | `linkfox-temu-manage-product-us` |
+| 本 skill：`bg.local.*` / `temu.local.*` 商品管理（查、改、删、库存、合规） | `linkfox-temu-manage-product-us` |
 | 网关、Token | 本 skill `scripts/`（`temu_us_proxy`、`check_linkfox_token` 等） |

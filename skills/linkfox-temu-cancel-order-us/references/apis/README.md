@@ -2,6 +2,8 @@
 
 每个 `type` 单独一份文档，经 `POST /temu/proxy` 调用。
 
+以下为 6 个取消订单操作；辅助加签文件下载 `POST /temu/fileDownload` 定义于 [../api.md](../api.md)，合计 7 个接口（不含 Feedback）。通用代理与 LinkFox Token 探测复用现有端点，不单独计数。
+
 ## 买家/消费者取消（2）
 
 | type | 文档 |

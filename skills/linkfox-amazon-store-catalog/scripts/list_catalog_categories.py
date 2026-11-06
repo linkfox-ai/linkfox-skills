@@ -10,17 +10,13 @@ GET `catalog/v0/categories`。须传 **MarketplaceId** 以及 **ASIN** 或 **Sel
 
 from __future__ import annotations
 
-import json
 import sys
 from urllib.parse import quote
 
 from _spapi_catalog_common import (
-    developer_proxy_get,
-    emit_result,
+    run_proxy,
     ensure_auth_skill_available,
-        lf_inline_flag,
     load_cli_params,
-    merge_success_json,
     norm_marketplace_ids,
     require_seller_region,
 )
@@ -33,9 +29,6 @@ def _build_query(params: dict) -> str:
     if not mids:
         print("Missing marketplaceId or marketplaceIds (use one id)", file=sys.stderr)
         sys.exit(1)
-    if len(mids) > 1:
-        print("listCatalogCategories uses a single MarketplaceId; using first only.", file=sys.stderr)
-
     asin = params.get("asin") or params.get("ASIN")
     sku = params.get("sellerSku") or params.get("SellerSKU")
     if asin and sku:
@@ -69,11 +62,10 @@ def main() -> None:
     seller_id, region = require_seller_region(params)
     qs = _build_query(params)
 
-    proxy = developer_proxy_get(region, PATH, seller_id, query_string=qs)
-    out: dict = {"developerProxy": proxy, "resolvedPath": PATH, "queryString": qs}
-    merge_success_json(out, proxy, "categories")
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy(
+        "listCatalogCategories", region, PATH, seller_id, qs,
+        result_key="categories",
+    )
 
 
 if __name__ == "__main__":

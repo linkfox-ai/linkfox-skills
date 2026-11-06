@@ -5,10 +5,11 @@ import json
 import os
 import sys
 import time
-import secrets
-import tempfile
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+import io
+from contextlib import ExitStack, redirect_stdout
+from unittest.mock import patch
+
+import call_api as api
 
 from _temu_token_store import get_token
 
@@ -66,8 +67,11 @@ def load_json_arg(argv: list) -> dict:
     if len(argv) < 2:
         return {}
     try:
-        return json.loads(argv[1])
-    except json.JSONDecodeError as e:
+        params = json.loads(argv[1])
+        if not isinstance(params, dict):
+            raise ValueError("JSON parameters must be an object")
+        return params
+    except (json.JSONDecodeError, ValueError) as e:
         print(f"Invalid parameter format: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -102,30 +106,86 @@ def call_temu_api(
     timeout: int = 150,
     linkfox_params=None,
 ) -> dict:
-    """调用 Temu 网关接口；必须先具备 LinkFox 用户 Token。"""
+    """通过 call_api.run 执行网关请求，并适配 Temu 请求头、超时与输出目录。"""
     linkfox_token = get_linkfox_token(linkfox_params)
-    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    req = Request(
-        url,
-        data=data,
-        headers=build_gateway_headers(linkfox_token),
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        raw = e.read().decode("utf-8") if e.fp else ""
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": raw}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+    # 业务要求当前目录可写；请求前探测，禁止公共调用器回退到其他目录。
+    root = _lf_root()
+    transport, request_factory, opener = api.call_api, api.Request, api.urlopen
+    captured = {}
+
+    def with_temu_body(api_path, request_params):
+        status, result = transport(api_path, request_params)
+        if isinstance(result, dict):
+            result = dict(result)
+            # HTTP 状态与网关 code / Temu errorCode 是不同层，必须随完整响应保留。
+            result["transportHttpStatus"] = status
+            if url.rstrip("/").endswith("/temu/proxy"):
+                result = parse_nested_body(result)
+        if status is None or not 200 <= status < 300:
+            print(f"LinkFox 外层 HTTP 状态：{status}；完整错误见保存的响应。", file=sys.stderr)
+        captured["result"] = result
+        return status, result
+
+    def with_legacy_headers(*args, **kwargs):
+        headers = dict(kwargs.get("headers") or {})
+        headers.update(build_gateway_headers(linkfox_token))
+        kwargs["headers"] = headers
+        return request_factory(*args, **kwargs)
+
+    def with_legacy_timeout(request, **kwargs):
+        kwargs["timeout"] = timeout
+        return opener(request, **kwargs)
+
+    output = io.StringIO()
+    # 临时适配只作用于同步 CLI 调用；退出或异常时全部恢复，不改环境变量。
+    with ExitStack() as stack:
+        for name, value in {
+            "get_api_key": lambda: linkfox_token,
+            "get_api_url": lambda _path: url,
+            "Request": with_legacy_headers,
+            "urlopen": with_legacy_timeout,
+            "call_api": with_temu_body,
+            "_linkfox_root": lambda: root,
+        }.items():
+            stack.enter_context(patch.object(api, name, value))
+        # 根目录可写不代表日期/会话/data 可写；请求前检查最终数据目录。
+        out_path = api.resolve_data_path(SLUG, time.time())
+        # 使用完整目标路径探测，也可在请求前发现 Windows 长路径或文件冲突。
+        with open(out_path, "x", encoding="utf-8"):
+            pass
+        os.remove(out_path)
+        stack.enter_context(patch.object(api, "_resolve_output_path", lambda _slug, _ts: out_path))
+        stack.enter_context(redirect_stdout(output))
+        argv = [json.dumps(body, ensure_ascii=False), "--no-cache"]
+        if lf_inline_flag():
+            argv.append("--inline")
+        api.run("/temu/fileDownload" if url.rstrip("/").endswith("/temu/fileDownload") else "/temu/proxy", SLUG, argv=argv)
+    result = _GatewayResult(captured["result"])
+    result.output = output.getvalue()
+    return result
+
+
+class _GatewayResult(dict):
+    """携带公共调用器已保存的输出，供 emit_result 展示而不重复落盘。"""
 
 def is_linkfox_auth_error(result: dict) -> bool:
-    msg = str(result.get("message") or result.get("error") or "")
-    return "无法识别当前用户" in msg or "重新登录" in msg
+    msg = " ".join(str(result.get(key) or "") for key in ("message", "errmsg", "error"))
+    return (
+        result.get("transportHttpStatus") == 401
+        or str(result.get("errcode", "")).strip() == "401"
+        or "无法识别当前用户" in msg
+        or "重新登录" in msg
+    )
+
+
+def is_normal_gateway_response(result: dict) -> bool:
+    """按 references 公共规则判断 HTTP 与 errcode；不代替 Temu 业务判断。"""
+    status = result.get("transportHttpStatus")
+    if type(status) is not int or not 200 <= status < 300:
+        return False
+    # 公共调用器的该函数恰好实现同一 errcode 规则；200 仅用于检查响应体，
+    # 实际 HTTP 的整个 2xx 范围已在上方验证，不启用任何响应缓存。
+    return api._is_cacheable(200, result)
 
 def resolve_access_token(params: dict) -> str:
     """Temu 店铺 accessToken：直接传入或从本地 storeKey 读取。"""
@@ -163,9 +223,7 @@ def parse_nested_body(result: dict) -> dict:
     return result
 
 # ===== LinkFox 统一输出层（落盘 + 摘要，无缓存）=====
-# 本块追加到共享模块（_xxx_common.py）末尾，供各入口脚本调用 emit_result()。
-# 依赖：json, os, sys, time, secrets, tempfile（共享模块通常已 import json/os/sys；
-#       若缺 time/secrets/tempfile，请在文件顶部补 import）。
+# 各入口脚本通过 emit_result() 保存完整响应并展示结果。
 
 import time as _lf_time
 import secrets as _lf_secrets
@@ -178,33 +236,15 @@ SLUG = "linkfox-temu-ads-eu"
 
 
 def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
+    """只写 cwd；不可写时直接报错，不回退其他目录。"""
+    cwd = os.path.abspath(os.getcwd())
+    if cwd == "/tmp" or cwd.startswith("/tmp/"):
+        raise OSError("本技能禁止将会话数据写入 /tmp，请切换到可写工作目录。")
+    root = os.path.join(cwd, "linkfox")
+    os.makedirs(root, exist_ok=True)
+    with _lf_tempfile.TemporaryFile(dir=root):
+        pass
+    return root
 
 
 def _lf_iso(ts: float) -> str:
@@ -311,6 +351,10 @@ def _lf_update_meta(session_dir: str, *, skill: str, file_rel: str, ts: float) -
 
 def emit_result(result, slug=SLUG, inline=False):
     """落盘完整响应到 linkfox/<date>/<session>/data/<slug>-<ts>.json；大响应只打印摘要。无缓存。"""
+    if isinstance(result, _GatewayResult):
+        # 网关数据已由 run 保存并按 --inline 生成输出，避免重复保存同一响应。
+        print(result.output, end="")
+        return
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
     ts = _lf_time.time()
     date_str = _lf_time.strftime("%Y-%m-%d", _lf_time.localtime(ts))

@@ -34,7 +34,7 @@
 ```bash
 DATADIR=$(python <brand-gene根目录>/scripts/save_brand_gene.py --datadir)
 BRAND_GENE_FILE='<S1 save_brand_gene.py 落盘的 brandGeneJson 绝对路径>'
-python scripts/build_textgen_params.py \
+python <本skill根目录>/scripts/build_textgen_params.py \
   --type SELLING_POINT \
   --image-urls '<步骤1的URL JSON数组>' \
   --point '<核心卖点>' \
@@ -47,7 +47,7 @@ python scripts/build_textgen_params.py \
 ```
 > **运行时模板唯一来源**：`scripts/templates/selling-point-aplus.txt`（与 A+ 图共用），运营更新直接改该 .txt。
 
-随后按本 skill **SKILL.md「步骤2 → ③textgen 改写支线」给出的标准链式调用**执行：把上面产出的 `$DATADIR/textgen_sp.json` 作为 `<textgen_params.json>`，经 `--stdin --content-only` 取出单行 prompt → `jq` 内联进下游 imagegen 参数 → 进入共享流水线步骤 3 出图（下游自动把 `⏎` 还原为换行符）。**具体命令以 SKILL.md 步骤2 为准，此处不重复。**
+随后按本 skill **`references/single-image.md`「步骤 2」给出的标准链式调用**执行：把上面产出的 `$DATADIR/textgen_sp.json` 作为 `<textgen_params.json>`，经 `--stdin --content-only` 取出单行 prompt → `jq` 内联进下游 imagegen 参数 → 进入共享流水线步骤 3 出图（下游自动把 `⏎` 还原为换行符）。**具体命令以 `references/single-image.md` 步骤 2 为准，此处不重复。**
 
 ## 执行自检
 

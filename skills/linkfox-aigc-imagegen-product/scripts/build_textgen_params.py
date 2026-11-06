@@ -132,8 +132,10 @@ def build_params(
     """
     if img_type not in TYPE_CONFIG:
         raise ValueError(f"不支持的 textgen 类型: {img_type}")
-    if not isinstance(image_urls, list):
-        raise ValueError("image_urls 必须是 list")
+    if not isinstance(image_urls, list) or not image_urls or not all(
+        isinstance(u, str) and u.startswith(("http://", "https://")) for u in image_urls
+    ):
+        raise ValueError("image_urls 必须是非空 http(s) URL 数组")
 
     config = TYPE_CONFIG[img_type]
     template = _read_template(config["template"])

@@ -12,6 +12,7 @@ from _shopee_follow_prize_common import (
     ensure_auth_skill_available,
     merge_shopee_body,
     qs_add,
+    _normal_response,
 )
 
 
@@ -114,7 +115,25 @@ def run_follow_prize_api(api_name: str, params: dict, caller: Optional[str] = No
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    def build_result(status, proxy):
+        out = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            try:
+                out["requestBody"] = json.loads(body) if body else None
+            except json.JSONDecodeError:
+                out["requestBody"] = body
+        if _normal_response(status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
         path,
         method,
         shop_id=shop_id,
@@ -122,17 +141,5 @@ def run_follow_prize_api(api_name: str, params: dict, caller: Optional[str] = No
         query_string=query_string or None,
         body=body,
         content_type=content_type,
+        result_transform=build_result,
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

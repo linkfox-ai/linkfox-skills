@@ -16,32 +16,44 @@
 | `runs` | "看下执行记录" / "这个流程跑过几次" / "上次为什么失败" / "最近一次跑成功了吗" | 取 workflowId,按 `runtime-execution.md` 调 `list_executions.py` 只读查询 |
 | `history` | "看下历史版本" / "刚才改了什么" / "谁改的这个流程" / "撤销刚才的修改" / "回到第 3 版" | 取 workflowId,按 `version-history.md` 调 `workflow_history.py`;查看纯读,还原先预览再 `--confirm` |
 | `automation` | "停用 / 关掉 / 暂停这个流程的自动化" / "重新启用记录触发" / "这个自动化开着吗" / "这张表挂了哪些工作流" | 按 `table-automation.md` 调 `table_automation.py`(`set --enabled true\|false` / `list` / `by-notebook`);不动画布、不 save/upload。**定时任务的启停不走 `set`**(由画布顶部排期开关管,脚本会退出 66)。**换表 / 换事件 / 改条件不是 `automation`**,是 refine 开始节点 |
+| `variables` | "存个配置 / 加个变量 / 把地区改成 EU" / "这个值放哪" / "流程里那个 `$vars.X` 在哪改" | 按 `variables-and-credentials.md` 调 `workflow_config.py vars list\|set\|delete`;非敏感配置才进变量,**密钥进凭据** |
+| `credentials` | "建个凭据 / 换个 token" / "这个 HTTP 节点用哪套认证" / "用我之前建的那个飞书凭据" | 按同一份 reference 调 `workflow_config.py creds list\|create\|update\|delete`;list 纯读,写操作只在用户明确要求时 |
 | `not_workflow` | "介绍一下 linkfox-workflow 系统" / "Retriever 节点原理是啥" / "写段代码给我" | 普通对话,不生成 flow |
 
 当前会话已经有唯一 workflow 文件时,“继续改”“优化一下”“把名字改成…”均路由为 `refine`,沿用原文件名。只有用户明确说“新建一份”“另做一个”“保留原来的再生成”时才路由为新的 `generate` 并创建新文件。
 
 ## 触发方式识别
 
-开始节点一律是 `BusinessStart`,它的 `startInputType` **只有四个合法值**(`formInput` /
-`webhookTrigger` 只存在于已禁用的原生 `Start` 上,别再往这里路由):
+开始节点一律是 `BusinessStart`,它的 `startInputType` **只有三个合法值**(`storeAuthorization` /
+`formInput` / `webhookTrigger` 都不存在,别再往这里路由):
 
-- 用户描述"我需要时点一下就跑 / 手动触发":`chatInput`(默认。**无对话文本**,聊天面板是一枚
-  「启动任务」按钮;下游读到的 `question` 恒为空串)
+- 用户描述"我需要时点一下就跑 / 手动触发":`chatInput`(**无对话文本**,聊天面板是一枚
+  「启动任务」按钮;下游读到的 `question` 恒为空串)。用户没说触发方式时不要直接落到它,先按下面反问
 - 用户描述"每天 / 每周 / 每月定时跑":`scheduleInput`,同时问频率与时间。**没有 Cron 子模式**,
   只有可视化配置;需要 cron 表达式或"每次调度带一段默认文本"的场景本分支表达不了。
   定时流读写的是某张多维表、或用户要"挂到这张表下"时,Start 带 `linkfoxTableAutomationContext`
   (见 `table-automation.md` §1.5);"表一改就跑"不是定时,是下面的 `tableRecordTrigger`
-- 用户描述"店铺有新订单 / 库存变了 / Listing 变了就跑":`storeAuthorization`,同时问监听哪类变化
-  (五种:`listing` / `orderList` / `afterSalesOrder` / `fbaInventory` / `removalOrder`)
+- 用户描述"店铺有新订单 / 库存变了 / Listing 变了就跑":**这个能力已经下线**(2026-10-30 删掉
+  店铺授权触发,仓库里从来没有店铺事件服务,配了也不会自己跑)。不要生成,也不要含糊答应。
+  给替代方案并说清代价:① 定时 + `DataReader`(`amazonStore`) 轮询 + `Condition` 判有没有新数据
+  (延迟 = 轮询间隔);② 店铺数据先落到多维表、改用 `tableRecordTrigger`;③ 手动 `chatInput`
 - 用户描述"多维表里加了一行 / 改了某个字段 / 某列变成 X 就跑":`tableRecordTrigger`,同时确认
   记录事件(新增 / 修改 / 满足条件)。**这一种有两个必须先跟用户讲清的前提**,见下
 
 需要"用户填一个表单再跑"时不要路由到触发方式:`BusinessStart` 没有 `formInput`,
 用 `chatInput` + 下游 `FillForm` 节点表达。
 
-不明确时默认 `chatInput` 并说明"如需其他触发方式请告知"。
+**触发方式不明确时先反问"要不要关联到多维表",不要静默默认成手动**:从零 generate、用户没提触发方式(没说"手动点一下""每天定时""表里改了就跑")时,反问一句:
 
-**以上默认值只用于从零 generate**。对话里带 `<linkfox-flow-info id>`(refine,含从多维表新建、画布上只有开始节点的首轮构建)时,触发方式**不是你来识别的**:fetch 基线里 BusinessStart 配的是什么就是什么,原样保留(见 SKILL.md「开始节点锁定」)。用户需求原文没提触发词,不等于"不明确、可以默认手动"。
+> 这个工作流要关联到多维表吗?① 表里记录新增 / 修改 / 条件满足时自动跑;② 定时跑,并挂在某张多维表下;③ 手动点一下就跑,不关联表。
+
+- **和本轮其它澄清问题一次问完**,不要为它单独多开一轮;用户已经说清触发方式(含"手动跑""不用自动""就是个手动工具")就不再问。
+- **不问的两种例外**:用户在催("直接生成 / 不要再问"),或只要一个最小骨架。这时按 `chatInput` 出,回复里带一句"要改成关联多维表随时说"。
+- 回答① → `tableRecordTrigger`,按「选表」查表让用户挑触发表,并讲清下面两个前提;回答② → `scheduleInput`,再问频率,读写的正是这张表时带 `linkfoxTableAutomationContext` 挂表下(§1.5);回答③ / 不回答 → `chatInput`。
+- **关联 ≠ 读写表**:`DataReader` / `WriteFile` 的选表槽位照「选表」规则自己查好,不能因为"已经选了张表"就跳过这个问题,也不能因为这个问题没问就把表槽位留空。
+- **只在从零 generate 时反问**。refine(含从多维表新建、画布只有开始节点的首轮构建)触发方式由基线决定,原样保留。
+
+**上面这套反问与默认值只用于从零 generate**。对话里带 `<linkfox-flow-info id>`(refine,含从多维表新建、画布上只有开始节点的首轮构建)时,触发方式**不是你来识别的**:fetch 基线里 BusinessStart 配的是什么就是什么,原样保留(见 SKILL.md「开始节点锁定」)。用户需求原文没提触发词,不等于"不明确、可以默认手动"。
 
 ### `tableRecordTrigger` 的两个前提(生成前必须说)
 
@@ -82,6 +94,8 @@
   - "这个流程怎么跑 / 怎么触发 / 能自动跑吗 / 上线后谁来调" → `explain`,回答触发方式和调用方式,**不要真跑**。
   - "跑成功了吗 / 跑过几次 / 上次为什么失败" → `runs`,查执行记录,不是再跑一次。
 - **"记录"分三种**:"执行记录 / 运行历史 / 跑的日志" → `runs`;"历史版本 / 改动记录 / 谁改的 / 撤销修改 / 回滚到第 N 版" → `history`;"聊天记录 / 对话历史" 不在本 skill 范围,说明不支持即可。
+- **"保存 / 存一个值"分三层**:本次执行内的中间结果 → 用 `$flow.state` / Node Output(改 flow,走 refine);非敏感的全局配置 → 平台变量(`variables`);密钥 / token / 机器人地址 → 凭据(`credentials`)。用户只说"存起来"时按这个顺序判断,拿不准问一句"这个值敏感吗、要在别的流程里复用吗"。
+- **凭据 vs 模型**:节点上的 `data.credential`(HTTP / LinkfoxHTTP 这类)是 `credentials` 能管的;Agent / LLM 的**模型**凭据在 `agentModelConfig.FLOWISE_CREDENTIAL_ID`,由用户在画布上选,脚本不管,也不要去查。
 - **"撤销 / 改回去"分两种**:要回到某个**已保存过的版本** → `history` 还原;要"把刚才加的节点去掉、其余保留后来的改动" → `refine`(在当前基线上删,不是还原)。分不清就问一句。
 - `run` 和 `runs` 都要求已经有 workflowId(来自 `<linkfox-flow-info id="...">`)。用户是在同一轮里说"生成完直接跑一下"时,先走完 generate 的落盘上传,拿到 workflowId 再按 `run` 执行 —— 但要先提醒运行时对象还是占位。
 

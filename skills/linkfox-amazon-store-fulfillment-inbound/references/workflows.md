@@ -44,7 +44,7 @@ getShipment → labels/BOL/tracking
 
 每个 `packageGrouping` 必须按工作流二选一：已知箱规传 `packingGroupId`，Pack Later 传 `shipmentId`。
 
-## 3. Partnered Carrier 和自有承运人
+## 3. 合作承运人与自有承运人
 
 - Amazon Partnered Carrier：在 `listTransportationOptions` 中选择 `shippingSolution=AMAZON_PARTNERED_CARRIER`。确认代表接受运费估算和 Amazon 扣费。
 - 自有承运人：选择 `shippingSolution=USE_YOUR_OWN_CARRIER`，按 `preconditions` 为每个 shipment 生成、列出并确认 delivery window。
@@ -52,7 +52,7 @@ getShipment → labels/BOL/tracking
 - 所有 shipment 类型都必须确认 transportation option。
 - `confirmTransportationOptions` 之前必须已确认 placement；确认 transportation 后不能再为该 plan 生成或确认新 transportation options。
 
-## 4. Shipment content update
+## 4. 货件内容更新
 
 仅在 transportation 已确认且 shipment 尚未进入 `RECEIVING` 之前使用：
 
@@ -106,10 +106,10 @@ getInboundPlan
 - `listInboundPlanItems` / `listInboundPlanPallets` 的 package grouping 标识在确认 placement 前可能是 `packingGroupId`，确认后则是 `shipmentId`；不要混用。
 - `listShipmentBoxes` 只在 `setPackingInformation` 生成箱信息后有数据；`listShipmentPallets` 只在 LTL/FTL transportation 流程提供托盘信息后有数据。
 
-## 7. 标签和 BOL
+## 7. 标签和提单
 
 placement 确认完成后，调用 `getShipment` 获取 `shipmentConfirmationId`，再传给 v0 `getLabels` / `getBillOfLading`。不要直接使用 v2024 `shipmentId`。完整 ID 规则见 [identifiers.md](identifiers.md)。
 
-## 8. 取消与运费 void window
+## 8. 取消与运费撤销窗口
 
-`cancelInboundPlan` 会取消 plan 及关联 shipments，但已确认 transportation 的运费只在 Amazon 的 void window 内可取消：SPD 为确认后 24 小时，LTL/FTL 为确认后 1 小时。超过时限可能仍收取运费。执行前展示 shipment 类型、transportation 确认时间和可能费用；完成后用 `getInboundOperationStatus` 或 `getInboundPlan` 确认 `VOIDED`。
+`cancelInboundPlan` 会取消 plan 及关联 shipments，但已确认 transportation 的运费只在 Amazon 的 void window 内可取消：SPD 为确认后 24 小时，LTL/FTL 为确认后 1 小时。超过时限可能仍收取运费。执行前展示 shipment 类型、transportation 确认时间和可能费用；完成后用 `getInboundOperationStatus` 确认操作为 `SUCCESS`；需要核对计划最终状态时，用 `getInboundPlan` 确认 `VOIDED`。

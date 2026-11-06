@@ -1,152 +1,118 @@
 ---
 name: linkfox-zhihuiya-claim-data
-description: 从智慧芽（PatSnap）获取专利权利要求数据。当用户提到专利权利要求、权利要求文本、独立权利要求、从属权利要求、权利要求数量、权利要求树、权利要求分析、权利要求范围、权利要求语言、想查看特定专利的权利要求部分、patent claims, independent claims, dependent claims, claims text, PatSnap时触发此技能。即使用户未明确提及"智慧芽"或"PatSnap"，只要其请求涉及通过专利ID或公开号获取或分析专利权利要求信息，也应触发此技能。
+description: 从智慧芽（PatSnap）获取单条或多条专利的权利要求文本、权利要求数量及同族专利替代数据，适用于通过专利 ID 或公开公告号查看独立与从属权利要求、整理权利要求树或比较多项专利的权利要求。用户未明确提及智慧芽但希望查询特定专利权利要求时也适用；不适用于关键词找专利、法律状态、审查历史、引证分析、摘要说明书附图查询，或出具自由实施及侵权法律意见。
 ---
 
-# Zhihuiya Patent Claims Data
+# 智慧芽专利权利要求查询
 
-This skill guides you on how to retrieve and present patent claims data from the Zhihuiya (PatSnap) patent database, helping IP professionals, patent analysts, and R&D teams quickly access the claims section of any patent.
+## 适用范围
 
-## 调用方式
+### 适用
 
-- **API 端点**：`POST /zhihuiya/claimData`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/zhihuiya_claim_data.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+面向知识产权人员、专利分析人员和研发团队，按用户指定的专利标识获取并整理权利要求。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-claim-data-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+**场景速查**
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查看这项专利的权利要求或权利要求范围、语言 | 单项专利权利要求文本查询。 |
+| 获取这批专利的权利要求文本 | 多项专利批量查询。 |
+| 这项专利有多少项权利要求 | 展示返回的权利要求数量。 |
+| 找出独立权利要求、从属关系或整理权利要求树 | 获取文本和元数据，按实际内容区分与整理。 |
+| 比较专利 A 和专利 B 的权利要求 | 分专利展示，并按用户要求比较。 |
+| 原专利没有权利要求，试试同族专利 | 按用户选择查询同族替代文本。 |
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 前置条件
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+**先确定目标专利**：取得用户提供的公开公告号或智慧芽内部专利 ID；内部 ID 通常来自先前的智慧芽检索结果。参数选择、优先级与批量限制见 `references/api.md`。
 
-## Core Concepts
+## 查询流程
 
-Patent claims define the legal scope of protection granted by a patent. They are the most critical part of a patent document for infringement analysis, freedom-to-operate assessments, and prior art comparisons. This tool retrieves the full set of claims for one or more patents by their patent ID or publication number.
+1. 确认用户要查看的专利与目标：全文、数量、独立与从属关系，或多专利比较；缺少专利标识时先补充。
+2. 根据公开公告号或内部 ID 准备请求，按 `references/api.md` 核对参数；同族替代按用户选择启用。
+3. 说明本次按请求次数估算的费用，在用户授权范围内执行查询；同一参数组合优先复用已有结果。
+4. 依据接口参考判断响应，先看摘要，再按需读取已保存文本。失败时解释原因并建议核对号码或考虑同族替代；后续请求遵守成本约束。
+5. 按专利组织权利要求、展示数量和实际文本来源；仅在用户要求时分析或比较。
 
-**Family substitution**: When a patent's claims are unavailable in the database, you can optionally request that claims from a related family member patent be returned instead. This is controlled by the `replaceByRelated` parameter.
+## 执行方式
 
-## Data Fields
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/zhihuiya_claim_data.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按下文动态规则计费。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换专利标识或请求选项连续试探；需要再次请求时，先向用户说明额外消耗。
 
-| Field | API Name | Description | Example |
-|-------|----------|-------------|---------|
-| Patent ID | patentId | Internal Zhihuiya patent identifier | 98a1b2c3-... |
-| Publication Number | pn | Publication or grant number of the patent | CN115000000A |
-| Related PN | pnRelated | Publication number of the family member used as substitute (only present when family substitution occurred) | US20230001234A1 |
-| Claims | claims | Array of claim objects containing the claim text and metadata | [...] |
-| Claim Count | claimCount | Total number of claims in the patent | 15 |
+### 输出策略
 
-## Parameter Guide
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-zhihuiya-claim-data-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Required (at least one)
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-You must provide **at least one** of the following two parameters. If both are provided, `patentId` takes priority.
+## 执行规则
 
-| Parameter | Description | Format |
-|-----------|-------------|--------|
-| patentId | One or more Zhihuiya patent IDs | Comma-separated string, max 100 entries |
-| patentNumber | One or more publication/grant numbers | Comma-separated string, max 100 entries |
+### 算力消耗预估
 
-### Optional
+预计每次接口请求消耗 3 算力，按请求次数估算；批量返回的记录条数不作为该预估的乘数。拆分成多个请求或额外重新查询时，按新增请求次数累计预估，最终以实际扣除为准。
 
-| Parameter | Description | Values |
-|-----------|-------------|--------|
-| replaceByRelated | Whether to substitute with a family member's claims when the target patent's claims are unavailable | `1` = yes, `0` = no (default) |
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-### How to Choose Between patentId and patentNumber
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-- Use **patentNumber** when the user provides a publication or grant number (e.g., `CN115000000A`, `US11234567B2`). This is the most common scenario.
-- Use **patentId** when the user provides an internal Zhihuiya identifier, typically obtained from a previous Zhihuiya search result.
-- When the user provides both, pass both and the API will prefer patentId.
+### 解决认证和算力问题
 
-## Usage Examples
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**1. Single patent by publication number**
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解权利要求**：权利要求界定专利保护范围，是侵权研究、自由实施研究及现有技术比较的重要材料。本技能提供文本数据；不直接出具法律意见。
+- **保留原始编号和关系**：按原编号逐项展示文本，在内容或元数据可支持时通过缩进区分独立与从属权利要求；整理权利要求树时不补造依赖关系。
+- **展示数量**：每项专利都注明返回的权利要求总数；数据缺失时如实说明。
+- **披露同族替代**：同族替代是以相关同族成员的权利要求代替目标专利不可用的文本。结果出现 `pnRelated` 时，明确说明文本来自同族专利，并给出该成员公开号，不将其当成目标专利原文。
+- **分组展示批量结果**：以公开号为标题分别组织各专利结果，避免混淆来源。
+- **保持原文与分析的区分**：默认展示原始权利要求文本，不附加主观法律解读；用户明确要求分析时，区分返回原文与基于原文的分析。
+- **如实解释缺失和错误**：数据覆盖及权利要求对象结构见 `references/api.md`；不凭空补齐缺失文本、字段或权利要求。
+
+## 使用示例
+
+### 按公开公告号查询单项专利
+
 ```json
 {"patentNumber": "CN115000000A"}
 ```
 
-**2. Multiple patents by publication number**
+### 批量查询公开公告号
+
 ```json
 {"patentNumber": "CN115000000A,US20230001234A1,EP4000000A1"}
 ```
 
-**3. Single patent by patent ID**
+### 按智慧芽内部专利 ID 查询
+
 ```json
 {"patentId": "98a1b2c3-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}
 ```
 
-**4. With family substitution enabled**
+### 单项专利启用同族替代
+
 ```json
 {"patentNumber": "CN115000000A", "replaceByRelated": "1"}
 ```
 
-**5. Batch query with family substitution**
+### 批量查询并启用同族替代
+
 ```json
 {"patentNumber": "CN115000000A,JP2023100000A", "replaceByRelated": "1"}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present claims clearly**: Display claims in a numbered list preserving the original claim numbering. Use indentation or formatting to distinguish independent claims from dependent claims where possible.
-2. **Highlight claim count**: Always state the total number of claims returned for each patent.
-3. **Family substitution notice**: If `pnRelated` is present in a result, explicitly inform the user that the claims shown are from a family member patent and provide the family member's publication number.
-4. **Batch results**: When multiple patents are queried, organize results by patent with clear headings showing the publication number.
-5. **Error handling**: When a query fails, explain the reason based on the response and suggest the user verify the patent number format or try enabling family substitution.
-6. **No subjective analysis**: Present the raw claim text without legal interpretation unless the user specifically requests analysis.
-## Important Limitations
-
-- **At least one identifier required**: Either `patentId` or `patentNumber` must be provided; omitting both will result in an error.
-- **Batch limit**: A maximum of 100 patents can be queried in a single request.
-- **Claims availability**: Not all patents have claims data available. Use `replaceByRelated` = `1` to attempt family member substitution when claims are missing.
-- **Claim object structure**: The individual claim objects within the `claims` array may vary in structure depending on the patent office and data source.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Patent claims retrieval and analysis:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Show me the claims of patent XX" | Single patent claims lookup |
-| "Get the claim text for these patents" | Batch claims retrieval |
-| "How many claims does patent XX have" | Claim count query |
-| "What are the independent claims of XX" | Claims retrieval + display |
-| "Compare claims of patent A and patent B" | Multi-patent claims retrieval |
-| "The claims are not available, try a family member" | Family substitution query |
-| "Patent claim scope", "claim language" | Claims retrieval |
-
-**Not applicable** -- Needs beyond patent claims data:
-- Patent search or discovery (finding patents by keyword/topic)
-- Patent legal status or prosecution history
-- Patent citation or reference analysis
-- Patent full-text beyond claims (abstract, description, drawings)
-- Freedom-to-operate or infringement opinions (legal advice)
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 81 × 返回data条数。每条为 1 条专利权利要求结果
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -2,15 +2,16 @@
 
 ## 业务目标
 
-用户上传商品图片（非模特、非服饰类，如美妆、数码、家居、食品等），本技能作为编排层统一规划出图方案（卖点推理 + 画面设计），然后按类型 Read 对应的 type reference 并执行共享流水线逐张生成，最终交付一组成套的电商图片。
+用户上传商品图片（非模特、非服饰类，如美妆、数码、家居、食品等），本技能作为编排层统一规划出图方案（卖点推理 + 画面设计），然后通过 dispatch 在线程池内按类型执行共享流水线，最终交付一组成套的电商图片。
 
 ## 输入参数清单
 
 | 参数 | 性质 | 默认 | 说明 |
 |------|------|------|------|
 | imageUrls | 运行时入参，必填 | — | 用户上传的商品图片 URL 列表 |
-| provider | 运行时入参 | 由用户确认 | 从图片 bizType=201 动态完整列表选择 requestValue，按任务能力校验；不以旧模型名列表限制 |
-| resolution | 运行时入参 | 由用户确认 | 从所选模型当前支持的分辨率选择；原默认/必填约定不变，旧2K/4K仅作历史示例 |
+| provider | 运行时入参 | GPT_2_5_IMAGE | 默认 LF智能模型 G-2.5 Sunburst；用户指定时原样透传当前可用 requestValue |
+| resolution | 运行时入参 | 1K | 首轮预览；确认画面后询问是否重出 2K、medium；只有用户明确要求才传 4K |
+| quality | 运行时入参 | low | 首轮预览；用户指定时原样透传 |
 | point | agent 层传入（可空） | — | 完整卖点描述（2~3句话），有则跳过卖点推理 |
 | pointHint | agent 层传入（可空） | — | 方向性关键词（需扩写） |
 | imageDesc | agent 层传入（可空） | — | 完整画面描述，有则跳过画面推理 |
@@ -23,10 +24,10 @@
 |------|------|------|------|----------|
 | S0 | 场景路由 | 用户消息 | S1/S2/S3 | 内部逻辑判断 |
 | S1 | 内容推理（卖点/画面/desc/layout） | S0 | S2 | 内部 AI 推理 |
-| S2 | 输出规划方案给用户确认 + **落盘 image-plan.json** | S1 | S3 | Markdown 表格 + AskUserQuestion + `save_image_plan.py` |
-| S3 | agent 端 N 个并发 Bash（`run_one_task.py --state --index`）+ summary | S2 | 用户 | `run_one_task.py` + summary phase |
+| S2 | 输出规划方案给用户确认 + **落盘 image-plan.json** | S1 | S3 | Markdown 表格 + AskUserQuestion + `scripts/save_image_plan.py` |
+| S3 | agent 单次 dispatch，由 skill 内部并发各任务，再 summary | S2 | 用户 | `scripts/run_collection_pipeline.py` + `scripts/run_one_task.py` |
 
-## 类型路由关系
+## 类型路由关系（单张时读取；套图由脚本路由）
 
 - SCENE → `references/types/scene.md`
 - CLOSE_UP → `references/types/close-up.md`

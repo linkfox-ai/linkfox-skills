@@ -28,7 +28,7 @@
     - 若 `比例` **为空**，则使用套图类型表中对应的默认比例
 - **A+ 图类型**（高级A+图、普通A+图、手机A+图）：
     - 若 Context 中 `A+图比例` **不为空** → 使用 `A+图比例` 的值
-    - 若 `A+图比例` **为空**但 `比例` **不为空** → 使用 `比例`（兼容旧流程）
+    - 若 `A+图比例` **为空**但 `比例` **不为空** → 使用 `比例`（普通比例作为回退）
     - 若两者**均为空** → 使用套图类型表中该 A+ 子类型的默认比例（`PREMIUM_APLUS`→`1464:600`、`STANDARD_APLUS`→`970:600`、`PHONE_APLUS`→`600:450`）
     - A+ 图额外支持 `1464:600` / `970:600` / `600:450` 等专属比例（这些比例在非 A+ 图类型中不可用）
 - 用户若在确认阶段修改了比例，**必须以用户修改后的值为准**
@@ -54,13 +54,13 @@
 
 ---
 
-## 用户确认后立即落盘（抗上下文压缩，强制）
+## 确认已落盘规划（抗上下文压缩，强制）
 
-用户通过 `AskUserQuestion` 确认生图后，**必须在进入 S3 之前**将最终 `imagePlanList` 落盘到 `$DATADIR/image-plan.json`，**禁止**仅在对话上下文保留完整 plan 供 S3 凭记忆重建（S3 上下文已接近压缩阈值，大 Write 极易失败）。
+plan 已将 `imagePlanList` 写入 `$DATADIR/image-plan.json`。用户确认且未修改时直接使用该文件，**禁止**再次初始化或凭上下文重建。用户修改时只编辑对应条目，再按 `references/runtime/02-confirm.md` 用 `--phase plan --state <state_file>` 同步数量与类型、重打表格并再次确认；不得传 `--job` 重新推理覆盖修改。删除全部条目表示取消，不进入 dispatch。
 
-**落盘步骤**（`DATADIR=$(python <brand-gene根目录>/scripts/save_brand_gene.py --datadir)`）：
+**手工新建规划文件时的分条写入方式**（仅用于尚不存在的文件，不用于确认 pipeline 已落盘的规划；`DATADIR=$(python <brand-gene根目录>/scripts/save_brand_gene.py --datadir)`）：
 
-1. 初始化：`python <本skill根目录>/scripts/save_image_plan.py --init --out "$DATADIR/image-plan.json"`
+1. 仅在目标文件不存在时初始化：`python <本skill根目录>/scripts/save_image_plan.py --init --out "$DATADIR/image-plan.json"`
 2. **逐条追加**（每条任务一次小 Write + 一次 Bash，禁止一次性 Write 整份 plan）：
    - 用 Write 工具写 `$DATADIR/plan-task-01.json`（**仅含单条** imagePlanList 条目，体积通常 < 1KB）
    - `python <本skill根目录>/scripts/save_image_plan.py --append-task-file "$DATADIR/plan-task-01.json" --out "$DATADIR/image-plan.json"`

@@ -19,12 +19,9 @@ from urllib.parse import urlencode
 
 from _spapi_ef_common import (
     PATH_INVENTORY_BATCH,
-    developer_proxy_call,
-    emit_result,
+    run_proxy,
     ensure_auth_skill_available,
-    lf_inline_flag,
     load_params_or_exit,
-    merge_json_body,
     require_fields,
 )
 
@@ -79,6 +76,9 @@ def main() -> None:
     if not isinstance(requests, list) or not (1 <= len(requests) <= MAX_REQUESTS):
         print(f"requests must be a list of 1..{MAX_REQUESTS} items", file=sys.stderr)
         sys.exit(1)
+    if any(not isinstance(item, dict) for item in requests):
+        print("requests 中每一项必须是 JSON 对象", file=sys.stderr)
+        sys.exit(1)
 
     use_raw = bool(params.get("useAmazonRequestShape"))
     try:
@@ -89,20 +89,7 @@ def main() -> None:
 
     body_obj = {"requests": amazon_requests}
     body_str = json.dumps(body_obj, ensure_ascii=False)
-    proxy = developer_proxy_call(
-        str(params["region"]),
-        PATH_INVENTORY_BATCH,
-        "POST",
-        str(params["sellerId"]),
-        body=body_str,
-    )
-    out: dict = {
-        "developerProxy": proxy,
-        "resolvedPath": PATH_INVENTORY_BATCH,
-        "requestBody": body_obj,
-    }
-    merge_json_body(out, proxy, "batchInventory", ok_statuses=(200, 207))
-    emit_result(out, inline=lf_inline_flag())
+    run_proxy(str(params['region']), PATH_INVENTORY_BATCH, 'POST', str(params['sellerId']), body=body_str, result_field='batchInventory', operation='post_batch_inventory', ok_statuses=(200, 207), output_fields={'requestBody': body_obj})
 
 
 if __name__ == "__main__":

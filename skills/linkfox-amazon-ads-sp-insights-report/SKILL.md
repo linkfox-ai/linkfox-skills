@@ -1,223 +1,114 @@
 ---
 name: linkfox-amazon-ads-sp-insights-report
-description: 亚马逊广告 Sponsored Products（SP）洞察报告技能，统一获取 Audience 受众细分表现和 Search Term Impression Share/Rank 搜索词展示份额/排名两类 Amazon Ads Reporting API v1 beta 报告。自动完成 profile 到 advertiser account 映射、报告创建、状态轮询、多分片 CSV 下载和落盘。只有用户明确要求 SP 受众报告、SP 搜索词展示份额或展示份额排名时触发；普通 SP 搜索词表现报告、SB/SD/DSP 报告不得触发。本技能依赖 linkfox-amazon-ads-auth。
+description: 获取亚马逊 Sponsored Products（SP）的 Audience 受众细分表现和 Search Term Impression Share/Rank 搜索词展示份额及排名报告，自动完成账号映射、异步等待、多分片 CSV 下载和保存。适用于用户明确要求 SP 受众、搜索词展示份额或份额排名的场景；不适用于普通 SP 搜索词表现报告、常规广告报告、广告实体管理及 SB、SD、DSP 报告。
 ---
-
 # Amazon Ads SP 洞察报告获取
 
-两类 Sponsored Products 专项报告一站式获取：脚本经 `developerProxy` 传 `profileId`（服务端解析 token），自动完成 advertiser account 映射、报告创建、等待（通常约 2–10 分钟）、多分片 CSV 下载和落盘。
-脚本使用 Amazon Reporting API v1 beta 允许的固定字段组合，不接受调用方自由拼接字段。Audience 与 Search Term Impression Share/Rank 的完整字段依据分别见 `references/sp-audience-reporting-v1.md` 和 `references/sp-search-impression-share-v1.md`。
+## 适用范围
 
-**依赖 `linkfox-amazon-ads-auth`**（脚本启动自动检查；未安装时 exit 42，stderr 打 `DEPENDENCY_MISSING`）。
+### 适用
 
-### ⚠️ 多账号场景：调用前必须解析好 profileId
+获取已授权广告账号的两类 Sponsored Products 专项报告。
 
-用户经常只说自然语言（“美国站”“日本站”“我的店铺”），本 Skill 的所有入口都必须拿到数字 `profileId` 才能调用。按下列顺序处理，**不要跳过**：
+**场景速查**
 
-1. 先调 `linkfox-amazon-ads-auth` 的 `authorized_stores.py`，拉出用户已授权的账号 × 站点清单。
-2. 根据用户提到的站点匹配 `countryCode`：
-   - **只有 1 个候选** → 静默使用对应 `profileId`；不要向用户播报该数字。
-   - **≥ 2 个候选** → 必须用 `accountName` 向用户确认，禁止默认选择第一个。
-   - **0 个候选** → 告知用户该站点未授权，引导使用 `linkfox-amazon-ads-auth` 完成授权。
-3. **严禁**要求用户直接提供 `profileId` 数字。
-4. **严禁**在账号有歧义时自行选择默认账号。
+| 用户表达 | 查询场景 |
+|---|---|
+| 看 SP 各受众细分的表现 | Audience：按账号、广告活动或广告组查看受众数据。 |
+| 看搜索词的展示份额和排名 | Search Term Impression Share/Rank：查看搜索词份额及份额排名。 |
+| 上次洞察报告还没生成，继续取 | 续跑已有报告，复用原任务。 |
 
-完整决策表见 `linkfox-amazon-ads-auth` SKILL.md 的多账号场景说明。
+### 边界
 
-## 调用方式
+普通 SP 搜索词曝光、点击、花费、销售、转化报告，以及常规 SP/SB/SD 报告，使用 `linkfox-amazon-ads-report`（普通 SP 搜索词对应 `spSearchTerm`）；广告活动、广告组、关键词、投放和预算管理使用 `linkfox-amazon-ads-manager`。授权与令牌刷新使用 `linkfox-amazon-ads-auth`。Sponsored Television、DSP、Brand Analytics、Retail Analytics 不在本技能范围。
 
-- **API 端点**：`POST /amazonAds/developerProxy`（脚本内部按顺序调用三个 Ads v1 路径；完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline] [--no-cache]`（可用脚本见下文）
-- **成本约束**：本工具不消耗算力；同一会话、同一报告类型和同一参数组合默认只调用一次，成功结果缓存 24 小时。失败、未完成或空报告不得自动换日期、切换账号或连续试探。
+## 接口清单
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-ads-sp-insights-report-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录；`<session>` 取自环境变量 `SESSION_ID`；禁止写入 `/tmp`，当前目录不可写则报错）
-- 报告 CSV 分片写入同一会话的 `data/`；最终响应不暴露 Amazon 预签名 URL
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）；加 `--no-cache` 强制重新获取
+| 接口 | 端点 | 接口文档 | 对应脚本 | 说明 |
+|---|---|---|---|---|
+| 查询 advertiser accounts | POST `/amazonAds/developerProxy` → path：`adsApi/v1/query/advertiserAccounts`，method：`POST` | [references/api.md](references/api.md#接口查询-advertiser-accounts) | `scripts/reporting_v1_workflow.py`（由两个入口调用） | 按授权 profile 映射唯一广告账号。 |
+| 创建洞察报告 | POST `/amazonAds/developerProxy` → path：`adsApi/v1/create/reports`，method：`POST` | [references/api.md](references/api.md#接口创建洞察报告)、[Audience](references/sp-audience-reporting-v1.md)、[Search Impression Share](references/sp-search-impression-share-v1.md) | `scripts/get_sp_audience_report.py` / `scripts/get_sp_search_impression_share.py` | 固定兼容字段，创建指定类型报告。 |
+| 查询洞察报告状态 | POST `/amazonAds/developerProxy` → path：`adsApi/v1/retrieve/reports`，method：`POST` | [references/api.md](references/api.md#接口查询洞察报告状态) | `scripts/reporting_v1_workflow.py`（由两个入口调用） | 轮询任务，完成后下载全部分片。 |
 
-**读数据建议**：先看摘要和 `preview`；响应 JSON 用 `jq` / `ConvertFrom-Json` 按需抽取，完整报告行从 `dataFiles[].path` 指向的文件用 CSV 工具或 `Import-Csv` 读取，避免整份报告进入上下文。
+## 前置条件
 
-## 解决认证和算力问题
+依赖 `linkfox-amazon-ads-auth` 完成授权与账号选择；运行 `python scripts/check_auth_dependency.py` 检查安装情况。入口启动时自动检查，缺失时按 [接口参考](references/api.md) 处理，不另行实现授权或令牌获取。
 
-发生以下情况时，按 `references/onboarding.md` 引导解决：
+## 报告获取流程
 
-### 异常情况
-- **未配置 API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`
-- **响应 401 或 402 状态码**
-- **响应提示算力、余额、套餐或额度不足**
+1. **确定类型**：受众表现使用 `scripts/get_sp_audience_report.py`；展示份额及排名使用 `scripts/get_sp_search_impression_share.py`。一次只运行用户要求的一个入口。
+2. **读取参考**：按报告类型读取 [Audience](references/sp-audience-reporting-v1.md) 或 [Search Impression Share](references/sp-search-impression-share-v1.md)，核对字段、限制及展示重点。
+3. **解析账号**：先用授权技能的 `authorized_stores.py` 获取账号与站点列表，按用户站点匹配 `countryCode`。一个候选时静默使用；多个候选必须用 `accountName` 让用户确认，禁止默认第一个；没有候选时说明未授权并引导授权。不得要求用户提供或向用户播报数字 profile 标识。
+4. **确定日期与粒度**：创建报告前取得用户日期，缺失时先询问，不猜测。默认粒度及全部参数约定见对应报告参考。
+5. **说明等待并运行**：告知 Amazon 通常约需 2–10 分钟，随后运行所选入口，由共享工作流完成映射、创建、轮询及下载。不要手工拆成三次业务调用，也不要直接运行共享模块。
+6. **解释结果**：报告完成后展示类型、日期、行数、预览及全部分片路径；合法空报告按接口参考解释。
+7. **继续未完成报告**：等待窗口结束表示任务仍在生成，先向用户确认是否继续，再使用返回的续跑参数和原入口继续原任务，禁止重复创建。
 
-## Core Concepts
+## 执行方式
 
-- **覆盖范围**：只覆盖 Sponsored Products Audience 和 Search Term Impression Share/Rank 两类 Reporting API v1 beta 报告
-- **一站式**：自动完成 advertiser account 映射 → 创建报告 → 等待生成 → 下载全部 CSV/gzip 分片 → 返回预览与文件路径
-- **双入口、共享流程**：两个公开入口分别固定报告类型，共用 `reporting_v1_workflow.py`；不要直接执行共享模块
-- **固定字段**：Agent 不选择 `fields`、`groupBy` 或自由过滤条件；脚本按对应 reference 构造 Amazon 官方兼容字段组合
-- **账号标识分工**：`profileId` 用于后端选择当前用户授权；`advertiserAccountId` 默认由脚本查询并映射
-- **v1 与 v3 边界**：普通曝光、点击、花费、转化类 SP 搜索词报告使用 `linkfox-amazon-ads-report` 的 `spSearchTerm`，不是本 Skill
-- **Beta 约束**：Amazon 当前将 Reporting API v1 标为 open beta；账号开放范围、字段和限流可能变化
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：同一会话、同一报告类型和同一参数组合默认只调用一次，成功结果缓存 24 小时。失败、未完成或空报告不得自动换日期、切换账号或连续试探；继续未完成任务时按续跑参数处理。
 
-## 可用脚本
+### 输出策略
 
-| 脚本 | 职责 |
-|------|------|
-| `get_sp_audience_report.py` | 一站式获取 SP Audience 受众细分表现；支持 ACCOUNT / CAMPAIGN / AD_GROUP 粒度 |
-| `get_sp_search_impression_share.py` | 一站式获取 SP 搜索词展示份额与展示份额排名 |
-| `check_auth_dependency.py` | 检测 `linkfox-amazon-ads-auth` 是否安装 |
+- 始终保存完整响应，目标路径为 `<根>/<YYYY-MM-DD>/<session>/data/linkfox-amazon-ads-sp-insights-report-<timestamp>.json`。`<根>` 优先取 `ACPX_WORKSPACES` 第一个路径下的 `linkfox/`，其次取 `<cwd>/linkfox/`；两处均不可写则请求前报错，不回退到家目录或系统临时目录。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，未设置时自动生成。完整 CSV 分片保存于同一会话的 `data/`。
+- 响应体的 UTF-8 编码不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应体的 UTF-8 编码超过 8000 字节：保存后，标准输出仅展示摘要，包括顶层字段、存在的常见计数及状态（如 `total`、`costToken`、`success`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-完整参数、内部调用链和响应结构见 `references/api.md`。选择 Audience 时读 `references/sp-audience-reporting-v1.md`；选择 Search Impression Share 时读 `references/sp-search-impression-share-v1.md`。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## Agent 调用流程
+## 执行规则
 
-Agent 收到“SP 受众”或“SP 搜索词展示份额”需求时，**必须**按下列顺序：
+### 算力消耗预估
 
-1. **定报告类型**：Audience 使用 `get_sp_audience_report.py`；展示份额/排名使用 `get_sp_search_impression_share.py`。一次只调用一个入口。
-2. **查 reference**：读取对应报告 reference，确认字段含义、限制和展示重点。
-3. **解析账号**：通过 Ads Auth Skill 按站点得到唯一 `profileId` 和 `region`；多候选时先向用户确认账号。
-4. **确认日期与粒度**：创建模式必须有 `startDate` / `endDate`。未指定 `timeUnit` 时使用 `DAILY`；Audience 未指定 `detailLevel` 时使用 `ACCOUNT`。
-5. **告知等待时间并调用**：说明 Amazon 通常需要约 2–10 分钟，然后运行选定入口。脚本会自动映射账号、创建、轮询和下载，不要手工拆成三次业务调用。
-6. **处理结果**：`success=true` 时展示报告类型、日期、总行数、预览和全部文件路径；`totalRows=0` 是合法空报告。
-7. **处理未完成**：`status=STILL_PROCESSING` 不是失败。先向用户确认是否继续，再使用 `resumeHint.params` 和 `--no-cache` 轮询同一 `reportId`，禁止创建重复报告。
+不消耗算力 （限时）。
 
-## 默认条件（用户未指定时使用）
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-| 条件 | 默认规则 |
-|------|---------|
-| 报告类型 | 根据用户意图二选一；不同时拉取两类报告 |
-| `startDate` / `endDate` | 不擅自猜测；用户未给日期时先询问 |
-| `timeUnit` | `DAILY` |
-| Audience `detailLevel` | `ACCOUNT` |
-| `advertiserAccountId` | 不传，由脚本根据 `profileId` 自动映射 |
-| `pollInterval` | 60 秒 |
-| `maxAttempts` | 10；形成约 10 分钟客户端等待窗口 |
-| 字段与过滤 | 使用脚本固定的官方兼容组合，不接受自定义 |
+### 解决认证和算力问题
 
-## 请求示例
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### 1. SP Audience 报告
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-```bash
-python scripts/get_sp_audience_report.py '{
-  "profileId": 1234567890, "region": "NA",
-  "startDate": "2026-08-01", "endDate": "2026-08-07",
-  "timeUnit": "DAILY", "detailLevel": "ACCOUNT"
-}'
-```
+### 约束与建议
 
-### 2. SP Search Term Impression Share/Rank 报告
+- **理解报告**：只覆盖 Reporting API v1 的 SP Audience 与搜索词展示份额/排名；不能用常规 v3 数据替代或伪造。Reporting API v1 为 open beta，不承诺账号开放范围、字段及限流长期稳定。
+- **区分账号标识**：profile 用于服务端选择授权，advertiser account 为报告目标，通常由脚本自动映射；用户多账号选择规则不得跳过。
+- **固定报告组合**：两个入口共享工作流，字段由脚本按参考构造，不让 Agent 自由组合维度或过滤；具体限制见报告参考。
+- **呈现报告**：Audience 优先展示受众名称、类型、来源、国家、曝光、点击、花费、购买、销售额、ROAS，并保留币种；搜索词报告突出搜索词、展示份额及份额排名。注明日期与粒度，说明当天数据可能不完整。
+- **保护输出**：完整报告从所有 CSV 分片按需读取，优先看摘要和预览；禁止展示完整 Token、内部授权记录或 Amazon 预签名下载链接。
+- **尊重结果**：失败时如实说明错误，不盲目换日期、账号或参数重建；空结果、续跑、缓存及网关账号保护措施见 [接口参考](references/api.md)。客观呈现，除非用户要求，不主动延伸商业决策建议。
+- **本地输出**：报告入口优先在工作区落盘，并提供成功结果缓存；与通用调用器的衔接说明、目录优先级及 CLI 约定见接口参考。
 
-```bash
-python scripts/get_sp_search_impression_share.py '{
-  "profileId": 1234567890, "region": "NA",
-  "startDate": "2026-08-01", "endDate": "2026-08-07",
-  "timeUnit": "DAILY"
-}'
-```
+## 使用示例
 
-### 3. 轮询已有 reportId（救回上次未完成报告）
+### 获取 SP Audience 报告
 
-根据原报告类型继续使用原入口；仅传 `profileId`、`region`、`reportId` 和轮询参数：
+用户：查看美国站上周各受众细分的表现。
 
-```bash
-python scripts/get_sp_search_impression_share.py '{
-  "profileId": 1234567890, "region": "NA",
-  "reportId": "REPORT_ID",
-  "pollInterval": 60, "maxAttempts": 20
-}' --no-cache
-```
+确认唯一广告账号与日期范围，读取 Audience 参考，运行受众报告入口；展示受众指标、币种和所有 CSV 分片路径。
 
-## 响应格式
+### 获取搜索词展示份额及排名
 
-成功：
+用户：查看日本站上周搜索词的展示份额和排名。
 
-```json
-{
-  "success": true,
-  "status": "COMPLETED",
-  "reportId": "report-id",
-  "reportKind": "audience",
-  "totalRows": 42,
-  "dataFiles": [{"part": 1, "path": "C:/.../part-01.csv", "rowCount": 42}],
-  "preview": [{"audienceSegment.name": "In-market ..."}],
-  "pollAttempts": 2,
-  "elapsedSeconds": 60.2
-}
-```
+确认账号与日期，运行搜索词展示份额入口，突出搜索词、份额与排名；不得用普通搜索词表现报告替代。
 
-- **失败**：`success=false`，并包含 `error`、脱敏后的 `details` 和 `_cacheable=false`。
-- **未完成**：`status=STILL_PROCESSING`，并包含原 `reportId`、`resumeHint.mode=poll-only`、`resumeHint.params` 和 `_cacheable=false`。
+### 恢复已有任务
 
-## 调用原则
+用户：继续获取上次还在生成的洞察报告。
 
-- 用户明确指定报告类型时只调用该类型，不擅自替换或同时生成另一份报告
-- Search Impression Share 不得追加 campaign、adGroup、target、keyword、groupBy 或自定义 fields
-- 参数中不得出现 access token、refresh token、LWA 密钥或自定义 Amazon 请求头；脚本会在联网前递归拒绝
-- 报告失败时如实展示 Amazon 错误，不盲目换参数重建
-- 报告仍在生成时复用同一 `reportId`；禁止因为等待较久创建重复报告
-- 成功后展示 CSV 文件路径和必要预览，不展示完整 Token、内部授权记录或 Amazon 预签名 URL
-- 客观呈现报告数据；除非用户要求，不主动扩展成商业决策建议
+确认继续后，按原报告类型使用返回的续跑参数，复用同一任务并绕过缓存。脚本调用示例见 [脚本用法](references/script-usage.md#入口调用示例)。
 
-## 常见错误
+## 使用反馈
 
-| 状态 | 含义 | 建议 |
-|------|------|------|
-| `Missing or invalid parameter` | 缺少 profile、region 或创建日期 | 补齐对应 reference 要求的参数后再调 |
-| `Unsupported parameter(s)` | 传了本报告不支持的字段或维度 | 删除不支持参数；不要绕过脚本固定字段组合 |
-| `HTTP 401` | LinkFox Key 或 Amazon Ads 授权失效 | LinkFox 401 走 onboarding；上游 401 使用 Ads Auth 刷新授权 |
-| `HTTP 403` | 当前 Ads 应用或账号未开放 Reporting API v1 | 检查 Ads API 应用与授权账号权限；不得用 v3 数据伪造结果 |
-| `HTTP 429` | Amazon Ads 上游限流 | 保持每分钟级轮询，不密集重试 |
-| `status=FAILED` | Amazon 报告生成失败 | 透传失败详情，不自动更换参数重建 |
-| `status=STILL_PROCESSING` | 客户端等待窗口结束，但报告仍在生成 | 不是失败；向用户确认后用 `resumeHint.params` 继续原 reportId |
-| `totalRows=0` | 报告成功但当期无数据 | 合法空结果，不自动扩大日期或切换账号 |
-| exit 42 | 依赖 Skill 未安装 | 先安装或加载 `linkfox-amazon-ads-auth` |
-
-## 日期与数据
-
-- 创建报告时 `startDate` / `endDate` 必须使用 `YYYY-MM-DD`，且 `startDate <= endDate`
-- `endDate` 不得晚于今天；使用当天可能得到尚未完整的数据，优先选择昨天或更早日期
-- `DAILY` 返回 `date.value`；`SUMMARY` 返回 `dateRange.value`
-- Audience 重点展示受众名称/类型/来源、国家、曝光、点击、花费、购买、销售额和 ROAS，并保留币种字段
-- Search Impression Share 重点展示 `searchTerm.value`、`metric.impressionShare` 和 `metric.impressionShareRank`
-- 完成报告可能包含多个分片；必须保留并展示全部 `dataFiles`
-
-## Not Applicable
-
-- 普通 SP 搜索词表现报告（曝光、点击、花费、销售、转化）→ `linkfox-amazon-ads-report` 的 `spSearchTerm`
-- SP / SB / SD 常规 v3 报告 → `linkfox-amazon-ads-report`
-- 广告活动、广告组、关键词、投放和预算实体管理 → `linkfox-amazon-ads-manager`
-- 授权、账号选择与 token 刷新 → `linkfox-amazon-ads-auth`
-- Sponsored Brands、Sponsored Display、Sponsored Television、Amazon DSP、Brand Analytics、Retail Analytics → 不在本 Skill
-
-## Amazon Ads API 接口保护与重试指引
-
-同一广告账号/profile 连续收到 Amazon Ads API 的 400、403、404 或 429 时，网关会返回 450、453、454 或 459 并短暂冷却。这些自定义状态码不是 Amazon 原生状态，也不表示封号；目的是避免持续异常或高频调用扩大广告账号风险。
-
-| 状态与 message | 范围 | 触发与冷却 | 处理 |
-|---|---|---|---|
-| `450`：`400，请求异常，请优化您的参数` | 广告账号/profile+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：20 分钟 | 停止原参数重试，检查 profileId、region、实体/报告 ID、日期和请求体 |
-| `453`：`403，店铺未授权，请先授权` | 广告账号/profile 全部接口 | 60 秒内超过 2 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 停止该广告账号调用，检查 Ads 授权、应用权限、profile 归属和区域 |
-| `454`：`404，资源不存在，请优化您的参数` | 广告账号/profile+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 确认资源 ID、所属 profile/区域、资源状态和接口路径 |
-| `459`：`429限流中，请降低频率` | 广告账号/profile+接口 | 首次：15 秒；2 分钟内超过 2 次：30 秒；3 分钟内超过 4 次：2 分钟 | 降低并发、分页和轮询频率并逐级退避 |
-
-- 立即停止自动或并发重试，不得通过换脚本或重复创建任务绕过保护；优先遵循 `retryAfter`、`blockedUntil`，没有时按表中时长说明。
-- 450/453/454 必须先修正参数、授权或资源标识，冷却后最多谨慎重试一次；再次触发则停止调用。453 期间停止该广告账号/profile 全部 Ads API。
-- 保留已有 `reportId` 等任务 ID；写操作结果不确定时先查询状态，不直接重放。
-- 向用户先说明广告账号保护，再给原因、处理和等待时间。可回复：“为保护您的亚马逊广告账号安全，检测到 Amazon Ads API 连续返回{原因}，当前已进入短暂保护。请先{处理动作}，预计{等待时间}后再试；这不代表封号，也不是套餐或积分限制。”不要只说“LinkFox 限流”或“服务器繁忙”。
-
-## 算力消耗规则
-
-不消耗算力。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

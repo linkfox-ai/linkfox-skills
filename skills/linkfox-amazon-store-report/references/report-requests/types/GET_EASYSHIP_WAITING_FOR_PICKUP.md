@@ -1,17 +1,17 @@
 # `GET_EASYSHIP_WAITING_FOR_PICKUP`
 
-> **分类**：5. Easy Ship Reports  
-> **说明**：Orders waiting for Easy Ship pickup  
-> **可用范围**：Seller only
+> **分类**：5. Easy Ship 报告  
+> **说明**：等待 Easy Ship 揽收的订单  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Easy Ship Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-easy-ship#easyship-waiting-for-pick-up-report)（章节：**EasyShip Waiting for Pick Up Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Easy Ship 报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-easy-ship#easyship-waiting-for-pick-up-report)（章节：**EasyShip Waiting for Pick Up Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
-- **受限报告**：未在相邻 Note 中写明，但 **Role** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
-- **Role**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
-- **Report output type**：Tab-delimited file
-- **要点**：Contains all of a seller's orders that are in the following status in Seller Central: "Waiting for pick up"
+- **受限报告**：未在相邻 Note 中写明，但 **角色** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
+- **角色**：[Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
+- **输出格式**：Tab-delimited file
+- **要点**：包含 Seller Central 中状态为 Waiting for pick up（等待揽收）的全部卖家订单。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-easy-ship#easyship-waiting-for-pick-up-report>
 

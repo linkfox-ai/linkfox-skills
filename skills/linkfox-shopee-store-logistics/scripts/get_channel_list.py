@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: get_channel_list.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_logistics_api("get_channel_list", params, "get_channel_list.py"), indent=2, ensure_ascii=False))
+    run_logistics_api("get_channel_list", params, "get_channel_list.py")
 
 
 if __name__ == "__main__":

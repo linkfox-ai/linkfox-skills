@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload source media, create once, poll the shared task query, and save media."""
+"""上传素材、创建一次任务、轮询公共任务查询并下载结果；支持超时续查。"""
 import argparse
 import json
 import os

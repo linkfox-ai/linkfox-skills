@@ -66,7 +66,7 @@ def main():
     body = build_request(params)
     result = call_temu_api(PROXY_URL, body, linkfox_params=params)
     inline = lf_inline_flag()
-    emit_result(parse_nested_body(result), inline)
+    emit_result(parse_nested_body(result), inline=inline)
 
 if __name__ == "__main__":
     main()

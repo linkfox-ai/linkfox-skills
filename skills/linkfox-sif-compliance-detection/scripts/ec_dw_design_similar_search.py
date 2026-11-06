@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SIF Design Patent Detection - LinkFox Skill
+SIF 外观专利检测 - LinkFox Skill
 调用 /ecDw/designSimilarSearch 接口。
 
 Usage:
@@ -21,10 +21,16 @@ import os
 import sys
 import time
 import secrets
-from urllib.request import Request, HTTPRedirectHandler, build_opener
-from urllib.error import HTTPError, URLError
+import io
+from contextlib import ExitStack, redirect_stdout
+from unittest.mock import patch
+from urllib.request import HTTPRedirectHandler, HTTPErrorProcessor, build_opener
 from xml.etree import ElementTree
 
+import call_api as _common
+
+# 引用公共调用器入口，兼容包装只处理响应，不自行构建/发送 HTTP 请求。
+_transport_call = _common.call_api
 
 API_PATH = "/ecDw/designSimilarSearch"
 SLUG = "linkfox-sif-compliance-detection"
@@ -32,6 +38,7 @@ SLUG = "linkfox-sif-compliance-detection"
 # 响应不超过该字节数时全量输出；所有响应均落盘
 SMALL_THRESHOLD = 8000
 CACHE_TTL_SEC = 24 * 60 * 60
+SEARCH_RESPONSE_CONTRACT = "design-similar-v3"
 _LAST_HTTP_STATUS = None
 
 _SESSION_CACHE: dict[str, str] = {}
@@ -40,8 +47,6 @@ def get_api_base() -> str:
     """网关基础地址：env LINKFOX_TOOL_GATEWAY 优先，缺省回退正式地址。"""
     return (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
 
-def get_api_url():
-    return get_api_base() + API_PATH
 
 
 def get_api_key():
@@ -58,7 +63,7 @@ def get_api_key():
 
 
 def _decode_gateway_response(body, http_status=None, reason=None):
-    """Parse JSON responses and normalize gateway ToolErrorResponse XML."""
+    """解析 JSON，兼容网关 ToolErrorResponse XML。"""
     if body:
         try:
             return json.loads(body)
@@ -94,7 +99,7 @@ def _decode_gateway_response(body, http_status=None, reason=None):
 
 
 def _attach_gateway_cost_headers(result, headers):
-    """Expose gateway billing headers in the normalized JSON result."""
+    """将实际费用响应头合入结果，响应头优先。"""
     if not isinstance(result, dict) or headers is None:
         return result
     for header, field in (
@@ -118,11 +123,38 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-_OPENER = build_opener(_NoRedirect())
+class _GatewayResponseProcessor(HTTPErrorProcessor):
+    """仅处理公共调用器的响应：阻止重定向，保留 HTTP 状态、XML 和费用。"""
+
+    def http_response(self, request, response):
+        global _LAST_HTTP_STATUS
+        _LAST_HTTP_STATUS = response.getcode()
+        try:
+            body = response.read().decode("utf-8", errors="replace")
+            if 300 <= _LAST_HTTP_STATUS < 400:
+                result = {"error": "Redirect blocked", "httpStatus": _LAST_HTTP_STATUS}
+            else:
+                result = _decode_gateway_response(
+                    body,
+                    None if 200 <= _LAST_HTTP_STATUS < 300 else _LAST_HTTP_STATUS,
+                    getattr(response, "reason", None),
+                )
+                if not 200 <= _LAST_HTTP_STATUS < 300 and isinstance(result, dict):
+                    result.setdefault("httpStatus", _LAST_HTTP_STATUS)
+            result = _attach_gateway_cost_headers(result, response.headers)
+            # 公共 call_api 读取归一化 JSON，不重复创建请求或额外联网。
+            return io.BytesIO(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+        finally:
+            response.close()
+
+    https_response = http_response
 
 
-def call_api(params):
-    """一次请求；禁用重定向，不重试或自动改参数。"""
+_OPENER = build_opener(_NoRedirect(), _GatewayResponseProcessor())
+
+
+def call_api(params, api_path=API_PATH):
+    """通过公共 run 请求一次，由业务入口负责缓存和落盘，不叠加公共缓存。"""
     global _LAST_HTTP_STATUS
     _LAST_HTTP_STATUS = None
     headers = {
@@ -134,8 +166,7 @@ def call_api(params):
         "MODE_ID": os.environ.get("MODE_ID", ""),
         "APP_NAME": os.environ.get("APP_NAME", ""),
     }
-    # urllib sends HTTP header values as Latin-1. Reject invalid values before
-    # transport, naming only the header so Authorization can never be echoed.
+    # 在公共调用器创建请求前校验；仅显示头名称，避免泄露 Authorization。
     for name, value in headers.items():
         try:
             value.encode("latin-1")
@@ -143,53 +174,52 @@ def call_api(params):
             return {"error": f"Invalid request header {name}: use Latin-1 text (ASCII recommended)"}
         if any(ord(char) < 32 or ord(char) == 127 for char in value):
             return {"error": f"Invalid request header {name}: control characters are not allowed"}
-    req = Request(
-        get_api_url(),
-        data=json.dumps(params, ensure_ascii=False).encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
+    captured = {}
+
+    def collect(api_path, business_params):
+        result = _transport_call(api_path, business_params)
+        captured["result"] = result
+        # 公共 run 的显示逻辑要求对象；非对象响应仍交回业务入口完整保存。
+        return result if isinstance(result, dict) else {"rawResponse": result}
+
     try:
-        with _OPENER.open(req, timeout=150) as response:
-            _LAST_HTTP_STATUS = response.getcode()
-            body = response.read().decode("utf-8", errors="replace")
-            result = _decode_gateway_response(body)
-            return _attach_gateway_cost_headers(result, response.headers)
-    except HTTPError as exc:
-        _LAST_HTTP_STATUS = exc.code
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        if 300 <= exc.code < 400:
-            result = {"error": "Redirect blocked", "httpStatus": exc.code}
-        else:
-            result = _decode_gateway_response(body, exc.code, exc.reason)
-            if isinstance(result, dict):
-                result.setdefault("httpStatus", exc.code)
-        return _attach_gateway_cost_headers(result, exc.headers)
-    except URLError as exc:
-        return {"error": f"Connection failed: {exc.reason}"}
+        with ExitStack() as stack:
+            # 公共 transport 负责 Request 和发送，注入 opener 以禁止重定向并归一化响应。
+            stack.enter_context(patch.object(_common, "urlopen", _OPENER.open))
+            stack.enter_context(patch.object(_common, "call_api", collect))
+            # 业务入口负责预检、缓存和落盘；run 的副作用限于内存，避免第二层缓存/文件。
+            stack.enter_context(patch.object(_common, "_cache_path", lambda *args: ""))
+            stack.enter_context(patch.object(_common, "_resolve_output_path", lambda *args: "<memory>"))
+            stack.enter_context(patch.object(_common, "open", lambda *args, **kwargs: io.StringIO(), create=True))
+            stack.enter_context(redirect_stdout(io.StringIO()))
+            _common.run(api_path, SLUG, argv=[json.dumps(params, ensure_ascii=False), "--inline", "--no-cache"])
+        return captured["result"]
     except TimeoutError:
         return {"error": "Connection timed out; execution outcome may be unknown"}
     except OSError as exc:
         return {"error": f"Connection failed; execution outcome may be unknown: {exc}"}
 
 
-def _cache_key(params):
+def _cache_key(params, api_path=API_PATH):
     """隔离不同网关、端点、API Key；不保存原始 Key。"""
     fingerprint = hashlib.sha256(get_api_key().encode("utf-8")).hexdigest()
-    raw = json.dumps({
+    cache_scope = {
         "apiBase": get_api_base(),
-        "apiPath": API_PATH,
+        "apiPath": api_path,
         "apiKeyFingerprint": fingerprint,
         "params": params,
-    }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    }
+    if api_path == API_PATH:
+        cache_scope["responseContract"] = SEARCH_RESPONSE_CONTRACT
+    raw = json.dumps(cache_scope, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
-def _cache_path(params):
+def _cache_path(params, api_path=API_PATH):
     cwd = os.getcwd()
     path = os.path.join(cwd, "linkfox", ".cache", SLUG)
     os.makedirs(path, exist_ok=True)
-    return os.path.join(path, f"{SLUG}-{_cache_key(params)}.json")
+    return os.path.join(path, f"{SLUG}-{_cache_key(params, api_path)}.json")
 
 
 def _load_cache(path):
@@ -205,9 +235,19 @@ def _load_cache(path):
         return None
 
 
+def _is_2xx(value):
+    """按公共基础规则识别数字或数字字符串，布尔值不视为状态码。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return False
+    try:
+        return 200 <= float(value) < 300
+    except (TypeError, ValueError):
+        return False
+
+
 def _is_success_payload(result):
-    """仅保存成功的网关响应；检查原上游 envelope 的业务状态。"""
-    if not isinstance(result, dict) or result.get("errcode") != 200 or "data" not in result:
+    """仅保存成功的网关响应；检查上游 envelope 的业务状态。"""
+    if not isinstance(result, dict) or "data" not in result:
         return False
     upstream = result["data"]
     if not isinstance(upstream, dict) or upstream.get("code") != "OK":
@@ -219,9 +259,14 @@ def _is_success_payload(result):
                 or envelope.get("success") is False or envelope.get("ok") is False):
             return False
         status = envelope.get("httpStatus")
-        if status is not None and str(status) not in ("200", "201", "202", "204"):
+        if status is not None and not _is_2xx(status):
             return False
-        for name in ("errcode", "errorCode", "code"):
+        # errcode 严格复用公共基本规则，0/false 均不是空值或成功码。
+        value = envelope.get("errcode")
+        if value is not None and not (isinstance(value, str) and not value.strip()):
+            if not _is_2xx(value):
+                return False
+        for name in ("errorCode", "code"):
             if name in envelope and str(envelope[name]).lower() not in ("0", "200", "ok", "success"):
                 return False
     return True
@@ -400,11 +445,11 @@ def _resolve_output_path(ts):
     return resolve_data_path(SLUG, ts)
 
 
-def main():
+def main(argv=None, *, api_path=API_PATH, script_name="ec_dw_design_similar_search.py"):
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
-    argv = sys.argv[1:]
+    argv = list(sys.argv[1:] if argv is None else argv)
     inline = "--inline" in argv
     use_cache = "--no-cache" not in argv
     argv = [arg for arg in argv if arg not in ("--inline", "--no-cache")]
@@ -415,7 +460,7 @@ def main():
         elif len(argv) == 1 and not argv[0].startswith("--"):
             params = json.loads(argv[0])
         else:
-            print("Usage: ec_dw_design_similar_search.py ('<JSON parameters>' | --params-file <path>) [--inline] [--no-cache]", file=sys.stderr)
+            print(f"Usage: {script_name} ('<JSON parameters>' | --params-file <path>) [--inline] [--no-cache]", file=sys.stderr)
             sys.exit(1)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         print(f"Invalid parameter format: {exc}", file=sys.stderr)
@@ -430,14 +475,14 @@ def main():
         out_path = _resolve_output_path(time.time())
         with open(out_path, "x", encoding="utf-8"):
             pass
-        cache_path = _cache_path(params) if use_cache else None
+        cache_path = _cache_path(params, api_path) if use_cache else None
     except (OSError, ValueError) as exc:
         print(f"Cannot prepare task output directory: {exc}", file=sys.stderr)
         sys.exit(1)
     result = _load_cache(cache_path) if cache_path else None
     cache_hit = result is not None
     if result is None:
-        result = call_api(params)
+        result = call_api(params, api_path)
         if cache_path and _is_success_result(result):
             _save_cache(cache_path, result)
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
@@ -458,4 +503,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

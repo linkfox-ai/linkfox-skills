@@ -6,7 +6,7 @@
 
 ```json
 {
-  "action": "generate | refine | explain | validate | export | run | runs | history | automation | not_workflow",
+  "action": "generate | refine | explain | validate | export | run | runs | history | automation | variables | credentials | not_workflow",
   "confidence": "high | medium | low",
   "plannerStatus": "ready | needs_input | blocked",
   "requiresConfirmation": true,
@@ -55,12 +55,14 @@
 
 11. 若是 `history`:纯文字,**不贴 JSON、不贴路径**。查看按"第 N 版 · 变更人 · 时间 · 改了什么"逐条列,不输出 flow info 标签;还原先说会改回哪些节点并请求确认(预览轮不输出标签),**还原成功后**说"已还原到第 N 版,记为第 M 版",最后一行输出 `<linkfox-flow-info id="<workflowId>"></linkfox-flow-info>`,让前台画布重新拉取。
 12. 若是 `automation`:纯文字,不贴 JSON、不输出 flow info 标签(画布没变)。启停按 `tableSync.status` 一句话说结果("已停用,表里变更不再触发" / "已重新启用");退出 70 说"订阅已保存,但自动化没生效"并转述 `detail`;查看按"流程 · 数据表 · 事件 · 开/关"逐条列。
+13. 若是 `variables`:纯文字,不贴原始 JSON、不输出 flow info 标签。按"名字 · 类型 · 值已设置/为空 · 更新时间"列;用 `--reveal` 时也只贴用户要看的那几条。写入后一句"已创建 / 已更新变量 <名字>"。`warnings` 非空时**必须**转述,尤其"值像密钥、明文存库且组 OWNER 可见"那条,并建议改用凭据。
+14. 若是 `credentials`:纯文字,不输出 flow info 标签。列表按"显示名 · 类型 · 更新时间"列,并给出可写进节点的 id(必要时)。创建 / 更新后一句"已创建凭据 <显示名>(类型 X)",**不贴任何字段值**;删除了说"已删除凭据 <显示名>",并提醒引用它的流运行时会取不到认证。`linkfoxAgentApi` 的"后台自动绑定"警告要转述。
 
 ## JSON 输出规范
 
 - 顶层字段固定 4 个:`description` / `usecases` / `nodes` / `edges`。
 - 严格按 `references/node-catalog.md` 的节点身份、必填 inputs、outputAnchor 命名。
-- 运行时目录字段(model / credential / documentStore uuid / vectorStore / flowId)一律留占位空字符串或最短骨架项,不写具体值。
+- 运行时目录字段(model / credential / documentStore uuid / vectorStore / flowId)一律留占位空字符串或最短骨架项,不写具体值。**例外**:用户明确点名"用已有凭据 X"时,`data.credential` 写 `creds list` 拿到的实例 id(不是类型名、不猜),规则见 `variables-and-credentials.md`。
 - 缩进 4 空格(可读性优先,不追求最短)。
 - JSON 前后不加解释性文字混排;要说明的话写在 JSON 代码块之外。
 - **落盘和上传先于展示**:generate / refine / export 的 JSON 必须先经 `scripts/save_workflow.py` 落到 workspace,再经 `scripts/upload_workflow.py` 上传并验证 mapping。拿到 `path` 和 `workflowId` 后才回复。禁止只贴 JSON,也禁止跳过上传。
@@ -81,7 +83,7 @@
 - 不输出内部字段 / 方法名,对用户说"选择模型 / 选择知识库"即可。
 - 只有上传脚本成功后才可以说“已上传到 linkfox-workflow 系统”;只有 `run_workflow.py` 退出码 0 且 `runStatus=FINISHED` 才可以说“已执行一次 / 流程跑完”。**“已发布 / 已上线 / 已经每天在跑”始终禁止**——上传不是发布,手动执行一次也不等于定时生效。
 - `runStatus` 不是 `FINISHED` 时禁止任何“执行成功 / 跑通了”措辞;`ERROR` 就说中断和失败节点,`WAITING_HUMAN_INPUT` 就说停在人工审批。
-- 不输出敏感字段的具体值(用户即使贴了带 credential UUID 的 JSON 也要提醒:导出前建议清空)。
+- 不输出敏感字段的具体值(用户即使贴了带 credential UUID 的 JSON 也要提醒:导出前建议清空)。凭据字段值、变量明文一律不贴回回复;用户要核对时,让他去画布上看,或明确要求 `vars list --reveal` 后只贴相关那几条。
 
 ## 下一步指引模板
 

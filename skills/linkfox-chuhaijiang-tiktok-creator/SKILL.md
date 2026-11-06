@@ -1,128 +1,123 @@
 ---
 name: linkfox-chuhaijiang-tiktok-creator
-description: 使用出海匠（Chuhaijiang）研究 TikTok 公开达人市场，支持达人搜索、详情、关联直播/商品/视频、机构榜、带货达人榜和涨粉榜。用户点名出海匠或 Chuhaijiang 时触发；未指定数据源时，仅对达人关联直播、机构榜或跨商品/视频的组合钻取触发。通用 TikTok 达人榜单、搜索和详情使用 linkfox-kalodata-tiktok-creator；商品到达人发现使用 linkfox-chuhaijiang-tiktok-product；点名其他数据源时不触发。
+description: 使用出海匠（Chuhaijiang）研究 TikTok 公开达人市场，支持达人搜索、详情、关联直播/商品/视频、机构榜、带货达人榜和涨粉榜。用户点名出海匠或 Chuhaijiang 时适用；未指定数据源时，仅对达人关联直播、机构榜或跨商品/视频的组合钻取适用。通用 TikTok 达人搜索、详情和榜单、商品到达人发现以及点名其他数据源的任务使用对应技能；不适用于私信触达、联盟邀请、账号登录或广告创建。
 ---
 
-# TikTok Creator Market Intelligence
+# 出海匠 TikTok 达人市场研究
 
-Use this skill to research public TikTok creator markets: discover creators, inspect one creator, trace their livestreams, products, and videos, or compare agency, commerce, and follower-growth rankings.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- Normal endpoints require a lowercase marketplace code.
-- Search and relationship endpoints return at most 10 records per page; ranking endpoints return at most 20.
-- Creator detail can request `channel`, `core`, or `portrait` expansions with a comma-separated `include` value.
-- Each endpoint call is billed independently. Reuse the 24-hour cache for identical requests; cache identity includes the gateway, API-key fingerprint, endpoint, and parameters.
-- Relationship ownership follows the starting entity: product-to-creator discovery belongs to the product skill; this skill owns creator-to-product, creator-to-live, and creator-to-video drill-downs.
+研究公开达人市场，发现候选达人、核对资料、追踪达人关联内容与商品，或比较机构、带货与涨粉表现。
 
-## Data Fields
+**场景速查**
 
-| Field | Meaning |
+| 用户表达 | 查询场景 |
 |---|---|
-| `data.total_count` | Total matching records when returned |
-| `data.items` | Creator, relationship, or ranking records |
-| `id` / `uid` / `creator_oecuid` | Creator identifiers; retain the identifier required by the next endpoint |
-| `nickname` / `unique_id` | Creator display identity |
-| `follower_count` | Audience size when returned |
-| `author_avg_engagement_rate` | Average engagement metric in creator search |
-| `total_video_live_30d_gmv` | Combined 30-day video and live GMV in creator search |
-| `video_30d_gmv` / `live_30d_gmv` | Channel-specific 30-day commerce performance |
+| 用出海匠找美国 TikTok 美妆达人 | 达人发现与筛选。 |
+| 用 Chuhaijiang 看这个达人详情 | 达人基础资料及指标。 |
+| 查这个达人的关联直播 | 达人到直播的关系追踪。 |
+| 看这个达人的带货商品和视频 | 从达人出发组合钻取。 |
+| 分析出海匠达人机构榜、带货达人榜或涨粉榜 | 榜单比较。 |
 
-Response fields vary by endpoint and optional detail expansion. Read `references/api.md` before parsing nested fields and preserve the runtime types returned by the API.
+### 边界
 
-## Endpoints
+未点名数据源且不属于上述特殊场景的通用 TikTok 达人搜索、详情与榜单使用 `linkfox-kalodata-tiktok-creator`；商品到达人的发现使用 `linkfox-chuhaijiang-tiktok-product`。点名 Kalodata、FastMoss、EchoTik 等其他数据源时交由对应技能。本技能只负责从达人出发的关联查询。
 
-| Intent | Endpoint | Script | Points/call |
-|---|---|---|---:|
-| Filter and discover creators | `/chuhaijiang/creators/search` | `chuhaijiang_creator_search.py` | 18 |
-| Inspect one creator | `/chuhaijiang/creators/detail` | `chuhaijiang_creator_detail.py` | 9 |
-| Find a creator's livestreams | `/chuhaijiang/creators/related-lives` | `chuhaijiang_creator_related_lives.py` | 18 |
-| Find a creator's promoted products | `/chuhaijiang/creators/related-products` | `chuhaijiang_creator_related_products.py` | 18 |
-| Find a creator's videos | `/chuhaijiang/creators/related-videos` | `chuhaijiang_creator_related_videos.py` | 18 |
-| Browse creator-agency ranking | `/chuhaijiang/creators/rankings/agencies` | `chuhaijiang_creator_rank_agencies.py` | 18 |
-| Browse commerce-creator ranking | `/chuhaijiang/creators/rankings/commercial` | `chuhaijiang_creator_rank_commercial.py` | 18 |
-| Browse follower-growth ranking | `/chuhaijiang/creators/rankings/growth` | `chuhaijiang_creator_rank_growth.py` | 18 |
+## 接口清单
 
-Call only the endpoint required by the user's current question. Ask before making additional paid drill-down calls that the user did not request.
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 达人搜索 | POST `/chuhaijiang/creators/search` | `scripts/chuhaijiang_creator_search.py` | 按关键词与市场指标发现达人。 |
+| 达人详情 | POST `/chuhaijiang/creators/detail` | `scripts/chuhaijiang_creator_detail.py` | 查看基础资料及可选核心、渠道和受众画像。 |
+| 关联直播 | POST `/chuhaijiang/creators/related-lives` | `scripts/chuhaijiang_creator_related_lives.py` | 从达人追踪关联直播。 |
+| 带货商品 | POST `/chuhaijiang/creators/related-products` | `scripts/chuhaijiang_creator_related_products.py` | 从达人追踪推广商品。 |
+| 关联视频 | POST `/chuhaijiang/creators/related-videos` | `scripts/chuhaijiang_creator_related_videos.py` | 从达人追踪发布的视频。 |
+| 达人机构榜 | POST `/chuhaijiang/creators/rankings/agencies` | `scripts/chuhaijiang_creator_rank_agencies.py` | 比较机构带货与关联规模。 |
+| 带货达人榜 | POST `/chuhaijiang/creators/rankings/commercial` | `scripts/chuhaijiang_creator_rank_commercial.py` | 按统计窗口比较带货表现。 |
+| 达人涨粉榜 | POST `/chuhaijiang/creators/rankings/growth` | `scripts/chuhaijiang_creator_rank_growth.py` | 按统计窗口比较涨粉表现。 |
 
-## Parameter Guide
+## 前置条件
 
-- `country`: one of `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn` in lowercase.
-- `id`: required for detail and relationship endpoints. Reuse the creator identifier returned by search or ranking results.
-- `page`: starts at 1. `pageSize` is optional; use no more than 10 for search/relationships and no more than 20 for rankings.
-- Search supports `keyword`, `category`, follower, 30-day GMV, average-view and engagement ranges, `hasContact`, and `sort`.
-- Commerce and growth rankings require `date` (`YYYYMMDD`) and `granularity` (`daily`, `weekly`, `monthly`, `0`, `1`, or `2`).
-- Use camelCase request names shown in `references/api.md`; do not send upstream snake_case names.
+先确定目标市场与研究问题。详情及关联查询复用搜索或榜单返回的达人标识；带货达人榜与达人涨粉榜研究先明确统计日期和窗口；达人机构榜按接口返回的 30 天指标比较。调用前阅读 `references/api.md` 中对应接口的参数、字段和使用限制。
 
-## 调用方式
+## 查询流程
 
-- **API 端点**：8 个 LinkFox 网关能力均使用 POST；完整请求地址、参数、响应和错误码见 `references/api.md`。
-- **Python 脚本**：`python scripts/<entry>.py '<JSON 参数>' [--inline]`
-- **成本约束**：业务入口脚本默认只缓存成功响应 24 小时，业务成功的空结果也可缓存；缓存按当前工作目录、调用身份、网关、端点和完整请求参数隔离。相同组合命中时输出 `Cache hit`，不会发起新的付费请求。HTTP 或业务失败不缓存；`--inline` 不绕过缓存；`--no-cache` 会强制真实请求并可能再次消耗算力，仅在用户明确同意额外消耗或调试时使用。
+1. 根据用户问题选择搜索、详情、关联查询或榜单，只调用当前问题需要的能力。
+2. 需要发现达人时先搜索或查看用户指定榜单；已有达人标识时直接查询所需资料，不重复发现。
+3. 从结果中保留下一步需要的达人及关联实体标识。仅在用户已要求的范围内查询详情、直播、商品或视频；额外收费钻取前向用户说明并征得同意。
+4. 先查看摘要，再按需从已保存的 JSON 提取字段；区分原始数据与分析判断，说明市场、筛选条件、请求日期、统计窗口和可用分页情况。
 
-**输出策略（8 个达人业务脚本）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-creator-<timestamp>.json`；`<cwd>` 为脚本执行时的当前工作目录，当前目录不可写时退出报错，不回退到用户目录或系统临时目录。
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 输出请求参数、顶层状态、`data.total_count`、各业务列表长度和首个非空业务列表的前 3 条样本
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：各接口按下方“算力消耗预估”计费。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存；缓存命中不发起请求，具体缓存规则及 `--no-cache` 限制见 `references/api.md`。失败或空结果时，不得自动更换关键词、翻页或修改筛选条件连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 解决认证和算力问题
+### 输出策略
 
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-creator-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。完整响应仅写入当前工作目录的会话数据目录；当前目录不可写时应报错，不回退到用户目录或系统临时目录。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括请求参数、顶层字段与状态、`data.total_count`、返回的分页字段、各业务列表长度，以及首个非空业务列表的前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”，或类似含义的内容。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-```bash
-python scripts/chuhaijiang_creator_search.py '{"country":"us","keyword":"beauty","pageSize":5}'
-python scripts/chuhaijiang_creator_detail.py '{"country":"us","id":"7302162228386776110","include":"channel,core,portrait"}'
-python scripts/chuhaijiang_creator_related_products.py '{"country":"us","id":"7302162228386776110","pageSize":5}'
-python scripts/chuhaijiang_creator_rank_growth.py '{"country":"us","date":"20260828","granularity":"daily","pageSize":5}'
-```
+达人详情 9 算力 / 次；达人搜索、关联直播、带货商品、关联视频、达人机构榜、带货达人榜和达人涨粉榜各 18 算力 / 次。按各端点分别计费，高频调用或多接口钻取前说明预计调用次数与总消耗。
 
-## Display Rules
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-1. State the marketplace, filters, ranking window, total count, and current page when available.
-2. For creator lists, show identity, audience size, engagement, content volume, commerce metrics, category, and creator ID when returned.
-3. For relationship results, show the endpoint-specific live, product, or video metrics and retain the related entity ID for optional drill-down.
-4. Keep currency units and time windows exactly as returned; do not infer a currency or normalize ratios silently.
-5. Separate observed API data from recommendations or interpretations.
-6. Never expose API keys, private contact details, or raw authentication headers.
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-## Important Limitations
+### 解决认证和算力问题
 
-1. Data is public market intelligence and cannot be treated as the user's private TikTok account or CRM data.
-2. This skill does not contact creators, send affiliate invitations, log into accounts, or create campaigns.
-3. Do not invent unsupported filters or compensate for an empty result by repeatedly calling paid endpoints.
-4. Rankings and creator metrics can change over time; report the request date and ranking window.
-5. Contact availability is a search filter, not permission to expose or misuse personal information.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## User Expression & Scenario Quick Reference
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**Applicable**:
+### 约束与建议
 
-- **达人发现与详情**：“用出海匠找美国 TikTok 美妆达人”，“用 Chuhaijiang 看这个达人详情”。
-- **关联数据**：“查这个达人的关联直播”，“看这个达人的带货商品和视频”。
-- **达人榜单**：“用 Chuhaijiang 看达人涨粉榜”，“分析出海匠达人机构榜”，“查看带货达人榜”。
+- **公开市场数据**：不得将结果视作用户私有 TikTok 账号或 CRM 数据；不联系达人、不发送联盟邀请、不登录账号、不创建广告或冒充达人。
+- **达人与关系展示**：达人列表展示可用身份、粉丝、互动、内容量、带货指标、类目与达人标识；关联结果展示对应直播、商品或视频的指标，并保留关联实体标识供用户后续研究。
+- **保留真实口径**：币种、单位、比率和累计、7 天、30 天或区间口径均按响应呈现，不静默换算币种或百分比。指标和榜单会变化，注明请求日期和统计窗口。
+- **字段与概念**：不同接口和详情扩展的字段不同；按接口定义读取真实路径及运行时类型，不补造缺失字段，不将机构标识当成达人标识。具体定义见 `references/api.md`。
+- **摘要主列表**：摘要按出海匠业务列表生成，展示各业务列表的长度及首个非空业务列表的样本；不将更长的商品图片等嵌套数组当成主列表。
+- **数据与判断分开**：将观察到的数据与建议、解释分别表达。
+- **保护认证与隐私**：不暴露密钥、原始认证头或私人联系方式；联系方式可用性筛选不代表公开、汇总或滥用个人信息的许可。公开邮箱及外部社交账号仅在用户有明确、合规业务需要时展示。
+- **反馈脱敏**：反馈内容先概括并脱敏，不包含 API Key、达人私人联系方式、原始用户消息或无关任务上下文。
+- **处理空结果与失败**：不编造筛选条件，不通过反复收费查询弥补空结果；按接口定义解释问题并保留已有数据。
 
-**Adjacent**: General TikTok creator searches without a named source should use the existing dedicated creator skills. Product-to-creator discovery starts from a product ID and belongs to the product skill. Requests naming Kalodata, FastMoss, EchoTik, or another provider should use that provider's skill.
+## 使用示例
 
-**Not applicable**: private outreach, affiliate invitations, account login, campaign creation, creator impersonation, or extracting unsupported personal data.
+### 发现美妆达人
 
-## 算力消耗规则
+用户：用出海匠找美国 TikTok 美妆达人。
 
-按端点分别计费：达人详情 9 算力/次；达人搜索、关联直播、关联商品、关联视频、达人机构榜、带货达人榜和达人涨粉榜 18 算力/次。
+按用户目标搜索，展示返回的身份、受众与带货指标；进一步钻取遵守用户要求的范围。
 
-> 用户会因算力消耗而支付费用。高频调用或多端点钻取前，先说明预计调用次数与算力消耗。
+### 查看达人资料与推广商品
 
-**Feedback:** Use the Feedback API in `references/api.md` only when the user explicitly asks to submit feedback or explicitly authorizes submission after an issue is identified. Summarize and sanitize the content; never include API keys, creator contact details, raw user messages, or unrelated task context.
+用户：看这个达人的详情和带货商品。
+
+使用同一市场与结果中的达人标识查询详情、带货商品，保留商品标识并区分达人与商品指标。
+
+### 比较涨粉表现
+
+用户：用 Chuhaijiang 看指定日期的达人涨粉榜。
+
+明确统计窗口后查看榜单，保留涨粉数和原始比率口径，不擅自更换时间范围继续检索。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

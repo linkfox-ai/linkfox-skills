@@ -11,8 +11,37 @@ from _shopee_payment_common import (
     developer_proxy_call,
     ensure_auth_skill_available,
     merge_shopee_body,
+    normal_gateway_response,
     qs_add,
 )
+
+
+def main_for_api(api_name=None) -> None:
+    """保留位置 JSON CLI，帮助和参数错误均不触发网络。"""
+    args = sys.argv[1:]
+    if not args or args[0] in ("--help", "-h"):
+        print(f"用法: {sys.argv[0]} '<JSON 参数>' [--inline] [--no-cache]")
+        if api_name is None:
+            print("api 可选值: " + ", ".join(sorted(PAYMENT_ENDPOINTS)))
+        if not args:
+            raise SystemExit(1)
+        return
+    if any(arg not in ("--inline", "--no-cache") for arg in args[1:]):
+        print("未知 CLI 选项", file=sys.stderr)
+        raise SystemExit(1)
+    try:
+        params = json.loads(args[0])
+    except json.JSONDecodeError as exc:
+        print(f"JSON 参数格式错误: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    if not isinstance(params, dict):
+        print("JSON 参数必须为对象", file=sys.stderr)
+        raise SystemExit(1)
+    chosen = api_name or params.get("api")
+    if not chosen:
+        print("Missing required field: api", file=sys.stderr)
+        raise SystemExit(1)
+    run_payment_api(str(chosen), params, sys.argv[0])
 
 
 def _comma_join_list(val: object, field: str, max_items: int) -> str:
@@ -82,6 +111,10 @@ def _build_post_body(params: dict, spec: dict) -> str:
 
 
 def run_payment_api(api_name: str, params: dict, caller: Optional[str] = None) -> dict:
+    if not isinstance(params, dict):
+        print("JSON 参数必须为对象", file=sys.stderr)
+        sys.exit(1)
+    params = dict(params)
     if api_name not in PAYMENT_ENDPOINTS:
         print(f"Unknown api: {api_name}. Valid: {', '.join(sorted(PAYMENT_ENDPOINTS))}", file=sys.stderr)
         sys.exit(1)
@@ -114,7 +147,31 @@ def run_payment_api(api_name: str, params: dict, caller: Optional[str] = None) -
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    # 在请求前解析 POST JSON，避免请求已提交后才发现格式错误。
+    body_obj = None
+    if body is not None:
+        try:
+            body_obj = json.loads(body)
+        except (TypeError, json.JSONDecodeError):
+            print("body / requestBody 必须为合法 JSON", file=sys.stderr)
+            sys.exit(1)
+
+    def format_result(status, proxy):
+        out: dict = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = body_obj
+        if normal_gateway_response(status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
         path,
         method,
         shop_id=shop_id,
@@ -122,17 +179,6 @@ def run_payment_api(api_name: str, params: dict, caller: Optional[str] = None) -
         query_string=query_string or None,
         body=body,
         content_type=content_type,
+        transform=format_result,
+        operation=api_name,
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

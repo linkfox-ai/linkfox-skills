@@ -1,114 +1,130 @@
 ---
 name: linkfox-amazon-store-fulfillment-outbound
-description: 亚马逊 Multi-Channel Fulfillment（MCF）新版出仓履约管理。用于获取配送报价和订单预览，创建、查询、列出、更新或取消履约订单，查看包裹与跟踪、签收证明、投递照片、收件人及 locker/drop-off 信息，并查询相关发票头。用户提到 Fulfillment Outbound、MCF、多渠道配送、亚马逊库存配送到站外客户、配送报价、getOffers、getOrderPreview、createOrder、getInvoiceHeaders、receivedBy、unitIdentifiers、v2026-07-04 时触发。即使未明确说“MCF API”，只要希望用亚马逊库存履约非亚马逊渠道订单，也应触发此技能；External Fulfillment、普通 Orders API 和旧版 v2020-07-01 不属于此技能。
+description: 管理亚马逊库存面向站外客户的多渠道配送（MCF），支持配送报价、订单预览、创建、查询、列表、更新和取消，查看包裹跟踪、签收凭证及关联发票头，并提供测试订单和包裹状态模拟。适用于已授权卖家的 Fulfillment Outbound v2026-07-04 履约管理；不适用于 External Fulfillment、普通订单管理或旧版 v2020-07-01 履约操作。
+---
+# Amazon 店铺多渠道出仓履约
+
+## 适用范围
+
+### 适用
+
+用亚马逊库存向非亚马逊渠道的客户发货，查询配送选项、可履约性、订单进展与签收情况。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+|---|---|
+| 看这些 SKU 配送到这个邮编有哪些选项 | 比较配送报价和有效期。 |
+| 预览并创建这笔 MCF 订单 | 展示费用与限制，确认后创建。 |
+| 释放暂存订单，或取消这笔订单 | 查询当前状态，确认变更后提交并核实。 |
+| 跟踪订单、看包裹或签收凭证 | 展示实际返回的物流与签收数据。 |
+| 查相关发票 | 查询发票头与后续分页情况。 |
+| 模拟测试订单或包裹状态 | 按接口参考核对动态沙箱范围。 |
+
+### 边界
+
+旧版履约、退货、feature 和迁移场景参见 [迁移说明](references/migration.md)，旧版能力保留在 `linkfox-amazon-store-fba`；External Fulfillment 与普通 Orders 管理使用对应技能。
+
+## 接口清单
+
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 预览履约订单（`getOrderPreview`） | POST `/spApi/developerProxy` → 上游 POST，path：`fulfillment/outbound/2026-07-04/previews` | `scripts/get_order_preview.py` | 查看计划发运、费用、限制与可履约性。 |
+| 获取配送报价（`getOffers`） | POST `/spApi/developerProxy` → 上游 POST，path：`fulfillment/outbound/2026-07-04/offers` | `scripts/get_offers.py` | 比较多个 SKU 的配送选项与报价有效期。 |
+| 创建履约订单（`createOrder`） | POST `/spApi/developerProxy` → 上游 POST，path：`fulfillment/outbound/2026-07-04/orders` | `scripts/create_order.py` | 提交已确认的多渠道履约订单。 |
+| 列出履约订单（`listOrders`） | POST `/spApi/developerProxy` → 上游 GET，path：`fulfillment/outbound/2026-07-04/orders` | `scripts/list_orders.py` | 按更新时间或分页令牌查看订单。 |
+| 查询履约订单（`getOrder`） | POST `/spApi/developerProxy` → 上游 GET，path：`fulfillment/outbound/2026-07-04/orders/{orderId}` | `scripts/get_order.py` | 读取订单、包裹、跟踪和签收信息。 |
+| 更新履约订单（`updateOrder`） | POST `/spApi/developerProxy` → 上游 PUT，path：`fulfillment/outbound/2026-07-04/orders/{orderId}` | `scripts/update_order.py` | 更新履约配置，释放暂存订单。 |
+| 取消履约订单（`cancelOrder`） | POST `/spApi/developerProxy` → 上游 PUT，path：`fulfillment/outbound/2026-07-04/orders/{orderId}/cancel` | `scripts/cancel_order.py` | 提交取消并核实最终状态。 |
+| 模拟订单状态（`updateOrderStatus`） | POST `/spApi/developerProxy` → 上游 PUT，path：`fulfillment/outbound/2026-07-04/orders/{orderId}/status` | `scripts/update_order_status.py` | 仅用于 Amazon 动态沙箱订单。 |
+| 模拟包裹状态（`updatePackage`） | POST `/spApi/developerProxy` → 上游 PUT，path：`fulfillment/outbound/2026-07-04/orders/{orderId}/packages/{packageId}` | `scripts/update_package.py` | 仅用于 Amazon 动态沙箱包裹。 |
+| 查询发票头（`getInvoiceHeaders`） | POST `/spApi/developerProxy` → 上游 GET，path：`finances/invoices/2026-06-25/invoices` | `scripts/get_invoice_headers.py` | 关联的 Invoices v2026-06-25 操作。 |
+
+## 前置条件
+
+**先完成授权并选定店铺**：依赖 `linkfox-amazon-store-auth`，运行 `python scripts/check_auth_dependency.py` 检查安装情况，再通过认证技能选择已授权店铺。依赖缺失时先安装或加载，不在本技能内实现授权与令牌刷新。参数、依赖退出码和环境变量兼容见 [接口说明](references/api.md)。
+
+## 履约流程
+
+1. 选择已授权店铺和区域，确认用户要报价、预览、创建、查询、修改、取消还是测试；先阅读目标操作的接口定义。
+2. 用 getOffers 比较多个 SKU 的配送选项与有效期，或用 getOrderPreview 查看计划发运、费用、限制和可履约性。出现 constraints 时停止创建，展示受影响商品及 Amazon 原因。
+3. 创建前固定卖家控制的订单和行项目幂等标识，展示店铺、地址、SKU、数量、服务等级、费用及暂存或发货选择。取得明确确认后只创建一次。
+4. 创建被异步接受时，以原订单标识安排 getOrder 核实，不自动轮询；结果不确定时不得另造订单或行项目标识再次提交。
+5. 释放暂存订单前先查询当前状态，展示目标和配置变化，确认后用 updateOrder 提交，再查询核实。
+6. 取消前查询最新状态，说明已拣货或发运的部分可能无法取消，确认后只提交一次，再查询最终状态；接受请求不等于业务完成。
+7. 跟踪订单时使用 getOrder，列表查询使用 listOrders；按需请求包裹明细。展示已返回范围，额外翻页或刷新先取得用户同意，不自动遍历。
+8. 发票查询使用 getInvoiceHeaders；先核对站点和日期条件，展示发票头与后续分页情况，不自动翻页。它是关联的 Invoices 操作，不属于九个 Outbound 操作。
+9. 沙箱状态模拟先展示测试目标、订单或包裹标识和状态变化，确认后执行；环境与调用限制见接口说明。
+10. Japan 时段或投递偏好、India 货到付款、跨境申报及特殊包装需求先预览，再将用户确认且 Amazon 支持的配置用于创建，具体字段见接口说明。
+11. 写入遇到限流、上游故障或超时先保留原标识并查询状态，遵循 [店铺保护与重试](references/spapi-protection.md)，不自动重放写入。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：本工具不消耗算力 （限时）。同一会话、同一参数组合默认只调用一次，脚本为成功的读取和预览结果提供 24 小时本地缓存。失败或空结果时，不得自动更改参数、翻页或连续试探；需要继续调用时，先说明已有结果与继续调用的目的，并取得用户同意。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-fulfillment-outbound-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、已有的常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+不消耗算力 （限时）。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **展示真实业务进展**：区分网关调用结果、上游接受状态和订单最终状态，连同限制与下一步一起解释。状态判定见接口说明。
+- **报价与预览**：把有效期、服务等级、配送区间、币种、价格和商品限制一起展示。
+- **订单与包裹**：按实际返回展示订单标识、状态、行项目、分包、物流、签收证明、投放位置和单件标识。分包按返回的关联标识对应，不把单件标识误当行项目标识。
+- **签收隐私**：仅在用户确实需要签收凭证时展示投递照片 URL 和收件人，不伪造缺失数据，不将这些信息写进反馈。
+- **区域配置**：跨境履约同时展示并确认起运国、目的国和申报价值；Japan 投递偏好及特殊包装按预览给出的可用配置处理，不猜测当地可用值。
+- **保留数据和凭据边界**：保留 Amazon 原始标识和完整响应，向用户展示业务结果，隐藏内部工具名及访问令牌。反馈仅附操作、脱敏标识、路径、状态和摘要。
+- **失败或空结果**：先展示现有结果与原因；需要继续调用时先取得用户同意，不自动换参数或连续试探。
+- **缓存与刷新**：脚本按当前会话隔离成功读取和预览的缓存，生产写入成功后失效；刷新、输出和依赖检测的详细约定见接口说明。
+- **迁移与通知**：跟踪数据包含在 v2026-07-04 订单中；订单状态通知属于 Notifications 的 FULFILLMENT_ORDER_STATUS 订阅，不属于 Outbound 操作。迁移时阅读迁移说明。
+
+## 使用示例
+
+### 比较配送选项
+
+用户：看这些亚马逊 SKU 配送到这个邮编有哪些选择。
+
+选择店铺，获取配送报价，展示有效期、价格与限制。
+
+### 预览后创建订单
+
+用户：预览并创建这笔 MCF 订单。
+
+先预览，展示费用、限制和目标；确认后只创建一次，解释是否需要后续核实。
+
+### 查询跟踪与签收
+
+用户：跟踪这笔订单并查看签收凭证。
+
+查询订单及包裹明细，展示实际返回的跟踪和签收信息。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Amazon 店铺 Fulfillment Outbound
-
-Use this Skill for Amazon Multi-Channel Fulfillment workflows on Fulfillment Outbound `v2026-07-04`. It exposes all nine operations in Amazon's current Outbound model plus the overview page's associated `getInvoiceHeaders` operation from Invoices `v2026-06-25`, while keeping the existing production `linkfox-amazon-store-fba` and `linkfox-amazon-store-external-fulfillment` implementations untouched.
-
-## Prerequisites
-
-1. Require **`linkfox-amazon-store-auth`**. Run `python scripts/check_auth_dependency.py`; exit code `42` means the dependency must be installed or loaded first.
-2. Select one authorized store and obtain its `sellerId` and `region`. Accept only `NA`, `EU`, or `FE`.
-3. Never accept or forward `amzAccessToken`, `accessToken`, or `refreshToken`; the server resolves authorization from `sellerId + region`.
-4. Read [references/api.md](references/api.md) for operation contracts and [references/workflows.md](references/workflows.md) before a create, update, or cancel action.
-5. After explicit user confirmation, pass boolean `confirmWrite: true` to `createOrder`, `updateOrder`, `cancelOrder`, `updateOrderStatus`, or `updatePackage`; the wrappers reject writes without it.
-6. When Amazon assigned a multi-tenant service identifier, pass it only as top-level `fulfillmentServiceId` (1–40 characters). The proxy maps it to `x-amzn-fulfillment-service-id`; never put the raw header name in query or body.
-
-## 调用方式
-
-- **API 端点**：`POST /spApi/developerProxy`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<operation_script>.py '<JSON 参数>' [--inline] [--no-cache]`
-- **调用约束**：本工具沿用 Amazon Store Skill 的统一免费配置；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换参数、翻页或连续试探；需要继续调用时先征得用户同意。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-amazon-store-fulfillment-outbound-<timestamp>.json`（`<session>` 取自 `SESSION_ID`；禁止写入 `/tmp`，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数、最大列表字段长度及前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-- 加 `--no-cache` 强制本次读/预览操作访问网关；只在用户要求刷新或已确认外部状态变化时使用
-
-**读数据建议**：先看摘要；需要具体字段时用 `jq` 或 `ConvertFrom-Json` 从保存文件按需抽取。
-
-## Operation Guide
-
-| Stage | Operation | Script | Availability |
-|---|---|---|---|
-| Quote | `getOffers` | `get_offers.py` | Production |
-| Preview | `getOrderPreview` | `get_order_preview.py` | Production |
-| Create | `createOrder` | `create_order.py` | Production |
-| Read | `getOrder` | `get_order.py` | Production |
-| List | `listOrders` | `list_orders.py` | Production |
-| Release hold / update | `updateOrder` | `update_order.py` | Production |
-| Cancel | `cancelOrder` | `cancel_order.py` | Production |
-| Simulate order status | `updateOrderStatus` | `update_order_status.py` | Amazon dynamic sandbox only |
-| Simulate package status | `updatePackage` | `update_package.py` | Amazon dynamic sandbox only |
-| List invoice headers | `getInvoiceHeaders` | `get_invoice_headers.py` | Production, Invoices v2026-06-25 |
-
-## Workflow Rules
-
-1. Use `getOffers` for multi-SKU delivery options and expiration times; use `getOrderPreview` for planned shipments, fees, constraints, and fulfillability.
-2. Show the chosen store, destination, line items, service tier, fees, hold/ship action, and `orderId` before `createOrder`.
-3. Treat `orderId` and every `lineItemId` as seller-controlled idempotency identifiers. Never invent a replacement ID after an uncertain timeout.
-4. A `createOrder` response can be HTTP 200 or 202. On 202, use the returned/requested `orderId` with `getOrder`; do not automatically poll.
-5. Use `updateOrder` only to update the supported fulfillment configuration, currently the HOLD/SHIP action. Confirm before releasing a held order.
-6. Confirm before `cancelOrder`. Amazon only stops fulfillment where cancellation is still possible; do not present 202 as completed cancellation.
-7. Add `shipments: "INCLUDE"` to `getOrder` or `listOrders` when package and tracking details are needed.
-8. Never automatically replay POST/PUT after 429, 500, 503, or a timeout. Recover with `getOrder` where possible.
-9. Use `getInvoiceHeaders` only for header-level invoice discovery. Require `marketplaceId`; provide both issue-date bounds or neither, keep the range within 90 days, and page with `nextToken` only after user approval.
-
-## Important Limitations
-
-- `updateOrderStatus` and `updatePackage` are marked `x-amzn-api-sandbox-only: true` by Amazon. Consistent with the existing FBA skill, their wrappers use the same `/spApi/developerProxy` request shape as every other operation and do not accept or send a separate `sandbox` control field. Use them only with sandbox test data; availability depends on the unified gateway/upstream route.
-- The optional `x-amzn-fulfillment-service-id` multi-tenant header is exposed only through the typed top-level `fulfillmentServiceId` parameter. Raw header names, nested aliases, blank values, values over 40 characters, and newline characters are rejected before calling the gateway.
-- Amazon's Outbound overview role list mentions `getInvoiceHeaders`, but its Reference path is `/finances/invoices/2026-06-25/invoices`. This Skill exposes it as an explicitly labeled related Invoices operation; it is not counted among the nine Outbound OpenAPI operations and does not accept `fulfillmentServiceId`.
-- Legacy v2020-07-01 returns, features, and package-tracking operations remain in the production FBA Skill and are not copied into this current-version Skill. Read [references/migration.md](references/migration.md) when migrating.
-
-## Display Rules
-
-- Present Amazon data and identifiers without exposing internal tool names or access tokens.
-- Separate operation success from business completion: show gateway `errcode`, Amazon `httpStatus`, order `status`, constraints, and next action.
-- For offers and previews, show expiration, service tier, delivery interval, currency, price, and item constraints together.
-- For orders, show `orderId`, status, line items, shipments, packages, tracking, proof of delivery, drop-off/locker details, unit identifiers, and pagination token only when present.
-
-## User Expression
-
-**Ask**: “Check MCF delivery options for these Amazon SKUs to this postal code.”
-
-**Do**: use `getOffers`; do not create an order.
-
-**Ask**: “Preview and then create this MCF order.”
-
-**Do**: run `getOrderPreview`, present constraints and fees, obtain confirmation, then run `createOrder` once.
-
-**Ask**: “Track my MCF order.”
-
-**Do**: run `getOrder` with `shipments: "INCLUDE"`; do not call the legacy tracking operation.
-
-## Feedback
-
-Report issues with `skillName: linkfox-amazon-store-fulfillment-outbound`, operation, masked IDs, resolved path, gateway status, and Amazon response summary. Never include credentials.
-
-## Amazon SP-API 接口保护与重试指引
-
-同一店铺连续收到 Amazon SP-API 的 400、403、404 或 429 时，网关会返回 450、453、454 或 459 并短暂冷却。这些自定义状态码不是 Amazon 原生状态，也不表示封号；目的是避免持续异常或高频调用扩大店铺风险。
-
-| 状态与 message | 范围 | 触发与冷却 | 处理 |
-|---|---|---|---|
-| `450`：`400，请求异常，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：20 分钟 | 停止原参数重试，检查必填字段、marketplace、ID、日期和请求体 |
-| `453`：`403，店铺未授权，请先授权` | 店铺全部接口 | 60 秒内超过 2 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 停止该店铺调用，检查授权、权限、店铺归属和区域 |
-| `454`：`404，资源不存在，请优化您的参数` | 店铺+接口 | 60 秒内超过 3 次：5 分钟；10 分钟内超过 4 次：30 分钟 | 确认资源 ID、所属店铺/站点、资源状态和接口路径 |
-| `459`：`429限流中，请降低频率` | 店铺+接口 | 首次：15 秒；2 分钟内超过 2 次：30 秒；3 分钟内超过 4 次：2 分钟 | 降低并发、分页和轮询频率并逐级退避 |
-
-- 立即停止自动或并发重试，不得通过换脚本或重复创建任务绕过保护；优先遵循 `retryAfter`、`blockedUntil`，没有时按表中时长说明。
-- 450/453/454 必须先修正参数、授权或资源标识，冷却后最多谨慎重试一次；再次触发则停止调用。453 期间停止该店铺全部 SP-API。
-- 保留已有 `reportId`、`feedId` 等任务 ID；写操作结果不确定时先查询状态，不直接重放。
-- 向用户先说明店铺保护，再给原因、处理和等待时间。可回复：“为保护您的亚马逊店铺安全，检测到 Amazon SP-API 连续返回{原因}，当前已进入短暂保护。请先{处理动作}，预计{等待时间}后再试；这不代表封号，也不是套餐或算力限制。”不要只说“LinkFox 限流”或“服务器繁忙”。
-
-## 算力消耗规则
-
-不消耗算力（以网关实际计费为准）。
-
----
-*更多跨境 Skill：[LinkFox Skills](https://skill.linkfox.com/)*
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

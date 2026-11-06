@@ -1,191 +1,118 @@
 ---
 name: linkfox-kalodata-tiktok-shop
-description: 通过kalodata数据搜索TikTok电商店铺排行榜并查询指定店铺的详细信息，支持按地区、货币、语言与日期范围查看高排名、高销量的TikTok Shop店铺（小店），并可用shopId获取销售额、销量、在售商品数、自营/分销/商城渠道收入及达人合作数。当用户提到TikTok店铺榜单、TikTok店铺排行、TikTok小店排行、TikTok热销店铺、TikTok店铺排名、TikTok Shop店铺榜、kalodata店铺搜索、kalodata店铺榜、TikTok店铺详情、TikTok小店资料、店铺销售额、店铺销量、TikTok shop ranking, TikTok shop leaderboard, TikTok top shops, TikTok store ranking, TikTok shop detail, TikTok store detail, kalodata shop search/detail时触发此技能。即使用户未明确提及"kalodata"，只要其需求涉及查看TikTok平台的店铺排行榜或某个TikTok店铺的详细数据，也应触发此技能。
+description: 通过 Kalodata 查看 TikTok Shop 店铺排行榜并查询单店详细数据，支持店铺发现、竞店对比、销售额与销量分析、自营及达人分销和商城渠道拆分、达人合作规模研究。适用于按市场与统计区间查找热销小店，或研究已确定的店铺；不适用于商品、达人、视频、直播的数据查询，其他平台店铺研究、广告管理或内容创作。
 ---
+# Kalodata TikTok Shop 店铺榜单与详情
 
-# Kalodata - TikTok Shop Search & Detail
+## 适用范围
 
-This skill supports a two-step TikTok shop workflow via the Kalodata data source:
+### 适用
 
-1. Browse TikTok Shop store (店铺) leaderboards to discover high-performing stores.
-2. Fetch one store's full detail by `shopId`.
+查看 TikTok Shop 店铺榜单，发现高销售额店铺、比较店铺表现，或获取指定店铺的详细经营数据。无需用户明确提及 Kalodata。
 
-Use the search (ranking) endpoint when the user wants rankings, store discovery, or store comparison. Use the detail endpoint when the user already has a `shopId` or has selected one store from a ranking result.
+**场景速查**
 
-## Core Concepts
+| 用户表达 | 查询场景 |
+|---|---|
+| TikTok 店铺排行榜、TikTok 小店排行 | 按市场和统计区间浏览店铺榜单。 |
+| TikTok 热销店铺、top TikTok shops | 发现高销售额店铺并比较规模。 |
+| 近 7 天美国 TikTok 店铺排名 | 查看特定市场和区间的榜单。 |
+| TikTok 店铺详情、小店资料 | 查询已确定店铺的经营概况。 |
+| 店铺销售额、销量、达人合作数 | 展示单店销售规模、渠道及内容合作规模。 |
+| kalodata shop search/detail | 使用指定数据源查看榜单或详情。 |
 
-The shop ranking endpoint returns a paginated leaderboard filtered by `region`, `dateRange`, `language`, and `currency`. The default ranking order is by `revenue` (GMV) descending, and each row carries an explicit `rank` position. Each shop row includes identity, scale, revenue channel split, and growth.
+### 边界
 
-The shop detail endpoint fetches **one** store by `shopId`. It returns the store's identity, scale, revenue channel split, and creator/video/live counts. The `shopId` usually comes from the ranking response field `shop_id`.
+商品、达人、视频和直播的榜单或详情使用相应 Kalodata 技能；其他平台店铺数据、TikTok 广告管理和内容创作不在本技能范围。
 
-> ⚠️ **Field names differ between the shop RANK and shop DETAIL endpoints.** Detail uses `self_account_revenue` (rank uses `self_promotion_revenue`), `shoppingmall_revenue` with no internal underscore (rank uses `shopping_mall_revenue`), and `seller_type` (rank uses `shop_type`). Detail returns `creator_number`/`video_number`/`live_number`/`product_number` (rank does not), and does **not** return `rank`/`revenue_growth_rate`/`on_sell_product_count`. Always use the exact endpoint field names.
+## 接口清单
 
-Both endpoints may reflect a statistical delay (T+1). See `references/api.md` for full request and response details.
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 店铺榜单 | POST `/kalodata/shop/rank` | `scripts/kalodata_shop_search.py` | 按市场和统计区间发现与比较店铺。 |
+| 店铺详情 | POST `/kalodata/shop/detail` | `scripts/kalodata_shop_detail.py` | 获取一个店铺的销售、渠道及内容合作规模。 |
 
-## Data Fields
+## 前置条件
 
-**Ranking rows** include:
+确定要浏览榜单还是研究某家店铺。市场、统计区间和币种等可选条件按用户需求传入，不将其作为调用的必填前置条件，也不自行假定服务端默认值。查询详情必须取得字符串 `shopId`，识别方式见 `references/api.md`。
 
-| Field | Description |
-|-------|-------------|
-| rank | Rank position (1 = top by revenue) |
-| shop_name | Shop display name |
-| shop_id | Shop unique ID; pass this as `shopId` for detail lookup |
-| shop_type | Shop type (e.g. `BRAND`) |
-| revenue | Total GMV in the requested currency |
-| sales_volumn | Sales volume; field is spelled `volumn` |
-| on_sell_product_count | Number of products currently on sale |
-| unit_price | Average unit price in the requested currency |
-| revenue_growth_rate | Revenue growth rate (%), can be negative |
-| self_promotion_revenue | Revenue from self-promotion (店铺自营/自播自推) |
-| affiliate_revenue | Revenue from affiliate (达人分销) |
-| shopping_mall_revenue | Revenue from the shopping mall (商城) |
+## 查询流程
 
-**Detail rows** include:
+1. 用户希望查排行、发现店铺或比较店铺时，先查店铺榜单；已确定店铺时直接查询详情。
+2. 从榜单继续深查时，选择用户关注的店铺，将榜单的 `shop_id` 作为详情的 `shopId`，保留一致的市场、统计区间与币种口径。
+3. 先读摘要与保存的数据，再按需提取具体字段。需要更多页或更多店铺时，遵守成本约束及 `references/api.md` 的分页、重试与缓存约定。
+4. 根据查询类型展示榜单或单店概况；出现错误或空结果时，保留已取得的数据，按接口定义解释原因。
 
-| Field | Description |
-|-------|-------------|
-| shop_id | Shop unique ID (string to preserve precision) |
-| shop_name | Shop display name |
-| seller_type | Seller/shop type (e.g. `BRAND`) — note: `seller_type`, not `shop_type` |
-| region | Market region (e.g. `US`) |
-| revenue | Total revenue / GMV in the requested currency |
-| sales_volumn | Sales volume; field is spelled `volumn` |
-| product_number | Number of products on sale |
-| unit_price | Average unit price in the requested currency |
-| self_account_revenue | Revenue from self-account (店铺自营/自播自推) — note: `self_account_revenue`, not `self_promotion_revenue` |
-| affiliate_revenue | Revenue from affiliate (达人分销) |
-| shoppingmall_revenue | Revenue from the shopping mall (商城) — note: NO underscore between `shopping` and `mall` |
-| creator_number | Number of creators cooperating with the shop (达人合作数) |
-| video_number | Number of related videos |
-| live_number | Number of related livestreams |
+## 执行方式
 
-> **Revenue channel split**: on the rank endpoint `revenue` = `self_promotion_revenue` + `affiliate_revenue` + `shopping_mall_revenue`; on the detail endpoint `revenue` ≈ `self_account_revenue` + `affiliate_revenue` + `shoppingmall_revenue`. Components may round independently of `revenue` (e.g. `shoppingmall_revenue` returns `10431.0` on detail vs `10431.39` on rank), so treat the split as approximate, not an exact equality.
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：每个接口每次远程调用消耗 7.0 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## Parameter Guide
+### 输出策略
 
-**Shop ranking (`/kalodata/shop/rank`)**
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-shop-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 序列化响应不超过 8000 个 UTF-8 字节：保存后，将完整 JSON 打印到标准输出。
+- 序列化响应超过 8000 个 UTF-8 字节：保存后，标准输出仅展示摘要，包括顶层字段、响应体中存在的常见计数（如 `costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| region | string | No | Market region code, e.g. `US` |
-| dateRange | string | No | Time window, e.g. `last7Day`, `last30Day` |
-| pageNumber | integer | No | Page number, 1-5 |
-| pageSize | integer | No | Page size, 5-100 |
-| language | string | No | Response language, e.g. `zh-CN`, `en-US` |
-| currency | string | No | Currency for monetary metrics, e.g. `USD` |
-| category_ids | array<string> | No | Category ID list filter |
-| revenue_range | string | No | Revenue / GMV range filter |
-| shop_type | string | No | Shop type filter: `BRAND` or `RETAILER` |
-| sortField | object | No | Sorting specification; pass `{}` for default revenue ranking |
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**Shop detail (`/kalodata/shop/detail`)**
+## 执行规则
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| shopId | string | Yes | Shop unique ID from ranking field `shop_id` |
-| category_id | string | No | Optional category ID dimension |
-| region | string | No | Market region code, e.g. `US` |
-| dateRange | string | No | Time window, e.g. `last7Day`, `last30Day` |
-| language | string | No | Response language, e.g. `zh-CN`, `en-US` |
-| currency | string | No | Currency for monetary metrics, e.g. `USD` |
+### 算力消耗预估
 
-## 调用方式
+每个接口每次调用消耗 7.0 算力；榜单后再查一家店铺详情共计 14.0 算力，缓存命中不发起远程请求。
 
-- **API 端点**：`POST /kalodata/shop/rank` 或 `POST /kalodata/shop/detail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/kalodata_shop_search.py '<JSON 参数>' [--inline]` 或 `python scripts/kalodata_shop_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-shop-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 <= 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq` 或 `ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 解决认证和算力问题
 
-## 解决认证和算力问题
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-### 异常情况
+### 约束与建议
 
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- **理解榜单口径**：榜单用于发现高表现店铺，不将其称为店铺名称或关键词搜索；详细使用限制见 `references/api.md`。
+- **清晰展示榜单**：以表格列出排名、店铺名称、店铺类型、销售额、销量、在售商品数、件单价及增长率；除用户明确要求受支持的排序外，保留榜单顺序。
+- **分组展示详情**：按店铺身份、销售规模、渠道收入、达人/视频/直播规模展示单店资料。`creator_number`、`video_number`、`live_number`、`product_number` 均以整数计数展示。
+- **标明数据口径**：展示指标时注明 `dateRange`、`region`、`currency`；两接口均可能存在 T+1 统计延迟。
+- **保留实际字段名**：销量拼写为 `sales_volumn`。榜单使用 `shop_type`、`self_promotion_revenue`、`shopping_mall_revenue`；详情使用 `seller_type`、`self_account_revenue`、`shoppingmall_revenue`。抽取时不能混用，也不能补造详情未返回的排名、增长率或榜单商品数字段。
+- **渠道拆分采用近似口径**：榜单与详情均按自营、达人分销、商城拆分收入；分项可能独立四舍五入，应展示为收入构成，不将分项之和视为精确恒等式。
 
-## Usage Examples
+## 使用示例
 
-**1. Top TikTok shops in the US over the last 7 days**
+### 查看美国近 7 天热销店铺
+
+使用 `scripts/kalodata_shop_search.py`：
+
 ```json
 {"region":"US","dateRange":"last7Day","pageSize":10,"pageNumber":1}
 ```
 
-**2. Fetch one shop's detail**
+### 查询指定店铺详情
+
+使用 `scripts/kalodata_shop_detail.py`：
+
 ```json
 {"shopId":"7495514739648989419","region":"US","dateRange":"last7Day","currency":"USD"}
 ```
 
-**3. Discovery-to-detail workflow**
-```text
-Run kalodata_shop_search.py first, choose a row's shop_id, then pass that value as shopId to kalodata_shop_detail.py.
-```
+### 从榜单继续深查
 
-## Display Rules
+用户：先看美国近 7 天店铺榜，再研究我选中的店铺。
 
-1. Present ranking results in a table with rank, shop name, shop type, revenue, sales volume, product count, unit price, and growth rate.
-2. Present detail results as one grouped profile: identity, scale, revenue channel split, and creator/video/live counts.
-3. Always label `dateRange`, `region`, and `currency` when showing metrics.
-4. Revenue channel breakdown is approximate (see Data Fields note); present the split as a breakdown, not an exact equality.
-5. Use the exact field name `sales_volumn`. On detail use `shoppingmall_revenue` (no underscore) and `self_account_revenue`; on rank use `shopping_mall_revenue` and `self_promotion_revenue`. Do not mix the two endpoints' field names.
-6. Show `creator_number`, `video_number`, `live_number`, `product_number` as plain integer counts.
-7. Preserve ranking order unless the user explicitly requests a supported `sortField`.
+先展示榜单，取得用户关注的店铺标识后查询详情，沿用相同的数据口径并分别展示榜单与详情。
 
-## Important Limitations
+## 使用反馈
 
-- Ranking is not keyword search; it browses leaderboards by region and time window.
-- Detail requires `shopId`; it cannot find a shop by name alone. Obtain `shopId` from the ranking `shop_id` field or the user.
-- The ranking response does not include total/page count; paginate until a page returns fewer than `pageSize` items.
-- `pageNumber` is limited to 1-5 and `pageSize` is limited to 5-100.
-- Detail has no pagination; `data` is a 1-element array for a single shop, with no `total`.
-- Field names differ between the rank and detail endpoints (see Data Fields) — use the exact names when extracting.
-- Transient upstream errors may appear as `errcode 501` with a Kalodata HTTP 554 message. Retry the same parameters once or twice; do not change parameters automatically.
-- Use the matching Kalodata product/video/creator/livestream skills for non-shop entities.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- TikTok Shop store ranking or single-store detail:
-
-| User Says | Scenario |
-|-----------|----------|
-| "TikTok店铺排行榜", "TikTok小店排行" | Store ranking lookup |
-| "TikTok热销店铺", "top TikTok shops" | Store leaderboard by region |
-| "近7天TikTok店铺榜", "美国TikTok店铺排名" | Time-windowed / region-filtered ranking |
-| "TikTok店铺详情", "TikTok小店资料" | Single-store detail lookup |
-| "店铺销售额", "店铺销量", "店铺达人合作数" | Store revenue / sales / creator count |
-| "kalodata shop search/detail" | Direct data source reference |
-
-**Not applicable** -- Needs beyond TikTok Shop stores:
-
-- TikTok creator/product/video/livestream rankings or details
-- Amazon / Shopify / 1688 / other platforms' store data
-- TikTok ad campaign management or content creation
-
-## 算力消耗规则
-
-每次调用消耗 7.0 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

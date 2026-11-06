@@ -1,26 +1,11 @@
 #!/usr/bin/env python3
-"""
-Shopee Store — get_access_token
+"""使用授权码交换 token；入参见 references/apis/get-access-token.md。"""
 
-官方: https://open.shopee.com/documents/v2/v2.public.get_access_token?module=104&type=1
-
-入参说明见 references/apis/get-access-token.md。
-"""
-
-from __future__ import annotations
-
-import json
-import sys
-
-from _public_api_runner import run_public_api
+from _public_api_runner import invoke_public_cli
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: get_access_token.py '<JSON>'", file=sys.stderr)
-        sys.exit(1)
-    params = json.loads(sys.argv[1])
-    print(json.dumps(run_public_api("get_access_token", params, "get_access_token.py"), indent=2, ensure_ascii=False))
+    invoke_public_cli("get_access_token")
 
 
 if __name__ == "__main__":

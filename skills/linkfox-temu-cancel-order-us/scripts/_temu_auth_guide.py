@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authorization guide data derived from TEMU_API_README.md."""
+"""Temu 手动授权步骤，与 references/access-token.md 保持一致。"""
 
 VALID_SHOP_TYPES = frozenset({"semi-managed", "full-managed", "local-native"})
 VALID_TOKEN_PURPOSES = frozenset(

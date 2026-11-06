@@ -1,295 +1,295 @@
-# Amazon Store Complete Report Types Reference
+# Amazon 店铺完整报告类型索引
 
-This document lists ALL report types available in Amazon Selling Partner API, organized by category.
+本文按类别整理 Amazon SP-API 报告类型。
 
-**Total**：本页表格共 **109** 个 `reportType` 枚举（与 `report-requests/types/` 专页一一对应）；Amazon 文档中可能另有增减，以 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 为准。
+**总计**：本页表格共 **109** 个 `reportType` 枚举（与 `report-requests/types/` 专页一一对应）；Amazon 文档中可能另有增减，以 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 为准。
 
-**全覆盖请求说明**：下表每一个 `Report Type` 在仓库中均有独立专页（CreateReport 要点、是否有官方 JSON Schema、链到 GitHub `schemas/reports` 专页等）→ [`report-requests/types/README.md`](report-requests/types/README.md)（按 `reportType` 字母/索引表浏览），或直接打开 [`report-requests/types/<REPORT_TYPE>.md`](report-requests/types)。
-
----
-
-## 1. Amazon Business Reports
-
-Business-related fee and discount reports.
-
-| Report Type | Description | Availability |
-|-------------|-------------|--------------|
-| `FEE_DISCOUNTS_REPORT` | Amazon Business fee discounts | Seller only |
+**全覆盖请求说明**：下表每一个 `报告类型` 在仓库中均有独立专页（CreateReport 要点、是否有官方 JSON Schema、链到 GitHub `schemas/reports` 专页等）→ [`report-requests/types/README.md`](report-requests/types/README.md)（按 `reportType` 字母/索引表浏览），或直接打开 [`report-requests/types/<REPORT_TYPE>.md`](report-requests/types)。
 
 ---
 
-## 2. Analytics Reports
+## 1. Amazon Business 报告
 
-Sales, traffic, and business intelligence reports.
+业务相关费用与折扣报告。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT` | Search catalog performance metrics | Seller only |
-| `GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT` | Search query performance data | Seller only |
-| `GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT` | Products frequently purchased together | Both |
-| `GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT` | Top search terms for products | Both |
-| `GET_BRAND_ANALYTICS_REPEAT_PURCHASE_REPORT` | Repeat purchase behavior analysis | Both |
-| `GET_VENDOR_REAL_TIME_INVENTORY_REPORT` | Real-time vendor inventory | Vendor only |
-| `GET_VENDOR_REAL_TIME_TRAFFIC_REPORT` | Real-time vendor traffic | Vendor only |
-| `GET_VENDOR_REAL_TIME_SALES_REPORT` | Real-time vendor sales | Vendor only |
-| `GET_VENDOR_SALES_REPORT` | Vendor sales report | Vendor only |
-| `GET_VENDOR_NET_PURE_PRODUCT_MARGIN_REPORT` | Vendor product margins | Vendor only |
-| `GET_VENDOR_TRAFFIC_REPORT` | Vendor traffic report | Vendor only |
-| `GET_VENDOR_FORECASTING_REPORT` | Vendor forecasting data | Vendor only |
-| `GET_VENDOR_INVENTORY_REPORT` | Vendor inventory report | Vendor only |
-| `GET_SALES_AND_TRAFFIC_REPORT` | Sales and traffic by date | Seller only |
+| `FEE_DISCOUNTS_REPORT` | Amazon Business 费用折扣 | 仅卖家 |
 
 ---
 
-## 3. B2B Product Opportunities
+## 2. 分析报告
 
-Business-to-business product opportunity insights.
+销售、流量和经营分析报告。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_B2B_PRODUCT_OPPORTUNITIES_RECOMMENDED_FOR_YOU` | Personalized B2B product recommendations | Seller only |
-| `GET_B2B_PRODUCT_OPPORTUNITIES_NOT_YET_ON_AMAZON` | B2B opportunities not yet on Amazon | Seller only |
+| `GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT` | 搜索目录表现指标 | 仅卖家 |
+| `GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT` | 搜索查询表现数据 | 仅卖家 |
+| `GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT` | 经常组合购买的商品 | 卖家与 Vendor |
+| `GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT` | 商品热门搜索词 | 卖家与 Vendor |
+| `GET_BRAND_ANALYTICS_REPEAT_PURCHASE_REPORT` | 重复购买行为分析 | 卖家与 Vendor |
+| `GET_VENDOR_REAL_TIME_INVENTORY_REPORT` | Vendor 实时库存 | 仅 Vendor |
+| `GET_VENDOR_REAL_TIME_TRAFFIC_REPORT` | Vendor 实时流量 | 仅 Vendor |
+| `GET_VENDOR_REAL_TIME_SALES_REPORT` | Vendor 实时销售 | 仅 Vendor |
+| `GET_VENDOR_SALES_REPORT` | Vendor 销售报告 | 仅 Vendor |
+| `GET_VENDOR_NET_PURE_PRODUCT_MARGIN_REPORT` | Vendor 商品利润率 | 仅 Vendor |
+| `GET_VENDOR_TRAFFIC_REPORT` | Vendor 流量报告 | 仅 Vendor |
+| `GET_VENDOR_FORECASTING_REPORT` | Vendor 需求预测 | 仅 Vendor |
+| `GET_VENDOR_INVENTORY_REPORT` | Vendor 库存报告 | 仅 Vendor |
+| `GET_SALES_AND_TRAFFIC_REPORT` | 按日期汇总的销售与流量 | 仅卖家 |
 
 ---
 
-## 4. Browse Tree Reports
+## 3. B2B 商品机会
 
-Product category and browse node data.
+B2B 商品机会洞察。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_XML_BROWSE_TREE_DATA` | Browse tree hierarchy (XML format) | Seller only |
+| `GET_B2B_PRODUCT_OPPORTUNITIES_RECOMMENDED_FOR_YOU` | 个性化 B2B 商品推荐 | 仅卖家 |
+| `GET_B2B_PRODUCT_OPPORTUNITIES_NOT_YET_ON_AMAZON` | 尚未在 Amazon 上架的 B2B 机会 | 仅卖家 |
 
 ---
 
-## 5. Easy Ship Reports
+## 4. 浏览树报告
 
-Amazon Easy Ship program reports (India marketplace).
+商品类目和浏览节点数据。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_EASYSHIP_DOCUMENTS` | Easy Ship shipping documents | Seller only |
-| `GET_EASYSHIP_PICKEDUP` | Easy Ship picked up orders | Seller only |
-| `GET_EASYSHIP_WAITING_FOR_PICKUP` | Orders waiting for Easy Ship pickup | Seller only |
+| `GET_XML_BROWSE_TREE_DATA` | 浏览树层级（XML 格式） | 仅卖家 |
 
 ---
 
-## 6. FBA (Fulfillment by Amazon) Reports
+## 5. Easy Ship 报告
 
-Comprehensive FBA inventory, shipment, fees, and fulfillment data.
+Amazon Easy Ship 计划报告（印度站点）。
 
-### 6.1 FBA Shipments
-
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL` | FBA fulfilled shipments (general) | Seller only |
-| `GET_AMAZON_FULFILLED_SHIPMENTS_DATA_INVOICING` | FBA shipments for invoicing | Seller only |
-| `GET_AMAZON_FULFILLED_SHIPMENTS_DATA_TAX` | FBA shipments tax data | Seller only |
-| `GET_FBA_FULFILLMENT_CUSTOMER_SHIPMENT_SALES_DATA` | FBA customer shipment sales | Seller only |
-| `GET_FBA_FULFILLMENT_CUSTOMER_SHIPMENT_PROMOTION_DATA` | FBA shipment promotion data | Seller only |
-| `GET_FBA_FULFILLMENT_CUSTOMER_TAXES_DATA` | FBA customer taxes | Seller only |
-
-### 6.2 FBA Inventory
-
-| Report Type | Description | Availability |
-|-------------|-------------|--------------|
-| `GET_AFN_INVENTORY_DATA` | Amazon Fulfilled Network inventory | Seller only |
-| `GET_AFN_INVENTORY_DATA_BY_COUNTRY` | AFN inventory by country | Seller only |
-| `GET_LEDGER_SUMMARY_VIEW_DATA` | Inventory ledger summary | Seller only |
-| `GET_LEDGER_DETAIL_VIEW_DATA` | Inventory ledger detail | Seller only |
-| `GET_RESERVED_INVENTORY_DATA` | Reserved inventory data | Seller only |
-| `GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA` | FBA Manage Your Inventory (active) | Seller only |
-| `GET_FBA_MYI_ALL_INVENTORY_DATA` | FBA all inventory status | Seller only |
-| `GET_RESTOCK_INVENTORY_RECOMMENDATIONS_REPORT` | FBA restock recommendations | Seller only |
-| `GET_STRANDED_INVENTORY_UI_DATA` | Stranded inventory (UI format) | Seller only |
-| `GET_STRANDED_INVENTORY_LOADER_DATA` | Stranded inventory (bulk format) | Seller only |
-| `GET_FBA_INVENTORY_PLANNING_DATA` | FBA inventory planning | Seller only |
-| `GET_REMOTE_FULFILLMENT_ELIGIBILITY` | Remote fulfillment eligibility | Seller only |
-
-### 6.3 FBA Fees & Charges
-
-| Report Type | Description | Availability |
-|-------------|-------------|--------------|
-| `GET_FBA_STORAGE_FEE_CHARGES_DATA` | FBA storage fee charges | Seller only |
-| `GET_FBA_OVERAGE_FEE_CHARGES_DATA` | FBA overage fee charges | Seller only |
-| `GET_FBA_ESTIMATED_FBA_FEES_TXT_DATA` | Estimated FBA fees | Seller only |
-| `GET_FBA_FULFILLMENT_LONGTERM_STORAGE_FEE_CHARGES_DATA` | Long-term storage fees | Seller only |
-
-### 6.4 FBA Returns & Reimbursements
-
-| Report Type | Description | Availability |
-|-------------|-------------|--------------|
-| `GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA` | FBA customer returns | Seller only |
-| `GET_FBA_FULFILLMENT_CUSTOMER_SHIPMENT_REPLACEMENT_DATA` | FBA shipment replacements | Seller only |
-| `GET_FBA_REIMBURSEMENTS_DATA` | FBA reimbursements | Seller only |
-
-### 6.5 FBA Removals
-
-| Report Type | Description | Availability |
-|-------------|-------------|--------------|
-| `GET_FBA_RECOMMENDED_REMOVAL_DATA` | Recommended removal inventory | Seller only |
-| `GET_FBA_FULFILLMENT_REMOVAL_ORDER_DETAIL_DATA` | Removal order details | Seller only |
-| `GET_FBA_FULFILLMENT_REMOVAL_SHIPMENT_DETAIL_DATA` | Removal shipment details | Seller only |
-
-### 6.6 FBA Compliance
-
-| Report Type | Description | Availability |
-|-------------|-------------|--------------|
-| `GET_FBA_FULFILLMENT_INBOUND_NONCOMPLIANCE_DATA` | Inbound non-compliance issues | Seller only |
+| `GET_EASYSHIP_DOCUMENTS` | Easy Ship 配送文档 | 仅卖家 |
+| `GET_EASYSHIP_PICKEDUP` | Easy Ship 已揽收订单 | 仅卖家 |
+| `GET_EASYSHIP_WAITING_FOR_PICKUP` | 等待 Easy Ship 揽收的订单 | 仅卖家 |
 
 ---
 
-## 7. Inventory Reports
+## 6. FBA（亚马逊配送）报告
 
-Listing and inventory management reports.
+FBA 库存、货件、费用和履约数据。
 
-| Report Type | Description | Availability |
+### 6.1 FBA 配送货件
+
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_FLAT_FILE_OPEN_LISTINGS_DATA` | Open listings (flat file) | Seller only |
-| `GET_MERCHANT_LISTINGS_ALL_DATA` | All active listings | Seller only |
-| `GET_MERCHANT_LISTINGS_DATA` | Active listings (standard) | Seller only |
-| `GET_MERCHANT_LISTINGS_INACTIVE_DATA` | Inactive listings | Seller only |
-| `GET_MERCHANT_LISTINGS_DATA_BACK_COMPAT` | Listings (backwards compatible) | Seller only |
-| `GET_MERCHANT_LISTINGS_DATA_LITE` | Listings (lite version) | Seller only |
-| `GET_MERCHANT_LISTINGS_DATA_LITER` | Listings (lighter version) | Seller only |
-| `GET_MERCHANT_CANCELLED_LISTINGS_DATA` | Cancelled listings | Seller only |
-| `GET_MERCHANTS_LISTINGS_FYP_REPORT` | Fix Your Products report | Seller only |
-| `GET_PAN_EU_OFFER_STATUS` | Pan-European offer status | Seller only |
-| `GET_MFN_PANEU_OFFER_STATUS` | MFN Pan-EU offer status | Seller only |
-| `GET_REFERRAL_FEE_PREVIEW_REPORT` | Referral fee preview | Seller only |
+| `GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL` | FBA 配送货件（通用） | 仅卖家 |
+| `GET_AMAZON_FULFILLED_SHIPMENTS_DATA_INVOICING` | FBA 货件开票数据 | 仅卖家 |
+| `GET_AMAZON_FULFILLED_SHIPMENTS_DATA_TAX` | FBA 货件税务数据 | 仅卖家 |
+| `GET_FBA_FULFILLMENT_CUSTOMER_SHIPMENT_SALES_DATA` | FBA 客户货件销售 | 仅卖家 |
+| `GET_FBA_FULFILLMENT_CUSTOMER_SHIPMENT_PROMOTION_DATA` | FBA 货件促销数据 | 仅卖家 |
+| `GET_FBA_FULFILLMENT_CUSTOMER_TAXES_DATA` | FBA 客户税务数据 | 仅卖家 |
+
+### 6.2 FBA 库存
+
+| 报告类型 | 说明 | 可用范围 |
+|-------------|-------------|--------------|
+| `GET_AFN_INVENTORY_DATA` | Amazon 配送网络库存 | 仅卖家 |
+| `GET_AFN_INVENTORY_DATA_BY_COUNTRY` | 按国家汇总的 AFN 库存 | 仅卖家 |
+| `GET_LEDGER_SUMMARY_VIEW_DATA` | 库存分类账汇总 | 仅卖家 |
+| `GET_LEDGER_DETAIL_VIEW_DATA` | 库存分类账明细 | 仅卖家 |
+| `GET_RESERVED_INVENTORY_DATA` | 预留库存数据 | 仅卖家 |
+| `GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA` | FBA 有效库存管理 | 仅卖家 |
+| `GET_FBA_MYI_ALL_INVENTORY_DATA` | FBA 全部库存状态 | 仅卖家 |
+| `GET_RESTOCK_INVENTORY_RECOMMENDATIONS_REPORT` | FBA 补货建议 | 仅卖家 |
+| `GET_STRANDED_INVENTORY_UI_DATA` | 滞留库存（界面格式） | 仅卖家 |
+| `GET_STRANDED_INVENTORY_LOADER_DATA` | 滞留库存（批量格式） | 仅卖家 |
+| `GET_FBA_INVENTORY_PLANNING_DATA` | FBA 库存规划 | 仅卖家 |
+| `GET_REMOTE_FULFILLMENT_ELIGIBILITY` | 远程配送资格 | 仅卖家 |
+
+### 6.3 FBA 费用
+
+| 报告类型 | 说明 | 可用范围 |
+|-------------|-------------|--------------|
+| `GET_FBA_STORAGE_FEE_CHARGES_DATA` | FBA 仓储收费 | 仅卖家 |
+| `GET_FBA_OVERAGE_FEE_CHARGES_DATA` | FBA 超量仓储收费 | 仅卖家 |
+| `GET_FBA_ESTIMATED_FBA_FEES_TXT_DATA` | FBA 费用估算 | 仅卖家 |
+| `GET_FBA_FULFILLMENT_LONGTERM_STORAGE_FEE_CHARGES_DATA` | 长期仓储费用 | 仅卖家 |
+
+### 6.4 FBA 退货与赔偿
+
+| 报告类型 | 说明 | 可用范围 |
+|-------------|-------------|--------------|
+| `GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA` | FBA 客户退货 | 仅卖家 |
+| `GET_FBA_FULFILLMENT_CUSTOMER_SHIPMENT_REPLACEMENT_DATA` | FBA 货件替换商品 | 仅卖家 |
+| `GET_FBA_REIMBURSEMENTS_DATA` | FBA 赔偿 | 仅卖家 |
+
+### 6.5 FBA 移除
+
+| 报告类型 | 说明 | 可用范围 |
+|-------------|-------------|--------------|
+| `GET_FBA_RECOMMENDED_REMOVAL_DATA` | 建议移除的库存 | 仅卖家 |
+| `GET_FBA_FULFILLMENT_REMOVAL_ORDER_DETAIL_DATA` | Removal order details | 仅卖家 |
+| `GET_FBA_FULFILLMENT_REMOVAL_SHIPMENT_DETAIL_DATA` | 移除货件明细 | 仅卖家 |
+
+### 6.6 FBA 合规
+
+| 报告类型 | 说明 | 可用范围 |
+|-------------|-------------|--------------|
+| `GET_FBA_FULFILLMENT_INBOUND_NONCOMPLIANCE_DATA` | 入库不合规问题 | 仅卖家 |
 
 ---
 
-## 8. Invoice Reports
+## 7. 库存报告
 
-VAT invoice data for tax compliance.
+刊登与库存管理报告。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_FLAT_FILE_VAT_INVOICE_DATA_REPORT` | VAT invoice data (flat file) | Seller only |
-| `GET_XML_VAT_INVOICE_DATA_REPORT` | VAT invoice data (XML) | Seller only |
+| `GET_FLAT_FILE_OPEN_LISTINGS_DATA` | 开放刊登（平面文件） | 仅卖家 |
+| `GET_MERCHANT_LISTINGS_ALL_DATA` | 全部有效刊登 | 仅卖家 |
+| `GET_MERCHANT_LISTINGS_DATA` | 有效刊登（标准） | 仅卖家 |
+| `GET_MERCHANT_LISTINGS_INACTIVE_DATA` | 失效刊登 | 仅卖家 |
+| `GET_MERCHANT_LISTINGS_DATA_BACK_COMPAT` | 刊登（向后兼容） | 仅卖家 |
+| `GET_MERCHANT_LISTINGS_DATA_LITE` | 刊登（精简版） | 仅卖家 |
+| `GET_MERCHANT_LISTINGS_DATA_LITER` | 刊登（更精简版） | 仅卖家 |
+| `GET_MERCHANT_CANCELLED_LISTINGS_DATA` | 已取消刊登 | 仅卖家 |
+| `GET_MERCHANTS_LISTINGS_FYP_REPORT` | 商品问题修复报告 | 仅卖家 |
+| `GET_PAN_EU_OFFER_STATUS` | 泛欧报价状态 | 仅卖家 |
+| `GET_MFN_PANEU_OFFER_STATUS` | 卖家配送泛欧报价状态 | 仅卖家 |
+| `GET_REFERRAL_FEE_PREVIEW_REPORT` | 佣金预览 | 仅卖家 |
 
 ---
 
-## 9. Order Reports
+## 8. 发票报告
 
-Order processing and fulfillment data.
+用于税务合规的 VAT 发票数据。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_FLAT_FILE_ACTIONABLE_ORDER_DATA_SHIPPING` | Actionable orders for shipping | Seller only |
-| `GET_ORDER_REPORT_DATA_INVOICING` | Order data for invoicing | Seller only |
-| `GET_ORDER_REPORT_DATA_TAX` | Order tax data | Seller only |
-| `GET_ORDER_REPORT_DATA_SHIPPING` | Order shipping data | Seller only |
-| `GET_FLAT_FILE_ORDER_REPORT_DATA_INVOICING` | Order invoicing (flat file) | Seller only |
-| `GET_FLAT_FILE_ORDER_REPORT_DATA_SHIPPING` | Order shipping (flat file) | Seller only |
-| `GET_FLAT_FILE_ORDER_REPORT_DATA_TAX` | Order tax (flat file) | Seller only |
-| `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL` | All orders by last update | Seller only |
-| `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL` | All orders by order date | Seller only |
-| `GET_FLAT_FILE_ARCHIVED_ORDERS_DATA_BY_ORDER_DATE` | Archived orders | Seller only |
-| `GET_XML_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL` | All orders (XML, by update) | Seller only |
-| `GET_XML_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL` | All orders (XML, by date) | Seller only |
-| `GET_FLAT_FILE_PENDING_ORDERS_DATA` | Pending orders (flat file) | Seller only |
-| `GET_PENDING_ORDERS_DATA` | Pending orders | Seller only |
-| `GET_CONVERGED_FLAT_FILE_PENDING_ORDERS_DATA` | Converged pending orders | Seller only |
+| `GET_FLAT_FILE_VAT_INVOICE_DATA_REPORT` | VAT 发票数据（平面文件） | 仅卖家 |
+| `GET_XML_VAT_INVOICE_DATA_REPORT` | VAT 发票数据（XML） | 仅卖家 |
 
 ---
 
-## 10. Payment Reports
+## 9. 订单报告
 
-Financial holds and payment data.
+订单处理与履约数据。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_DATE_RANGE_FINANCIAL_HOLDS_DATA` | Financial holds by date range | Seller only |
+| `GET_FLAT_FILE_ACTIONABLE_ORDER_DATA_SHIPPING` | 待处理发货订单 | 仅卖家 |
+| `GET_ORDER_REPORT_DATA_INVOICING` | 订单开票数据 | 仅卖家 |
+| `GET_ORDER_REPORT_DATA_TAX` | 订单税务数据 | 仅卖家 |
+| `GET_ORDER_REPORT_DATA_SHIPPING` | 订单配送数据 | 仅卖家 |
+| `GET_FLAT_FILE_ORDER_REPORT_DATA_INVOICING` | 订单开票（平面文件） | 仅卖家 |
+| `GET_FLAT_FILE_ORDER_REPORT_DATA_SHIPPING` | 订单配送（平面文件） | 仅卖家 |
+| `GET_FLAT_FILE_ORDER_REPORT_DATA_TAX` | 订单税务（平面文件） | 仅卖家 |
+| `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL` | 按最后更新日期的全部订单 | 仅卖家 |
+| `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL` | 按下单日期的全部订单 | 仅卖家 |
+| `GET_FLAT_FILE_ARCHIVED_ORDERS_DATA_BY_ORDER_DATE` | 已归档订单 | 仅卖家 |
+| `GET_XML_ALL_ORDERS_DATA_BY_LAST_UPDATE_GENERAL` | 全部订单（XML，按更新日期） | 仅卖家 |
+| `GET_XML_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL` | 全部订单（XML，按下单日期） | 仅卖家 |
+| `GET_FLAT_FILE_PENDING_ORDERS_DATA` | 待处理订单（平面文件） | 仅卖家 |
+| `GET_PENDING_ORDERS_DATA` | 待处理订单 | 仅卖家 |
+| `GET_CONVERGED_FLAT_FILE_PENDING_ORDERS_DATA` | 合并的待处理订单 | 仅卖家 |
 
 ---
 
-## 11. Performance Reports
+## 10. 支付报告
 
-Seller performance metrics and feedback.
+财务冻结与支付数据。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_SELLER_FEEDBACK_DATA` | Customer feedback | Seller only |
-| `GET_V1_SELLER_PERFORMANCE_REPORT` | Seller performance v1 | Seller only |
-| `GET_V2_SELLER_PERFORMANCE_REPORT` | Seller performance v2 | Seller only |
-| `GET_PROMOTION_PERFORMANCE_REPORT` | Promotion performance | Both |
-| `GET_COUPON_PERFORMANCE_REPORT` | Coupon performance | Both |
+| `GET_DATE_RANGE_FINANCIAL_HOLDS_DATA` | 指定日期范围的财务冻结 | 仅卖家 |
 
 ---
 
-## 12. Regulatory Compliance Reports
+## 11. 绩效报告
 
-Compliance and regulatory reporting.
+卖家绩效指标与反馈。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `END_USER_DATA_REPORT` | End user data report | Seller only |
-| `FBA_BULK_INVOICE` | FBA bulk invoice | Seller only |
-| `MARKETPLACE_ASIN_PAGE_VIEW_METRICS` | ASIN page view metrics | Seller only |
-| `GET_EPR_MONTHLY_REPORTS` | Extended Producer Responsibility (monthly) | Seller only |
-| `GET_EPR_QUARTERLY_REPORTS` | EPR quarterly reports | Seller only |
-| `GET_EPR_ANNUAL_REPORTS` | EPR annual reports | Seller only |
+| `GET_SELLER_FEEDBACK_DATA` | 客户反馈 | 仅卖家 |
+| `GET_V1_SELLER_PERFORMANCE_REPORT` | 卖家绩效 v1 | 仅卖家 |
+| `GET_V2_SELLER_PERFORMANCE_REPORT` | 卖家绩效 v2 | 仅卖家 |
+| `GET_PROMOTION_PERFORMANCE_REPORT` | 促销表现 | 卖家与 Vendor |
+| `GET_COUPON_PERFORMANCE_REPORT` | 优惠券表现 | 卖家与 Vendor |
 
 ---
 
-## 13. Returns Reports
+## 12. 监管合规报告
 
-Return and replacement order data.
+合规与监管报告。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_XML_RETURNS_DATA_BY_RETURN_DATE` | Returns by date (XML) | Seller only |
-| `GET_FLAT_FILE_RETURNS_DATA_BY_RETURN_DATE` | Returns by date (flat file) | Seller only |
-| `GET_XML_MFN_PRIME_RETURNS_REPORT` | MFN Prime returns (XML) | Seller only |
-| `GET_CSV_MFN_PRIME_RETURNS_REPORT` | MFN Prime returns (CSV) | Seller only |
-| `GET_XML_MFN_SKU_RETURN_ATTRIBUTES_REPORT` | MFN SKU return attributes (XML) | Seller only |
-| `GET_FLAT_FILE_MFN_SKU_RETURN_ATTRIBUTES_REPORT` | MFN SKU return attributes (flat file) | Seller only |
+| `END_USER_DATA_REPORT` | 终端用户数据报告 | 仅卖家 |
+| `FBA_BULK_INVOICE` | FBA 批量发票 | 仅卖家 |
+| `MARKETPLACE_ASIN_PAGE_VIEW_METRICS` | ASIN 页面浏览指标 | 仅卖家 |
+| `GET_EPR_MONTHLY_REPORTS` | 生产者延伸责任（月度） | 仅卖家 |
+| `GET_EPR_QUARTERLY_REPORTS` | EPR 季度报告 | 仅卖家 |
+| `GET_EPR_ANNUAL_REPORTS` | EPR 年度报告 | 仅卖家 |
 
 ---
 
-## 14. Settlement/Payments Reports
+## 13. 退货报告
 
-Financial settlement and transaction data.
+退货与替换订单数据。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE` | Settlement report v2 (flat file) | Seller only |
-| `GET_V2_SETTLEMENT_REPORT_DATA_XML` | Settlement report v2 (XML) | Seller only |
-| `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2` | Enhanced settlement report | Seller only |
+| `GET_XML_RETURNS_DATA_BY_RETURN_DATE` | 按日期的退货（XML） | 仅卖家 |
+| `GET_FLAT_FILE_RETURNS_DATA_BY_RETURN_DATE` | 按日期的退货（平面文件） | 仅卖家 |
+| `GET_XML_MFN_PRIME_RETURNS_REPORT` | MFN Prime 退货（XML） | 仅卖家 |
+| `GET_CSV_MFN_PRIME_RETURNS_REPORT` | MFN Prime 退货（CSV） | 仅卖家 |
+| `GET_XML_MFN_SKU_RETURN_ATTRIBUTES_REPORT` | MFN SKU 退货属性（XML） | 仅卖家 |
+| `GET_FLAT_FILE_MFN_SKU_RETURN_ATTRIBUTES_REPORT` | MFN SKU 退货属性（平面文件） | 仅卖家 |
 
 ---
 
-## 15. Tax Reports
+## 14. 结算与支付报告
 
-Tax compliance and transaction data.
+财务结算与交易数据。
 
-| Report Type | Description | Availability |
+| 报告类型 | 说明 | 可用范围 |
 |-------------|-------------|--------------|
-| `GST_MTR_STOCK_TRANSFER_REPORT` | GST stock transfer report | Seller only |
-| `GST_MTR_B2B` | GST Monthly Tax Report B2B | Seller only |
-| `GST_MTR_B2C` | GST Monthly Tax Report B2C | Seller only |
-| `GET_FLAT_FILE_SALES_TAX_DATA` | Sales tax collection data | Seller only |
-| `SC_VAT_TAX_REPORT` | Seller Central VAT tax report | Seller only |
-| `GET_VAT_TRANSACTION_DATA` | VAT transaction data | Seller only |
-| `GET_GST_MTR_B2B_CUSTOM` | Custom GST MTR B2B | Seller only |
-| `GET_GST_MTR_B2C_CUSTOM` | Custom GST MTR B2C | Seller only |
-| `GET_GST_STR_ADHOC` | GST Adhoc report | Seller only |
+| `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE` | 结算报告 v2（平面文件） | 仅卖家 |
+| `GET_V2_SETTLEMENT_REPORT_DATA_XML` | 结算报告 v2（XML） | 仅卖家 |
+| `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2` | 增强结算报告 | 仅卖家 |
 
 ---
 
-## Report Request Best Practices
+## 15. 税务报告
 
-1. **Schedule Frequency**: Most reports can be requested on-demand, but some have rate limits
-2. **Date Ranges**: Use reasonable date ranges (typically 1-90 days)
-3. **Retention**: Reports are retained for 90 days unless specified otherwise
-4. **Rate Limits**: Respect API rate limits (typically 0.0222 requests/second)
-5. **Marketplace-Specific**: Some reports are only available in certain marketplaces
+税务合规与交易数据。
 
-## Common Marketplace IDs
+| 报告类型 | 说明 | 可用范围 |
+|-------------|-------------|--------------|
+| `GST_MTR_STOCK_TRANSFER_REPORT` | GST 库存调拨报告 | 仅卖家 |
+| `GST_MTR_B2B` | GST 月度税务报告 B2B | 仅卖家 |
+| `GST_MTR_B2C` | GST 月度税务报告 B2C | 仅卖家 |
+| `GET_FLAT_FILE_SALES_TAX_DATA` | 销售税收取数据 | 仅卖家 |
+| `SC_VAT_TAX_REPORT` | Seller Central VAT 税务报告 | 仅卖家 |
+| `GET_VAT_TRANSACTION_DATA` | VAT 交易数据 | 仅卖家 |
+| `GET_GST_MTR_B2B_CUSTOM` | 自定义 GST MTR B2B | 仅卖家 |
+| `GET_GST_MTR_B2C_CUSTOM` | 自定义 GST MTR B2C | 仅卖家 |
+| `GET_GST_STR_ADHOC` | GST 临时报表 | 仅卖家 |
 
-| Region | Country | Marketplace ID |
+---
+
+## 报告请求建议
+
+1. **请求频率**：多数报告可按需请求，但部分存在频率限制。
+2. **日期范围**：通常按 1–90 天合理选择，具体以报告约定为准。
+3. **保留期限**：未另行约定时报告保留 90 天。
+4. **速率限制**：参考速率约 0.0222 次/秒，实际请求间隔须遵循对应接口配额及响应提示。
+5. **站点范围**：部分报告仅在特定站点可用。
+
+## 常用站点 ID
+
+| 区域 | 国家 | 站点 ID |
 |--------|---------|----------------|
 | NA | United States | ATVPDKIKX0DER |
 | NA | Canada | A2EUQ1WTGCTBG2 |
@@ -310,38 +310,38 @@ Tax compliance and transaction data.
 | FE | India | A21TJRUUN4KGV |
 | FE | UAE | A2VIGQ35RCS4UG |
 
-## Quick Reference by Use Case
+## 按场景速查
 
-**Inventory Management**:
+**库存管理**:
 - `GET_MERCHANT_LISTINGS_ALL_DATA`
 - `GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA`
 - `GET_STRANDED_INVENTORY_UI_DATA`
 
-**Order Processing**:
+**订单处理**:
 - `GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL`
 - `GET_FLAT_FILE_ACTIONABLE_ORDER_DATA_SHIPPING`
 
-**Financial Analysis**:
+**财务分析**:
 - `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE`
 - `GET_SALES_AND_TRAFFIC_REPORT`
 - `GET_FBA_STORAGE_FEE_CHARGES_DATA`
 
-**Performance Monitoring**:
+**绩效监控**:
 - `GET_V2_SELLER_PERFORMANCE_REPORT`
 - `GET_SELLER_FEEDBACK_DATA`
 - `GET_SALES_AND_TRAFFIC_REPORT`
 
-**Returns Management**:
+**退货管理**:
 - `GET_FLAT_FILE_RETURNS_DATA_BY_RETURN_DATE`
 - `GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA`
 
-**Tax Compliance**:
+**税务合规**:
 - `GET_FLAT_FILE_SALES_TAX_DATA`
 - `GET_VAT_TRANSACTION_DATA`
 - `GET_GST_MTR_B2B_CUSTOM`
 
 ---
 
-**Official Documentation**: https://developer-docs.amazon.com/sp-api/docs/report-type-values
+**官方文档**： https://developer-docs.amazon.com/sp-api/docs/report-type-values
 
-**Last Updated**: Based on Amazon Selling Partner API documentation as of April 2026
+**文档覆盖时间**：2026 年 4 月；报告类型的可用性与后续变化以对应官方文档为准。

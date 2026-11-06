@@ -242,7 +242,6 @@ def _load_flow(
 # 手动执行时拿不到真实事件载荷的启动方式。执行照跑,但 stdout 带上这句,
 # 免得把"手动跑通"说成"事件触发配好了"。
 _NO_PAYLOAD_TRIGGERS = {
-    "storeAuthorization": "店铺授权启动手动执行没有真实店铺事件载荷;跑通不代表事件触发已生效",
     "tableRecordTrigger": (
         "记录触发手动执行没有变更载荷(recordEvent / rows / recordRows 不存在);"
         "跑通不代表记录触发已生效,接了 WriteFile 的会报'没有产出任何记录'"

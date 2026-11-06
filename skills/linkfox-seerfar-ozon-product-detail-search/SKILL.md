@@ -1,146 +1,118 @@
 ---
 name: linkfox-seerfar-ozon-product-detail-search
-description: Seerfar Ozon 商品详情查询：按 Ozon 商品 SKU 拉取单个商品的完整详情，返回标题、价格（卢布）、评分、评论数、QA数、统计窗口内总销量与日均销量、销售额、库存、类目排名、每日销量趋势、品牌、卖家、配送方式（FBO/FBS/OZON）、重量、上架时间/天数/月数等。用于单品深度分析、竞品商品拆解、Ozon 选品评估、Listing 诊断、销量趋势与类目排名跟踪。当用户提到 Ozon 商品详情、Ozon 单品分析、Ozon SKU 查询、竞品商品数据、Ozon 销量趋势、Ozon 类目排名、Ozon 库存、Ozon 上架时间、Seerfar Ozon 商品搜索、Ozon product detail, Ozon SKU lookup, single product analysis, competitor product teardown, Ozon sales trend, category rank 时触发此技能。即使用户未明确提到"Seerfar"，只要其意图是查看某个 Ozon 商品的详细数据，也应触发此技能。
+description: 按 Ozon 商品 SKU 查询 Seerfar 单品详情，查看价格、评分、评论与问答、销量与销售额、库存、每日趋势、类目排名、品牌、卖家、配送方式及上架时长。适用于 Ozon 单品深查、竞品拆解、Listing 诊断和销量趋势跟踪；用户无需明确提及 Seerfar。店铺目录、关键词发现、类目浏览和批量商品发现使用对应技能。
 ---
 
-# Seerfar Ozon Product Detail Search
+# Seerfar Ozon 商品详情搜索
 
-This skill fetches the full detail of a single Ozon product by its SKU from the Seerfar analytics database — title, price (₽), rating, reviews, QA count, sales (total + daily average + daily trend), revenue, stock, category rank, brand, seller, fulfillment (FBO/FBS/OZON), weight and listing age. The starting point for single-product deep analysis, competitor product teardown, listing diagnostics and sales-trend tracking.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Unit of data is a single product, looked up by `sku`**: pass one Ozon SKU, get that product's full detail. This is a *product-level* view (one SKU), not a shop catalog, keyword or category view.
+查看指定 Ozon 商品的完整指标。用户已有商品 SKU，或可以先从上游数据源确定 SKU，且希望核对该商品详情、销量、库存或趋势时，使用本技能。
 
-**Where the SKU comes from**: `sku` is the Ozon product SKU — the same `sku` returned by other Seerfar Ozon tools (shop search, keyword back search, category search, market keyword search). If the user only has a product name, URL or shop, first obtain the `sku` from one of those listing-level sources, then call this skill for the deep dive.
+**场景速查**
 
-**Sales window**: `dateRange` controls the sales/metrics window — `totalSales`, `dailySales`, `totalRevenue` and `salesTrendVOList` are computed over this range. Default `past_30_days`. Options: `past_7_days` / `past_30_days` / `past_60_days` / `past_90_days` / `past_180_days` / `past_365_days`.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查看这个 Ozon 商品的详情、这个 SKU 的数据 | 商品资料与指标概览。 |
+| 这个竞品最近 30 天卖了多少、日均销量多少 | 销量快照。 |
+| 这个商品销售额或库存多少 | 销售额与库存核对。 |
+| 这个商品在类目里排第几 | 类目排名历史。 |
+| 最近销量趋势怎样、哪天卖得最好 | 每日趋势与销量峰值。 |
+| 这个商品是谁家的、什么品牌 | 卖家与品牌溯源。 |
+| 这个商品上架多久了 | 上架日期及上架时长。 |
 
-**Sales & price currency**: `price` is in Russian rubles (₽), indicated by `currency`. `totalSales` is units over the window; `dailySales` is the average units/day; `totalRevenue` is revenue over the window.
+### 边界
 
-**Listing age**: `upTime` is the listing timestamp (ms); `upDays` / `upMonths` are the derived age in days / months.
+店铺完整商品目录、关键词发现、类目商品浏览分别使用 Seerfar Ozon 店铺搜索、市场关键词搜索／关键词挖掘／关键词反查、类目搜索等对应技能。多商品概要可从列表级数据源取得；需要逐个深查时按用户范围分别查询。
 
-## Parameters
+## 前置条件
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| sku | string | yes | Ozon product SKU (e.g. `175924376`). The same `sku` from other Seerfar Ozon tools. |
-| dateRange | string | no | Sales/metrics window. Default `past_30_days`. One of: `past_7_days`, `past_30_days`, `past_60_days`, `past_90_days`, `past_180_days`, `past_365_days`. |
-| uId | string | no | User ID. |
-| memberId | string | no | Member ID (data attribution). |
+**先确定商品 SKU**：仅有商品名称、URL 或店铺信息时，先从 Seerfar Ozon 店铺搜索、关键词反查、类目搜索或市场关键词搜索等列表级数据源取得准确的 SKU。
 
-Only `sku` is required.
+## 查询流程
 
-## 调用方式
+1. 确定用户要查看的商品，沿用上游列表中的商品 SKU。
+2. 按分析目的选择统计窗口：近期动量选较短窗口，生命周期、季节性和排名稳定性选较长窗口；库存等商品快照的口径见 `references/api.md`。
+3. 准备请求并查询，先读取销量、日均销量、销售额、库存和类目排名概览，再查看每日趋势。参数及使用限制统一见 `references/api.md`。
+4. 比较商品时逐个查询所需 SKU，复用同参数缓存，并遵守成本约束；失败或空结果按接口参考解释，不自动变更条件连续试探。
 
-- **API 端点**：`POST /seerfar/ozon/productDetailSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/seerfar_ozon_product_detail_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 执行方式
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-product-detail-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/seerfar_ozon_product_detail_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：单次调用的算力规则见下方“算力消耗预估”。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+### 输出策略
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-seerfar-ozon-product-detail-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## Usage Examples
+## 执行规则
 
-**1. Default 30-day detail for a product**
+### 算力消耗预估
+
+12 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **数据粒度**：这是商品层级的详情视图，适合核对一个已知商品，商品 SKU 与其他 Seerfar Ozon 数据源中的编号一致。
+- **清晰展示数据**：用清楚的布局呈现指标，不附加主观建议。销量和销售额属于 Seerfar 模型估算，展示时注明来源及统计区间。
+- **先展示身份与快照**：展示标题、SKU、价格、评分、评论数和问答数，再展示总销量、日均销量、销售额、库存及统计区间。价格和销售额注明卢布（₽），沿用响应币种。
+- **区分类目与排名**：展示类目路径及排名历史，不将排名历史当作类目名称来源；字段结构和口径见接口参考。
+- **概括每日趋势**：展示峰值日期和趋势方向，完整序列提供已保存文件。日销量为零表示当日无销量，不当作数据缺失。
+- **保留可追溯信息**：展示卖家名称及编号、品牌名称及编号；负值卖家编号表示 Ozon 平台自营卖家。
+- **配送与上架时长**：多个配送方式用 `/` 连接；上架时间转换成日期，同时展示上架天数和月数。
+- **兼容缺失字段与别名**：重量、毛利率缺失时展示 `-`；统一字段与原始字段展示一组即可，不重复计数。字段映射、单位及实际返回差异见 `references/api.md`。
+- **解释空结果和错误**：按 `references/api.md` 判断正常响应与业务结果；空商品结果提示用户核对 SKU，不直接报告系统故障。异常时根据消息说明原因并给出核对 SKU、限流后稍候重试等建议，后续请求仍遵守成本约束。
+
+## 使用示例
+
+### 默认统计窗口的商品详情
+
 ```json
 {"sku": "175924376"}
 ```
 
-**2. Last 7 days (recent momentum)**
+### 近 7 天的销售动量
+
 ```json
 {"sku": "175924376", "dateRange": "past_7_days"}
 ```
 
-**3. Last 90 days (quarterly trend)**
+### 近 90 天的季度趋势
+
 ```json
 {"sku": "175924376", "dateRange": "past_90_days"}
 ```
 
-**4. Full year (lifecycle view)**
+### 全年的生命周期观察
+
 ```json
 {"sku": "175924376", "dateRange": "past_365_days"}
 ```
 
-## How to Build Queries
+## 使用反馈
 
-1. **Resolve the SKU first**: if the user gives a product name, URL or shop rather than a SKU, obtain the `sku` from a listing-level Seerfar Ozon source (shop search / keyword back search / category search / market keyword search) before calling this skill.
-2. **Pick `dateRange` by intent**: short windows (`past_7_days` / `past_30_days`) for recent momentum and current stock; long windows (`past_90_days` / `past_180_days` / `past_365_days`) for lifecycle, seasonality and ranking stability.
-3. **Read aggregates, then trend**: start with top-level `totalSales` / `dailySales` / `totalRevenue` / `stock` / `categoryRanks` for a snapshot, then drill into `salesTrendVOList` for the daily series.
-4. **One SKU per call**: this endpoint takes a single `sku`; to compare products, call once per SKU.
-
-## Display Rules
-
-1. **Present data only**: show the product metrics in a clear layout without subjective advice.
-2. **Lead with identity + snapshot**: `title`, `sku`, `price` (₽), `reviewRating` (`reviewCount` reviews, `questionsAndAnswers` Q&A), then the sales snapshot (`totalSales`, `dailySales`, `totalRevenue`, `stock`) and the window (`startDate`–`endDate`).
-3. **Category ranks**: `categoryRanks` is a monthly rank history (`{date, rank, count}`) — it has no category name, so show the category path from `categoryInfo` (`titlePath` / `cnTitlePath`) alongside the rank history.
-4. **Sales trend**: `salesTrendVOList` is a daily series (`{date, sales, revenue, price, stock, reviewCount, reviewRating}`) — summarize (peak day, trend direction) rather than dumping every row; offer the persisted file for the full series. Some days may have `sales: 0` — treat as no-sales, not missing data.
-5. **Seller & brand**: show `sellerName` (`sellerId` — negative means an Ozon platform seller) and `brandName` (`brandId`) so the user can trace the seller/brand.
-6. **Fulfillment**: `fulfillment` is an array (e.g. `["FBO"]`, or `["OZON"]` for platform-sold items); join multiple values with `/`.
-7. **Listing age**: render `upTime` as a date (ms timestamp) alongside `upDays` / `upMonths`.
-8. **Conditional fields**: `weight` (physical goods only) and `grossMargin` are schema-defined but absent for some products (e.g. digital goods / Ozon platform sellers) — show `-` when missing rather than failing. `monthlySalesUnits` / `monthlySalesRevenue` mirror the window's `totalSales` / `totalRevenue` and are safe to read directly.
-9. **Empty result**: a non-existent `sku` returns success with `total:0` and empty `products` — tell the user the SKU may be wrong rather than reporting a system error.
-10. **Error handling**: when `code` is not `"200"` (or `errcode` is not `200`), explain from `msg` / `errmsg` and suggest fixes (check SKU, retry on rate-limit).
-
-## Important Limitations
-
-- **`sku` is required**; omitting it returns a parameter error.
-- **Single-SKU endpoint**: returns one product's detail; no batch/list mode. Compare products by calling once per SKU.
-- **`dateRange` only affects sales aggregates + trend**: product metadata (title, price, rating, brand, seller, weight, fulfillment) is a point-in-time snapshot, not windowed.
-- **Conditional fields**: `weight` (physical goods only) and `grossMargin` are schema-defined but not always returned — absent for digital goods / Ozon platform sellers. `monthlySalesUnits` / `monthlySalesRevenue` are returned and mirror the window's `totalSales` / `totalRevenue`.
-- **Sales/revenue are Seerfar model estimates** over the chosen window, not Ozon-official figures.
-- **`total` reflects returned record count** (1 when the SKU is found), not a catalog total.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — deep-dive on one Ozon product:
-
-| User Says | Scenario |
-|-----------|----------|
-| "查看这个 Ozon 商品的详情" / "这个 SKU 的数据" | Single product detail |
-| "这个竞品最近30天卖了多少" / "日均销量多少" | Sales snapshot (`totalSales` / `dailySales`) |
-| "这个商品销售额多少" | Revenue (`totalRevenue`) |
-| "这个商品库存多少" | Stock check (`stock`) |
-| "这个商品在类目里排第几" | Category rank (`categoryRanks`) |
-| "这个商品最近销量趋势" / "哪天卖得最好" | Daily sales trend (`salesTrendVOList`) |
-| "这个商品是谁家的/什么品牌" | Seller + brand (`sellerName` / `brandName`) |
-| "这个商品上架多久了" | Listing age (`upDays` / `upMonths`) |
-
-**Not applicable** — needs beyond one product's detail:
-- A shop's full product catalog → use the Seerfar Ozon shop search skill.
-- Discovering Ozon keywords → use market keyword search / keyword mining / keyword back search.
-- Browsing the category tree → use category search.
-- Multiple products' summary at once → call this skill per SKU, or use a listing-level source.
-
-**Boundary judgment**: if the user already has a specific Ozon SKU (or obtained one from a listing-level source) and wants that product's full metrics — sales, revenue, stock, category rank, trend, brand, seller — start here. If they want to discover products, keywords or shops, route to the corresponding Seerfar Ozon skill first.
-
-## 算力消耗规则
-
-消耗 5 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

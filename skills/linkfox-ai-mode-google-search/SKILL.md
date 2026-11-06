@@ -1,179 +1,125 @@
 ---
 name: linkfox-ai-mode-google-search
-description: 基于 Google 搜索的 AI 概览（AI Overview / AI Mode）抓取，针对一个关键词返回主搜索的 AI 概览要点，适合用最新网页信息做深度调研、技术问答、长尾选品分析、海外消费者偏好分析。仅支持单轮对话，如需追问须由 agent 总结上下文后发起新请求。当用户提到 Google AI、AI Overview、AI Mode、谷歌AI概览、谷歌AI搜索、海外深度调研、长尾选品调研、消费者偏好分析、网页要点总结、Google AI search, AI Overview, AI Mode, deep research, consumer preference analysis 等场景时触发此技能。即使用户未明确提到"Google AI"，只要其需求是"用谷歌搜索 + AI 总结网页要点"，也应触发此技能。
+description: 获取 Google AI Overview / AI Mode 的网页概览与来源引用，适用于实时网页要点总结、海外深度调研、技术问答、长尾选品探索和消费者偏好分析。当用户希望用谷歌搜索并由 AI 汇总网上说法时使用，无需明确提及 Google AI。不适用于内部结构化数据、Amazon ABA 分析、平台商品价格评论采集、仅需原始网页的普通搜索、图像生成识别或文件分析。
 ---
 
-# Google AI Search
+# Google AI 搜索
 
-This skill calls Google Search in AI Mode to get the AI Overview answer for a single keyword. Only one question per call is supported — there is no multi-turn follow-up within a single request. The response is unstructured Markdown — summarize it directly, do not route it to a data-analysis sandbox.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-The tool drives Google's AI Mode (the panel that appears at the top of Google search results and synthesizes an answer with citations):
+获取 Google 搜索顶部由 AI 综合网页并附来源引用的概览，用于总结公开网页信息和探索研究方向。
 
-1. The required `keyword` is sent to Google as the query and the AI Overview for it is captured.
-2. **Single-round only**: each call handles exactly one question. There is no `prompts` parameter for follow-ups.
-3. **For follow-up questions**: the agent must summarize the previous AI Overview answer (key points, citations, relevant context) and concatenate it with the new question into a new `keyword`, then make a fresh API call.
-4. All answers are returned as a single Markdown document under `stdout`, with citations linked to the source pages.
+**场景速查**
 
-`resultsNum` reports how many AI Overview blocks were rendered; `0` means the keyword did not trigger an AI Overview on Google for the requested locale.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 用 Google AI 帮我搜、Google AI Overview 看下 | 查看指定主题的 AI 概览。 |
+| 海外消费者对某产品怎么看、美国市场有什么偏好 | 消费者偏好分析。 |
+| 某产品的最新趋势、痛点、使用场景 | 深度调研与技术问答。 |
+| 网页上对某主题有什么总结、搜索引擎里大家怎么说 | 跨网页要点总结。 |
+| 长尾选品调研、蓝海选品方向 | 探索细分需求和产品方向。 |
+| 顺便问一下、然后再追问 | 总结前文后发起新的搜索。 |
 
-## Parameters
+### 边界
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| keyword | string | Yes | Google search keyword. Sent as the `q=` parameter to Google AI Mode. For follow-up questions, the agent should summarize the previous answer and concatenate with the new question into this field. |
+内部结构化数据、Amazon ABA 搜索词分析、指定平台的商品列表、价格或评论查询，使用对应数据技能。只要原始搜索结果或网页、无需 AI 综合时，使用普通网页搜索；图像生成、图像识别和文件分析不属于本技能范围。
 
-## Response Fields
+## 前置条件
 
-| Field | Type | Description |
-|-------|------|-------------|
-| stdout | string | Markdown document with the AI Overview for the keyword, plus inline citation links |
-| sourceUrl | string | The Google AI Mode search URL that was actually requested |
-| resultsNum | integer | Number of AI Overview blocks rendered (0 = keyword did not trigger AI Overview) |
-| code / errcode | string / integer | `200` on success; non-200 indicates a business error |
-| msg / errmsg | string | `ok` on success; otherwise an error description |
-| costTime | integer | API latency in milliseconds |
-| costToken | integer | Tokens consumed (only billed on success) |
-| taskId | string | Upstream task identifier for tracing |
-| type | string | Render hint, fixed value `stdoutWorkbenches` |
+先明确研究主题；涉及特定市场或回答语言要求时，将相关背景用于构造查询，无需为所有问题补齐市场和语言。追问时先取得上一轮概览与来源。参数和使用限制见 [接口定义](references/api.md)。
 
-## 调用方式
+## 查询流程
 
-- **API 端点**：`POST /aiMode/googleSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/google_ai_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+1. 根据用户问题确定主题与市场，优先采用目标市场语言和自然语言问句，将时间、使用场景及比较对象等有用背景前置。
+2. 追问时，先总结上一轮的关键结论、来源引用与相关背景，再结合新问题发起新的查询；不要把上一轮结果当成服务端已保存的对话上下文。
+3. 调用前说明预估算力消耗，按[算力消耗预估](#算力消耗预估)提醒用户并由用户决定是否继续；相同参数优先复用已有结果。
+4. 使用推荐脚本取得概览，先检查响应与保存路径，再依据接口定义处理空结果或错误。保留已取得的内容，需要进一步搜索时遵守成本约束。
+5. 直接整理 `stdout` 概览正文，保留 Markdown 层级与来源链接，按用户的问题给出要点；需要追溯时附 `sourceUrl` 实际搜索页和 `taskId` 任务标识。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ai-mode-google-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/google_ai_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按对话轮次 × 4.2 计算算力消耗。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词或拼接追问连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 输出策略
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ai-mode-google-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## How to Build Queries
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-Each call takes a single `keyword`. For follow-up questions, the agent must summarize the previous result and build a new query.
+## 执行规则
 
-### Tips
-
-1. **Front-load context in `keyword`**: include market/region cues when relevant (`"open-ear bone-conduction headphones US 2026"`) — the AI Overview is sensitive to phrasing.
-2. **Match the language to the target market**: ask in English for US/UK/AU markets, Japanese for JP, German for DE, etc. — the AI Overview is biased toward the locale's language.
-3. **Use natural-language questions**: phrasing like "compare against" / "what are the unsolved pain points" elicits richer AI Overview output than single keywords.
-4. **For follow-ups, summarize and re-ask**: when the user wants to dig deeper, the agent should summarize key points from the previous AI Overview response and concatenate with the new question into a new `keyword` for a fresh call. Example: `"Based on the AI overview that top bone-conduction headphones are Shokz OpenRun Pro and AfterShokz Aeropex, what are the unsolved technical pain points compared to in-ear earbuds?"`
-
-### Usage Examples
-
-**1. Single-shot AI Overview**
-
-```json
-{
-  "keyword": "GaN charger vs traditional charger comparison"
-}
-```
-
-**2. Cross-border product research**
-```json
-{
-  "keyword": "best open-ear bone conduction headphones 2026 US"
-}
-```
-
-**3. Follow-up question (agent summarizes prior result and re-asks in a new call)**
-
-First call:
-```json
-{
-  "keyword": "best open-ear bone conduction headphones 2026 US"
-}
-```
-
-Second call (agent builds context summary + new question):
-```json
-{
-  "keyword": "The AI overview mentioned OpenRun Pro and AfterShokz Aeropex as top picks for bone conduction headphones. What unsolved technical pain points still exist compared to in-ear earbuds?"
-}
-```
-
-**4. Consumer preference snapshot**
-```json
-{
-  "keyword": "robot vacuum buying preferences 2026 reddit"
-}
-```
-
-**5. Long-tail keyword exploration for selection**
-```json
-{
-  "keyword": "smart pet feeder for cats with camera"
-}
-```
-
-## Display Rules
-
-1. **Render the Markdown directly**: `stdout` is already structured Markdown with headings, bullets, and citation links — preserve that structure when answering the user.
-2. **Cite sources**: keep the inline reference links from `stdout` so the user can verify each claim.
-3. **Flag empty AI Overview**: if `resultsNum` is `0`, tell the user Google AI Overview did not trigger for that keyword and suggest rephrasing or trying a different region.
-4. **Don't reroute to a data-analysis sandbox**: the output is unstructured text and not suitable for SQL-like processing.
-5. **Indicate freshness**: results reflect Google AI Mode at call time; mention this when the user asks about recency.
-6. **Handle business errors**: if `code` / `errcode` is not `200`, surface the `msg` / `errmsg` to the user and suggest retrying or refining the input.
-
-## Important Limitations
-
-- **Unstructured output**: Markdown text only — no structured tables, no second-pass data query.
-- **AI Overview not guaranteed**: some keywords (especially niche, ambiguous, or sensitive ones) do not trigger AI Overview at all (`resultsNum = 0`).
-- **Single-round only**: no multi-turn follow-up within one call. For follow-ups, the agent must summarize previous context and make a new call.
-- **Locale follows Google's defaults**: the tool uses Google's standard AI Mode endpoint without an explicit region switch; bias the language and wording of `keyword` to match the market you care about.
-- **Real-time fetch**: results are pulled live, so output for the same keyword can vary across calls.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — when the user wants AI-summarized live web information:
-
-| User Says | Scenario |
-|-----------|----------|
-| "用 Google AI 帮我搜...", "Google AI Overview 看下..." | Direct AI Overview lookup |
-| "海外消费者对 XX 怎么看", "美国市场对 XX 的偏好" | Cross-border consumer preference |
-| "XX 的最新趋势 / 痛点 / 使用场景" | Deep research |
-| "顺便问一下 / 然后再追问 ..." | Follow-up needed (agent summarizes prior result and re-asks in new call) |
-| "网页上对 XX 的总结", "搜索引擎里大家怎么说 XX" | Web-wide summarization |
-| "长尾选品调研 / 蓝海选品方向" | Long-tail product exploration |
-
-**Not applicable** — better routed elsewhere:
-
-- Querying internal structured datasets (use the appropriate data query tool).
-- Amazon ABA search-term analytics (use the ABA data explorer).
-- Pulling structured product listings, prices, reviews from a specific platform (use the matching platform skill).
-- Plain web search where the user only needs raw page content with no AI synthesis (use the standard web search skill).
-- Image generation, image recognition, or file analysis.
-
-**Boundary judgment**: when the user wants "AI 帮我汇总网上的说法" or "用谷歌搜一下", this skill applies. If the user wants to ask follow-up questions, the agent should summarize the previous answer and make a new call. If they explicitly want raw search results, structured data, or already have a specialized data source, do not use this skill.
-
-## 算力消耗规则
+### 算力消耗预估
 
 按动态规则计费：消耗算力 = 对话轮次 × 4.2。
 
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
+本技能按倍数动态计算，可能一次性消耗大量算力；调用前必须提醒用户，由用户决定是否继续。
 
-**Feedback:**
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+### 解决认证和算力问题
 
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **构造有效问题**：概览对措辞敏感。查询美国、英国、澳大利亚市场时优先使用英语，日本使用日语，德国使用德语；加入市场和年份等上下文。“与某方案比较”“尚未解决的痛点是什么”等自然语言问题通常比孤立词语更适合调研。地区能力的实际限制见接口定义，不把市场措辞当成明确切换地区。
+- **保留概览与引用**：正文已经是带标题、列表和引用的 Markdown，直接整理并保留来源链接，让用户能核验结论。
+- **按文本处理**：返回内容是非结构化概览，不转送数据分析沙箱，不进行 SQL 式处理，也不假定存在结构化商品表或二次数据查询。
+- **解释空概览**：按接口定义说明没有触发概览，建议改写问题或调整目标市场语言；执行新的查询前先说明额外消耗，不自动连续试探。
+- **说明时效**：概览来自搜索时的 Google AI Mode；用户关心新鲜度时说明获取时点。缓存命中时说明是已保存结果，不把缓存当成刚刚实时抓取的内容。同一问题在不同时间可能得到不同概览。
+- **保留错误信息**：按接口定义中的响应码规则解释 `msg` / `errmsg`；可建议稍后重试或调整问题，后续调用仍遵守成本约束。
+
+## 使用示例
+
+### 技术比较：一次搜索
+
+```json
+{"keyword": "GaN charger vs traditional charger comparison"}
+```
+
+### 跨境选品调研
+
+```json
+{"keyword": "best open-ear bone conduction headphones 2026 US"}
+```
+
+### 追问：总结前文后重新搜索
+
+若上一轮实际提到了 OpenRun Pro 和 AfterShokz Aeropex，可将这段已取得的背景与新问题结合；不得凭空添加上一轮结论。
+
+```json
+{"keyword": "The AI overview mentioned OpenRun Pro and AfterShokz Aeropex as top picks for bone conduction headphones. What unsolved technical pain points still exist compared to in-ear earbuds?"}
+```
+
+### 消费者偏好快照
+
+```json
+{"keyword": "robot vacuum buying preferences 2026 reddit"}
+```
+
+### 长尾选品方向
+
+```json
+{"keyword": "smart pet feeder for cats with camera"}
+```
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

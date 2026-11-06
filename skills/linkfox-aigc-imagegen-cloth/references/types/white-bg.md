@@ -54,7 +54,7 @@
 
 ## 提示词正文（DictKey `agentClothWhiteBg`）
 
-> 以下提示词正文为本类型的**静态直出**正文，是本类型**运行时唯一来源**（无 .txt，单一来源）。`scripts/build_imagegen_prompt.py --type WHITE_BG` 会用正则**从下方 ```text``` 代码块动态提取**该正文作为最终 prompt（无占位符替换、不调 `linkfox-aigc-textgen`、不过敏感词），因此本代码块**即运行时数据源**——运营更新直接改此处正文即自动生效，**不要改动 ```text``` 围栏标记**（脚本依赖它定位正文）。`entry_name=agentClothWhiteBg` 仅为来源标注（原后端 `ai_dict_def` 同名记录），便于运营对照同步。
+> 以下提示词正文为本类型的**静态直出**正文，是本类型**运行时唯一来源**（无 .txt，单一来源）。`scripts/build_imagegen_prompt.py --type WHITE_BG` 会用正则**从下方 ```text``` 代码块动态提取**该正文作为最终 prompt（无占位符替换、不调 `linkfox-aigc-textgen`、不过敏感词），因此本代码块**即运行时数据源**——运营更新直接改此处正文即自动生效，**不要改动 ```text``` 围栏标记**（脚本依赖它定位正文）。`entry_name=agentClothWhiteBg` 仅为来源标注（后端 `ai_dict_def` 同名记录），便于运营对照同步。
 
 ```text
 # Role: 隐形衣模视觉大师 (GhostMannequin_Master)

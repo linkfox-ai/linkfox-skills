@@ -20,8 +20,7 @@ import os
 import sys
 import time
 import secrets
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
+from _linkfox_transport import request
 
 
 API_PATH = "/chuhaijiang/sellers/related-products"
@@ -38,8 +37,6 @@ def get_api_base() -> str:
     """网关基础地址：env LINKFOX_TOOL_GATEWAY 优先，缺省回退正式地址。"""
     return (os.environ.get("LINKFOX_TOOL_GATEWAY") or "https://tool-gateway.linkfox.com").rstrip("/")
 
-def get_api_url():
-    return get_api_base() + API_PATH
 
 
 def get_api_key():
@@ -58,36 +55,10 @@ def get_api_key():
 def call_api(params):
     global _LAST_CALL_WAS_HTTP_ERROR
     _LAST_CALL_WAS_HTTP_ERROR = False
-    api_url = get_api_url()
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": (os.environ.get("SESSION_ID") or "").strip(),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(
-        api_url,
-        data=data,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        _LAST_CALL_WAS_HTTP_ERROR = True
-        body = e.read().decode("utf-8") if e.fp else ""
-        try:
-            return json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
-        except Exception:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+    get_api_key()  # 检查密钥配置，未配置时输出认证提示；支持两种密钥变量。
+    http_status, payload = request(API_PATH, SLUG, params)
+    _LAST_CALL_WAS_HTTP_ERROR = http_status is None or not 200 <= http_status < 300
+    return payload
 
 
 def _cache_key(params):
@@ -122,7 +93,7 @@ def _load_cache(path):
     try:
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
-        return payload
+        return payload if _is_success_payload(payload) else None
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -136,14 +107,34 @@ def _save_cache(path, payload):
 
 
 def _is_success_result(result):
-    if _LAST_CALL_WAS_HTTP_ERROR:
-        return False
+    return not _LAST_CALL_WAS_HTTP_ERROR and _is_success_payload(result)
+
+
+def _is_success_payload(result):
+    """缓存体遵循 errcode 响应规则；其他状态标记保留兼容判定。"""
     if not isinstance(result, dict) or result.get("error"):
         return False
     has_success_marker = result.get("success") is True
     if result.get("success") is False:
         return False
-    for key in ("errcode", "errorCode", "code"):
+    if "errcode" in result:
+        has_success_marker = True
+        errcode = result["errcode"]
+        if isinstance(errcode, str):
+            errcode = errcode.strip()
+            if not errcode:
+                errcode = None
+            elif len(errcode) == 3 and errcode.isascii() and errcode.isdigit():
+                errcode = int(errcode)
+            else:
+                return False
+        if errcode is not None and not (
+            type(errcode) in (int, float)
+            and 200 <= errcode < 300
+            and errcode % 1 == 0
+        ):
+            return False
+    for key in ("errorCode", "code"):
         if key not in result:
             continue
         has_success_marker = True

@@ -20,7 +20,7 @@ def main() -> None:
         print("Usage: unbind_first_mile_tracking_number_all.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    print(json.dumps(run_first_mile_api("unbind_first_mile_tracking_number_all", params, "unbind_first_mile_tracking_number_all.py"), indent=2, ensure_ascii=False))
+    run_first_mile_api("unbind_first_mile_tracking_number_all", params, "unbind_first_mile_tracking_number_all.py")
 
 
 if __name__ == "__main__":

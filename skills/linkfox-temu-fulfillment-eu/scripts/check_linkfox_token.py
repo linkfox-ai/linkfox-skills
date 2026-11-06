@@ -38,12 +38,31 @@ def main():
                     "ok": False,
                     "reason": "linkfox_token_invalid",
                     "message": result.get("message") or result,
+                    "response": result,
                     "hint": "Set LINKFOXAGENT_API_KEY or pass token in JSON.",
                 },
                 indent=2,
                 ensure_ascii=False,
             )
         )
+        sys.exit(1)
+
+    http_status = result.get("_http_status")
+    errcode = result.get("errcode")
+    if isinstance(errcode, str):
+        errcode = errcode.strip()
+        if errcode.isascii() and errcode.isdigit():
+            errcode = int(errcode)
+    normal_errcode = errcode is None or errcode == "" or (
+        type(errcode) in (int, float) and 200 <= errcode < 300
+    )
+    if http_status is None or not 200 <= http_status < 300 or not normal_errcode:
+        print(json.dumps({
+            "ok": False,
+            "reason": "gateway_probe_failed",
+            "gatewayReachable": http_status is not None,
+            "response": result,
+        }, indent=2, ensure_ascii=False))
         sys.exit(1)
 
     print(

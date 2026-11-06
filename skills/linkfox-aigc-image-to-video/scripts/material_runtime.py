@@ -1,4 +1,4 @@
-"""Shared orchestration; HTTP API calls and response storage stay in official entries."""
+"""素材上传、任务查询与媒体下载编排；业务 HTTP 由公共调用入口负责。"""
 import contextlib
 import importlib.util
 import io
@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import sys
 import time
+import uuid
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
@@ -62,7 +63,21 @@ def invoke(path, params, no_cache=False):
 
 
 def api_error(result):
-    return bool(result.get("error")) or result.get("errcode") not in (None, 0, 200, "0", "200") or result.get("code") not in (None, 0, 200, "0", "200")
+    def normal(code):
+        if code is None or isinstance(code, str) and not code.strip():
+            return True
+        if isinstance(code, str):
+            code = code.strip()
+            if len(code) != 3 or not code.isascii() or not code.isdigit():
+                return False
+            code = int(code)
+        return type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
+
+    if "transportHttpStatus" in result:
+        status = result["transportHttpStatus"]
+        if type(status) is not int or not 200 <= status < 300:
+            return True
+    return bool(result.get("error")) or not normal(result.get("errcode")) or not normal(result.get("code"))
 
 
 def prepare_media(params, scripts):
@@ -91,8 +106,6 @@ def prepare_media(params, scripts):
 
 def download_results(result, scripts):
     entry = scripts / "query_task.py"
-    if not entry.exists():
-        entry = scripts / "task_query.py"
     storage = load_entry(entry)
     slug = scripts.parent.name
     stamp = time.time()
@@ -103,15 +116,22 @@ def download_results(result, scripts):
     paths, items = [], []
     if result.get("status") == "SUCCESS":
         for index, item in enumerate(result.get("resultList") or [], 1):
+            if not isinstance(item, dict):
+                items.append({"downloadError": "结果项不是对象，无法下载；请保留原始查询响应"})
+                continue
             record = {"id": item.get("id"), "type": item.get("type")}
             for key in ("status", "errorCode", "errorMsg"):
                 if key in item:
                     record[key] = item[key]
             items.append(record)
             url = item.get("url")
-            if item.get("status") not in (None, 1) or not isinstance(url, str) or not url:
+            if item.get("status") not in (None, 1):
+                record["downloadError"] = "旧查询结果项未成功，未下载；请查看原始状态和错误"
                 continue
-            temporary = media / (".download-" + str(time.time_ns()))
+            if not isinstance(url, str) or not url.strip():
+                record["downloadError"] = "结果项缺少有效下载 URL；请保留原始查询响应"
+                continue
+            temporary = media / (".download-" + uuid.uuid4().hex)
             try:
                 if urlsplit(url).scheme not in {"http", "https"}:
                     raise ValueError("Unsupported result URL")
@@ -131,7 +151,7 @@ def download_results(result, scripts):
                             output.write(chunk)
                 if temporary.stat().st_size == 0:
                     raise ValueError("Empty result file")
-                final = media / (slug + "-" + str(time.time_ns()) + "-" + str(index) + ext)
+                final = media / (slug + "-" + str(time.time_ns()) + "-" + uuid.uuid4().hex[:12] + "-" + str(index) + ext)
                 temporary.replace(final)
                 paths.append(str(final.resolve()))
                 record["localPath"] = paths[-1]

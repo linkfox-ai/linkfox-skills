@@ -1,24 +1,28 @@
 # `GET_LEDGER_SUMMARY_VIEW_DATA`
 
-> **分类**：6.2 FBA Inventory  
-> **说明**：Inventory ledger summary  
-> **可用范围**：Seller only
+> **分类**：6.2 FBA 库存  
+> **说明**：库存分类账汇总  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#inventory-ledger-report---summary-view)（章节：**Inventory Ledger Report - Summary View**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **要点**：The Inventory Ledger Report is like a bank statement of your inventory. It provides end-to-end inventory reconciliation capability by showing starting inventory balance, received inventory, customer orders, customer returns, adjustments, removals and ending balance. This report accepts the following reportOptions values: Report behaviors:
-- **reportOptions（摘录）**：
-  - aggregateByLocation: Include Country to aggregate Summary View data by country. Include FC to aggregate Summary View data by fulfillment center. Default: COUNTRY. Example: "reportOptions":{"aggregateByLocation":"COUNTRY"}
-  - aggregatedByTimePeriod: Specify the time period to aggregate Summary View data accordingly (for example, MONTHLY, WEEKLY, DAILY, etc.). Default: MONTHLY. Example: "reportOptions":{"aggregatedByTimePeriod":"MONTHLY"}
-  - FNSKU: Include FNSKU value to view report data for that particular FNSKU.
-  - MSKU: Include MSKU value to view report data for all active FNSKU mappings of that MSKU.
-  - ASIN: Include ASIN value to view report data for all active FNSKU mappings of that ASIN.
+- **角色**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **要点**：库存分类账类似库存银行流水，展示期初库存、收货、客户订单、客户退货、调整、移除和期末余额，实现全流程对账。接受下列 reportOptions。
+
+#### reportOptions 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| aggregateByLocation | string | 按国家汇总使用 Country，按仓库汇总使用 FC。默认 COUNTRY；示例："reportOptions":{"aggregateByLocation":"COUNTRY"}。Country 与默认值及示例中的 COUNTRY 存在大小写差异，请按接口要求核对，不自行统一大小写。 |
+| aggregatedByTimePeriod | string | 指定汇总周期，例如 MONTHLY、WEEKLY、DAILY。默认 MONTHLY；示例："reportOptions":{"aggregatedByTimePeriod":"MONTHLY"}。 |
+| FNSKU | string | 提供 FNSKU 可查看该 FNSKU 的报告数据。 |
+| MSKU | string | 提供 MSKU 可查看映射到该 MSKU 的全部有效 FNSKU 数据。 |
+| ASIN | string | 提供 ASIN 可查看映射到该 ASIN 的全部有效 FNSKU 数据。 |
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#inventory-ledger-report---summary-view>
 

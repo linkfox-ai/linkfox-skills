@@ -1,14 +1,23 @@
-# 授权与调用前检查
+# 解决认证和算力问题
 
-1. 安装并加载 `linkfox-amazon-store-auth`。
-2. 运行 `python scripts/check_auth_dependency.py`。
-3. 通过 auth Skill 的 authorized stores 能力让用户选择店铺，取得 `sellerId` 和 `region`。
-4. 设置 `LINKFOX_AGENT_API_KEY`，或使用兼容变量 `LINKFOXAGENT_API_KEY`。
-5. 不读取、不显示、不传递 Amazon access/refresh token。
+调用本 skill 时若网关返回 **auth** 或 **billing** 错误，走本 skill 自带的 `scripts/onboarding.py` 完成引导。
 
-常见失败：
+**auth 场景**：`errcode=401` 或消息含 `authorized error`/`鉴权失败`/`未授权`/`unauthorized`；或 `LINKFOX_AGENT_API_KEY` 与 `LINKFOXAGENT_API_KEY` 均为空。
+1. 若已配置 key → 先让用户重启会话（最常见误判），仍失败让用户重新取 key 或换手机号重注册
+2. 未配置 → 询问：自助去 https://agent.linkfox.com/ 取 key，或提供手机号让脚本注册
+3. 手机号路径：
+   - `python scripts/onboarding.py send-code <phone>` → 展示 JSON 里的 phone/agreements
+   - 收到验证码后：`python scripts/onboarding.py login <phone> <code>`
+   - 拿到 `api_key` 后把下面三平台配置转发给用户，提示重启会话生效：
+     - Windows PowerShell（永久）：`setx LINKFOX_AGENT_API_KEY "<key>"`
+     - macOS zsh：`echo 'export LINKFOX_AGENT_API_KEY="<key>"' >> ~/.zshrc && source ~/.zshrc`
+     - Linux bash：`echo 'export LINKFOX_AGENT_API_KEY="<key>"' >> ~/.bashrc && source ~/.bashrc`
+     - 变量名 `LINKFOX_AGENT_API_KEY`（主推）或 `LINKFOXAGENT_API_KEY`（老规范）任一即可
 
-- 网关 401/403：检查 LinkFox API key 和用户权限。
-- Amazon 401/403：检查店铺授权、区域及角色。
-- 网关提示路径白名单或模块不存在：确认当前部署已开放 `fulfillment/outbound/2026-07-04`；不要改用旧路径掩盖部署问题。
-- 沙箱 operation：沿用 Amazon Store Skill 的统一网关配置；`updateOrderStatus`、`updatePackage` 只能用于 sandbox 测试数据。
+**billing 场景**：`errcode=402` 或消息含 `算力/余额/quota/insufficient/充值/套餐到期`。
+- `python scripts/onboarding.py list-plans` → 有 AskUserQuestion 就弹菜单，否则输出编号清单让用户选
+- 校验 `plan_id` ∈ 清单、支付方式 ∈ 该套餐 `available_methods`（通常 `wechat/alipay`）
+- `python scripts/onboarding.py order <plan_id> <method>` → 展示优先级 PNG > `pay_url` > `ascii_qr`（标注兜底）
+- 已付款可选调 `python scripts/onboarding.py query <order_id>`，不主动轮询
+
+排除 `errcode=403`（无权限，不归入这两类）。所有子命令输出 stdout JSON，`error` 字段已含阶段前缀，透传给用户即可。完整用法：`python scripts/onboarding.py --help`。

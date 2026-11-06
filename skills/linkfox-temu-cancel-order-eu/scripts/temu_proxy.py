@@ -17,18 +17,7 @@ Usage:
 import json
 import sys
 
-from _temu_common import (
-    PROXY_URL,
-    call_temu_api,
-    emit_result,
-    lf_inline_flag,
-    load_json_arg,
-    parse_nested_body,
-    require_text,
-    resolve_access_token,
-    validate_management_type,
-    validate_site,
-)
+from _temu_common import PROXY_URL, call_temu_api, load_json_arg, require_text, resolve_access_token, validate_management_type, validate_site
 
 def build_request(params: dict) -> dict:
     site = validate_site(require_text(params, "site"))
@@ -64,9 +53,7 @@ def main():
 
     params = load_json_arg(sys.argv)
     body = build_request(params)
-    inline = lf_inline_flag()
-    result = call_temu_api(PROXY_URL, body, linkfox_params=params)
-    emit_result(parse_nested_body(result), inline=inline)
+    result = call_temu_api(PROXY_URL, body, linkfox_params=params, display=True)
 
 if __name__ == "__main__":
     main()

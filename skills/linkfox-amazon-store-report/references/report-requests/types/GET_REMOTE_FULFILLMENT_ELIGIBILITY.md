@@ -1,18 +1,18 @@
 # `GET_REMOTE_FULFILLMENT_ELIGIBILITY`
 
-> **分类**：6.2 FBA Inventory  
-> **说明**：Remote fulfillment eligibility  
-> **可用范围**：Seller only
+> **分类**：6.2 FBA 库存  
+> **说明**：远程配送资格  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#remote-fulfillment-eligibility)（章节：**Remote Fulfillment Eligibility**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment), [Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking)
-- **要点**：Contains all of a seller's US Fulfillment by Amazon offers, including whether they qualify for the North America Remote Fulfillment (NARF) program. 📘Note:Recheck this report regularly, since ASIN eligibility can change. This report can take up to 24 hours to generate.
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment), [Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking)
+- **要点**：包含卖家全部美国 FBA 报价及其 North America Remote Fulfillment（NARF）资格。ASIN 资格可能变化，应定期核查；生成报告可能需要最多 24 小时。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#remote-fulfillment-eligibility>
 

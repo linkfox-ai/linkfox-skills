@@ -1,175 +1,111 @@
 ---
 name: linkfox-echotik-list-seller-product
-description: 查询某个TikTok Shop店铺（卖家）的在售商品列表，通过sellerId获取该店铺全部商品，返回商品标题、价格、多周期(1天/7天/15天/30天/60天/90天/总)销量与销售额(GMV)、评分、评论数、佣金比例、上架时间、带货方式、品类等指标。当用户提到TikTok店铺商品、TikTok店铺在售商品、TikTok卖家商品列表、TikTok店铺选品、查看TikTok店铺卖什么、TikTok店铺商品分析、EchoTik店铺商品、TikTok Shop seller products, TikTok store products, TikTok seller product list, EchoTik store product list时触发此技能。即使用户未明确提及"EchoTik"或"TikTok"，只要其需求涉及查看某个TikTok Shop店铺（已知sellerId）的在售商品及其销量/价格/佣金表现，也应触发此技能。
+description: 查询指定 TikTok Shop 店铺的在售商品，展示商品标题、图片、价格、多周期销量与销售额（GMV）、评分、评论、佣金、上架时间、带货方式和品类。适用于已知店铺的商品目录查看、店铺选品、近期热销与佣金表现分析，无需明确提及 EchoTik。不适用于全站商品发现、店铺搜索、店铺完整资料、达人或视频分析，以及其他电商平台数据查询。
 ---
 
-# EchoTik TikTok Seller Product List
+# EchoTik TikTok 店铺商品列表
 
-This skill lists the in-store products of a single TikTok Shop seller (store) by its `sellerId`, helping cross-border sellers and marketers see exactly what a store sells and how each product performs — multi-period sales and GMV, price, rating, reviews, and commission rate.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-EchoTik is a TikTok Shop analytics platform. Given a store's `sellerId`, this tool returns that store's product catalog with per-product metrics: title, image, price (and SPU average / min / max), sales volume and GMV across 1d/7d/15d/30d/60d/90d/total windows, rating, review count, commission rate, listing date, sales channel, and category.
+查看单个 TikTok Shop 店铺的在售商品及经营指标。
+用户已知店铺，想了解它卖什么、哪些商品畅销、近期动销或价格与佣金表现时，使用本技能。
 
-**Where to get a `sellerId`**: Obtain it from the **EchoTik TikTok Seller Search** skill (`linkfox-echotik-list-seller`), which lists and filters TikTok Shop stores by region, category, GMV, trend, and store type; or from the **EchoTik TikTok Seller Detail** skill (`linkfox-echotik-seller-detail`).
+**场景速查**
 
-**Pagination quirk**: `pageSize` must be a multiple of 10 (max 100). The official upstream API caps a single page at 10; this tool internally pulls multiple pages of 10 and merges them, so `pageSize=50` returns up to 50 merged products.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| TikTok 店铺商品 / TikTok store products | 查看指定店铺商品目录。 |
+| 这个 TikTok 店铺在卖什么 | 展示商品、图片和价格。 |
+| 查看这家 TikTok 店铺的商品 | 深查店铺搜索或详情中选定的店铺。 |
+| 店里销量最高的商品 | 按总销量查看畅销商品。 |
+| 店铺近期爆款 | 按近 7 天销量或 GMV 查看近期动销。 |
+| 哪些商品便宜、哪些佣金高 | 按价格查询，并展示返回商品的佣金。 |
 
-## Data Fields
+### 边界
 
-The response's `products` array contains product objects. Key fields:
+- 全站关键词、地区或类目找品使用 `linkfox-echotik-list-product`。
+- 查找或筛选店铺使用 `linkfox-echotik-list-seller`；查看单店完整资料使用 `linkfox-echotik-seller-detail`。
+- 达人、视频及 Amazon、Shopee 等其他平台数据不属于本技能范围。
 
-| Field | Description |
-|-------|-------------|
-| productId / asin | Product unique ID |
-| title / productName | Product title |
-| imageUrl / coverUrl | Product image URL |
-| productImageUrls | Product image URL list |
-| price | Product price |
-| spuAvgPrice | SPU average price |
-| minPrice / maxPrice | Min / max price |
-| currency | Currency |
-| totalSaleCnt | Total sales volume |
-| totalSale1dCnt / 7dCnt / 15dCnt / 30dCnt / 60dCnt / 90dCnt | Sales volume (1d/7d/15d/30d/60d/90d, incremental) |
-| totalSaleGmvAmt | Total GMV (revenue) |
-| totalSaleGmv1dAmt / 7dAmt / 15dAmt / 30dAmt / 60dAmt / 90dAmt | GMV (1d/7d/15d/30d/60d/90d, incremental) |
-| monthlySalesUnits | Monthly sales |
-| productRating | Product rating |
-| ratings / reviewCount | Review count |
-| productCommissionRate | Commission rate (decimal, e.g. 0.05 = 5%) |
-| categoryName / categoryIds | Product category name / ID list |
-| salesFlagText | Main sales channel (video/livestream) |
-| salesTrendFlagText | Sales trend |
-| firstCrawlDt / availableDate | Listing date (YYYYMMDD integer / date string) |
-| discount / offMarkText / freeShippingText | Discount / promo mark / free-shipping flag |
-| isSShopText | S-store flag |
-| salePropsInfo | Sales attribute info (variants: propId/propName/propValue) |
-| region | Marketplace code |
-| sourceTool / sourceType | Source tool / type |
+## 前置条件
 
-Top-level fields: `errcode`, `errmsg`, `total`, `columns`, `type`, `costToken`.
+**先确定店铺编号**：使用用户提供的 `sellerId`，或从已知店铺链接、`linkfox-echotik-list-seller`、`linkfox-echotik-seller-detail` 的结果确认编号。编号要求见 `references/api.md`。
 
-## Parameter Guide
+## 查询流程
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| sellerId | string | Yes | - | TikTok Shop store ID. Obtain from the Seller Search / Seller Detail skill. Max length 1000 |
-| sellerProductSortField | integer | No | 1 | Sort field: 1=total sales, 2=total GMV, 3=SPU avg price, 4=7-day sales, 5=7-day GMV |
-| sortType | integer | No | 1 | Sort order: 0=ascending, 1=descending |
-| pageNum | integer | No | 1 | Page number (starts at 1) |
-| pageSize | integer | No | 50 | Page size — must be a multiple of 10, max 100 |
+1. 确认用户要查看的店铺和比较目标；缺少店铺编号时先取得编号，不猜测店铺。
+2. 按目标选择总销量、总 GMV、SPU 平均价格或近 7 天销量、GMV 排序，依据 `references/api.md` 准备请求。
+3. 查询所需页面并先看摘要，再从已保存的 JSON 中提取所需指标；不把当前页解释为店铺全部商品。
+4. 展示店铺商品表、返回记录数和当前页。结果较多时提示可继续分页或调整排序，后续请求遵守成本约束。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /echotik/listSellerProduct`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_list_seller_product.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_list_seller_product.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-seller-product-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-seller-product-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-**1. List a store's top products by total sales**
+5 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **数据含义**：EchoTik 是 TikTok Shop 数据分析平台；店铺商品目录同时提供累计及多周期表现，用于比较同店商品。
+- **清晰展示数据**：表格展示商品图片、标题、价格、总销量、近 30 天销量与 GMV、评分、评论数、佣金；按需补充累计 GMV、品类、带货方式、趋势、上架时间和促销信息。
+- **保留统计口径**：累计销量与 GMV、1/7/15/30/60/90 天增量及月销量分别标明，不混为同一指标。提醒用户完整多周期数据可从保存的 JSON 查看。
+- **佣金与币种**：将 `productCommissionRate` 按百分比展示，例如 `0.05` 展示为 `5%`；价格与 GMV 始终标明响应的 `currency`。
+- **展示图片与分页**：有 `imageUrl` 时展示或提供链接，便于视觉比较；报告 `total` 和当前页，区分当前页数量与返回记录数。
+- **按需取数**：实时查询及服务端二次处理限制见 `references/api.md`。保存的 JSON 可按需提取展示字段，不宣称提供额外数据库或 SQL 查询能力。
+
+## 使用示例
+
+### 按总销量降序查看店铺畅销商品
+
 ```json
-{
-  "sellerId": "7495514739648989419",
-  "sellerProductSortField": 1,
-  "sortType": 1,
-  "pageSize": 20,
-  "pageNum": 1
-}
+{"sellerId":"7495514739648989419","sellerProductSortField":1,"sortType":1,"pageSize":20,"pageNum":1}
 ```
 
-**2. Rank a store's products by 7-day GMV (recent momentum)**
+### 按近 7 天 GMV 查看近期动销
+
 ```json
-{
-  "sellerId": "7495514739648989419",
-  "sellerProductSortField": 5,
-  "sortType": 1
-}
+{"sellerId":"7495514739648989419","sellerProductSortField":5,"sortType":1}
 ```
 
-**3. Cheapest products in a store (price ascending)**
+### 按价格升序查看店铺低价商品
+
 ```json
-{
-  "sellerId": "7495514739648989419",
-  "sellerProductSortField": 3,
-  "sortType": 0
-}
+{"sellerId":"7495514739648989419","sellerProductSortField":3,"sortType":0}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data clearly**: Show products in a table with key columns — product image, title, price, total sales, 30-day sales/GMV, rating, review count, and commission rate
-2. **Sales & GMV granularity**: When relevant, show total sales and total GMV; mention multi-period breakdowns (1d/7d/15d/30d/60d/90d) are available in the saved JSON
-3. **Commission formatting**: Display `productCommissionRate` as a percentage for readability (e.g. show 0.05 as "5%")
-4. **Currency awareness**: Include the `currency` field when displaying prices and GMV
-5. **Image reference**: When `imageUrl` is present, surface it so the user can visually compare products
-6. **Result count**: Always inform the user of `total` records and the current page; suggest pagination or tighter sorting when the result set is large
-7. **No secondary processing**: Results are live queries, not stored in a database; secondary SQL/data processing is not available
-
-## Important Limitations
-
-1. **sellerId required**: `sellerId` is mandatory; obtain it from the EchoTik TikTok Seller Search skill (`linkfox-echotik-list-seller`) or Seller Detail skill (`linkfox-echotik-seller-detail`), or a known store link/ID.
-2. **Store-scoped only**: This lists one store's products; to discover/filter products across all TikTok Shop, use the EchoTik TikTok Product Search skill (`linkfox-echotik-list-product`).
-3. **pageSize rule**: Must be a multiple of 10 (max 100). Other values may be rejected or adjusted.
-4. **Listing date format**: `firstCrawlDt` uses `YYYYMMDD` integers (e.g. `20240504`).
-5. **No region/keyword filter**: This tool only takes a `sellerId` and sort/pagination — it does not accept keyword, region, or category filters (the store's marketplace is inferred from the seller).
-6. **Data real-time nature**: Results are live queries, not stored in a database; secondary SQL/data processing is not available.
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** — See what a specific TikTok Shop store sells:
-
-| User Says | Scenario |
-|-----------|----------|
-| "TikTok店铺商品" / "TikTok store products" | List a store's products by sellerId |
-| "这个TikTok店铺在卖什么" | View a store's product catalog |
-| "查看这家TikTok店铺的商品" | Deep-dive a store found via search/detail |
-| "TikTok店铺销量最高的商品" | Sort store products by total sales |
-| "TikTok店铺近期爆款" | Sort by 7-day sales/GMV |
-| "这家店哪些商品佣金高" | Review commission rate per product |
-
-**Not applicable** — Needs beyond one store's product list:
-
-- Discovering/filtering products across all TikTok Shop (use EchoTik TikTok Product Search)
-- Listing or filtering TikTok Shop stores (use EchoTik TikTok Seller Search)
-- A single store's full profile (use EchoTik TikTok Seller Detail)
-- TikTok creator/influencer or video analytics
-- Amazon, Shopee, or other non-TikTok platform data
-
-**Boundary judgment**: When users say "这个店铺卖什么" or "查看店铺商品" with a known store (sellerId or store link), this skill applies. If they want to search products across TikTok Shop by keyword/region/category, use the Product Search skill instead.
-
-## 算力消耗规则
-
-消耗 5 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,68 +1,57 @@
-# linkfox-shopee-store-public — 参数与字段参考
+# Shopee Public 公共模块 接口说明
 
-> 单接口入参/响应说明已拆到 **`apis/`**（按 API 一份）；本文件保留模块总览与 Feedback。
-Shopee **Public 模块**全部 6 个 API，经 **`POST /shopee/developerProxy`** 转发。
+本技能提供六个 Public 转发操作和一个店铺授权状态辅助调用（不返回原始 token），共七个实际操作（不含 Feedback 和公共 onboarding）。各操作独立文档如下。
 
-授权见 **`linkfox-shopee-store-auth`**。官方索引：[v2.public.get_shops_by_partner](https://open.shopee.com/documents/v2/v2.public.get_shops_by_partner?module=104&type=1)
+| 操作 | 文档 |
+|---|---|
+| `get_shops_by_partner` | [查询 Partner 下已授权店铺](apis/get-shops-by-partner.md) |
+| `get_merchants_by_partner` | [查询 Partner 下已授权商户](apis/get-merchants-by-partner.md) |
+| `get_access_token` | [使用授权码交换 token](apis/get-access-token.md) |
+| `refresh_access_token` | [刷新 access token](apis/refresh-access-token.md) |
+| `get_token_by_resend_code` | [使用 resend code 获取 token](apis/get-token-by-resend-code.md) |
+| `get_shopee_ip_ranges` | [查询 Shopee 开放平台 IP 段](apis/get-shopee-ip-ranges.md) |
+| `/shopee/storeTokens` | [兼容辅助调用](apis/store-tokens.md) |
 
-## 通用约定
+日常授权优先使用 `linkfox-shopee-store-auth`。上游官方文档路径为 `https://open.shopee.com/documents/v2/v2.public.{api}?module=104&type=1`。
 
-- **path**：须 `api/v2/public/...`
-- **Partner 级接口**：`get_shops_by_partner` / `get_merchants_by_partner` 等通常无需 `shopId`
-- **OAuth 接口**：`get_access_token` / `refresh_access_token` / `get_token_by_resend_code` 传 POST `body`
-- **官方文档 URL 规则**：`https://open.shopee.com/documents/v2/v2.public.{api}?module=104&type=1`
+## 公共规则
 
----
+### 调用规范
 
-## Public 模块总览
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-| # | API | Method | path | 脚本 | 官方文档 |
-|---|-----|--------|------|------|----------|
-| 1 | get_access_token | POST | `api/v2/public/get_access_token` | `get_access_token.py` | [apis/get-access-token.md](./apis/get-access-token.md) |
-| 2 | get_merchants_by_partner | GET | `api/v2/public/get_merchants_by_partner` | `get_merchants_by_partner.py` | [apis/get-merchants-by-partner.md](./apis/get-merchants-by-partner.md) |
-| 3 | get_shopee_ip_ranges | GET | `api/v2/public/get_shopee_ip_ranges` | `get_shopee_ip_ranges.py` | [apis/get-shopee-ip-ranges.md](./apis/get-shopee-ip-ranges.md) |
-| 4 | get_shops_by_partner | GET | `api/v2/public/get_shops_by_partner` | `get_shops_by_partner.py` | [apis/get-shops-by-partner.md](./apis/get-shops-by-partner.md) |
-| 5 | get_token_by_resend_code | POST | `api/v2/public/get_token_by_resend_code` | `get_token_by_resend_code.py` | [apis/get-token-by-resend-code.md](./apis/get-token-by-resend-code.md) |
-| 6 | refresh_access_token | POST | `api/v2/public/refresh_access_token` | `refresh_access_token.py` | [apis/refresh-access-token.md](./apis/refresh-access-token.md) |
-通用入口：`public_api.py`（JSON 含 `"api": "<上表 API 名>"`）。
+### 响应码基本规则
 
----
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-## 常用接口说明
+## 脚本运行约定
 
-| API | 要点 |
-|-----|------|
-| `get_shops_by_partner` | 查询 Partner 下已授权店铺列表 — [apis/get-shops-by-partner.md](./apis/get-shops-by-partner.md) |
-| `get_merchants_by_partner` | 查询 Partner 下已授权商户列表 — [apis/get-merchants-by-partner.md](./apis/get-merchants-by-partner.md) |
-| `get_access_token` | 用 auth code 换 token — [apis/get-access-token.md](./apis/get-access-token.md) |
-| `refresh_access_token` | 刷新 access token — [apis/refresh-access-token.md](./apis/refresh-access-token.md) |
-| `get_token_by_resend_code` | 通过 resend code 获取 token — [apis/get-token-by-resend-code.md](./apis/get-token-by-resend-code.md) |
-| `get_shopee_ip_ranges` | Shopee 开放平台 IP 段（白名单配置） — [apis/get-shopee-ip-ranges.md](./apis/get-shopee-ip-ranges.md) |
+- **运行环境与依赖**：Python 3.10 或以上。依赖检查返回 0 表示找到 `linkfox-shopee-store-auth`；返回 42 且 stderr 含 `DEPENDENCY_MISSING:` 表示缺失，先安装依赖。`skipDepCheck` 只跳过安装检测，不绕过网关授权。
+- **依赖探测路径**：支持 `LINKFOX_SKILLS_DIR`、`SKILLS_DIR`、`CURSOR_SKILLS_DIR`、`HERMES_SKILLS_EXTERNAL_DIRS`、`OPENCLAW_WORKSPACE`、`OPENCLAW_ROOT`、`OPENCLAW_WORKDIR`、`OPENCLAW_SKILLS_DIR`，以及当前目录、技能同级目录和用户安装目录的探测规则；详见 `scripts/check_auth_dependency.py`（路径以技能目录为基准）。
+- **网关与认证兼容**：网关优先使用 `LINKFOX_TOOL_GATEWAY`，其次 `SHOPEE_API_BASE_URL`，缺省 `https://tool-gateway.linkfox.com`。密钥读取 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY`；发送 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME` 请求头。
+- **无响应缓存**：业务封装调用 `call_api.run` 始终传 `--no-cache`，不会读取或保存响应缓存；运行时可能创建空缓存目录。
+- **落盘与错误处理**：完整结果保存到当前工作目录的 `linkfox/`；请求前预检实际会话数据目录的可写性。不能回退到主目录或临时目录，也禁止写入 `/tmp`。同一请求只保存一次加工后的完整结果，保存失败时报错；不因保存失败自动重发请求。`--inline` 仅控制输出是否完整打印，仍须保存文件。
 
-> 日常授权与已授权店铺查询优先使用 **`linkfox-shopee-store-auth`**（`authorize_url.py` / `authorized_stores.py` / `store_tokens.py`）。
+## Feedback
 
----
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
-## curl 示例
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
-```bash
-curl -X POST https://tool-gateway.linkfox.com/shopee/developerProxy \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "path": "api/v2/public/get_shops_by_partner",
-    "method": "GET",
-    "accessToken": "xxx"
-  }'
-```
-
----
-
-## Feedback API
-
-```bash
-curl -X POST https://skill-api.linkfox.com/api/v1/public/feedback \
-  -H "Content-Type: application/json" \
-  -d '{"skillName":"linkfox-shopee-store-public","sentiment":"POSITIVE",
-       "category":"OTHER","content":"Public API查询正常"}'
+```json
+{
+  "skillName": "linkfox-shopee-store-public",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

@@ -1,166 +1,196 @@
-# 批量修改 SKU 基础价（定价单）— `bg.local.goods.priceorder.change.sku.price`
+# 批量修改 SKU 基础价 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_price_priceorder_change_sku_price.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a（`sub_menu_code` 以 Partner 后台该接口页为准） |
-| **网关** | `POST /temu/proxy`，`type`=`bg.local.goods.priceorder.change.sku.price`，业务载荷放在 Body 的 `params` |
+脚本运行、无缓存和认证兼容见 [公共运行约定](../api.md#脚本运行约定)；认证或用量引导见 [onboarding.md](../onboarding.md)。
 
-**Description:** Support merchants within the **white list** to modify SKU base prices in batches.
+## 公共规则
 
-> 须在 Temu 白名单内方可调用；非白名单店铺可能返回业务错误。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Request 结构（官方业务参数）
+### 响应码基本规则
 
-```text
-params
-└── request (OBJECT, 选填)
-    ├── goodsId (LONG, 必填)
-    ├── changeSkuPriceDTOList[] (OBJECT[], 必填)
-    │   ├── reason (STRING, 否)
-    │   └── skuChangePriceBaseDTOList[] (OBJECT[], 必填)
-    │       ├── skuId (LONG, 必填)
-    │       └── newSupplierPrice (OBJECT, 必填)
-    │           ├── amount (STRING, 否)
-    │           └── currency (STRING, 否)
-    └── rejectSkuPricing (BOOLEAN, 否)
-```
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-### `request`
+## 接口：批量修改 SKU 基础价（bg.local.goods.priceorder.change.sku.price）
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| goodsId | LONG | **是** | Goods Id |
-| changeSkuPriceDTOList | OBJECT[] | **是** | SKU information and reason that adjust price |
-| rejectSkuPricing | BOOLEAN | 否 | Reject if price order is wait merchant confirm |
+> Partner US：[商品菜单](https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a)，具体 `sub_menu_code` 以后台接口页为准。
 
-### `changeSkuPriceDTOList[]` 元素
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关请求体
 
 | 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| reason | STRING | 否 | The reason of adjust price |
-| skuChangePriceBaseDTOList | OBJECT[] | **是** | SKU information |
+|---|---|---|---|
+| site | string | 是 | 本技能默认 `us`；通用入口支持 `cn` / `partner` / `us` / `global` / `eu`，值须小写。 |
+| managementType | string | 是 | 本技能默认 `semi-managed`；通用入口支持 `full-managed` / `semi-managed`，值须小写。 |
+| accessToken | string | 是 | Temu 店铺令牌；脚本也可用 `storeKey` 本地解析后填入。 |
+| type | string | 是 | `bg.local.goods.priceorder.change.sku.price`；不是 URL path。 |
+| params | object | 否 | Temu 业务参数，当前接口业务块放在 `params.request`。 |
 
-### `skuChangePriceBaseDTOList[]` 元素
+#### 脚本认证与控制参数
 
 | 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
+|---|---|---|---|
+| accessToken | string | 与 storeKey 二选一 | 直接传入优先于本地保存的令牌。 |
+| storeKey | string | 与 accessToken 二选一 | 本地店铺键，结合 site、managementType、tokenPurpose 精确取令牌。 |
+| tokenPurpose | string | 否 | 美国站包装默认 `product-inventory`；通用入口默认 `default`。仅用于本地取令牌，不发往网关。 |
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox 用户密钥，按列出的顺序取首个非空值，优先于两种环境变量；仅用于请求头。 |
+| --inline | CLI flag | 否 | 全量打印，仍保存响应。 |
+| --no-cache | CLI flag | 否 | 兼容通用调用器选项；本技能业务封装始终加入，不读取或保存响应缓存。 |
+
+业务 JSON 优先使用对象类型的 `params`；否则将顶层非认证、非控制字段整体作为 `params`，保留 `request` 包装。`type`、`app_key`、`access_token`、`sign`、`timestamp` 不应放入业务 `params`，上游加签由网关处理。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| params.request | OBJECT | 否 | 官方业务参数包装对象；内部必填字段见下表。 |
+
+#### `request`
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| goodsId | LONG | **是** | 商品 ID |
+| changeSkuPriceDTOList | OBJECT[] | **是** | 需要调价的 SKU 信息及原因 |
+| rejectSkuPricing | BOOLEAN | 否 | 定价单等待商家确认时是否拒绝该定价单 |
+
+#### `changeSkuPriceDTOList[]` 元素
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| reason | STRING | 否 | 调价原因 |
+| skuChangePriceBaseDTOList | OBJECT[] | **是** | SKU 信息 |
+
+#### `skuChangePriceBaseDTOList[]` 元素
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
 | skuId | LONG | **是** | SKU ID |
-| newSupplierPrice | OBJECT | **是** | Base price (new supplier price) |
+| newSupplierPrice | OBJECT | **是** | 基础价（新供货价） |
 
-### `newSupplierPrice`
+#### `newSupplierPrice`
 
 | 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| amount | STRING | 否 | Amount |
-| currency | STRING | 否 | Currency Type |
+|---|---|---|---|
+| amount | STRING | 否 | 金额 |
+| currency | STRING | 否 | 币种 |
 
-### 网关 `params` 写法
+同一商品可在一个 `changeSkuPriceDTOList` 项中放多个 SKU；也可按原因拆成多项，每项带各自的 `reason` 与 `skuChangePriceBaseDTOList`。
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "goodsId": 123456,
-    "rejectSkuPricing": true,
-    "changeSkuPriceDTOList": [
-      {
-        "reason": "Cost adjustment",
-        "skuChangePriceBaseDTOList": [
-          {
-            "skuId": 58224724203874,
-            "newSupplierPrice": {
-              "amount": "18.99",
-              "currency": "USD"
-            }
-          },
-          {
-            "skuId": 58224724203875,
-            "newSupplierPrice": {
-              "amount": "19.99",
-              "currency": "USD"
-            }
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+### 响应结构
 
-> 同一 `goodsId` 下可在一个 `changeSkuPriceDTOList` 项里放多个 SKU；也可按调价原因拆成多项，每项带各自的 `reason` 与 `skuChangePriceBaseDTOList`。
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| transportHttpStatus | integer / null | 脚本追加的 LinkFox 外层 HTTP 状态码，连接失败时为 null；与网关 code、errcode 和内层 Temu errorCode 分别判断。直接调用网关时从 HTTP 响应读取。 |
+| errcode | integer / string / null | 若返回，按公共响应码基本规则判断；不将 0 或 false 当作空值。 |
+| errmsg | string | 网关消息，若返回则保留并解释。 |
+| code | integer | 网关业务错误码：1002 为参数或 Token 问题，1003 为转发失败。 |
+| body | string | Temu 原始 JSON 字符串；须先判断网关状态，再解析。 |
+| temuBody | object / array / 标量 / null | 代理脚本在 body 为合法 JSON 字符串时追加的解析结果；body 为空、非字符串或解析失败时不追加。此字段是脚本输出，非网关原生字段。 |
 
----
-
-## Response（Temu `body` 解析后）
-
-```text
-response
-├── success (BOOLEAN)
-├── errorCode (INTEGER)
-├── errorMsg (STRING)
-└── result (OBJECT)
-    ├── successSkuList[] (LONG)
-    ├── failedSkuList[] (LONG)
-    ├── failedSkuReasonMap (MAP)
-    │   ├── $key (STRING)   → SKU ID
-    │   └── $value (STRING) → Fail reason
-    └── successPriceOrderList[] (OBJECT[])
-        ├── priceOrderSn (STRING)
-        └── skuIdList[] (LONG)
-```
+#### Temu 业务响应
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | Is success |
-| errorCode | INTEGER | Error code |
-| errorMsg | STRING | Error message |
-| result | OBJECT | Return specific information |
-| result.successSkuList | LONG[] | SKU list with successfully changed prices |
-| result.failedSkuList | LONG[] | SKU list with failed change price |
-| result.failedSkuReasonMap | MAP | Reasons for price adjustment failure；**key** 为 SKU ID（字符串），**value** 为失败原因 |
-| result.successPriceOrderList | OBJECT[] | List of price orders that request for changing price successfully |
+|---|---|---|
+| success | BOOLEAN | 是否成功 |
+| errorCode | INTEGER | 错误码 |
+| errorMsg | STRING | 错误信息 |
+| result | OBJECT | 业务结果 |
+| result.successSkuList | LONG[] | 调价成功的 SKU 列表 |
+| result.failedSkuList | LONG[] | 调价失败的 SKU 列表 |
+| result.failedSkuReasonMap | MAP | 调价失败原因；**key** 为 SKU ID（字符串），**value** 为失败原因 |
+| result.successPriceOrderList | OBJECT[] | 成功发起调价的定价单列表 |
 
-### `successPriceOrderList[]` 元素
+#### `successPriceOrderList[]` 元素
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| priceOrderSn | STRING | Price order Sn |
-| skuIdList | LONG[] | List of SKUs corresponding to price order |
+|---|---|---|
+| priceOrderSn | STRING | 定价单编号 |
+| skuIdList | LONG[] | 定价单对应的 SKU 列表 |
 
-### `failedSkuReasonMap` 示例
+#### `failedSkuReasonMap` 动态映射
 
-```json
-{
-  "58224724203875": "Price order pending merchant confirm"
-}
-```
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| $key | STRING | SKU ID。 |
+| $value | STRING | 失败原因。 |
 
----
+### 响应码规则
 
-## 示例
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关 `code=1002` 表示参数或 Token 问题；`code=1003` 表示转发失败，应检查 Temu 令牌、IP 白名单或网络。网关失败时不能将嵌套数据解释成业务成功。
+- 网关正常后解析 `body`，检查 Temu 的 `success`、`errorCode`、`errorMsg` 和 `result`；业务示例的 `success=true`、`errorCode=0` 属于内层 Temu 状态，不改变外层 `errcode` 规则。
+- 仅支持 Temu 白名单商家，非白名单店铺可能返回业务错误。
+- 必须检查 `successSkuList`、`failedSkuList`、`failedSkuReasonMap` 和 `successPriceOrderList`，不可将部分成功当作全部成功。改价后使用定价单查询核对 `priceAuditList.supplierPrice`，不重复提交调价来核验。
+
+### curl 示例
 
 ```bash
-python scripts/us_price_priceorder_change_sku_price.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '
+{
+  "site": "us",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "request": {
-    "goodsId": 123456,
-    "rejectSkuPricing": true,
-    "changeSkuPriceDTOList": [
-      {
-        "reason": "Promo",
-        "skuChangePriceBaseDTOList": [
-          {
-            "skuId": 58224724203874,
-            "newSupplierPrice": { "amount": "15.99", "currency": "USD" }
-          }
-        ]
-      }
-    ]
+  "type": "bg.local.goods.priceorder.change.sku.price",
+  "params": {
+    "request": {
+      "goodsId": 123456,
+      "rejectSkuPricing": true,
+      "changeSkuPriceDTOList": [
+        {
+          "reason": "成本调整",
+          "skuChangePriceBaseDTOList": [
+            {
+              "skuId": 58224724203874,
+              "newSupplierPrice": {
+                "amount": "15.99",
+                "currency": "USD"
+              }
+            }
+          ]
+        }
+      ]
+    }
   }
 }'
 ```
 
-改价后可用 `bg.local.goods.priceorder.query` 核对 `priceAuditList` 中的 `supplierPrice`，或再次调用本接口查看 `successSkuList` / `failedSkuList`。
+---
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-price-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

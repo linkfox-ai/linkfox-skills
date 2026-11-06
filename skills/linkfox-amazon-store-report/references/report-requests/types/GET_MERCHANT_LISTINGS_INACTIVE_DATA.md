@@ -1,20 +1,24 @@
 # `GET_MERCHANT_LISTINGS_INACTIVE_DATA`
 
-> **分类**：7. Inventory Reports  
-> **说明**：Inactive listings  
-> **可用范围**：Seller only
+> **分类**：7. 库存报告  
+> **说明**：失效刊登  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Inventory Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory)（章节：**GET_MERCHANT_LISTINGS_INACTIVE_DATA**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [库存报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory)（章节：**GET_MERCHANT_LISTINGS_INACTIVE_DATA**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
-- **要点**：A detailed inactive listings report. 📘NoteYou can only specify one marketplace per report. When requesting a report with multiple marketplaceIds, only the first marketplaceId in the list will be accepted. This report accepts the following reportOptions values:
-- **reportOptions（摘录）**：
-  - preferredReportDocumentLocale: A string value that specifies the preferred locale for report column headers. Accepts standard locale codes in the POSIX-style locale format. Example: "reportOptions":{"preferredReportDocumentLocale":"en_US"}. 📘NoteReports are not cached by locale. Requesting the same report within the cache period (between one and six hours depending on the number of entries) may return headers in a different locale than requested.
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
+- **要点**：失效刊登的详细报告。每份仅支持一个站点；传多个 marketplaceIds 时只接受第一个。接受下列 reportOptions。
+
+#### reportOptions 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| preferredReportDocumentLocale | string | 指定列标题首选语言的字符串，接受 POSIX 风格 locale，例如 "reportOptions":{"preferredReportDocumentLocale":"en_US"}。报告不会按 locale 单独缓存；在缓存周期内重复请求（按记录数约 1–6 小时）可能返回与所请求语言不同的列标题。此为 Amazon 上游行为，不是本技能响应缓存。 |
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-inventory>
 

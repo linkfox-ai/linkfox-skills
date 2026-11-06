@@ -3,16 +3,7 @@
 
 import json
 
-from _temu_common import (
-    FILE_DOWNLOAD_URL,
-    PROXY_URL,
-    call_temu_api,
-    emit_result,
-    lf_inline_flag,
-    load_json_arg,
-    parse_nested_body,
-    resolve_access_token,
-)
+from _temu_common import FILE_DOWNLOAD_URL, PROXY_URL, call_temu_api, emit_result, lf_inline_flag, parse_nested_body, resolve_access_token
 
 # Partner EU 退货退款 / 售后：默认欧洲站半托管 + 订单/售后场景 token
 DEFAULT_SITE = "eu"
@@ -51,6 +42,7 @@ def build_eu_proxy_body(params: dict, api_type: str, business=None) -> dict:
         params.setdefault("site", site)
         params.setdefault("managementType", management_type)
 
+    params = dict(params, site=site, managementType=management_type)
     body = {
         "site": site,
         "managementType": management_type,
@@ -78,6 +70,7 @@ def eu_file_download_call(params: dict, timeout: int = 150) -> dict:
         str(params.get("managementType", DEFAULT_MANAGEMENT_TYPE)).strip().lower()
         or DEFAULT_MANAGEMENT_TYPE
     )
+    params = dict(params, site=site, managementType=management_type)
     body = {
         "site": site,
         "managementType": management_type,

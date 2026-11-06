@@ -4,7 +4,7 @@ Temu EU price API generic proxy (site=eu, semi-managed by default).
 
 Usage:
   python temu_eu_proxy.py '{
-    "accessToken": "TEMU_US_TOKEN",
+    "accessToken": "TEMU_EU_TOKEN",
     "type": "bg.local.goods.priceorder.query",
     "params": {"request": {"page": 1, "size": 20, "priceOrderType": 1}}
   }'

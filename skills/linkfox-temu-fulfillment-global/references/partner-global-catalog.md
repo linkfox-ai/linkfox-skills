@@ -8,7 +8,7 @@ Partner Platform for **Global（全球区，非 US/EU）** **Fulfillment / 电�
 
 脚本前缀：`global_buy_shipping_*`、`global_co_warehouse_*`、`global_self_fulfilled_*`、`global_tracking_*`。
 
-> **与 US 版差异**：全球站 **不含** Scan Form 相关 4 个接口（`temu.logistics.scanform.*`、`temu.logistics.candidate.scanform.list.get`）；美国站请用 **`linkfox-temu-fulfillment-us`** 若需 Scan Form。
+> **与 US 版差异**：全球站 **不含** Scan Form 相关 4 个接口（`temu.logistics.scanform.create`、`temu.logistics.scanform.get`、`temu.logistics.scanform.document.get`、`temu.logistics.candidate.scanform.list.get`）；美国站请用 **`linkfox-temu-fulfillment-us`** 若需 Scan Form。
 
 ## 已接入（23）
 

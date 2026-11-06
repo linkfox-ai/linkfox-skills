@@ -8,14 +8,14 @@ import mimetypes
 import os
 import subprocess
 import sys
-import time
-import secrets
-import tempfile
+import io
+from contextlib import redirect_stdout, redirect_stderr
+from threading import RLock
+import call_api as gateway
+from urllib.parse import urlsplit
 from pathlib import Path
 from typing import Any, Optional
-from urllib.error import HTTPError, URLError
 from urllib.parse import quote
-from urllib.request import Request, urlopen
 
 API_BASE_URL = os.environ.get("LINKFOX_TOOL_GATEWAY") or os.environ.get("SHOPEE_API_BASE_URL") or "https://tool-gateway.linkfox.com"
 STORE_TOKENS_ENDPOINT = f"{API_BASE_URL.rstrip('/')}/shopee/storeTokens"
@@ -70,31 +70,87 @@ def get_api_key() -> str:
     return key
 
 
+_GATEWAY_LOCK = RLock()
+
+
 def call_api(endpoint: str, params: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    req = Request(
-        endpoint,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+    """通过公共 run 调用网关，不创建响应缓存。"""
+    get_api_key()
+    parsed = urlsplit(endpoint)
+    # 兼容自定义基础地址包含路径前缀；只剥离实际注册的末端点。
+    api_path = next((suffix for suffix in (
+        "/shopee/developerProxy", "/shopee/uploadMediaSpaceImage", "/shopee/storeTokens"
+    ) if parsed.path.endswith(suffix)), None)
+    if api_path is None:
+        raise ValueError(f"Unsupported media-space endpoint: {endpoint}")
+    base = endpoint[:-len(api_path)].rstrip("/")
+    captured = {}
+    with _GATEWAY_LOCK:
+        original_call = gateway.call_api
+        original_base = gateway.get_api_base
+        original_root = gateway._linkfox_root
+        original_path = gateway._resolve_output_path
+        original_session = gateway._session_id
+
+        def capture(path, payload):
+            status, result = original_call(path, payload)
+            captured.update(status=status, result=result)
+            return status, result if isinstance(result, dict) else {"rawResponse": result}
+
+        def output_path(slug, ts):
+            return prepared_output
+
+        # 在请求前验证当前工作目录可写，不使用公共调用器的目录回退。
+        _lf_root()
+        gateway.call_api = capture
+        gateway.get_api_base = lambda: base
+        gateway._linkfox_root = _lf_root
+        gateway._resolve_output_path = output_path
+        gateway._session_id = _lf_session_id
+        try:
+            slug = SLUG + "-" + api_path.rsplit("/", 1)[-1] + "-gateway"
+            # 先创建真实会话目录和元数据并探测目标文件可写；避免请求后才发现落盘失败。
+            prepared_output = gateway.resolve_data_path(slug, _lf_time.time())
+            with open(prepared_output, "x", encoding="utf-8"):
+                pass
+            with redirect_stdout(io.StringIO()) as log, redirect_stderr(io.StringIO()) as errors:
+                gateway.run(api_path, slug,
+                            argv=[json.dumps(params, ensure_ascii=False), "--inline", "--no-cache"])
+            # 原始响应已落盘；只转发路径提示，业务结果由 CLI 输出。
+            if errors.getvalue():
+                sys.stderr.write(errors.getvalue())
+            for line in (log.getvalue() + errors.getvalue()).splitlines():
+                if line.startswith("Failed to save to"):
+                    raise OSError(line)
+                if line.startswith("Saved full response:"):
+                    print(line, file=sys.stderr)
+        finally:
+            gateway.call_api = original_call
+            gateway.get_api_base = original_base
+            gateway._linkfox_root = original_root
+            gateway._resolve_output_path = original_path
+            gateway._session_id = original_session
+    result = captured["result"]
+    out = dict(result) if isinstance(result, dict) else {"rawResponse": result}
+    out["transportHttpStatus"] = captured["status"]
+    return out
+
+
+def _normal_gateway_response(proxy: dict) -> bool:
+    status = proxy.get("transportHttpStatus", 200)
+    if type(status) not in (int, float) or not 200 <= status < 300:
+        return False
+    code = proxy.get("errcode")
+    if code is None:
+        return True
+    if isinstance(code, str):
+        code = code.strip()
+        if not code:
+            return True
+        if len(code) != 3 or not code.isascii() or not code.isdigit():
+            return False
+        code = int(code)
+    return type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
 
 
 def resolve_store_tokens(params: dict) -> dict:
@@ -183,14 +239,17 @@ def developer_proxy_call(
     return call_api(DEVELOPER_PROXY_ENDPOINT, proxy)
 
 
-
-
 def qs_add(parts: list[str], key: str, value: str) -> None:
     parts.append(f"{key}={quote(str(value), safe='')}")
 
 
 def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
-    if int(proxy.get("httpStatus") or 0) != 200:
+    if not _normal_gateway_response(proxy):
+        return
+    try:
+        if int(proxy.get("httpStatus") or 0) != 200:
+            return
+    except (TypeError, ValueError):
         return
     body_raw = proxy.get("body")
     if not body_raw or not str(body_raw).strip():
@@ -198,7 +257,7 @@ def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
         return
     try:
         parsed = json.loads(body_raw)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError):
         out[key] = None
         return
     out[key] = parsed
@@ -207,13 +266,10 @@ def merge_shopee_body(out: dict, proxy: dict, key: str) -> None:
 
 
 # ===== LinkFox 统一输出层（落盘 + 摘要，无缓存）=====
-# 本块追加到共享模块（_xxx_common.py）末尾，供各入口脚本调用 emit_result()。
-# 依赖：json, os, sys, time, secrets, tempfile（共享模块通常已 import json/os/sys；
-#       若缺 time/secrets/tempfile，请在文件顶部补 import）。
+# 各入口调用 emit_result()；与公共调用器共用会话标识，只在当前工作目录落盘。
 
 import time as _lf_time
 import secrets as _lf_secrets
-import tempfile as _lf_tempfile
 
 LF_SMALL_THRESHOLD = 8000
 _LF_SESSION_CACHE: dict = {}
@@ -222,33 +278,19 @@ SLUG = "linkfox-shopee-store-media-space"
 
 
 def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
-        return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
+    """仅允许当前工作目录；在请求前验证可写，禁止静默回退。"""
+    sid = (os.environ.get("SESSION_ID") or "").strip()
+    if sid and (sid in (".", "..") or any(c in sid for c in ('/', '\\', ':'))):
+        raise ValueError("SESSION_ID must be a single directory name")
+    root = Path.cwd() / "linkfox"
+    root.mkdir(parents=True, exist_ok=True)
+    probe = root / (".write_probe-" + _lf_secrets.token_hex(6))
+    try:
+        probe.write_text("", encoding="utf-8")
+    finally:
+        if probe.exists():
+            probe.unlink()
+    return str(root.resolve())
 
 
 def _lf_iso(ts: float) -> str:
@@ -256,7 +298,7 @@ def _lf_iso(ts: float) -> str:
 
 
 def _lf_session_id(ts: float) -> str:
-    env = os.environ.get("SESSION_ID")
+    env = (os.environ.get("SESSION_ID") or "").strip()
     if env:
         return env.strip()
     if "_auto" not in _LF_SESSION_CACHE:
@@ -355,10 +397,14 @@ def _lf_update_meta(session_dir: str, *, skill: str, file_rel: str, ts: float) -
 
 def emit_result(result, slug=SLUG, inline=False):
     """落盘完整响应到 linkfox/<date>/<session>/data/<slug>-<ts>.json；大响应只打印摘要。无缓存。"""
+    if isinstance(result, dict) and result.get("api"):
+        slug = f"{slug}-{result['api']}"
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
     ts = _lf_time.time()
     date_str = _lf_time.strftime("%Y-%m-%d", _lf_time.localtime(ts))
     sid = _lf_session_id(ts)
+    if sid in ("", ".", "..") or any(c in sid for c in ('/', '\\', ':')):
+        raise ValueError("SESSION_ID must be a single directory name")
     root = _lf_root()
     session_dir = os.path.join(root, date_str, sid)
     os.makedirs(session_dir, exist_ok=True)
@@ -370,8 +416,8 @@ def emit_result(result, slug=SLUG, inline=False):
         with open(out, "w", encoding="utf-8") as f:
             f.write(serialized)
         print(f"Saved full response: {out} ({len(serialized)} bytes)")
-    except OSError as e:
-        print(f"Failed to save to {out}: {e}", file=sys.stderr)
+    except OSError:
+        raise
     _lf_update_meta(session_dir, skill=slug, file_rel=os.path.relpath(out, session_dir), ts=ts)
     if inline or len(serialized.encode("utf-8")) <= LF_SMALL_THRESHOLD:
         print(serialized)

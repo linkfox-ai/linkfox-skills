@@ -13,7 +13,6 @@ import json
 import sys
 
 from _follow_prize_api_runner import run_follow_prize_api
-from _shopee_follow_prize_common import emit_result, lf_inline_flag
 
 
 def main() -> None:
@@ -21,8 +20,7 @@ def main() -> None:
         print("Usage: add_follow_prize.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    inline = lf_inline_flag()
-    emit_result(run_follow_prize_api("add_follow_prize", params, "add_follow_prize.py"), inline)
+    run_follow_prize_api("add_follow_prize", params, "add_follow_prize.py")
 
 
 if __name__ == "__main__":

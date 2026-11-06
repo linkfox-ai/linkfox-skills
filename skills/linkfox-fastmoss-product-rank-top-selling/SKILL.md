@@ -1,197 +1,117 @@
 ---
 name: linkfox-fastmoss-product-rank-top-selling
-description: 通过FastMoss数据查询TikTok全球电商市场的热销商品排行榜，支持按日/周/月维度和类目维度分析。当用户提到TikTok热销榜、TikTok爆品排行、TikTok销量排行、TikTok GMV排名、TikTok类目热销、TikTok选品周报、TikTok top-selling rankings, TikTok bestseller charts, TikTok GMV ranking, TikTok category hot sellers, TikTok weekly product report, FastMoss时触发此技能。即使用户未明确提及"FastMoss"，只要其需求涉及查看TikTok平台的热销排行榜或按时间维度的销售排名，也应触发此技能。
+description: 通过 FastMoss 数据查看 TikTok Shop 全球市场的热销商品排行榜，支持按日、周、月、类目和销量、GMV、增长率分析，返回商品价格、佣金、店铺及销售表现。适用于 TikTok 热销榜、爆品排行、类目热销和选品周报，无需明确提及 FastMoss。不适用于关键词搜商品、其他平台选品、广告管理、内容制作、评论与文案分析、利润计算或定价策略。
 ---
 
-# FastMoss - TikTok Top Selling Rankings
+# FastMoss TikTok 热销商品排行
 
-This skill guides you on how to query and analyze the TikTok top selling product rankings via the FastMoss data source, helping cross-border e-commerce sellers identify hot-selling products across TikTok's global markets by day, week, or month.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-The TikTok Top Selling Ranking tracks the best-performing products on TikTok Shop across 15 global markets. It reveals which products are leading in sales volume, GMV, and growth rate over configurable time windows (daily, weekly, monthly). This is an essential tool for product scouting, trend analysis, and competitive intelligence in TikTok e-commerce.
+查看 TikTok Shop 的热销商品排名，按统计周期、类目和销售指标比较商品表现。
+用户说“选品”或“什么卖得好”，且上下文明确指向 TikTok Shop 热销排行时，使用本技能。
 
-**Data scope**: The ranking covers 15 TikTok Shop markets and supports three time granularities — day, week, and month — via the `dateInfo` parameter. Each product entry includes sales volume, GMV, growth rate, commission rate, shop information, category, and more.
+**场景速查**
 
-**dateInfo format is important**:
-- type: `"day"` -> value: `"2025-02-01"` (YYYY-MM-DD)
-- type: `"week"` -> value: `"2025-18"` (year-weekNumber)
-- type: `"month"` -> value: `"2025-02"` (year-month)
+| 用户表达 | 查询场景 |
+|----------|----------|
+| TikTok 上什么商品最畅销 | 热销榜查询。 |
+| 本周 TikTok 爆品、今天的热销商品 | 周榜或日榜查询。 |
+| TikTok GMV 排名、销售额最高的商品 | 按销售额排序。 |
+| TikTok 美妆类目有哪些热销商品 | 指定类目排行。 |
+| 做一份 TikTok 选品周报、查看月度热销榜 | 按统计周期整理排名。 |
+| FastMoss 热销榜数据 | 指定数据源查询。 |
+| TikTok 哪些商品增长最快 | 按增长率排序。 |
 
-**Pagination**: Results are paginated. Use `page` (page number, starting from 1) and `pageSize` (items per page, max 10, default 10) to navigate through the result set. 
+### 边界
 
-## Parameter Guide
+按关键词查找商品使用 `linkfox-fastmoss-product-search`。Amazon、Shopify 等其他平台选品，以及广告管理、视频制作、商品评论、Listing 文案、利润计算和定价策略不属于本技能范围。
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| region | string | Yes | Market region code (US, GB, MX, ES, DE, IT, FR, ID, VN, MY, TH, PH, BR, JP, SG) |
-| dateInfo | object | Yes | Date specification with `type` (day/week/month) and `value` (see format above) |
-| category | string | No | Category name in English, matched to TikTok category ID. Non-English input should be translated first |
-| orderby | object | No | Sorting: `field` (units_sold/gmv/total_units_sold/total_gmv/growth_rate) + `order` (desc/asc). Default: desc |
-| page | integer | No | Page number, default 1 |
-| pageSize | integer | No | Items per page, max 10, default 10 |
+## 前置条件
 
-## Supported Markets
+先明确目标市场、统计周期和榜单关注指标；参数格式及使用限制见 `references/api.md`。
 
-| Code | Market |
-|------|--------|
-| US | United States |
-| GB | United Kingdom |
-| MX | Mexico |
-| ES | Spain |
-| DE | Germany |
-| IT | Italy |
-| FR | France |
-| ID | Indonesia |
-| VN | Vietnam |
-| MY | Malaysia |
-| TH | Thailand |
-| PH | Philippines |
-| BR | Brazil |
-| JP | Japan |
-| SG | Singapore |
+## 查询流程
 
-Default market is **US**. Use US when the user does not specify a market.
+1. 确认用户要浏览热销排行；根据目标市场、统计周期和关注指标整理查询条件。
+2. 按 `references/api.md` 核对日期、类目、排序和分页参数，应用已定义的默认值；仅补问仍无法确定的必要信息，再查询。
+3. 执行本次查询，优先复用同参数缓存；先读摘要，再从保存的响应提取需要的字段。
+4. 按统计周期整理商品排名，标注市场、统计区间和币种；错误或空结果按接口定义解释，后续检索遵循成本约束。
 
-## 调用方式
+## 执行方式
 
-- **API 端点**：`POST /fastmoss/productRankTopSelling`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/fastmoss_product_rank_top_selling.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/fastmoss_product_rank_top_selling.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-fastmoss-product-rank-top-selling-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 输出策略
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-fastmoss-product-rank-top-selling-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## Usage Examples
+## 执行规则
 
-**1. Today's top selling products in the US (daily)**
-Query the US market for a specific day to see which products lead in sales.
-```
-region: "US", dateInfo: {"type": "day", "value": "2026-04-15"}
-```
+### 算力消耗预估
 
-**2. Weekly top sellers in the UK**
-Check the UK market for weekly best-performing products.
-```
-region: "GB", dateInfo: {"type": "week", "value": "2026-15"}
-```
+11 算力 / 次
 
-**3. Monthly GMV leaders in Southeast Asia**
-Scout the Indonesian market for monthly top sellers sorted by GMV.
-```
-region: "ID", dateInfo: {"type": "month", "value": "2026-03"}, orderby: {"field": "gmv", "order": "desc"}
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解榜单口径**：热销榜反映 TikTok Shop 商品在指定统计周期内的销量、GMV 和增长表现，也提供累计指标、佣金、店铺与类目信息，用于热销追踪、趋势观察和竞品数据比较。
+- **只展示数据**：使用清晰表格展示商品名称、编号、价格、对应周期的销量和 GMV、累计表现、增长率、佣金及店铺，不附加主观经营建议。
+- **区分统计周期**：按日、周、月选择对应周期字段，避免将累计数据当作本期数据。日期格式及数据延迟以 `references/api.md` 为准。
+- **展示增长率和佣金**：增长率加 `%`；佣金以基点返回，转换为百分比展示，例如 `1000 = 10%`。
+- **标明币种**：价格与 GMV 同时显示响应中的币种，不混合不同市场的货币。
+- **说明商品状态**：`offShelvesText` 为“是”表示已下架，“否”表示在售。
+- **保留实际返回范围**：标明当前页与返回数量；可选字段缺失时不补造数据，空结果不触发自动连续试探。
+
+## 使用示例
+
+### 美国日榜
+
+```json
+{"region": "US", "dateInfo": {"type": "day", "value": "2026-04-15"}}
 ```
 
-**4. Category-specific ranking**
-Find top selling products in a specific category.
+### 英国周榜
+
+```json
+{"region": "GB", "dateInfo": {"type": "week", "value": "2026-15"}}
 ```
-region: "US", dateInfo: {"type": "day", "value": "2026-04-15"}, category: "Beauty"
+
+### 印度尼西亚月度销售额排行
+
+```json
+{"region": "ID", "dateInfo": {"type": "month", "value": "2026-03"}, "orderby": {"field": "gmv", "order": "desc"}}
 ```
 
-## Data Fields (Response)
+### 美国美妆类目日榜
 
-| Field | API Name | Description |
-|-------|----------|-------------|
-| Product Title | title | Name of the product |
-| Product ID | productId | Unique product identifier |
-| Region | region | Market region code |
-| Price | price | Product price |
-| Min Price | minPrice | Lowest price; optional and present only for price-range products |
-| Max Price | maxPrice | Highest price; optional and present only for price-range products |
-| Currency | currency | Currency symbol or label returned by the API |
-| Total Sales | totalSaleCnt | Total units sold |
-| 1-Day Sales | totalSale1dCnt | Units sold in the last 1 day (when dateType=day) |
-| 7-Day Sales | totalSale7dCnt | Units sold in the last 7 days (when dateType=week) |
-| 30-Day Sales | totalSale30dCnt | Units sold in the last 30 days (when dateType=month) |
-| Total GMV | totalSaleGmvAmt | Total gross merchandise value |
-| 1-Day GMV | totalSaleGmv1dAmt | GMV in the last 1 day (when dateType=day) |
-| 7-Day GMV | totalSaleGmv7dAmt | GMV in the last 7 days (when dateType=week) |
-| 30-Day GMV | totalSaleGmv30dAmt | GMV in the last 30 days (when dateType=month) |
-| Growth Rate | growthRate | Sales growth rate (percentage) |
-| Shop Name | shopName | Name of the seller's shop |
-| Shop Total Units Sold | shopTotalUnitsSold | Total units sold by the shop |
-| Shop Seller ID | shopSellerId | Unique shop seller identifier |
-| Category Name | categoryName | Product category |
-| Category IDs | categoryIds | Category ID path from level 1 to level 3 |
-| Commission Rate | productCommissionRate | Commission rate in basis points (1000 = 10%) |
-| Image URL | imageUrl | Product image URL |
-| Cover URLs | coverUrl | Product cover image URL list |
-| Shop Avatar | shopAvatar | Shop avatar URL |
-| Source Tool | sourceTool | Source tool identifier |
-| Source Type | sourceType | Product source type |
-| Delisted Status | offShelvesText | Delisted indicator ("是" = delisted, "否" = active) |
+```json
+{"region": "US", "dateInfo": {"type": "day", "value": "2026-04-15"}, "category": "Beauty"}
+```
 
-Top-level responses include `errcode`, `errmsg`, `page`, `pageSize`, `total`, `products`, `columns`, `type`, and `costTime`. Some response variants may also include `costToken`, `matchedCategoryIdPath`, or `matchedCategoryNamePath`; consumers should treat these as optional.
+## 使用反馈
 
-## Display Rules
-
-1. **Present data only**: Show query results in clear tables without subjective business advice
-2. **Growth rate**: Growth rate is in percentage -- show with % sign
-3. **Commission rate**: Commission rate is in basis points (1000 = 10%) -- convert to percentage for display
-4. **Currency awareness**: Always display currency alongside prices since different markets use different currencies
-5. **dateInfo format**: Validate and remind users of the correct format for the selected time granularity
-6. **Delisted status**: `offShelvesText` value "是" means delisted, "否" means active -- clarify this for users
-
-## Important Limitations
-
-- **dateInfo is mandatory**: Both `type` and `value` must be provided with specific format requirements
-- **No keyword search**: This tool does NOT support keyword search (use linkfox-fastmoss-product-search for that)
-- **Max 10 items per page**: The `pageSize` parameter cannot exceed 10
-- **Data delay**: Data has T+1 statistical delay
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- TikTok top selling product rankings and trend analysis:
-
-| User Says | Scenario |
-|-----------|----------|
-| "What are the top selling products on TikTok" | Top selling ranking lookup |
-| "TikTok bestsellers this week", "hot products on TikTok Shop" | Weekly/daily ranking query |
-| "TikTok GMV ranking", "highest revenue products on TikTok" | GMV-based ranking |
-| "TikTok category hot sellers", "top selling beauty products on TikTok" | Category-specific ranking |
-| "TikTok weekly product report", "monthly top sellers" | Time-dimension analysis |
-| "FastMoss top selling", "FastMoss ranking data" | Direct data source reference |
-| "Which products are growing fastest on TikTok" | Growth rate sorted ranking |
-
-**Not applicable** -- Needs beyond TikTok top selling rankings:
-
-- Amazon product research or ABA keyword data
-- TikTok advertising / ad campaign management
-- TikTok content creation or video editing
-- Product reviews or listing copywriting
-- TikTok product keyword search (use linkfox-fastmoss-product-search instead)
-- Profit margin calculations or pricing strategy
-
-**Boundary judgment**: When users say "product research" or "what's selling well", if the context clearly involves TikTok Shop or TikTok e-commerce rankings, this skill applies. If they are asking about Amazon, Shopify, or other platforms, it does not apply. If they want to search products by keyword rather than browse rankings, use linkfox-fastmoss-product-search instead.
-
-## 算力消耗规则
-
-消耗 11 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

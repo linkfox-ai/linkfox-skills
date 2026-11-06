@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""US site file download via /temu/fileDownload (default site=eu)."""
+"""EU site file download via /temu/fileDownload (default site=eu)."""
 
 import json
 import sys

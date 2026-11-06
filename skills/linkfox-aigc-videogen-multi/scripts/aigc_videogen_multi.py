@@ -8,9 +8,8 @@ import json
 import os
 import sys
 import time
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
-from http.client import HTTPException
+import call_api
+from _linkfox_transport import request_json
 
 from aigc_model_config import load_catalog, parse_model_args, print_catalog, save_catalog
 
@@ -24,7 +23,7 @@ INITIAL_DELAY = 120
 
 
 # ===== linkfox_paths 内联块（自包含，无外部依赖，无 oss2）=====
-# 粘贴到各 aigc skill 的 py 脚本模块级，替代 `from linkfox_paths import ...`。
+# 会话路径与媒体下载工具在本模块内定义。
 # 提供：get_api_base / resolve_data_path / session_root / download_media
 #       / encode_nl / decode_nl / decode_nl_in_obj
 
@@ -34,8 +33,8 @@ import secrets as _lf_secrets
 import time as _lf_time
 import tempfile as _lf_tempfile
 
-_LF_SESSION_CACHE = {}
-NL_PLACEHOLDER = "⏎"
+# 公共调用器与媒体封装共享会话标识和可写目录，避免自动会话被拆分。
+_LF_SESSION_CACHE = call_api._SESSION_CACHE
 
 
 def get_api_base():
@@ -161,14 +160,6 @@ def resolve_data_path(slug, ts, ext="json"):
     return out
 
 
-def session_root(ts=None):
-    """返回当前 session 目录。"""
-    if ts is None:
-        ts = _lf_time.time()
-    _, session_dir = _lf_ensure_session(ts)
-    return session_dir
-
-
 def download_media(url, slug, ts=None, ext=None, timeout=300):
     """下载 URL 到 <session>/media/<slug>-<ts>.<ext>，返回本地路径；失败返回 None。"""
     import sys as _lf_sys
@@ -239,33 +230,6 @@ def download_media(url, slug, ts=None, ext=None, timeout=300):
         return None
 
 
-def encode_nl(text):
-    if not isinstance(text, str):
-        return text
-    text = text.replace("\\r\\n", NL_PLACEHOLDER)
-    text = text.replace("\\n", NL_PLACEHOLDER)
-    text = text.replace("\\r", NL_PLACEHOLDER)
-    text = text.replace("\r\n", NL_PLACEHOLDER)
-    text = text.replace("\r", NL_PLACEHOLDER)
-    text = text.replace("\n", NL_PLACEHOLDER)
-    return text
-
-
-def decode_nl(text):
-    if not isinstance(text, str):
-        return text
-    return text.replace(NL_PLACEHOLDER, "\n")
-
-
-def decode_nl_in_obj(obj):
-    if isinstance(obj, str):
-        return decode_nl(obj)
-    if isinstance(obj, list):
-        return [decode_nl_in_obj(item) for item in obj]
-    if isinstance(obj, dict):
-        return {k: decode_nl_in_obj(v) for k, v in obj.items()}
-    return obj
-
 _get_base = get_api_base
 
 
@@ -273,93 +237,12 @@ def get_api_base():
     return _get_base()
 
 
-def get_api_key():
-    """
-获取配置在环境变量的API Key。
-如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-"""
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print("API Key 未配置", file=sys.stderr)
-        sys.exit(1)
-    return key
-
-
-def _response_error(code, message, raw=b"", status=None, headers=None):
-    headers = headers or {}
-    result = {"error": message, "errorCode": code, "responseBytes": len(raw)}
-    if status is not None:
-        result["httpStatus"] = status
-    content_type = headers.get("Content-Type")
-    request_id = headers.get("X-Request-Id") or headers.get("X-Kong-Request-Id")
-    if content_type:
-        result["contentType"] = content_type
-    if request_id:
-        result["requestId"] = request_id
-    if raw:
-        # Kept in the failure data file, never printed as a raw body to stdout.
-        result["details"] = raw.decode("utf-8", errors="replace")
-    return result
-
-
-def _decode_response(raw, status, headers):
-    if not raw.strip():
-        return _response_error("EMPTY_RESPONSE", f"Upstream returned an empty response (HTTP {status})", raw, status, headers)
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return _response_error("INVALID_ENCODING", f"Upstream response is not UTF-8 (HTTP {status})", raw, status, headers)
-    try:
-        result = json.loads(text)
-    except json.JSONDecodeError:
-        return _response_error("INVALID_JSON_RESPONSE", f"Upstream response is not JSON (HTTP {status})", raw, status, headers)
-    if not isinstance(result, dict):
-        return _response_error("INVALID_RESPONSE", "Upstream JSON response must be an object", raw, status, headers)
-    business_code = result.get("errcode", result.get("code"))
-    business_failed = business_code is not None and str(business_code) not in ("0", "200")
-    if result.get("error") or business_failed or not 200 <= status < 300:
-        message = result.get("error") or result.get("errmsg") or result.get("msg") or result.get("message") or f"HTTP {status}: upstream request failed"
-        result["error"] = message
-        result.setdefault("errorCode", str(business_code) if business_failed else "HTTP_ERROR")
-        metadata = _response_error(result["errorCode"], message, raw, status, headers)
-        for key in ("httpStatus", "contentType", "requestId", "responseBytes"):
-            if key in metadata:
-                result.setdefault(key, metadata[key])
-    return result
-
-
 def _post(url, params, timeout=150):
-    api_key = get_api_key()
-    data = json.dumps(params, ensure_ascii=False).encode("utf-8")
-    headers = {
-        "Authorization": api_key,
-        "Content-Type": "application/json",
-        "User-Agent": "LinkFox-Skill/2.0",
-        "SESSION_ID": os.environ.get("SESSION_ID", ""),
-        "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-        "MODE_ID": os.environ.get("MODE_ID", ""),
-        "APP_NAME": os.environ.get("APP_NAME", ""),
-    }
-    req = Request(url, data=data, headers=headers, method="POST")
-    status, response_headers = None, {}
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            status = response.status
-            response_headers = response.headers
-            return _decode_response(response.read(), status, response_headers)
-    except HTTPError as error:
-        try:
-            raw = error.read() if error.fp else b""
-            return _decode_response(raw, error.code, error.headers or {})
-        except (OSError, HTTPException) as read_error:
-            return _response_error("HTTP_READ_ERROR", "Could not read upstream error response", getattr(read_error, "partial", b""), error.code, error.headers)
-    except URLError as error:
-        code = "REQUEST_TIMEOUT" if isinstance(error.reason, TimeoutError) else "CONNECTION_ERROR"
-        return {"error": "Request timed out; submission outcome may be unknown" if code == "REQUEST_TIMEOUT" else f"Connection failed: {error.reason}", "errorCode": code}
-    except TimeoutError:
-        return _response_error("REQUEST_TIMEOUT", "Request timed out; submission outcome may be unknown", status=status, headers=response_headers)
-    except (OSError, HTTPException) as error:
-        return _response_error("HTTP_READ_ERROR", "Could not read upstream response; submission outcome may be unknown", getattr(error, "partial", b""), status, response_headers)
+    # 通过公共调用器执行请求并完整存档响应。
+    base = get_api_base()
+    path = url[len(base):]
+    return request_json(path, params, slug=SLUG + ("-create" if path == CREATE_PATH else "-query"),
+                        timeout=timeout, absolute_url=url, aigc_codes=True)
 
 
 def create_task(params):
@@ -439,20 +322,6 @@ def _download_results(result):
         return []
 
 
-def summarize(result):
-    if not isinstance(result, dict):
-        print(json.dumps(result, ensure_ascii=False)[:500])
-        return
-    print(f"Top-level keys: {list(result.keys())}")
-    for k in ("errcode", "code", "msg", "costToken", "status"):
-        if k in result:
-            print(f"  {k}: {result[k]}")
-    result_list = result.get("resultList") or []
-    if result_list:
-        print(f"\nresultList (length={len(result_list)}):")
-        print(json.dumps(result_list[:3], indent=2, ensure_ascii=False))
-
-
 def _emit_failure(result, exit_code=1):
     result = dict(result)
     result.setdefault("status", "ERROR")
@@ -485,6 +354,10 @@ def main():
         print_catalog(catalog, out, inline=inline)
         return
 
+    argv = [value for value in argv if value != "--no-cache"]
+    if argv == ["--help"] or argv == ["-h"]:
+        print("用法：aigc_videogen_multi.py '<JSON>' [--inline] [--no-cache]；或 --list-models [--allowed-models '<JSON数组>'] [--inline]")
+        return
     if not argv:
         print("Usage: aigc_videogen_multi.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
@@ -520,6 +393,12 @@ def main():
 
     media_paths = _download_results(result)
 
+    # 通过公共调用器执行请求并完整存档响应。
+    try:
+        with open(_resolve_output_path(time.time()), "w", encoding="utf-8") as handle:
+            json.dump(result, handle, ensure_ascii=False, indent=2)
+    except OSError as error:
+        print(f"完整响应存档失败：{error}", file=sys.stderr)
     if media_paths:
         print(f"Saved full response: {json.dumps(media_paths, ensure_ascii=False)}")
     else:

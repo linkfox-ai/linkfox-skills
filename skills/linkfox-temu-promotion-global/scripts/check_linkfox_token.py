@@ -11,6 +11,7 @@ Usage:
 import json
 import sys
 
+import _temu_common as common
 from _temu_common import PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error, load_json_arg
 
 def main():
@@ -31,7 +32,7 @@ def main():
     }
     result = call_temu_api(PROXY_URL, probe_body, timeout=150, linkfox_params=params)
 
-    if is_linkfox_auth_error(result):
+    if common.LAST_HTTP_STATUS == 401 or is_linkfox_auth_error(result):
         print(
             json.dumps(
                 {
@@ -44,6 +45,37 @@ def main():
                 ensure_ascii=False,
             )
         )
+        sys.exit(1)
+
+    errcode = result.get("errcode")
+    empty_code = errcode is None or (isinstance(errcode, str) and not errcode.strip())
+    normal_code = (
+        (type(errcode) in (int, float) and 200 <= errcode < 300 and errcode % 1 == 0)
+        or (isinstance(errcode, str) and errcode.strip().isascii()
+            and len(errcode.strip()) == 3 and errcode.strip().isdigit()
+            and 200 <= int(errcode.strip()) < 300)
+    )
+    status = common.LAST_HTTP_STATUS
+    probe_code = result.get("code")
+    # 空对象不能证明认证有效；仅接受已知探测返回。
+    expected_probe = probe_code in (1002, "1002") or (probe_code is None and normal_code)
+    messages = "\n".join(
+        str(result.get(key) or "") for key in ("message", "error", "errmsg", "msg")
+    ).lower()
+    usage_error = any(marker in messages for marker in (
+        "算力余额不足", "计费不足", "余额不足", "quota exceeded",
+        "insufficient balance", "套餐到期", "需充值", "请充值", "配额超限",
+    ))
+    if (
+        status is None or not 200 <= status < 300 or result.get("error")
+        or (not empty_code and not normal_code) or not expected_probe or usage_error
+    ):
+        print(json.dumps({
+            "ok": False,
+            "reason": "gateway_probe_failed",
+            "message": result,
+            "hint": "根据实际网关错误检查认证和连接；不要自动重试。",
+        }, indent=2, ensure_ascii=False))
         sys.exit(1)
 
     print(

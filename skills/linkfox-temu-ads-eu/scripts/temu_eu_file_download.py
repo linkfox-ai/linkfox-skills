@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""US site signed file download via /temu/fileDownload."""
+"""通过 /temu/fileDownload 获取 EU 站点加签资源。"""
 
 import json
 import sys

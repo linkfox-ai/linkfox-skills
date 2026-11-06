@@ -16,7 +16,7 @@ Import convention (at top of each list_*.py):
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from _common import ensure_auth_skill_available, get_access_token, list_sp_entities
+    from _common import ensure_auth_skill_available, list_sp_entities
     # or list_sd_entities for Sponsored Display
 """
 
@@ -28,12 +28,13 @@ import subprocess
 import sys
 import time
 import secrets
-import tempfile
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from contextlib import redirect_stdout
+from unittest.mock import patch
+import io
+import call_api
 
 
 # 生产默认走 tool-gateway.linkfox.com；开发/测试期可 export AMAZON_ADS_BASE_URL=<url> 覆盖
@@ -88,65 +89,95 @@ def ensure_auth_skill_available() -> None:
 
 # ---------- LinkFox gateway plumbing ----------
 
-def get_api_key() -> str:
-    """
-    获取配置在环境变量的API Key。
-    如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-    """
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
 
 
 def call_gateway(endpoint: str, payload: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(payload).encode("utf-8")
-    req = Request(
-        endpoint,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-            "SESSION_ID": os.environ.get("SESSION_ID", ""),
-            "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
-            "MODE_ID": os.environ.get("MODE_ID", ""),
-            "APP_NAME": os.environ.get("APP_NAME", ""),
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+    """经公共 run 调用；兼容 AMAZON_ADS_BASE_URL 地址配置、关闭响应缓存并保存每页原文。"""
+    root = _lf_root()  # 请求前确认 cwd 可写，禁止公共输出回退到其他目录。
+    captured = {}
+    transport = call_api.call_api
+
+    def invoke(api_path, params):
+        try:
+            status, result = transport(api_path, params)
+        except json.JSONDecodeError as exc:
+            status, result = None, {'error': f'网关响应不是有效 JSON：{exc}',
+                                    'details': exc.doc}
+        except (ValueError, UnicodeError, OSError) as exc:
+            # 公共调用器只支持 JSON 对象输出；兼容处理留在业务层，绝不重放请求。
+            status, result = None, {'error': f'网关响应或连接异常：{exc}'}
+        if not isinstance(result, dict):
+            result = {'error': '网关响应不是 JSON 对象', 'details': result}
+        captured.update(status=status, result=result)
+        return status, result
+
+    # 业务封装处理兼容环境变量和输出目录，公共调用器无需修改。
+    with patch.object(call_api, 'get_api_url', return_value=endpoint), \
+         patch.object(call_api, '_linkfox_root', return_value=root), \
+         patch.object(call_api, '_resolve_output_path',
+                      side_effect=lambda slug, ts: call_api.resolve_data_path(slug, time.time())), \
+         patch.object(call_api, 'call_api', side_effect=invoke), \
+         redirect_stdout(io.StringIO()):
+        call_api.run('/amazonAds/developerProxy', SLUG + '-gateway',
+                     [json.dumps(payload, ensure_ascii=False), '--no-cache'])
+    status = captured['status']
+    result = captured['result']
+    if (not _upstream_ok(status) or 'error' in result
+            or not _gateway_code_ok(result.get('errcode'))):
+        failure = dict(result)
+        failure.update(success=False,
+                       error=result.get('error') or result.get('errmsg') or f'LinkFox HTTP {status}',
+                       details=result, transportHttpStatus=status)
+        return failure
+    return result
 
 
-def get_access_token(profile_id: int) -> str:
-    """Legacy no-op: developerProxy resolves token server-side from profileId."""
-    print(f"Using server-side token resolution for profileId={profile_id}", file=sys.stderr)
-    return ""
+def _gateway_code_ok(code) -> bool:
+    """严格采用公共 errcode 规则，0 和 false 不是空值。"""
+    if code is None:
+        return True
+    if isinstance(code, str):
+        code = code.strip()
+        if not code:
+            return True
+        if len(code) != 3 or not code.isascii() or not code.isdigit():
+            return False
+        code = int(code)
+    return type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
 
 
-def _developer_proxy_call(region: str, path: str, method: str, access_token: str,
+def _upstream_ok(status) -> bool:
+    """网关定义的 HTTP 状态必须为整数，异常值结构化返回而非触发算术异常。"""
+    return type(status) is int and 200 <= status < 300
+
+
+def _list_failure(result: dict, items: list, pages: int, response_key: str) -> dict:
+    """分页失败保留已取数据、原始错误与停止位置，不将部分结果冒充完整成功。"""
+    return {**result, 'success': False, response_key: list(items),
+            'total': len(items), 'pagesFetched': pages, 'truncated': True}
+
+
+def parse_profile_id(value) -> int:
+    """将整数或十进制数字字符串规范为正数 Long，拒绝截断和布尔转换。"""
+    if isinstance(value, str):
+        value = value.strip()
+        if not value.isascii() or not value.isdecimal():
+            raise ValueError("profileId 必须为Long范围内的正整数或数字字符串")
+        value = int(value)
+    if type(value) is not int or not 0 < value <= 9223372036854775807:
+        raise ValueError("profileId 必须为Long范围内的正整数或数字字符串")
+    return value
+
+
+def _developer_proxy_call(region: str, path: str, method: str,
                           profile_id: int, body: str | None, content_type: str | None,
                           query_string: str | None, accept: str | None = None) -> dict:
     payload: dict[str, Any] = {
         "region": region,
         "path": path,
         "method": method,
-        "profileId": int(profile_id),
+        "profileId": parse_profile_id(profile_id),
     }
-    if access_token:
-        payload["amzAccessToken"] = access_token
     if body is not None:
         payload["body"] = body
     if content_type:
@@ -164,7 +195,6 @@ def list_sp_entities(region: str, profile_id: int,
                      entity_path: str, entity_content_type: str, response_key: str,
                      request_body: dict, fetch_all: bool = True,
                      max_pages: int = DEFAULT_MAX_PAGES,
-                     access_token: str = "",
                      accept: str | None = None) -> dict:
     """
     POST a SP v3 list endpoint and optionally auto-paginate via nextToken.
@@ -194,7 +224,6 @@ def list_sp_entities(region: str, profile_id: int,
             region=region,
             path=entity_path,
             method="POST",
-            access_token=access_token,
             profile_id=profile_id,
             body=json.dumps(page_body),
             content_type=entity_content_type,
@@ -203,34 +232,34 @@ def list_sp_entities(region: str, profile_id: int,
         )
 
         if "error" in resp:
-            return {
-                "error": resp["error"],
-                "details": resp.get("details"),
-                "pagesFetched": pages,
-            }
+            return _list_failure(resp, collected, pages, response_key)
 
         http_status = resp.get("httpStatus")
-        if http_status is None or http_status // 100 != 2:
-            return {
+        if not _upstream_ok(http_status):
+            return _list_failure({
+                **resp,
                 "error": f"Upstream HTTP {http_status}",
-                "httpStatus": http_status,
-                "contentType": resp.get("contentType"),
-                "body": resp.get("body"),
-                "pagesFetched": pages,
-            }
+            }, collected, pages, response_key)
 
         try:
             parsed = json.loads(resp.get("body") or "{}")
         except Exception as e:
-            return {
+            return _list_failure({
+                **resp,
                 "error": f"Failed to parse upstream body as JSON: {e}",
-                "body": resp.get("body"),
-                "pagesFetched": pages,
-            }
+            }, collected, pages, response_key)
 
-        page_items = parsed.get(response_key) or []
-        if isinstance(page_items, list):
-            collected.extend(page_items)
+        if not isinstance(parsed, dict):
+            return _list_failure({**resp, 'error': '上游分页响应必须是 JSON 对象'},
+                                 collected, pages, response_key)
+
+        page_items = parsed.get(response_key)
+        if page_items is None:
+            page_items = []
+        if not isinstance(page_items, list):
+            return _list_failure({**resp, 'error': f'上游 {response_key} 必须是数组'},
+                                 collected, pages, response_key)
+        collected.extend(page_items)
 
         pages += 1
         token = parsed.get("nextToken")
@@ -256,7 +285,12 @@ def parse_argv_params(usage_text: str) -> dict:
         print(usage_text, file=sys.stderr)
         sys.exit(1)
     try:
-        return json.loads(sys.argv[1])
+        params = json.loads(sys.argv[1])
+        if not isinstance(params, dict):
+            print('JSON 参数必须为对象', file=sys.stderr)
+            sys.exit(1)
+        _lf_root()
+        return params
     except json.JSONDecodeError as e:
         print(f"❌ Invalid JSON: {e}", file=sys.stderr)
         sys.exit(1)
@@ -267,6 +301,12 @@ def require_fields(params: dict, required: list[str]) -> None:
     if missing:
         print(f"❌ Missing required parameters: {', '.join(missing)}", file=sys.stderr)
         sys.exit(1)
+    if 'profileId' in required:
+        try:
+            params['profileId'] = parse_profile_id(params['profileId'])
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            sys.exit(1)
 
 
 # 字段结构规范表 —— 每个 filter 字段对应的请求体结构（封装层按此规范化入参后再发给上游）
@@ -397,7 +437,7 @@ def split_server_client_filters(params: dict, filter_keys: list[str]):
 
 
 def build_filter_body(params: dict, filter_keys: list[str]) -> dict:
-    """兼容旧调用方：仅返回上游请求体部分（忽略 client-side 过滤器）。
+    """仅返回上游请求体部分（忽略 client-side 过滤器）。
 
     新调用方建议直接用 `split_server_client_filters()`，以便拿到 client-side 过滤器做本地筛选。
     """
@@ -537,8 +577,7 @@ def list_sd_entities(region: str, profile_id: int,
                      server_query: dict,
                      fetch_all: bool = True,
                      max_pages: int = DEFAULT_MAX_PAGES,
-                     page_size: int = DEFAULT_PAGE_SIZE,
-                     access_token: str = "") -> dict:
+                     page_size: int = DEFAULT_PAGE_SIZE) -> dict:
     """GET 一个 Sponsored Display v3 list endpoint，并按 startIndex + count 自动翻页。
 
     Sponsored Display 响应顶层是数组（非 `{<entityKey>:[...]}` 结构）；本函数对两种形态都兼容。
@@ -568,7 +607,6 @@ def list_sd_entities(region: str, profile_id: int,
             region=region,
             path=entity_path,
             method="GET",
-            access_token=access_token,
             profile_id=profile_id,
             body=None,
             content_type=None,
@@ -576,40 +614,37 @@ def list_sd_entities(region: str, profile_id: int,
         )
 
         if "error" in resp:
-            return {
-                "error": resp["error"],
-                "details": resp.get("details"),
-                "pagesFetched": pages,
-            }
+            return _list_failure(resp, collected, pages, response_key)
 
         http_status = resp.get("httpStatus")
-        if http_status is None or http_status // 100 != 2:
-            return {
+        if not _upstream_ok(http_status):
+            return _list_failure({
+                **resp,
                 "error": f"Upstream HTTP {http_status}",
-                "httpStatus": http_status,
-                "contentType": resp.get("contentType"),
-                "body": resp.get("body"),
-                "pagesFetched": pages,
-            }
+            }, collected, pages, response_key)
 
         try:
             parsed = json.loads(resp.get("body") or "[]")
         except Exception as e:
-            return {
+            return _list_failure({
+                **resp,
                 "error": f"Failed to parse upstream body as JSON: {e}",
-                "body": resp.get("body"),
-                "pagesFetched": pages,
-            }
+            }, collected, pages, response_key)
 
         if isinstance(parsed, list):
             page_items = parsed
         elif isinstance(parsed, dict):
-            page_items = parsed.get(response_key) or []
+            page_items = parsed.get(response_key)
+            if page_items is None:
+                page_items = []
         else:
-            page_items = []
+            return _list_failure({**resp, 'error': '上游分页响应必须是数组或 JSON 对象'},
+                                 collected, pages, response_key)
 
-        if isinstance(page_items, list):
-            collected.extend(page_items)
+        if not isinstance(page_items, list):
+            return _list_failure({**resp, 'error': f'上游 {response_key} 必须是数组'},
+                                 collected, pages, response_key)
+        collected.extend(page_items)
 
         pages += 1
         page_len = len(page_items) if isinstance(page_items, list) else 0
@@ -633,7 +668,6 @@ def list_sd_entities(region: str, profile_id: int,
 def mutate_entity(region: str, profile_id: int,
                   path: str, method: str, content_type: str,
                   payload,
-                  access_token: str = "",
                   accept: str | None = None) -> dict:
     """POST (create) or PUT (update) an entity batch via developerProxy.
 
@@ -648,7 +682,6 @@ def mutate_entity(region: str, profile_id: int,
         region=region,
         path=path,
         method=method,
-        access_token=access_token,
         profile_id=profile_id,
         body=body_str,
         content_type=content_type,
@@ -667,15 +700,17 @@ def mutate_entity(region: str, profile_id: int,
     except (json.JSONDecodeError, TypeError):
         parsed = body_raw
 
+    if not _upstream_ok(http_status):
+        return {"success": False, "error": f"Upstream HTTP {http_status}",
+                "httpStatus": http_status, "body": body_raw, "data": parsed}
     return {"success": True, "httpStatus": http_status, "data": parsed}
 # ===== LinkFox 统一输出层（落盘 + 摘要，无缓存）=====
-# 本块追加到共享模块（_xxx_common.py）末尾，供各入口脚本调用 emit_result()。
+# 各业务入口使用 emit_result() 保存并展示响应。
 # 依赖：json, os, sys, time, secrets, tempfile（共享模块通常已 import json/os/sys；
 #       若缺 time/secrets/tempfile，请在文件顶部补 import）。
 
 import time as _lf_time
 import secrets as _lf_secrets
-import tempfile as _lf_tempfile
 
 LF_SMALL_THRESHOLD = 8000
 _LF_SESSION_CACHE: dict = {}
@@ -684,33 +719,16 @@ SLUG = "linkfox-amazon-ads-manager"
 
 
 def _lf_root() -> str:
-    cached = _LF_SESSION_CACHE.get("_root")
-    if cached:
-        return cached
-    candidates = []
-    acpx = (os.environ.get("ACPX_WORKSPACES") or "").strip()
-    if acpx:
-        acpx = acpx.split(os.pathsep)[0].strip()
-        if acpx:
-            candidates.append(os.path.join(acpx, "linkfox"))
-    candidates.append(os.path.join(os.getcwd(), "linkfox"))
-    candidates.append(os.path.join(os.path.expanduser("~"), "linkfox"))
-    candidates.append(os.path.join(_lf_tempfile.gettempdir(), "linkfox"))
-    for root in candidates:
-        try:
-            os.makedirs(root, exist_ok=True)
-            probe = os.path.join(root, ".write_probe")
-            with open(probe, "w", encoding="utf-8") as f:
-                f.write("")
-            os.remove(probe)
-        except OSError:
-            continue
-        root = os.path.abspath(root)
-        _LF_SESSION_CACHE["_root"] = root
+    root = os.path.abspath(os.path.join(os.getcwd(), 'linkfox'))
+    if _LF_SESSION_CACHE.get('_root') == root:
         return root
-    fallback = os.path.abspath(candidates[-1])
-    _LF_SESSION_CACHE["_root"] = fallback
-    return fallback
+    os.makedirs(root, exist_ok=True)
+    probe = os.path.join(root, '.write_probe-' + secrets.token_hex(6))
+    with open(probe, 'w', encoding='utf-8'):
+        pass
+    os.remove(probe)
+    _LF_SESSION_CACHE['_root'] = root
+    return root
 
 
 def _lf_iso(ts: float) -> str:

@@ -6,6 +6,8 @@ import json
 import sys
 from typing import Any, List, Optional
 
+import call_api as api
+
 from _first_mile_endpoints import LIST_QUERY_FIELDS, FIRST_MILE_ENDPOINTS, RESERVED_PARAM_KEYS
 from _shopee_first_mile_common import (
     developer_proxy_call,
@@ -107,6 +109,11 @@ def run_first_mile_api(api_name: str, params: dict, caller: Optional[str] = None
         query_string = _build_get_query(params)
     else:
         body = _build_post_body(params, spec)
+        try:
+            json.loads(body)
+        except (ValueError, TypeError):
+            print("请求体必须是合法 JSON", file=sys.stderr)
+            sys.exit(1)
 
     shop_id = params.get("shopId")
     merchant_id = params.get("merchantId")
@@ -114,7 +121,24 @@ def run_first_mile_api(api_name: str, params: dict, caller: Optional[str] = None
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    out: dict = {}
+
+    def transform(status, proxy):
+        out.update({
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": status,
+        })
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = json.loads(body) if body else None
+        if status is not None and 200 <= status < 300 and api._is_cacheable(200, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    developer_proxy_call(
         path,
         method,
         shop_id=shop_id,
@@ -122,17 +146,6 @@ def run_first_mile_api(api_name: str, params: dict, caller: Optional[str] = None
         query_string=query_string or None,
         body=body,
         content_type=content_type,
+        result_transform=transform,
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
     return out

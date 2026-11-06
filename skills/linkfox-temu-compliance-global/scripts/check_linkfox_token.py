@@ -31,14 +31,30 @@ def main():
     }
     result = call_temu_api(PROXY_URL, probe_body, timeout=150, linkfox_params=params)
 
-    if is_linkfox_auth_error(result):
+    http_status = result.get("_http_status")
+    if http_status == 401 or is_linkfox_auth_error(result):
         print(
             json.dumps(
                 {
                     "ok": False,
                     "reason": "linkfox_token_invalid",
                     "message": result.get("message") or result,
+                    "response": dict(result),
                     "hint": "Set LINKFOXAGENT_API_KEY or pass token in JSON.",
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        sys.exit(1)
+
+    if http_status is None or not 200 <= http_status < 300:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "reason": "gateway_request_failed",
+                    "response": dict(result),
                 },
                 indent=2,
                 ensure_ascii=False,
@@ -52,7 +68,7 @@ def main():
                 "ok": True,
                 "linkfoxToken": masked,
                 "gatewayReachable": True,
-                "note": "LinkFox user Token accepted by gateway.",
+                "note": "Probe completed without a recognized authentication error; business permissions and Temu token were not verified.",
             },
             indent=2,
             ensure_ascii=False,

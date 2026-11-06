@@ -4,6 +4,8 @@ Partner Platform for US：**买家取消** + **卖家取消**（`menu_code` / `s
 
 本 skill 经 `temu_us_proxy`（`POST /temu/proxy`）调用 **6** 个 `type`，默认 **`site=us`**、**`tokenPurpose=order-shipping`**。
 
+另提供 1 个辅助接口 `POST /temu/fileDownload`，定义见 [api.md](./api.md)。本目录仅列取消订单操作；包含辅助接口时合计 7 个接口，不含 Feedback。
+
 ## 已接入（6）
 
 | sub_menu_code | type | 脚本 | 参数文档 |

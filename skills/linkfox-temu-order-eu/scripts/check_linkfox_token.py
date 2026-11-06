@@ -11,7 +11,10 @@ Usage:
 import json
 import sys
 
-from _temu_common import PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error, load_json_arg
+from _temu_common import (
+    PROXY_URL, call_temu_api, get_linkfox_token, is_gateway_response_normal,
+    is_linkfox_auth_error, load_json_arg,
+)
 
 def main():
     params = load_json_arg(sys.argv) if len(sys.argv) >= 2 else {}
@@ -39,6 +42,24 @@ def main():
                     "reason": "linkfox_token_invalid",
                     "message": result.get("message") or result,
                     "hint": "Set LINKFOXAGENT_API_KEY or pass token in JSON.",
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        sys.exit(1)
+
+    # 仅正常网关响应可用作探测证据；连接失败、用量错误及其他错误均不能证明令牌有效。
+    if not is_gateway_response_normal(result) or str(result.get("code", "")).strip() == "1003":
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "reason": "gateway_probe_failed",
+                    "transportHttpStatus": result.get("transportHttpStatus"),
+                    "message": result.get("errmsg") or result.get("error") or result.get("message") or result,
+                    "gatewayReachable": result.get("transportHttpStatus") is not None,
+                    "hint": "按 references/api.md 的响应码规则处理；认证或用量错误参考 references/onboarding.md。",
                 },
                 indent=2,
                 ensure_ascii=False,

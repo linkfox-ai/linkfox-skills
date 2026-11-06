@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Amazon Ads Authorization URL Generator - LinkFox Skill
-Calls the /amazonAds/authorizeUrl endpoint to generate authorization URL
+Amazon Ads 授权链接生成脚本。
+通过公共调用器生成授权链接，手动模式保留 URL 导出行为。
 
-Usage:
+用法：
   python authorize_url.py '{"region": "NA", "accountName": "My Ads Account"}'
 """
 
@@ -14,83 +14,35 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
 
-from _lf_output import emit_result, lf_inline_flag
+from _ads_auth_common import request, cli_params
 
 # 生产默认走 tool-gateway.linkfox.com；开发/测试期可 export AMAZON_ADS_BASE_URL=<url> 覆盖
 API_BASE_URL = (os.environ.get("LINKFOX_TOOL_GATEWAY") or os.environ.get("AMAZON_ADS_BASE_URL") or "https://tool-gateway.linkfox.com").rstrip("/")
-API_ENDPOINT = f"{API_BASE_URL}/amazonAds/authorizeUrl"
-
-
-def get_api_key():
-    """
-获取配置在环境变量的API Key。
-如果获取不到，按 SKILL.md 的 **## 解决认证和算力问题** 处理。
-"""
-    key = os.environ.get("LINKFOX_AGENT_API_KEY") or os.environ.get("LINKFOXAGENT_API_KEY")
-    if not key:
-        print(
-            "API Key 未配置",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return key
 
 
 def call_api(params: dict) -> dict:
-    api_key = get_api_key()
-    data = json.dumps(params).encode("utf-8")
-    req = Request(
-        API_ENDPOINT,
-        data=data,
-        headers={
-            "Authorization": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "LinkFox-Skill/2.0",
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=150) as response:
-            result = json.loads(response.read().decode("utf-8"))
-            error_code = str(result.get("errcode", ""))
-            if error_code.isdigit() and int(error_code) not in (0, 200):
-                raise SystemExit(json.dumps(result, ensure_ascii=False))
-            return result
-    except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
-    except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+    """自动授权兼容入口：仅返回内存中的 JSON，不写 URL 文件或剪贴板。"""
+    return request("/amazonAds/authorizeUrl", params)
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: authorize_url.py '<JSON parameters>'", file=sys.stderr)
-        print(
-            'Example: authorize_url.py \'{"region": "NA", "accountName": "My Ads Account"}\'',
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
     try:
-        params = json.loads(sys.argv[1])
-    except json.JSONDecodeError as e:
-        print(f"Invalid parameter format: {e}", file=sys.stderr)
+        params = cli_params(sys.argv[1:], required=True)
+    except ValueError as e:
+        print(f"参数格式错误：{e}", file=sys.stderr)
         sys.exit(1)
 
     if "region" not in params or not params.get("region"):
-        print("Note: 'region' not provided, defaulting to 'NA' (see SKILL.md)", file=sys.stderr)
+        print("未提供 region，默认使用 NA（详见 references/api.md）", file=sys.stderr)
         params["region"] = "NA"
     if params["region"] not in ("NA", "EU", "FE"):
-        print(f"Error: 'region' must be one of NA / EU / FE, got {params['region']!r}", file=sys.stderr)
+        print(f"region 必须为 NA / EU / FE，收到 {params['region']!r}", file=sys.stderr)
         sys.exit(1)
 
     if "accountName" not in params:
         print(
-            "Error: 'accountName' is required — 授权前必须填写可识别的账号名，"
+            "缺少 accountName：授权前必须填写可识别的账号名，"
             "用于在已授权列表中区分。",
             file=sys.stderr,
         )
@@ -98,14 +50,16 @@ def main():
     account_name = params["accountName"]
     if not isinstance(account_name, str) or not account_name.strip():
         print(
-            "Error: 'accountName' must be a non-empty string",
+            "accountName 必须为非空字符串",
             file=sys.stderr,
         )
         sys.exit(1)
     params["accountName"] = account_name.strip()
 
-    result = call_api(params)
-    emit_result(result, lf_inline_flag())
+    result = request("/amazonAds/authorizeUrl", params, persist=True,
+                     inline="--inline" in sys.argv[1:])
+    if result.get("error"):
+        sys.exit(1)
 
     if "authorizeUrl" in result:
         url = result["authorizeUrl"]
@@ -115,7 +69,7 @@ def main():
         file_path = _save_url_to_file(url)
         clipboard_ok = _copy_to_clipboard(url)
 
-        print("\n✓ Authorization URL generated.", file=sys.stderr)
+        print("\n✓ 已生成授权链接。", file=sys.stderr)
         print(f"账号名: {params['accountName']}", file=sys.stderr)
         if clipboard_ok:
             print("✓ 已写入剪贴板 —— 浏览器地址栏直接 Ctrl+V / Cmd+V", file=sys.stderr)
@@ -160,7 +114,7 @@ def _save_url_to_file(url: str):
 
 
 def _copy_to_clipboard(url: str) -> bool:
-    """Best-effort 跨平台写系统剪贴板；失败静默降级。"""
+    """尽力跨平台写入系统剪贴板；失败时静默降级。"""
     plat = platform.system()
     try:
         if plat == "Windows":

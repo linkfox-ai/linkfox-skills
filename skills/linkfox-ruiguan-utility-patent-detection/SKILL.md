@@ -1,145 +1,110 @@
 ---
 name: linkfox-ruiguan-utility-patent-detection
-description: 基于产品信息检测和搜索相似的实用新型/发明专利。当用户提到实用新型专利检测、专利侵权风险、专利相似度搜索、专利排查、发明专利查询、专利风险评估、TRO（临时限制令）风险分析、utility patent, invention patent detection, patent infringement risk, patent search, TRO risk, Ruiguan时触发此技能。即使用户未明确说"实用新型专利"，只要其需求涉及在目标市场销售前检查产品是否可能侵犯已有的实用新型/发明专利，也应触发此技能。
+description: 基于产品标题、功能描述和目标市场检索相似的实用新型/发明专利，帮助跨境电商卖家在上架前排查专利相似性、有效状态和 TRO 维权风险。适用于产品专利初筛、同类发明检索和上市前专利风险评估；不适用于外观专利、商标、版权、产品认证、合同审查或确定性的侵权法律判断。
 ---
 
-# Ruiguan Utility Patent Detection
+# 睿观实用新型/发明专利检测
 
-This skill guides you on how to search for similar utility (invention) patents based on a product's title, description, and target selling region. It helps cross-border e-commerce sellers identify potential patent infringement risks before listing products.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-**Utility patent** (also called invention patent) protects new and useful inventions or functional improvements. Unlike design patents that protect appearance, utility patents protect how a product works, its structure, or its composition. Infringing on a utility patent can lead to product removal, lawsuits, or TRO orders.
+根据产品的实际功能、结构和技术信息查找相似专利，识别需要进一步审查的有效专利及 TRO 维权线索。用户希望检查产品能否销售、是否存在发明专利风险或相似专利时使用，无需明确提及睿观。
 
-**Similarity score**: Each returned patent includes a `similarity` field (0 to 1). A higher value means the patent is more closely related to the queried product. Patents with high similarity scores deserve careful review.
+**场景速查**
 
-**TRO risk indicators**: Two boolean fields flag enforcement history:
-- `troCase` -- whether the patent has a history of TRO enforcement actions
-- `troHolder` -- whether the patent holder is known for initiating TRO cases
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 检查这个产品在美国的专利风险 | 上架前专利初筛。 |
+| 有没有类似的实用新型或发明专利 | 按产品功能和技术特征检索相似专利。 |
+| 这个产品能不能卖，会不会因专利被起诉 | 提供风险线索，说明需要专业审查。 |
+| 这个产品有没有 TRO 风险 | 关注专利和权利人的 TRO 维权标记。 |
+| 上市前做一次全面专利排查 | 使用更完整的产品资料开展较广范围检索。 |
 
-Patents flagged with either indicator require extra caution.
+## 前置条件
 
-**Patent validity**: The `patentValidity` field shows whether a patent is `Active` or `Invalid`. Only active patents pose infringement risk.
+取得产品标题、描述及目标销售市场。描述应覆盖关键功能、材料、工作机制、结构和技术属性；缺少决定检索方向的信息时先补齐。参数、支持范围与调用限制见 `references/api.md`。
 
-## Parameters
+## 专利排查流程
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| productTitle | string | Yes | Product title (max 1000 characters) |
-| productDescription | string | Yes | Product description (max 1000 characters) |
-| region | string | Yes | Target selling country/region code, comma-separated for multiple. Currently supports: US. Default: `US` |
-| topNumber | integer | Yes | Number of patent results to return. Range: 10--200. Default: `100` |
+1. 明确是快速初筛、较全面排查，还是重点查看 TRO 线索；根据真实产品资料组织标题和功能描述，按 `references/api.md` 确定市场与召回范围。
+2. 先检查同参数缓存与已有结果，结合算力消耗预估及接口参考中的累计调用规则确定本次查询范围，再执行检索。
+3. 从保存的响应中读取专利列表，按相似度排序，并区分有效状态和 TRO 标记，优先查看与产品功能、结构相近的专利。
+4. 用表格呈现结果，突出需要专业复核的条目。失败或空结果时解释原因，建议核对标题、描述和市场；后续调用遵守成本约束。
 
-### Parameter Guidelines
+## 执行方式
 
-1. **productTitle**: Use the product's actual listing title or a concise descriptive title. Be specific rather than generic -- "portable USB-C fast charger 65W" is better than "charger".
-2. **productDescription**: Include key features, materials, mechanisms, and technical attributes. The more detail provided, the more accurate the similarity matching.
-3. **region**: Currently only `US` is supported. Always set to `US` unless the user specifies otherwise.
-4. **topNumber**: Default is 100. Increase to 200 for a broader search when doing thorough patent clearance. Decrease to 10--20 for a quick preliminary scan.
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/ruiguan_utility_patent_detection.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次接口调用消耗 106 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 调用方式
+### 输出策略
 
-- **API 端点**：`POST /ruiguan/utilityPatentDetection`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/ruiguan_utility_patent_detection.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-utility-patent-detection-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-utility-patent-detection-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行规则
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+### 算力消耗预估
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+106 算力 / 次。累计调用限制见 `references/api.md` 的「使用限制」。
 
-## Usage Examples
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**1. Basic patent risk check for a product**
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-User: "Check if this silicone kitchen spatula has any patent risks in the US."
+### 解决认证和算力问题
 
-Build the request with a descriptive product title and description, region set to US, and a reasonable topNumber.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**2. Thorough patent clearance before launch**
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-User: "I'm about to launch a new wireless earbuds product. Do a comprehensive patent check."
+### 约束与建议
 
-Use topNumber=200 for maximum coverage. Include detailed product description covering Bluetooth version, charging case design, noise cancellation features, etc.
+- **理解保护对象**：实用新型/发明专利保护产品的工作原理、结构、组成或功能改进；外观专利侧重外观装饰。侵权可能导致下架、诉讼或 TRO（临时限制令）。
+- **区分相似与侵权**：相似度越高，越值得结合权利要求和产品技术特征审查；相似性不能直接证明侵权。客观呈现数据，不给出确定性法律结论，最终评估建议咨询专利律师。
+- **按相关性展示**：按相似度降序，用表格展示专利标题、相似度、有效状态、申请号、公开日、TRO 标记和预估到期日；有中英文标题时一并展示。
+- **突出重点条目**：重点标出相似度高于 0.7、有效状态为 Active 或具有 TRO 标记的专利，并分别说明触发原因，不将任何单项标记等同于侵权结论。
+- **解释有效状态**：明确区分 Active（有效）和 Invalid（无效），专利侵权风险审查重点关注有效专利。
+- **解释 TRO 线索**：专利曾有 TRO 维权史，或权利人有发起 TRO 案件的记录时，醒目提示较高的维权风险；两类标记分别展示。
+- **控制展示数量**：结果较多时，先展示最相关的 10–20 条并概括其余结果，保留完整响应供后续查阅。
 
-**3. Quick scan for TRO risk**
+## 使用示例
 
-User: "Any TRO risks for selling LED strip lights in the US?"
+### 产品专利初筛
 
-After retrieving results, filter and highlight patents where `troCase` or `troHolder` is true.
+用户：帮我检查这款硅胶厨房刮刀在美国的专利风险。
 
-**4. Investigating a specific product category**
+根据具体产品标题、材料、结构和用途准备资料，选择常规检索范围；展示相似专利及需要进一步复核的条目。
 
-User: "Check patent risks for a portable blender with USB charging."
+### 上市前较全面排查
 
-Provide both the product title and a detailed description emphasizing the functional aspects (motor type, blade design, charging mechanism, capacity).
+用户：我要推出一款无线耳机，做一次全面专利排查。
 
-## Display Rules
+收集蓝牙版本、充电盒、降噪机制等技术信息，按接口参考选择较广召回范围并说明消耗，返回结果仍属于相似性检索。
 
-1. **Present data in tables**: Show results in a clear, structured table format. Key columns to display: patent title, similarity score, patent validity, application number, publication date, TRO flags, and estimated expiration date.
-2. **Sort by relevance**: Display patents sorted by similarity score in descending order (highest similarity first).
-3. **Highlight high-risk patents**: Call attention to patents with similarity above 0.7, active validity status, and/or TRO flags.
-4. **TRO warnings**: If any returned patents have `troCase=true` or `troHolder=true`, display a prominent warning about elevated enforcement risk.
-5. **Validity filtering**: When presenting results, clearly distinguish between Active and Invalid patents. Emphasize that only Active patents require attention.
-6. **Volume notice**: When results are large, show the most relevant patents (e.g., top 10--20 by similarity) and summarize the rest.
-7. **Error handling**: When a query fails, explain the reason and suggest adjusting the product title or description for better results.
-8. **Bilingual titles**: When available, show both the English title (`title`) and Chinese title (`titleCn`) to aid understanding.
-9. **No legal advice**: Present patent data factually. Do not provide legal conclusions about infringement -- recommend consulting a patent attorney for definitive assessments.
-## Important Limitations
+### 重点查看 TRO 风险
 
-- **Region support**: Currently only US patents are searchable
-- **Result cap**: Maximum 200 patents per query
-- **Input length**: Both productTitle and productDescription are limited to 1000 characters each
-- **Not legal advice**: Results indicate similarity, not confirmed infringement. Professional patent review is always recommended.
+用户：在美国卖 LED 灯带有没有 TRO 风险？
 
-## User Expression & Scenario Quick Reference
+检索后突出专利和权利人的 TRO 标记，说明维权线索与有效状态，不因没有标记就承诺安全。
 
-**Applicable** -- Patent-related queries for product risk assessment:
+### 按技术特征检索同类专利
 
-| User Says | Scenario |
-|-----------|----------|
-| "Check patent risk for my product" | Basic patent detection |
-| "Any utility/invention patent issues" | Utility patent search |
-| "Is this product safe to sell (patent-wise)" | Patent clearance check |
-| "TRO risk for this product" | TRO enforcement risk |
-| "Similar patents for this product" | Patent similarity search |
-| "Patent infringement check" | Pre-launch risk assessment |
-| "Will I get sued for selling this" | Patent risk evaluation |
+用户：查一下 USB 充电便携榨汁机的专利风险。
 
-**Not applicable** -- Needs beyond utility patent detection:
+结合电机类型、刀片结构、充电机制和容量等实际资料检索，按相似度排序并展示中英文专利标题。
 
-- Design patent searches (appearance/ornamental design)
-- Trademark or brand infringement checks
-- Copyright issues
-- Product compliance or certification (FCC, CE, etc.)
-- General legal advice or contract review
+## 使用反馈
 
-## 算力消耗规则
-
-消耗 106 算力。
-
-> **重要**：本技能消耗大量算力，如果调用次数超过5次，必须用`AskUserQuestion` 和用户进行二次确认，要明确告知用户已消耗算力和继续调用的话预计消耗的算力，让用户自行决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

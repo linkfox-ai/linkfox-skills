@@ -54,4 +54,4 @@ Partner 文档入口：
 
 ## Token 说明
 
-建议使用 **`tokenPurpose=order-shipping`**。详见 `references/access-token.md`。
+建议使用 **`tokenPurpose=order-shipping`**。详见 [Token 授权说明](access-token.md)。

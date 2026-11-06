@@ -18,7 +18,7 @@
 | `boxId` | `listShipmentBoxes` | v0 `getLabels.packageLabelsToPrint`（wire: `PackageLabelsToPrint`）需要指定箱标签时使用 |
 | `amazonReferenceId` | placement 确认后的 `getShipment` | 卡车/FC appointment 引用值；生成 self-ship slots 前要确认存在 |
 
-## v2024 转 v0 labels/BOL
+## v2024 转 v0 标签与提单
 
 ```text
 confirmPlacementOption
@@ -32,7 +32,7 @@ v0 OpenAPI 使用路径名 `{shipmentId}`，但在 v2024 创建的 workflow 中�
 
 仅当用户明确操作原生 v0 shipment 时，才允许把 legacy `shipmentId` 作为兼容输入。如果同时传入两个不同的值，应拒绝而不是自动选择。
 
-## option 有效性
+## 方案有效性
 
 - 新一次 generate 可以使旧 option/preview/slot ID 失效。
 - 必须在同一 `inboundPlanId`、`shipmentId` 和生成批次中使用 ID。

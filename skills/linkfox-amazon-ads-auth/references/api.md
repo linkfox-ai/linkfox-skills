@@ -1,194 +1,246 @@
-# linkfox-amazon-ads-auth — 参数与字段参考
+# Amazon Ads 授权与广告账户管理 接口说明
 
-Amazon Ads 授权、已授权账号列表、profile 管理与授权连接解绑。
+## 公共规则
 
-下游实体查询见 `linkfox-amazon-ads-manager`；SP 报告见 `linkfox-amazon-ads-report`。
+### 调用规范
 
-## 通用约定
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-- **Base URL**：`${LINKFOX_TOOL_GATEWAY}`
-- **Method**：POST，`Content-Type: application/json`
-- **Auth**：Header `Authorization: <api_key>`（读环境变量 `LINKFOX_AGENT_API_KEY`（优先）或 `LINKFOXAGENT_API_KEY`；如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
+### 响应码基本规则
 
-- **解绑脚本**：`LinkFox-Skill/2.0`；透传 `SESSION_ID` / `MESSAGE_ID` / `MODE_ID` / `APP_NAME`，超时 150s，不缓存、不自动重试。
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。授权接口也兼容旧版成功码整数 `0` 和字符串 `"0"`。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 不符合上述取值。布尔值 `false` 为无效业务码。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+### 网关错误响应
 
-## 关键 ID 关系
+成功对象与错误对象分别处理。错误模型仅含errcode（integer）与errmsg（string）；脚本记录的传输状态、计费头和本地错误见脚本参考。
 
-```
-  一次 OAuth 授权
-        ▼
-  authRecordId (1 条 OAuth 授权连接)
-        │
-        ├──► profileId A (US)    ─┐
-        ├──► profileId B (CA)    ├── 一次授权 → 多个 profile（每个 marketplace 一个）
-        └──► profileId C (MX)    ─┘
-```
+接口仅管理当前API Key对应成员的授权。OAuth回调由系统内部保存授权并同步profile；业务操作通过profileId选择授权，原始Amazon凭证由服务端管理。
 
-- `authRecordId`：授权记录 ID，一次 LWA OAuth 对应一个
-- `profileId`：业务操作单位；下游 skill 调用的核心参数
-- `accountInfoId`：广告主 entity 级标识，跨 marketplace 稳定
+## 接口：生成授权链接（authorizeUrl）
 
-## 接口
+### 调用规范
 
-### 1. 生成授权 URL — `/amazonAds/authorizeUrl`
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/amazonAds/authorizeUrl`
 
-**Request**：
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `region` | string | 是 | `NA` / `EU` / `FE` |
-| `accountName` | string | **是** | 非空字符串，用于在已授权列表识别 |
-
-**Response**：
-```json
-{"authorizeUrl": "https://sellercentral.amazon.com/ap/oa?...", "sourceType": "amazon_ads"}
-```
-
-授权完成后 OAuth 回调由系统内部处理（存 token + 同步 profile），不作为公开接口。
-
----
-
-### 2. 列已授权账号 — `/amazonAds/authorizedStores`
-
-**Request**：无（用当前用户上下文）
-
-**Response**：
-```json
-{
-  "total": 3,
-  "stores": [
-    {
-      "profileId": 1111111111,
-      "accountInfoId": "ENTITY1ABC",
-      "accountInfoName": "店铺 A",
-      "accountType": "seller",
-      "countryCode": "US",
-      "marketplaceStringId": "ATVPDKIKX0DER",
-      "region": "NA",
-      "authRecordId": 1001,
-      "accountName": "我的美国广告账号"
-    }
-  ]
-}
-```
-
-按 profileId 聚合（每个账号 × marketplace 一条）。
-`accountType` ∈ `seller` / `vendor` / `agency`。
-
----
-
-### 3. 列 profile — `/amazonAds/profiles`
-
-**Request**：
-| 参数 | 类型 | 必填 | 默认 | 说明 |
-|------|------|------|------|------|
-| `refresh` | boolean | 否 | false | true=穿透上游重新拉取并落库；false=读本地快照 |
-
-**Response**：
-```json
-{
-  "total": 3, "refreshed": false,
-  "profiles": [{
-    "profileId": 1111111111, "region": "NA", "countryCode": "US",
-    "currencyCode": "USD", "dailyBudget": "100.00",
-    "timezone": "America/Los_Angeles",
-    "accountInfoId": "ENTITY1ABC", "accountInfoType": "seller",
-    "accountInfoName": "店铺 A",
-    "marketplaceStringId": "ATVPDKIKX0DER",
-    "authRecordId": 1001
-  }]
-}
-```
-
-与 `authorizedStores` 区别：前者面向"选账号 × 站点"粗粒度；本接口含货币、时区、日预算等业务字段。
-
----
-
-### 4. 解绑广告连接 — `/amazonAds/cancelAuthorization`
-
-**Request**：
+### 请求参数
 
 | 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `authRecordId` | integer | 是 | 授权记录 ID，范围 1–9223372036854775807；不接受 profileId 替代 |
+|---|---|---|---|
+| region | string | 是 | NA / EU / FE。 |
+| accountName | string | 是 | 非空账户显示名，最长256字符，服务端去除首尾空白。 |
 
-后端兼容纯数字字符串；脚本要求 JSON 整数。
+CLI选项和本地输出见 [script-usage.md](script-usage.md)。
 
-**Response**：
+### 响应结构
 
-```json
-{
-  "success": true,
-  "authRecordId": 1001,
-  "removedBindings": 1,
-  "affectedProfileIds": [1111111111, 2222222222, 3333333333],
-  "localAuthorizationRevoked": false,
-  "amazonRevoked": false,
-  "message": "已解除当前用户的指定广告授权绑定；token 与其他用户绑定保留，未撤销 Amazon 授权"
-}
-```
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| authorizeUrl | string | 本次 OAuth URL，例如 https://sellercentral.amazon.com/ap/oa?...，必须完整保留。 |
+| sourceType | string | 来源类型，示例值为 amazon_ads。 |
 
-- 仅解除当前成员的整份连接（全部 profile），保留 token、profile 快照和其他成员绑定。
-- 未绑定或重复解绑仍返回 `success=true`、`removedBindings=0`、`affectedProfileIds=[]`；两个 revoked 字段固定为 `false`。
-- `affectedProfileIds` 表示被移除连接的范围；其他授权仍可能提供相同 profile 的访问。
-- 已发出的请求和未完成的授权回调不受影响，后者可能恢复绑定。Amazon 官方撤销需原授权人通过广告后台的第三方应用管理进入 Login with Amazon 移除应用。
+### 响应码规则
 
----
+#### 基础规则
 
-## 错误码
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
 
-| errcode | 含义 | 建议 |
-|---------|------|------|
-| 200 | 成功 | — |
-| 400 | 解绑参数格式错误 | 检查 authRecordId；整数溢出返回 1002 |
-| 402 | 计费/算力不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。 |
-| 1002 | 缺参数或认证失败 | 检查必填参数与 API Key |
-| 1003 | 上游 Amazon Ads 调用失败 | 稍后重试 |
-| 1004 | 授权记录不存在或不属于当前用户 | 核对 profileId / authRecordId |
-| 1005 | profileId 权限校验失败 | 核对 profileId 归属 |
+#### 业务规则
 
-错误响应：
-```json
-{"errcode": 1002, "errmsg": "缺少 accountName（账户显示名，必填非空）"}
-```
+OAuth 回调由系统处理，技能流程不手动调用。生成 URL 不证明授权成功；完成后以本次回调和只读授权记录核验。缺少账号名的错误示例：`{"errcode":1002,"errmsg":"缺少 accountName（账户显示名，必填非空）"}`。
 
----
+错误时保留errmsg并按实际状态处理；不要补造未返回的业务结果。收到450 / 453 / 454 / 459时按[广告账号保护与重试](ads-protection.md)执行。
 
-## curl 示例
+缺参数或身份异常返回1002；授权地址生成失败或配置异常返回1003。
+
+### curl 示例
 
 ```bash
-export KEY=$LINKFOXAGENT_API_KEY
-BASE=https://tool-gateway.linkfox.com
-
-# 1. 生成授权 URL
-curl -X POST $BASE/amazonAds/authorizeUrl -H "Authorization: $KEY" \
+curl -X POST https://tool-gateway.linkfox.com/amazonAds/authorizeUrl \
+  -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{"region":"NA","accountName":"我的美国广告账号"}'
-
-# 2. 列已授权
-curl -X POST $BASE/amazonAds/authorizedStores -H "Authorization: $KEY" \
-  -H "Content-Type: application/json" -d '{}'
-
-# 3. 列 profile（refresh=true 穿透刷新）
-curl -X POST $BASE/amazonAds/profiles -H "Authorization: $KEY" \
-  -H "Content-Type: application/json" -d '{"refresh":true}'
-
-# 4. 解绑广告连接
-curl -X POST $BASE/amazonAds/cancelAuthorization -H "Authorization: $KEY" \
-  -H "Content-Type: application/json" -d '{"authRecordId":1001}'
 ```
 
----
+## 接口：列已授权账号（authorizedStores）
 
-## Feedback API
+### 调用规范
 
-与上面的工具 API **base URL 不同**：
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/amazonAds/authorizedStores`
+
+### 请求参数
+
+无业务参数，发送{}；成员身份来自API Key。
+
+CLI选项和本地输出见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| total | integer | 已授权账号与站点条数，示例 3。 |
+| stores | array<object> | 按 profileId 聚合去重，每个账号 × marketplace 一条；不能据此判断完整授权关系。 |
+| stores[].profileId | integer（Long） | 下游广告业务操作使用的 profile 标识。 |
+| stores[].accountInfoId | string | 广告主 entity 标识，跨 marketplace 稳定。 |
+| stores[].accountInfoName | string | 广告账户名称，可能与紫鸟 storeName 不同。 |
+| stores[].accountType | string | seller / vendor / agency。 |
+| stores[].countryCode | string | 站点国家代码，例如 US。 |
+| stores[].marketplaceStringId | string | marketplace 标识，例如 ATVPDKIKX0DER。 |
+| stores[].region | string | NA / EU / FE。 |
+| stores[].authRecordId | integer（Long） | OAuth 授权记录 ID，一次授权对应一条连接；不是 profileId。 |
+| stores[].accountName | string | 发起授权时提供的账号显示名。 |
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+列表用于选择账号与站点；按 profileId 聚合的去重结果不能证明某份连接已被完全移除。旧记录不能作为本次 OAuth 成功证据。
+
+错误时保留errmsg并按实际状态处理；不要补造未返回的业务结果。收到450 / 453 / 454 / 459时按[广告账号保护与重试](ads-protection.md)执行。
+
+### curl 示例
 
 ```bash
-curl -X POST https://skill-api.linkfox.com/api/v1/public/feedback \
+curl -X POST https://tool-gateway.linkfox.com/amazonAds/authorizedStores \
+  -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"skillName":"linkfox-amazon-ads-auth","sentiment":"POSITIVE",
-       "category":"OTHER","content":"授权流程顺畅"}'
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{}'
 ```
 
-- `sentiment`: `POSITIVE` / `NEUTRAL` / `NEGATIVE`
-- `category`: `BUG` / `COMPLAINT` / `SUGGESTION` / `OTHER`
+## 接口：列广告 profile（profiles）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/amazonAds/profiles`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| refresh | boolean | 否 | 默认false读取DB快照；true时服务端尝试为当前成员绑定的授权重新同步profile。 |
+
+CLI选项和本地输出见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| total | integer | profile 条数，示例 3。 |
+| refreshed | boolean | true表示本次执行了刷新尝试；同步失败也可能返回true，不能作为刷新成功证据。 |
+| profiles | array<object> | 按绑定授权列出的profile快照；相同profile可能来自不同连接，不按profileId去重。 |
+| profiles[].profileId | integer（Long） | 广告业务 profile 标识，例如 1111111111。 |
+| profiles[].region | string | NA / EU / FE。 |
+| profiles[].countryCode | string | 国家代码，例如 US。 |
+| profiles[].currencyCode | string | 货币代码，例如 USD。 |
+| profiles[].dailyBudget | string | 日预算，示例 "100.00"，保留字符串类型。 |
+| profiles[].timezone | string | 时区，例如 America/Los_Angeles。 |
+| profiles[].accountInfoId | string | 广告主 entity 标识，跨 marketplace 稳定。 |
+| profiles[].accountInfoType | string | 广告账户类型，示例 seller。 |
+| profiles[].accountInfoName | string | 广告账户名称，可能不同于授权显示名。 |
+| profiles[].marketplaceStringId | string | marketplace 标识，例如 ATVPDKIKX0DER。 |
+| profiles[].authRecordId | integer（Long） | OAuth 连接标识；用于确定整份连接的解绑范围。 |
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+与 authorizedStores 相比，本接口用于连接范围和货币、时区、日预算等更细字段。解绑前读取快照，不使用 refresh=true；重新授权可能更新原记录，不能要求 profile 数量增加才能判成功。
+
+错误时保留errmsg并按实际状态处理；不要补造未返回的业务结果。收到450 / 453 / 454 / 459时按[广告账号保护与重试](ads-protection.md)执行。
+
+### curl 示例
+
+```bash
+curl -X POST https://tool-gateway.linkfox.com/amazonAds/profiles \
+  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{"refresh":true}'
+```
+
+## 接口：解绑广告连接（cancelAuthorization）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/amazonAds/cancelAuthorization`
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| authRecordId | string | 是 | 授权记录ID的正整数文本，匹配^[1-9][0-9]{0,18}$，数值不超过9223372036854775807；解绑整份授权连接。 |
+
+CLI选项和本地输出见 [script-usage.md](script-usage.md)。
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| success | boolean | 本地解绑业务结果；只有 true 才表示已解除或原本不存在。 |
+| authRecordId | integer（Long） | 本次解绑的授权记录 ID。 |
+| removedBindings | integer | 移除绑定数；未绑定或重复解绑为 0，成功示例为 1。 |
+| affectedProfileIds | array<integer（Long）> | 被移除连接覆盖的 profile 列表；未绑定或重复解绑为空数组。其他授权仍可能提供相同 profile 访问。 |
+| localAuthorizationRevoked | boolean | 固定 false；保留 token 与 profile 快照。 |
+| amazonRevoked | boolean | 固定 false；未撤销 Amazon 官方授权。 |
+| message | string | 结果说明，例如“已解除当前用户的指定广告授权绑定；token 与其他用户绑定保留，未撤销 Amazon 授权”。 |
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 仅解除 API Key 对应当前成员的整份连接及其全部 profile；共用成员身份的使用者都会受影响。保留 token、profile 快照与其他成员绑定。
+- 未绑定或重复解绑仍返回 success=true、removedBindings=0、affectedProfileIds=[]；两个 revoked 字段始终为 false。
+- 已发请求及未完成 OAuth 回调不受影响，后者可能恢复绑定。结果不确定先查询状态，不重放、不自动重新授权。
+- Amazon 官方撤销需原授权人在广告后台的第三方应用管理中进入 Login with Amazon 移除应用；本接口不执行该操作。
+
+错误时保留errmsg并按实际状态处理；不要补造未返回的业务结果。收到450 / 453 / 454 / 459时按[广告账号保护与重试](ads-protection.md)执行。
+
+### curl 示例
+
+```bash
+curl -X POST https://tool-gateway.linkfox.com/amazonAds/cancelAuthorization \
+  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{"authRecordId":"1001"}'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-amazon-ads-auth",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
+```

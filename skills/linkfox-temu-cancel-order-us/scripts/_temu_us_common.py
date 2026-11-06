@@ -3,16 +3,7 @@
 
 import json
 
-from _temu_common import (
-    emit_result,
-    lf_inline_flag,
-    FILE_DOWNLOAD_URL,
-    PROXY_URL,
-    call_temu_api,
-    load_json_arg,
-    parse_nested_body,
-    resolve_access_token,
-)
+from _temu_common import emit_result, lf_inline_flag, FILE_DOWNLOAD_URL, PROXY_URL, call_temu_api, parse_nested_body, resolve_access_token
 
 # Partner US 取消订单（买家+卖家）接口：默认美国站半托管 + 订单 token
 DEFAULT_SITE = "us"

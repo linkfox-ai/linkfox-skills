@@ -2,13 +2,13 @@
 
 > 本文件供 **`linkfox-temu-tax-eu`**（及同仓库其它 Temu EU skill）共用。Tax 接口默认 `site=eu`、`tokenPurpose=product-inventory`；若 Partner Tax 文档指定其它 token，以文档为准。
 
-Temu **没有** LinkFox 侧自动 OAuth；`accessToken` 须在 Temu 卖家后台「服务市场 → 授权管理」**手动复制**。与 `LINKFOXAGENT_API_KEY`（LinkFox 用户鉴权）是两套令牌（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）。
+Temu **没有** LinkFox 侧自动 OAuth；`accessToken` 须在 Temu 卖家后台「服务市场 → 授权管理」**手动复制**。与 `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY`（LinkFox 用户鉴权）是两套令牌（如未配置 按 SKILL.md 的 **执行规则 → 解决认证和算力问题** 处理）。
 
 ## 两种鉴权（勿混淆）
 
 | 令牌 | 用途 | 获取方式 |
 |------|------|----------|
-| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | `LINKFOXAGENT_API_KEY` 或请求 JSON 的 `token`；Header `Authorization` + `Token`（同 amazon-store-auth）（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理） |
+| **LinkFox 用户 Token** | 调用 `/temu/proxy`、`/temu/fileDownload` **必填** | JSON 的 `token` / `linkfoxToken` / `linkfox_token` 优先，其次 `LINKFOX_AGENT_API_KEY` / `LINKFOXAGENT_API_KEY`；Header `Authorization` + `Token` 同值（如未配置，按 SKILL.md 的 **执行规则 → 解决认证和算力问题** 处理） |
 | **Temu accessToken** | Temu 业务 API（经紫鸟转发） | Temu 卖家后台授权后复制 |
 
 ```bash
@@ -40,7 +40,7 @@ python scripts/check_linkfox_token.py
 3. **服务市场** → **授权管理**
 4. **获取授权** → 选择 **「Cyber-ERP酷鸟助手」**
 5. 全选授权 → 确认 → 复制 token
-6. 调用 API：`site=eu` / `global` / `eu`，`managementType=semi-managed`
+6. 调用 API：`site=us` / `global` / `eu`，`managementType=semi-managed`
 
 ## 3. 全托管店铺
 
@@ -62,7 +62,7 @@ python scripts/check_linkfox_token.py
 |------|------|-----------|
 | cn | 中国站 | openapi.kuajingmaihuo.com |
 | partner | Partner 网关 | openapi-b-partner.temu.com |
-| us | 欧洲站 | openapi-b-eu.temu.com |
+| us | 美国站 | 按 `site=us` 由网关选择；本技能税务操作使用 `eu`。 |
 | global | 全球区 | openapi-b-global.temu.com |
 | eu | 欧洲站 | openapi-b-eu.temu.com |
 
@@ -72,13 +72,13 @@ python scripts/check_linkfox_token.py
 
 ```bash
 # 查看授权步骤
-python scripts/temu_token_guide.py '{"shopType":"semi-managed","tokenPurpose":"product-inventory","site":"cn"}'
+python scripts/temu_token_guide.py '{"shopType":"semi-managed","tokenPurpose":"product-inventory","site":"eu"}'
 
 # 保存 token
 python scripts/save_temu_access_token.py '{
   "storeKey": "my-shop",
-  "label": "中国半托管",
-  "site": "cn",
+  "label": "欧洲半托管税务",
+  "site": "eu",
   "managementType": "semi-managed",
   "tokenPurpose": "product-inventory",
   "accessToken": "PASTE_TOKEN"
@@ -88,13 +88,13 @@ python scripts/save_temu_access_token.py '{
 python scripts/list_temu_access_tokens.py
 
 # 用 storeKey 调 API（无需每次粘贴 token）
-python scripts/temu_proxy.py '{
+python scripts/temu_eu_proxy.py '{
   "storeKey": "my-shop",
-  "site": "cn",
+  "site": "eu",
   "managementType": "semi-managed",
   "tokenPurpose": "product-inventory",
-  "type": "bg.goods.category.mapping",
-  "params": {"goodsName": "测试", "goodsNameEn": "Test"}
+  "type": "temu.pay.tax.invoice.info.query",
+  "params": {"request": {"parentOrderSnList": ["PO-123456789"]}}
 }'
 ```
 

@@ -16,10 +16,11 @@
 
 | 参数 | 说明 |
 |------|------|
-| `imageUrls` | 共享参数，见主 SKILL.md |
+| `imageUrls` | 共享参数，见 ../parameters.md |
 | `ratio` | 默认 `1:1` |
-| `resolution` | 默认 `2K` |
-| `provider` | 见主 SKILL.md |
+| `resolution` | 首轮未指定时用 `1K` |
+| `quality` | 首轮未指定时用 `low` |
+| `provider` | 见 ../parameters.md |
 
 > `point` / `imageDesc` / `brandGeneJson` / `language` / `salesRegion` / `platform` 等字段在本链路**均不参与**，即便上游传入也不会影响出图结果。
 
@@ -39,7 +40,7 @@
 
 ## 提示词正文（DictKey `agentProductWhiteBg`）
 
-> `scripts/build_imagegen_prompt.py --type WHITE_BG` 会用正则**从下方 ```text``` 代码块动态提取**该正文作为最终 prompt，因此本代码块**即运行时数据源**——运营更新直接改此处正文即自动生效，**不要改动 ```text``` 围栏标记**（脚本依赖它定位正文）。`entry_name=agentProductWhiteBg` 仅为来源标注（原后端 `ai_dict_def` 同名记录），便于运营对照同步。
+> `scripts/build_imagegen_prompt.py --type WHITE_BG` 会用正则**从下方 ```text``` 代码块动态提取**该正文作为最终 prompt，因此本代码块**即运行时数据源**——运营更新直接改此处正文即自动生效，**不要改动 ```text``` 围栏标记**（脚本依赖它定位正文）。`entry_name=agentProductWhiteBg` 仅为来源标注（后端 `ai_dict_def` 同名记录），便于运营对照同步。
 
 ```text
 ##Product Refinement White Background Image AI Visual Designer Instructions

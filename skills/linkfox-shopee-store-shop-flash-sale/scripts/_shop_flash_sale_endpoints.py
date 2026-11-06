@@ -1,10 +1,9 @@
-"""Shopee Shop Flash Sale module API registry (v2.shop_flash_sale.*)."""
+"""Shopee 店铺秒杀操作注册表（v2.shop_flash_sale.*）。"""
 
 from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-SHOPEE_DOC_MODULE = "123"
 
 class ShopFlashSaleEndpoint(TypedDict, total=False):
     path: str
@@ -19,67 +18,67 @@ SHOP_FLASH_SALE_ENDPOINTS: dict[str, ShopFlashSaleEndpoint] = {
         "path": "api/v2/shop_flash_sale/get_time_slot_id",
         "method": "GET",
         "response_key": "getTimeSlotId",
-        "notes": 'Get available flash sale time slot IDs',
+        "notes": '获取可用秒杀时段编号',
     },
     "create_shop_flash_sale": {
         "path": "api/v2/shop_flash_sale/create_shop_flash_sale",
         "method": "POST",
         "response_key": "createShopFlashSale",
-        "notes": 'Create shop flash sale event; pass full body',
+        "notes": '创建店铺秒杀活动；传入完整请求体',
     },
     "get_item_criteria": {
         "path": "api/v2/shop_flash_sale/get_item_criteria",
         "method": "GET",
         "response_key": "getItemCriteria",
-        "notes": 'Get item eligibility criteria for flash sale',
+        "notes": '查询商品参与秒杀的条件',
     },
     "add_shop_flash_sale_items": {
         "path": "api/v2/shop_flash_sale/add_shop_flash_sale_items",
         "method": "POST",
         "response_key": "addShopFlashSaleItems",
-        "notes": 'Add items to flash sale',
+        "notes": '添加秒杀商品',
     },
     "get_shop_flash_sale_list": {
         "path": "api/v2/shop_flash_sale/get_shop_flash_sale_list",
         "method": "GET",
         "response_key": "getShopFlashSaleList",
-        "notes": 'List shop flash sales; pagination/status filters',
+        "notes": '查询秒杀活动列表；分页与状态筛选',
     },
     "get_shop_flash_sale": {
         "path": "api/v2/shop_flash_sale/get_shop_flash_sale",
         "method": "GET",
         "response_key": "getShopFlashSale",
-        "notes": 'Flash sale detail by flash_sale_id',
+        "notes": '按 flash_sale_id 查询活动详情',
     },
     "get_shop_flash_sale_items": {
         "path": "api/v2/shop_flash_sale/get_shop_flash_sale_items",
         "method": "GET",
         "response_key": "getShopFlashSaleItems",
-        "notes": 'Items in flash sale',
+        "notes": '查询活动内商品',
     },
     "update_shop_flash_sale": {
         "path": "api/v2/shop_flash_sale/update_shop_flash_sale",
         "method": "POST",
         "response_key": "updateShopFlashSale",
-        "notes": 'Update flash sale settings',
+        "notes": '更新秒杀活动设置',
     },
     "update_shop_flash_sale_items": {
         "path": "api/v2/shop_flash_sale/update_shop_flash_sale_items",
         "method": "POST",
         "response_key": "updateShopFlashSaleItems",
-        "notes": 'Update flash sale item settings',
+        "notes": '更新秒杀商品设置',
     },
     "delete_shop_flash_sale": {
         "path": "api/v2/shop_flash_sale/delete_shop_flash_sale",
         "method": "POST",
         "response_key": "deleteShopFlashSale",
-        "notes": 'Delete flash sale',
+        "notes": '删除秒杀活动',
     },
     "delete_shop_flash_sale_items": {
         "path": "api/v2/shop_flash_sale/delete_shop_flash_sale_items",
         "method": "POST",
         "response_key": "deleteShopFlashSaleItems",
-        "notes": 'Remove items from flash sale',
+        "notes": '移除秒杀商品',
     },
 }
 
@@ -89,11 +88,6 @@ RESERVED_PARAM_KEYS = frozenset({
 
 LIST_QUERY_FIELDS = frozenset()
 
-def official_doc_url(api_name: str) -> str:
-    return (
-        f"https://open.shopee.com/documents/v2/v2.shop_flash_sale.{api_name}"
-        f"?module={SHOPEE_DOC_MODULE}&type=1"
-    )
 
 def list_api_names() -> list[str]:
     return sorted(SHOP_FLASH_SALE_ENDPOINTS.keys())

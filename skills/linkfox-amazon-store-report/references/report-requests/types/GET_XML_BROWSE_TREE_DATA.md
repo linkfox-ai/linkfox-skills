@@ -1,24 +1,28 @@
 # `GET_XML_BROWSE_TREE_DATA`
 
-> **分类**：4. Browse Tree Reports  
-> **说明**：Browse tree hierarchy (XML format)  
-> **可用范围**：Seller only
+> **分类**：4. 浏览树报告  
+> **说明**：浏览树层级（XML 格式）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Browse Tree Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-browse-tree#browse-tree-report)（章节：**Browse Tree Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [浏览树报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-browse-tree#browse-tree-report)（章节：**Browse Tree Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
-- **受限报告**：未在相邻 Note 中写明，但 **Role** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
-- **Role**：[Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
-- **Availability**：Sellers
-- **Requested/scheduled**：This report can be requested or scheduled.
-- **Report output type**：XML
+- **受限报告**：未在相邻 Note 中写明，但 **角色** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
+- **角色**：[Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing), [Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Inventory and Order Tracking](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#inventory-and-order-tracking), [Direct to Consumer Shipping (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#direct-to-consumer-shipping-restricted)
+- **可用范围**：卖家
+- **按需/计划**：本报告可按需请求或计划生成。
+- **输出格式**：XML
 - **Schema**：[BrowseTreeReport.xsd](https://images-na.ssl-images-amazon.com/images/G/01/mwsportal/doc/en_US/Reports/XSDs/BrowseTreeReport.xsd)
-- **要点**：Contains browse tree hierarchy information and node refinement information for the Amazon retail website in any marketplace. This report accepts the following reportOptions values: 📘Note:The seller must be registered in any marketplace that you specify using the MarketplaceId value. Also, your request must be sent to an endpoint that corresponds to the MarketplaceId that you specify. Otherwise, the service returns an error. 📘Note:If RootNodesOnly and BrowseNodeId are both included in the reportOptions parameter, RootNodesOnly takes precedence. 📘Note:Amazon recommends that you do not include the MarketplaceIds parameter with calls to the createReport operation that request the Browse Tree Report. If there is ever a conflict between a MarketplaceIds parameter value and the MarketplaceId value of the reportOptions parameter, the MarketplaceId value takes precedence.
-- **reportOptions（摘录）**：
-  - MarketplaceId – Specifies the marketplace from which you want browse tree information. If MarketplaceId is not included in the reportOptions parameter, the report contains browse tree information from the seller's default marketplace.
-  - RootNodesOnly - A string value that must be either true or false. When you set RootNodesOnly to true, the report contains only the root nodes from the marketplace that you specify using MarketplaceId (or from your default marketplace if you do not specify MarketplaceId). When you set RootNodesOnly to false, or if you do not include RootNodesOnly in the ReportOptions parameter, the value of BrowseNodeId determines the content of the report.
-  - BrowseNodeId – Specifies the top node of the browse tree hierarchy in the report. If BrowseNodeId is not included in the ReportOptions parameter, and if RootNodesOnly is false or is not included in the ReportOptions parameter, then the report contains the entire browse node hierarchy from the marketplace specified using MarketplaceId (or from the seller's default marketplace, if MarketplaceId is not specified). Note that if you include an invalid BrowseNodeId in your request, the service returns a report that contains no data.
+- **要点**：提供任意 Amazon 零售站点的浏览树层级和节点细化信息，接受下列 reportOptions。卖家必须已注册 MarketplaceId 指定站点，且请求发到对应区域端点，否则报错。RootNodesOnly 与 BrowseNodeId 同时存在时前者优先。Amazon 建议请求浏览树报告时不传 createReport 的 MarketplaceIds；如与 reportOptions 的 MarketplaceId 冲突，后者优先。
+
+#### reportOptions 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| MarketplaceId | string | 指定浏览树所属站点；reportOptions 未提供时使用卖家默认站点。 |
+| RootNodesOnly | string | 必须为 true 或 false。true 仅返回 MarketplaceId 指定站点（未指定时默认站点）的根节点；false 或未提供时由 BrowseNodeId 决定报告内容。 |
+| BrowseNodeId | string | 指定浏览树顶层节点；未提供且 RootNodesOnly 为 false 或未提供时，返回 MarketplaceId 指定站点（未指定时默认站点）的全部层级。无效 BrowseNodeId 返回空报告。 |
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-browse-tree#browse-tree-report>
 

@@ -1,87 +1,89 @@
 ---
 name: linkfox-jiimore-product-discovery
-description: 基于极目数据的亚马逊商品发掘与潜力爆品挖掘。当用户提到产品挖掘、潜力爆品、高转化选品、点击增长分析、市场增长机会、关键词选品、FBA利润筛选、细分市场商品发掘、卖家来源筛选、product mining, potential bestsellers, high-conversion product selection, market growth opportunities, Jiimore data, FBA profitability screening, keyword-based product selection时触发此技能。即使用户未明确提及"极目"，只要其需求涉及基于转化率、点击量和利润指标的亚马逊关键词驱动选品，也应触发此技能。
+description: 基于极目数据按关键词发掘亚马逊潜力商品，结合转化率、点击量与增长率、价格、评论、上架时间、毛利、FBA 费用、卖家来源和细分市场数量筛选与排序。适用于关键词选品、高转化或快速增长商品发现、新品机会核对及竞品对标；无需明确提及极目。不适用于 ABA 搜索词分析、广告管理、评论内容分析、Listing 优化、库存供应链管理或完整利润与定价策略报告。
 ---
 
-# Jiimore Product Discovery
+# 极目亚马逊商品发掘
 
-This skill guides you on how to discover and mine high-potential Amazon products using the Jiimore product discovery engine, helping Amazon sellers find potential bestsellers through keyword-based filtering with conversion, click growth, and profitability indicators.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Jiimore Product Discovery is a keyword-driven Amazon product mining tool. Given a search keyword, it returns a list of products matching specified performance criteria such as conversion rate, click growth rate, gross profit margin, pricing, reviews, and listing age. This makes it ideal for identifying emerging opportunities, validating product ideas, and competitive benchmarking.
+从关键词出发，按商品表现筛选候选，并返回可核对的商品数据。
+用户希望发现潜力爆品、高转化商品、点击增长机会，或比较利润、评论与卖家来源时，使用本技能。
 
-**Keyword is required**: Every query must include a `keyword`. The keyword should be translated into the language of the target marketplace (e.g., Japanese for JP, German for DE).
+**场景速查**
 
-**Rate values are decimals**: Conversion rates and growth rates are expressed as decimals between 0 and 1. For example, `0.1` means 10%, `0.25` means 25%. This is a common point of confusion when users specify percentages.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 找这个关键词下的热门商品 | 关键词驱动的商品发现。 |
+| 找高转化商品或潜力爆品 | 按转化表现筛选商品。 |
+| 找近期增长快的商品 | 结合点击量和点击增长表现筛选。 |
+| 看看有潜力的新品 | 结合上架时间和增长指标筛选。 |
+| 找毛利较高的商品 | 结合毛利与 FBA 费用筛选。 |
+| 找评论少、竞争可能较低的商品 | 列出低评论候选，保留可核对的指标。 |
+| 找中国卖家的商品 | 按卖家来源筛选。 |
+| 挖掘细分市场机会 | 结合细分市场数量和综合转化表现筛选。 |
 
-**Marketplace support**: Currently supports US (United States), JP (Japan), and DE (Germany). Default is **US**. Use US when the user doesn't specify a marketplace.
+## 前置条件
 
-## Parameter Guide
+**先确定检索目标**：明确用户要研究的关键词、目标站点和筛选重点。按 `references/api.md` 准备请求，避免以未指定的条件扩大检索范围。
 
-### Required
+## 商品发掘流程
 
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| keyword | Search keyword (must be translated to the target marketplace language) | wireless charger |
+1. 明确检索目标，未指定站点时沿用接口默认值，依据接口定义准备目标语言的关键词、筛选条件、排序和分页信息。
+2. 核对已有会话结果与本地缓存，复用同一参数组合的数据；需要新查询时遵守成本约束。
+3. 执行一次查询，先查看保存路径和摘要，再从完整响应中按需提取商品与指标。
+4. 按下方展示建议整理结果，说明查询范围、分页和缺失数据；失败或空结果时按接口定义解释原因，后续检索遵守成本约束。
 
-### Filtering Parameters
+## 执行方式
 
-| Parameter | Description | Value Format |
-|-----------|-------------|--------------|
-| priceMin / priceMax | Product price range | Number (e.g., 10.0, 50.0) |
-| totalReviewsMin / totalReviewsMax | Review count range | Integer (e.g., 0, 500) |
-| customerRatingMin / customerRatingMax | Customer rating range | Number (e.g., 4.0, 5.0) |
-| clickConversionRateMin / clickConversionRateMax | Click-to-purchase conversion rate | Decimal 0-1 (0.1 = 10%) |
-| clickConversionRateCompositeMin / clickConversionRateCompositeMax | Composite conversion rate | Decimal 0-1 (0.1 = 10%) |
-| clickCountT7Min / clickCountT7Max | Weekly click count range | Integer |
-| clickCountT30Min / clickCountT30Max | Monthly click count range | Integer |
-| clickCountGrowthT7Min / clickCountGrowthT7Max | Weekly click growth rate | Decimal 0-1 (0.1 = 10%) |
-| clickCountGrowthT30Min / clickCountGrowthT30Max | Monthly click growth rate | Decimal 0-1 (0.1 = 10%) |
-| salesVolumeT360Min / salesVolumeT360Max | Annual sales volume range | Integer |
-| grossProfitMarginMin / grossProfitMarginMax | Gross profit margin range | Number |
-| fbaFeeMin / fbaFeeMax | FBA fee range | Number |
-| launchDateMin / launchDateMax | Listing date range | String: yyyyMMdd000000 |
-| nicheCountMin / nicheCountMax | Niche market count range | Integer |
-| sellerCountry | Seller origin country code(s), comma-separated | CN,US |
-| countryCode | Target marketplace (US, JP, DE) | US |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/jiimore_product_discovery.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### Sorting & Pagination
+### 输出策略
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| sortField | Sort by field (see options below) | purchasedClicksT360 |
-| sortType | Sort direction: `desc` or `asc` | desc |
-| page | Page number | 1 |
-| pageSize | Results per page (10-100) | 50 |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-jiimore-product-discovery-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-**Available sort fields**: totalReviews, price, launchDate, clickCountT7, clickCountT30, clickCountT90, clickConversionRate, clickConversionRateComposite, customerRating, purchasedClicksT360, clickCountGrowthT7, clickCountGrowthT30, currentPrice, fbaFee, shippingFee, gpm
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-## 调用方式
+## 执行规则
 
-- **API 端点**：`POST /jiimore/productDiscovery`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/jiimore_product_discovery.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+### 算力消耗预估
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-jiimore-product-discovery-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+9 算力 / 次
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 解决认证和算力问题
 
-## Usage Examples
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**1. Find high-conversion wireless chargers in the US market**
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **理解数据用途**：这是关键词驱动的商品筛选工具，用转化、点击增长、利润、价格、评论和上架时间等指标发现候选、核对产品想法和对标竞品；筛选命中不等于商业成功。
+- **清晰展示数据**：用表格展示实际返回的标题、ASIN、价格、评论或评分、转化率、点击量与增长表现；缺失字段标明未返回，不推算补齐。
+- **比例展示**：将返回的比例转换为百分比，例如将 0.12 展示为 12%；请求中的数值格式见接口定义。
+- **主图展示**：有商品图片链接时，将主图与商品数据一起展示。
+- **说明分页情况**：展示总量、当前页和本次返回范围；有更多页时告知可以继续获取，后续查询遵守成本约束。
+- **说明语言选择**：向用户说明检索使用的关键词及目标语言，便于核对翻译是否符合产品含义；站点与语言约定见接口定义。
+- **客观呈现结果**：仅基于真实返回的数据说明商品表现，不附加主观商业推荐，不生成完整利润或定价策略。
+- **解释错误原因**：按 `references/api.md` 判断响应并解释错误，必要时建议用户调整条件；不得自动连续试探。
+
+## 使用示例
+
+### 美国站高转化无线充电器
+
 ```json
 {
   "keyword": "wireless charger",
@@ -92,7 +94,8 @@ Jiimore Product Discovery is a keyword-driven Amazon product mining tool. Given 
 }
 ```
 
-**2. Discover fast-growing new products (listed within the last 6 months, weekly click growth > 20%)**
+### 指定日期后上架且周点击增长较快的台灯
+
 ```json
 {
   "keyword": "desk lamp",
@@ -104,7 +107,8 @@ Jiimore Product Discovery is a keyword-driven Amazon product mining tool. Given 
 }
 ```
 
-**3. Find underpriced high-margin products with low competition (few reviews)**
+### 价格较低、毛利较高且评论较少的手机支架
+
 ```json
 {
   "keyword": "phone stand",
@@ -118,7 +122,8 @@ Jiimore Product Discovery is a keyword-driven Amazon product mining tool. Given 
 }
 ```
 
-**4. Mine products from Chinese sellers with strong monthly click growth in the German market**
+### 德国站中国卖家且月点击增长较快的手机壳
+
 ```json
 {
   "keyword": "Handyhuelle",
@@ -130,7 +135,8 @@ Jiimore Product Discovery is a keyword-driven Amazon product mining tool. Given 
 }
 ```
 
-**5. Find high-rated products with strong annual sales in the Japanese market**
+### 日本站评分较高且年销量较多的无线耳机
+
 ```json
 {
   "keyword": "ワイヤレスイヤホン",
@@ -142,7 +148,8 @@ Jiimore Product Discovery is a keyword-driven Amazon product mining tool. Given 
 }
 ```
 
-**6. Identify niche opportunities with high composite conversion and multiple niche markets**
+### 综合转化较高且覆盖多个细分市场的瑜伽垫
+
 ```json
 {
   "keyword": "yoga mat",
@@ -154,62 +161,10 @@ Jiimore Product Discovery is a keyword-driven Amazon product mining tool. Given 
 }
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data clearly**: Show query results in well-structured tables, including product title, ASIN, price, ratings, conversion rates, click counts, and growth rates
-2. **Rate formatting**: Always display rate values as percentages for readability (e.g., show 0.12 as 12%). Remind users that the API accepts decimals (0-1)
-3. **Image display**: When product image URLs are available, display the main product image alongside the data
-4. **Pagination awareness**: When results span multiple pages, inform the user of the total count and current page, and offer to fetch additional pages
-5. **Keyword translation reminder**: Remind users that keywords must be in the target marketplace language (English for US, Japanese for JP, German for DE)
-6. **Error handling**: When a query fails, explain the reason based on the response and suggest adjusting query criteria
-7. **No subjective advice**: Present factual product data without making subjective business recommendations
-## Important Limitations
-
-- **Keyword is mandatory**: Every query requires a keyword; browsing without a keyword is not supported
-- **Three marketplaces only**: Currently limited to US, JP, and DE
-- **Page size cap**: Maximum 100 results per page
-- **Rate values**: All rate/percentage parameters must be passed as decimals (0-1), not percentages
-- **Launch date format**: Must follow the `yyyyMMdd000000` format exactly (e.g., `20250101000000`)
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Product discovery and mining tasks:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Find hot products for keyword X" | Keyword-based product discovery |
-| "High conversion products", "best sellers" | High-conversion product screening |
-| "Fast growing products", "trending items" | Click growth-based discovery |
-| "New products with high potential" | New listing + growth filtering |
-| "Products with good margins", "profitable items" | Gross profit margin screening |
-| "Low competition products", "few reviews" | Low-review opportunity mining |
-| "Products from Chinese sellers" | Seller origin filtering |
-| "Niche market opportunities" | Niche count-based discovery |
-
-**Not applicable** -- Needs beyond product discovery:
-
-- ABA search term data and keyword analysis (use ABA Data Explorer)
-- Advertising / PPC campaign management
-- Product reviews and listing optimization
-- Inventory management and supply chain
-- Comprehensive market reports with profit/pricing strategy
-
-## 算力消耗规则
-
-消耗 9 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

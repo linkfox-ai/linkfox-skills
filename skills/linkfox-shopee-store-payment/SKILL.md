@@ -1,137 +1,136 @@
 ---
 name: linkfox-shopee-store-payment
-description: Shopee（虾皮）店铺支付结算（与 linkfox-shopee-store-auth 同系列），经 /shopee/developerProxy 转发 Shopee Open API Payment 模块全部 18 个接口：get_escrow_detail、get_escrow_list、get_payout_detail、get_wallet_transaction_list、get_income_overview、generate_income_report 等。当用户提到 Shopee 支付、结算、托管escrow、打款payout、钱包流水、收入报表、分期付款、get_escrow_detail 时触发。即使未明确提及"支付"，只要涉及已授权 Shopee 店铺的结算/打款/收入查询，也应触发。
+description: 查询已授权 Shopee（虾皮）店铺的订单托管与结算明细、打款汇总和明细、钱包流水、账单交易、收入概览与明细，生成和获取收入报告、收入对账单，并查询支付方式和管理店铺或商品分期。适用于店铺资金核对、收入报表和分期设置；不适用于店铺授权、订单查询处理或促销管理。
+---
+# Shopee 店铺支付与结算
+
+## 适用范围
+
+### 适用
+
+处理已授权 Shopee 店铺的 Payment 业务，包括资金查询、收入报表和分期设置。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+|---|---|
+| 看这笔订单结算了多少 | 查询订单托管与结算明细。 |
+| 查店铺打款和钱包流水 | 查询打款明细、汇总、钱包与账单交易。 |
+| 导出收入报告或对账单 | 异步生成，再获取对应结果。 |
+| 看店铺收入构成 | 查询收入概览与明细。 |
+| 查询或修改分期付款 | 读取或设置店铺、商品分期状态。 |
+| 看当前支持哪些支付方式 | 查询可用支付方式。 |
+
+### 边界
+
+店铺授权交由 `linkfox-shopee-store-auth`；订单查询与处理使用 `linkfox-shopee-store-orders`。Discount、Voucher 等促销业务不属于 Payment 模块。
+
+## 接口清单
+
+| 接口 | 端点 | 接口文档 | 对应脚本 | 说明 |
+|---|---|---|---|---|
+| 异步生成收入报告（`generate_income_report`） | POST `/shopee/developerProxy` → 上游 POST，path：`api/v2/payment/generate_income_report` | [references/apis/generate-income-report.md](references/apis/generate-income-report.md) | `scripts/generate_income_report.py` | 异步生成收入报告。 |
+| 异步生成收入对账单（`generate_income_statement`） | POST `/shopee/developerProxy` → 上游 POST，path：`api/v2/payment/generate_income_statement` | [references/apis/generate-income-statement.md](references/apis/generate-income-statement.md) | `scripts/generate_income_statement.py` | 异步生成收入对账单。 |
+| 查询账单交易信息（`get_billing_transaction_info`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_billing_transaction_info` | [references/apis/get-billing-transaction-info.md](references/apis/get-billing-transaction-info.md) | `scripts/get_billing_transaction_info.py` | 查询账单交易信息。 |
+| 查询订单托管与结算明细（`get_escrow_detail`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_escrow_detail` | [references/apis/get-escrow-detail.md](references/apis/get-escrow-detail.md) | `scripts/get_escrow_detail.py` | 查询订单托管与结算明细。 |
+| 批量查询托管明细（`get_escrow_detail_batch`） | POST `/shopee/developerProxy` → 上游 POST，path：`api/v2/payment/get_escrow_detail_batch` | [references/apis/get-escrow-detail-batch.md](references/apis/get-escrow-detail-batch.md) | `scripts/get_escrow_detail_batch.py` | 批量查询托管明细。 |
+| 按时间范围查询托管列表（`get_escrow_list`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_escrow_list` | [references/apis/get-escrow-list.md](references/apis/get-escrow-list.md) | `scripts/get_escrow_list.py` | 按时间范围查询托管列表。 |
+| 查询收入明细（`get_income_detail`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_income_detail` | [references/apis/get-income-detail.md](references/apis/get-income-detail.md) | `scripts/get_income_detail.py` | 查询收入明细。 |
+| 查询收入概览（`get_income_overview`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_income_overview` | [references/apis/get-income-overview.md](references/apis/get-income-overview.md) | `scripts/get_income_overview.py` | 查询收入概览。 |
+| 获取已生成的收入报告（`get_income_report`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_income_report` | [references/apis/get-income-report.md](references/apis/get-income-report.md) | `scripts/get_income_report.py` | 获取已生成的收入报告。 |
+| 获取已生成的收入对账单（`get_income_statement`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_income_statement` | [references/apis/get-income-statement.md](references/apis/get-income-statement.md) | `scripts/get_income_statement.py` | 获取已生成的收入对账单。 |
+| 查询商品分期状态（`get_item_installment_status`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_item_installment_status` | [references/apis/get-item-installment-status.md](references/apis/get-item-installment-status.md) | `scripts/get_item_installment_status.py` | 查询商品分期状态。 |
+| 查询可用支付方式（`get_payment_method_list`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_payment_method_list` | [references/apis/get-payment-method-list.md](references/apis/get-payment-method-list.md) | `scripts/get_payment_method_list.py` | 查询可用支付方式。 |
+| 查询打款明细（`get_payout_detail`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_payout_detail` | [references/apis/get-payout-detail.md](references/apis/get-payout-detail.md) | `scripts/get_payout_detail.py` | 查询打款明细。 |
+| 查询打款汇总（`get_payout_info`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_payout_info` | [references/apis/get-payout-info.md](references/apis/get-payout-info.md) | `scripts/get_payout_info.py` | 查询打款汇总。 |
+| 查询店铺分期状态（`get_shop_installment_status`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_shop_installment_status` | [references/apis/get-shop-installment-status.md](references/apis/get-shop-installment-status.md) | `scripts/get_shop_installment_status.py` | 查询店铺分期状态。 |
+| 分页或按时间查询钱包流水（`get_wallet_transaction_list`） | POST `/shopee/developerProxy` → 上游 GET，path：`api/v2/payment/get_wallet_transaction_list` | [references/apis/get-wallet-transaction-list.md](references/apis/get-wallet-transaction-list.md) | `scripts/get_wallet_transaction_list.py` | 分页或按时间查询钱包流水。 |
+| 设置商品分期状态（`set_item_installment_status`） | POST `/shopee/developerProxy` → 上游 POST，path：`api/v2/payment/set_item_installment_status` | [references/apis/set-item-installment-status.md](references/apis/set-item-installment-status.md) | `scripts/set_item_installment_status.py` | 设置商品分期状态。 |
+| 开启或关闭店铺分期（`set_shop_installment_status`） | POST `/shopee/developerProxy` → 上游 POST，path：`api/v2/payment/set_shop_installment_status` | [references/apis/set-shop-installment-status.md](references/apis/set-shop-installment-status.md) | `scripts/set_shop_installment_status.py` | 开启或关闭店铺分期。 |
+| 查询店铺授权状态（兼容辅助操作） | POST `/shopee/storeTokens` | [references/api.md](references/api.md#接口查询店铺授权状态兼容辅助操作) | `scripts/_shopee_payment_common.py`：`resolve_store_tokens` | 返回授权记录与状态；正常 Payment 流程由服务端解析令牌，无需另行调用。 |
+
+## 前置条件
+
+**先完成授权并确定店铺**：依赖 `linkfox-shopee-store-auth` 选店并完成授权。运行 `python scripts/check_auth_dependency.py` 检查依赖；缺失时先安装依赖，不在本技能内实现授权或令牌逻辑。依赖检测及兼容行为见 [references/api.md](references/api.md)。
+
+## 业务流程
+
+1. 检查认证技能依赖，确定用户要操作的已授权店铺及业务目标。
+2. 查询订单结算时，先由订单技能取得订单号，再查询托管明细；查询资金往来时，选择打款、钱包或账单交易操作。
+3. 收入报表先异步生成，再用对应获取操作读取结果；根据实际返回说明生成状态，不将生成请求完成视作文件已经可用。
+4. 修改分期时，核对用户指定的店铺或商品以及开关目标，再按已授权范围提交设置。
+5. 按接口参考先判断网关与上游状态，再读取解析结果；展示本次结果和可用的报表信息，保留错误原文供定位。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：同一会话、同一参数组合默认只调用一次；业务脚本不使用响应缓存，重复执行不会复用缓存结果。失败或空结果时，不得自动更换查询条件或连续试探；需要继续查询时，先说明原因与范围，按用户任务范围执行。
+
+### 输出策略
+
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-shopee-store-payment-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、实际存在的顶层标量字段（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+不消耗算力 （限时）。
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
+
+- **资金概念**：Escrow 是订单托管与结算；Payout 是打款；钱包流水用于核对资金变动；收入报告与对账单采用异步生成、随后获取的流程。
+- **转发链路**：店铺选择后由服务端解析令牌，经 `developerProxy` → 紫鸟 `shopee-proxy` → Shopee API。正常流程无需在本地获取令牌。
+- **清晰展示数据**：注明店铺、查询范围和返回的币种；按实际数据展示结算、打款、钱包或收入信息，不补造缺失金额、报表链接或分期状态。
+- **区分读取与设置**：分期设置会改变店铺或商品配置；生成报表是异步任务，结果未就绪时说明实际状态，后续调用遵守调用约束。
+- **脚本兼容行为**：各业务入口均不使用响应缓存；具体参数映射、CLI、输出及依赖约定见 [references/api.md](references/api.md#运行约定)。
+- **官方参考**：各操作文档保留 Shopee Payment 官方文档链接；未在接口参考中列明的上游字段以对应官方文档和实际响应为准，不推断必填、默认值、枚举或批量上限。
+
+## 使用示例
+
+### 查询订单结算
+
+用户：查这笔订单的结算明细。
+
+确认店铺，从订单技能获取订单号，再查询托管明细，解释返回的结算数据。
+
+### 查询打款与钱包
+
+用户：核对这个时间段的打款和钱包流水。
+
+选择打款明细、打款汇总和钱包流水操作，按用户指定范围查询并展示资金记录。
+
+### 获取收入报告
+
+用户：生成店铺收入报告。
+
+提交生成任务，再按实际返回和用户任务范围获取报告，展示生成状态及可用结果。
+
+### 管理分期
+
+用户：查看并调整指定店铺或商品的分期状态。
+
+核对目标，按需查询当前状态，再按用户指定的设置提交并说明返回结果。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
 ---
 
-# Shopee 店铺 Payment
-
-Shopee Open Platform **Payment 模块**（18 个 API）。**依赖 `linkfox-shopee-store-auth`** 选店；经 **`POST /shopee/developerProxy`** 传入 `shopId`（或 `merchantId`），由服务端解析 token 转发（`path` 须 `api/v2/payment/...`）。
-
-## 调用方式
-
-- **API 端点**：`POST /shopee/developerProxy`（不同操作通过请求体区分；完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文脚本一览）
-- **成本约束**：本工具会消耗算力；失败/空结果不得自动换关键词、翻页或连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/<skill-name>-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## 官方参考
-
-Payment 模块索引：[v2.payment.get_escrow_detail](https://open.shopee.com/documents/v2/v2.payment.get_escrow_detail?module=97&type=1)
-
----
-
-## Prerequisites（必须先读）
-
-1. 运行 `python scripts/check_auth_dependency.py`；exit code **42** → 先安装 **`linkfox-shopee-store-auth`** 并授权店铺。
-2. **不要**在本 skill 内实现授权/令牌逻辑。
-
----
-
-## Core Concepts
-
-- **转发链路**：`developerProxy`（`shopId`/`merchantId` 选店，服务端注入 token）→ 紫鸟 `shopee-proxy` → Shopee API
-- **Escrow**：订单托管/结算明细 → `get_escrow_detail`（需 `order_sn`）
-- **Payout**：打款 → `get_payout_detail`、`get_payout_info`
-- **钱包**：`get_wallet_transaction_list`
-- **收入报表**：`generate_income_*` 异步生成 → `get_income_*` 获取结果
-- **订单查询** → `linkfox-shopee-store-orders`；本 skill 负责**资金/结算**
-
-## 可用脚本（Payment 模块 18 个 API）
-
-| 分组 | 脚本 |
-|------|------|
-| 托管/结算 | `get_escrow_detail.py`、`get_escrow_list.py`、`get_escrow_detail_batch.py` |
-| 打款/钱包 | `get_payout_detail.py`、`get_payout_info.py`、`get_wallet_transaction_list.py`、`get_billing_transaction_info.py` |
-| 分期 | `get_shop_installment_status.py`、`set_shop_installment_status.py`、`get_item_installment_status.py`、`set_item_installment_status.py` |
-| 收入报表 | `generate_income_statement.py`、`get_income_statement.py`、`generate_income_report.py`、`get_income_report.py`、`get_income_overview.py`、`get_income_detail.py` |
-| 其他 | `get_payment_method_list.py` |
-| 通用入口 | `payment_api.py`（JSON 含 `api` 字段） |
-
-共享：`_shopee_payment_common.py`、`_payment_endpoints.py`、`_payment_api_runner.py`。
-
-## 接口说明（按 API）
-
-入参与响应细节放在 `references/apis/`，SKILL 只保留索引。
-
-| API | 说明文档 |
-|-----|----------|
-| `generate_income_report` | [references/apis/generate-income-report.md](./references/apis/generate-income-report.md) |
-| `generate_income_statement` | [references/apis/generate-income-statement.md](./references/apis/generate-income-statement.md) |
-| `get_billing_transaction_info` | [references/apis/get-billing-transaction-info.md](./references/apis/get-billing-transaction-info.md) |
-| `get_escrow_detail` | [references/apis/get-escrow-detail.md](./references/apis/get-escrow-detail.md) |
-| `get_escrow_detail_batch` | [references/apis/get-escrow-detail-batch.md](./references/apis/get-escrow-detail-batch.md) |
-| `get_escrow_list` | [references/apis/get-escrow-list.md](./references/apis/get-escrow-list.md) |
-| `get_income_detail` | [references/apis/get-income-detail.md](./references/apis/get-income-detail.md) |
-| `get_income_overview` | [references/apis/get-income-overview.md](./references/apis/get-income-overview.md) |
-| `get_income_report` | [references/apis/get-income-report.md](./references/apis/get-income-report.md) |
-| `get_income_statement` | [references/apis/get-income-statement.md](./references/apis/get-income-statement.md) |
-| `get_item_installment_status` | [references/apis/get-item-installment-status.md](./references/apis/get-item-installment-status.md) |
-| `get_payment_method_list` | [references/apis/get-payment-method-list.md](./references/apis/get-payment-method-list.md) |
-| `get_payout_detail` | [references/apis/get-payout-detail.md](./references/apis/get-payout-detail.md) |
-| `get_payout_info` | [references/apis/get-payout-info.md](./references/apis/get-payout-info.md) |
-| `get_shop_installment_status` | [references/apis/get-shop-installment-status.md](./references/apis/get-shop-installment-status.md) |
-| `get_wallet_transaction_list` | [references/apis/get-wallet-transaction-list.md](./references/apis/get-wallet-transaction-list.md) |
-| `set_item_installment_status` | [references/apis/set-item-installment-status.md](./references/apis/set-item-installment-status.md) |
-| `set_shop_installment_status` | [references/apis/set-shop-installment-status.md](./references/apis/set-shop-installment-status.md) |
-
-模块总览 / Feedback 见 [references/api.md](./references/api.md)。
-
-## Usage Scenarios
-
-### 1. 查订单结算明细
-1. orders skill 获取 `order_sn`
-2. `get_escrow_detail.py`：`order_sn`
-
-### 2. 查打款与钱包
-- `get_payout_detail.py` / `get_payout_info.py`
-- `get_wallet_transaction_list.py`
-
-### 3. 收入报表
-1. `generate_income_report.py` 或 `generate_income_statement.py`
-2. `get_income_report.py` / `get_income_statement.py` 取结果
-
-## 调用原则
-
-- 先看 **`developerProxy.httpStatus`**，再读 `*Response` 字段
-- GET：业务参数放 JSON 顶层
-- POST：传 `body` 或顶层 body 字段
-- 每个脚本 docstring 含 **官方文档 URL**（`module=97`）
-
-## Not Applicable
-
-- 店铺授权 → `linkfox-shopee-store-auth`
-- 订单查询/处理 → `linkfox-shopee-store-orders`
-- 促销 Discount/Voucher 等 → 非 Payment 模块
-
-## 算力消耗规则
-
-不消耗算力。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
-
----
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

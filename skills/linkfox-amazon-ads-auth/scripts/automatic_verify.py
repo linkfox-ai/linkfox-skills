@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Return Ads authorization records as one JSON document."""
+"""将只读 Ads 授权记录作为单个 JSON 对象返回，不落盘。"""
 
 import argparse
 import json

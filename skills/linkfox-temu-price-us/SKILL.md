@@ -1,159 +1,120 @@
 ---
 name: linkfox-temu-price-us
-description: Temu 美国站商品价格管理 API，经 LinkFox 网关转发 Partner US 价格接口：定价单列表查询(bg.local.goods.priceorder.query)、批量改 SKU 基础价(bg.local.goods.priceorder.change.sku.price)、推荐供货价/基础价估算等。当用户提到 Temu US 价格、定价单、priceorder query、priceAuditList、改供货价、批量改价、priceorder change sku price、recommendedprice query、baseprice recommend 时触发。商品管理用 linkfox-temu-manage-product-us；订单用 linkfox-temu-order-us；发品用 linkfox-temu-add-product-us。
+description: 管理 Temu 美国站商品价格，支持定价单与报价列表查询、批量修改 SKU 基础价、查询商品推荐供货价和发品或改价前的基础价估算，并支持加签资源文件下载。适用于美国站定价单、供货价核对、推荐价查询和改价管理；不适用于欧洲站或全球站价格、商品编辑和库存、订单履约或商品发布。
 ---
 
-# Temu 美国站价格 API（linkfox-temu-price-us）
+# Temu 美国站商品价格管理
 
-本 skill（`linkfox-temu-price-us`）覆盖 Partner Platform for US **Product** 菜单下与**价格/供货价**相关的 `bg.local.*` / `temu.local.*` 接口（`menu_code=fb16b05f7a904765aac4af3a24b87d4a`，具体 `sub_menu_code` 以 Partner 文档为准）。欧洲站请用 **`linkfox-temu-price-eu`**；全球站（非 US/EU）请用 **`linkfox-temu-price-global`**。
+## 适用范围
 
-> 当前已接入 **4** 个接口；其余价格接口将按 Partner 文档逐条补充到 `references/apis/` 与 `us_price_*.py`。
+### 适用
 
-**网关（本 skill 内置）**：
+管理 Partner US 商品菜单下的价格与供货价，按用户任务查询、估算或修改已授权店铺的商品价格。
 
-| 能力 | 方法 | 路径 |
-|------|------|------|
-| 价格 OpenAPI（`us_price_*`、`temu_us_proxy`） | POST | `https://tool-gateway.linkfox.com/temu/proxy` |
-| 加签文件下载 | POST | `https://tool-gateway.linkfox.com/temu/fileDownload` |
+**场景速查**
 
-## 相关 skill
+| 用户表达 | 查询场景 |
+|---|---|
+| 看美国站商品的定价单和报价 | 定价单列表查询。 |
+| 平台建议这个商品用什么供货价 | 查询已存在商品的推荐供货价。 |
+| 发品或改价前估算基础价 | 根据类目、规格、站外价及可用尺寸重量估算。 |
+| 按我给出的价格批量调整 SKU | 修改基础价并核对逐项结果。 |
+| 下载接口返回的加签文件 | 经加签下载能力获取资源结果。 |
 
-| 场景 | skill |
-|------|--------|
-| 商品列表/详情/编辑/库存/上下架 | `linkfox-temu-manage-product-us` |
-| 订单查询、发货、物流 | `linkfox-temu-order-us` |
-| 取消订单（买家+卖家） | `linkfox-temu-cancel-order-us` |
+### 边界
 
-| 履约/发货（含自发货） | `linkfox-temu-fulfillment-us` |
-| 发品、类目、V2 add | `linkfox-temu-add-product-us` |
-| 半托管 `temu.goods.price.list.get`（`productSkuIds`） | `linkfox-temu-add-product-us` → `us_goods_price_list.py` |
-| 网关与 Temu token | 本 skill `scripts/` |
+欧洲站价格使用 `linkfox-temu-price-eu`，全球站价格使用 `linkfox-temu-price-global`。
+商品列表、详情、编辑、库存与上下架使用 `linkfox-temu-manage-product-us`；发品、类目和半托管供货价列表使用 `linkfox-temu-add-product-us`。
+订单查询使用 `linkfox-temu-order-us`，取消订单使用 `linkfox-temu-cancel-order-us`，发货履约使用 `linkfox-temu-fulfillment-us`。
 
-## 调用方式
+## 接口清单
 
-- **API 端点**：`POST /temu/proxy`（不同操作通过请求体区分；完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline]`（可用脚本见上文脚本一览）
-- **成本约束**：本工具会消耗算力；失败/空结果不得自动换关键词、翻页或连续试探；需要继续检索时先向用户说明会产生额外消耗。
+| 接口 | 端点 | 接口文档 | 对应脚本 |
+|---|---|---|---|
+| 推荐基础价/供货价估算 | POST `/temu/proxy` → 转发 path：`/temu-proxy/{site}/{managementType}`，Body `type=temu.local.goods.baseprice.recommend` | [references/apis/temu-local-goods-baseprice-recommend.md](references/apis/temu-local-goods-baseprice-recommend.md) | `scripts/us_price_baseprice_recommend.py` |
+| 推荐供货价查询 | POST `/temu/proxy` → 转发 path：`/temu-proxy/{site}/{managementType}`，Body `type=temu.local.goods.recommendedprice.query` | [references/apis/temu-local-goods-recommendedprice-query.md](references/apis/temu-local-goods-recommendedprice-query.md) | `scripts/us_price_recommendedprice_query.py` |
+| 定价单列表查询 | POST `/temu/proxy` → 转发 path：`/temu-proxy/{site}/{managementType}`，Body `type=bg.local.goods.priceorder.query` | [references/apis/bg-local-goods-priceorder-query.md](references/apis/bg-local-goods-priceorder-query.md) | `scripts/us_price_priceorder_query.py` |
+| 批量修改 SKU 基础价 | POST `/temu/proxy` → 转发 path：`/temu-proxy/{site}/{managementType}`，Body `type=bg.local.goods.priceorder.change.sku.price` | [references/apis/bg-local-goods-priceorder-change-sku-price.md](references/apis/bg-local-goods-priceorder-change-sku-price.md) | `scripts/us_price_priceorder_change_sku_price.py` |
+| 加签文件下载 | POST `/temu/fileDownload` | [references/api.md](references/api.md) | `scripts/temu_us_file_download.py`、`scripts/temu_file_download.py` |
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/<skill-name>-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+通用入口 `scripts/temu_us_proxy.py` 与 `scripts/temu_proxy.py` 复用代理能力，不新增已定义业务操作。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 前置条件
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+先确定店铺和操作目标，准备 LinkFox 用户密钥与 Temu 店铺授权。Temu 令牌须在卖家后台手动复制，可按 [references/access-token.md](references/access-token.md) 和 [references/authorization-flow.md](references/authorization-flow.md) 获取并保存；两套认证不可混淆。
+商品标识、类目和规格缺失时，先从商品管理或发品流程取得，不猜测。按需读取接口清单中的完整定义；Partner US 原始文档目录见 [references/partner-us-catalog.md](references/partner-us-catalog.md)。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+## 价格管理流程
 
-## 默认参数
+1. 从商品管理流程取得商品、类目和规格标识。
+2. 按用户任务查询定价单或报价列表。
+3. 查询已存在商品的平台推荐供货价；需要发品或改价前估算时，再使用基础价估算。
+4. 用户要求调价时，核对店铺、商品、SKU、金额和币种，按明确范围提交。
+5. 展示逐项成功、失败及原因，再查询定价单核对最终供货价与提交状态。不得用再次调价作为结果查询。
 
-| 字段 | 默认 | 说明 |
-|------|------|------|
-| site | `us` | Partner US |
-| managementType | `semi-managed` | 半托管 |
-| tokenPurpose | `product-inventory` | 酷鸟卖家助手 token |
+## 执行方式
 
-## 鉴权
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/<脚本名>.py '<JSON 参数>' [--inline] [--no-cache]`。
+- **调用约束**：同一会话、同一参数组合默认只调用一次，优先读取已保存的响应。业务脚本不读取或保存响应缓存。失败或空结果时，不得自动更换筛选条件、翻页或连续试探；需要继续查询时，先明确查询范围。
 
-1. **LinkFox**：`LINKFOXAGENT_API_KEY` → Header `Authorization` + `Token`
-2. **Temu**：`accessToken` 或 `storeKey`
+### 输出策略
 
-## Scripts（按 type）
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-temu-price-us-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-| 脚本 | type | 状态 |
-|------|------|------|
-| `us_price_baseprice_recommend.py` | `temu.local.goods.baseprice.recommend` | 已接入 |
-| `us_price_recommendedprice_query.py` | `temu.local.goods.recommendedprice.query` | 已接入 |
-| `us_price_priceorder_query.py` | `bg.local.goods.priceorder.query` | 已接入 |
-| `us_price_priceorder_change_sku_price.py` | `bg.local.goods.priceorder.change.sku.price` | 已接入 |
-| `temu_us_proxy.py` | 任意 `type` | 通用 |
-| `temu_us_file_download.py` | 加签文件下载 | 通用 |
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-> 新增接口后在此表与 [partner-us-catalog.md](./references/partner-us-catalog.md) 同步登记。
+## 执行规则
 
-## 示例
+### 算力消耗预估
 
-```bash
-export LINKFOXAGENT_API_KEY="<key>"
+不消耗算力 （限时）。
 
-# 推荐基础价/供货价估算（须 catId + supplierPriceEstimateSkuQryList）
-python scripts/us_price_baseprice_recommend.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "supplierPriceEstimateQry": {
-      "goodsBasicInfo": { "catId": 12345 },
-      "supplierPriceEstimateSkuQryList": [
-        {
-          "specIdList": [9001],
-          "externPlatformPriceInfo": { "amount": "19.99", "currency": "USD" }
-        }
-      ]
-    }
-  }
-}'
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-# 推荐供货价查询（须 recommendedPriceType + goodsIdList，1～100 个 goodsId）
-python scripts/us_price_recommendedprice_query.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "recommendedPriceType": 10,
-    "goodsIdList": [123456789]
-  }
-}'
+### 解决认证和算力问题
 
-# 定价单列表查询（白名单；分页 page/size，可选筛选）
-python scripts/us_price_priceorder_query.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "page": 1,
-    "size": 20,
-    "priceOrderType": 1,
-    "orderBy": "order_create_time",
-    "orderByType": 0
-  }
-}'
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-# 批量修改 SKU 基础价（白名单；须 goodsId + changeSkuPriceDTOList）
-python scripts/us_price_priceorder_change_sku_price.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "goodsId": 123456,
-    "changeSkuPriceDTOList": [
-      {
-        "skuChangePriceBaseDTOList": [
-          {
-            "skuId": 58224724203874,
-            "newSupplierPrice": { "amount": "15.99", "currency": "USD" }
-          }
-        ]
-      }
-    ]
-  }
-}'
-```
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**Feedback：** `skillName`：`linkfox-temu-price-us`
+### 约束与建议
 
-## 网关与授权脚本
+- **区分价格概念**：已存在商品的推荐供货价、发品或改价前的基础价估算、定价单中的参考价、目标价、原价和最终价分别展示。半托管发品侧供货价列表属于发品技能，不与本技能本地仓定价单混用。
+- **清晰展示结果**：注明店铺、美国站、商品和 SKU，金额带币种；定价单展示当前页、总数及状态，修改结果分别列出成功 SKU、失败 SKU、失败原因和生成的定价单。
+- **区分估算与结果**：推荐价和估算值供用户判断，不表示调价已生效；状态未定义时展示原始状态值，不补造含义。基础价估算未定义的返回子字段按实际数据说明，不编造响应。
+- **解释空结果和错误**：保留网关原始结果和已取得数据，依接口定义判断转发与业务状态；不以 HTTP 正常就认定全部 SKU 修改成功。
+- **脚本运行约定**：业务脚本接受 JSON 参数和 `--inline`，提供本地授权工具，不使用响应缓存；认证优先级、参数包装与输出规则见 [references/api.md](references/api.md#脚本运行约定)。
 
-| 脚本 | 说明 |
-|------|------|
-| `check_linkfox_token.py` | 校验 LinkFox 用户 Token |
-| `temu_token_guide.py` | Temu accessToken 后台授权步骤 |
-| `save_temu_access_token.py` | 保存 accessToken 到本地 |
-| `list_temu_access_tokens.py` | 列出已保存 token |
-| `get_temu_access_token.py` | 读取已保存 token |
-| `temu_proxy.py` | 通用网关转发（多 site） |
-| `temu_file_download.py` | 加签文件下载（多 site） |
+## 使用示例
 
-授权说明：[references/access-token.md](./references/access-token.md)
+### 查询推荐供货价
 
-## 算力消耗规则
+用户：看看这些美国站商品的平台推荐供货价。
 
-不消耗算力。
+确认店铺和商品后查询，按商品及 SKU 展示推荐供货价、币种与返回范围。
+
+### 估算基础价
+
+用户：发布前根据这些规格和站外售价估算供货价。
+
+准备类目、规格及用户提供的价格资料，按接口定义估算，说明估算依据和返回内容。
+
+### 批量改价并核对
+
+用户：把这些 SKU 改成我给的价格，并核对结果。
+
+核对目标与价格，提交修改，逐项展示成功和失败，再通过定价单查询核对，不重复提交修改。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
+
+---
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

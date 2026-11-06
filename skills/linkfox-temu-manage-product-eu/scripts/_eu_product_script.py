@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Factory for thin US product API CLI scripts."""
+"""欧洲站商品操作的 CLI 公共入口。"""
 
 import sys
 

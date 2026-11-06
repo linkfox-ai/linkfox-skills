@@ -1,19 +1,19 @@
 # `GET_FLAT_FILE_SALES_TAX_DATA`
 
-> **分类**：15. Tax Reports  
-> **说明**：Sales tax collection data  
-> **可用范围**：Seller only
+> **分类**：15. 税务报告  
+> **说明**：销售税收取数据  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Tax Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#sales-tax-report)（章节：**Sales Tax Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [税务报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#sales-tax-report)（章节：**Sales Tax Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
-- **受限报告**：未在相邻 Note 中写明，但 **Role** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
-- **Role**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
-- **Report output type**：Tab-delimited flat file
-- **Store availability**：US
-- **User type**：Sellers
-- **要点**：Tab-delimited flat file for tax-enabled US sellers. Content updated daily. This report cannot be requested or scheduled. The seller must generate the report from the Tax Document Library in Seller Central. After the report has been generated, you can search for it using the getReports operation.
+- **受限报告**：未在相邻 Note 中写明，但 **角色** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
+- **角色**：[Tax Remittance (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-remittance-restricted)
+- **输出格式**：制表符分隔的平面文件
+- **店铺范围**：US
+- **用户类型**：Sellers
+- **要点**：面向启用税务功能的美国卖家的制表符分隔文件，每日更新。不可按需请求或计划生成；卖家必须先在 Seller Central 的 Tax Document Library 生成，然后通过 getReports 查找。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-tax#sales-tax-report>
 

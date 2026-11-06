@@ -23,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from _common import (  # noqa: E402
     ensure_auth_skill_available,
-    get_access_token,
     mutate_entity,
     parse_argv_params,
     require_fields,
@@ -47,11 +46,9 @@ def main() -> None:
     profile_id = int(params["profileId"])
     region = params["region"]
 
-    access_token = get_access_token(profile_id)
     result = mutate_entity(
         region=region,
         profile_id=profile_id,
-        access_token=access_token,
         path=ENTITY_PATH,
         method=METHOD,
         content_type=CONTENT_TYPE,
@@ -59,11 +56,11 @@ def main() -> None:
     )
 
     if "error" in result:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        emit_result(result, inline=lf_inline_flag())
         sys.exit(1)
 
     inline = lf_inline_flag()
-    emit_result(result, inline)
+    emit_result(result, inline=inline)
     print(
         f"\n\u2713 {METHOD} {ENTITY_PATH} \u2014 HTTP {result.get('httpStatus', '?')}",
         file=sys.stderr,

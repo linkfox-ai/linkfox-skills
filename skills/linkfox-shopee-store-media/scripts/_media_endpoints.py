@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-SHOPEE_DOC_MODULE = "130"
 
 class MediaEndpoint(TypedDict, total=False):
     path: str
@@ -54,16 +53,11 @@ MEDIA_ENDPOINTS: dict[str, MediaEndpoint] = {
 }
 
 RESERVED_PARAM_KEYS = frozenset({
-    "shopId", "merchantId", "skipDepCheck", "body", "requestBody", "api", "contentType",
+    "shopId", "merchantId", "skipDepCheck", "body", "requestBody", "api", "contentType", "accessToken",
 })
 
 LIST_QUERY_FIELDS = frozenset()
 
-def official_doc_url(api_name: str) -> str:
-    return (
-        f"https://open.shopee.com/documents/v2/v2.media.{api_name}"
-        f"?module={SHOPEE_DOC_MODULE}&type=1"
-    )
 
 def list_api_names() -> list[str]:
     return sorted(MEDIA_ENDPOINTS.keys())

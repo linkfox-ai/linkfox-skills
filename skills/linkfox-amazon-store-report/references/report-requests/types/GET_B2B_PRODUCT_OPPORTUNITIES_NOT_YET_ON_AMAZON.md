@@ -1,19 +1,19 @@
 # `GET_B2B_PRODUCT_OPPORTUNITIES_NOT_YET_ON_AMAZON`
 
-> **分类**：3. B2B Product Opportunities  
-> **说明**：B2B opportunities not yet on Amazon  
-> **可用范围**：Seller only
+> **分类**：3. B2B 商品机会  
+> **说明**：尚未在 Amazon 上架的 B2B 机会  
+> **可用范围**：仅卖家
 
 ## 官方索引（Report type values）
 
 - **Schema 专页（请求体、`reportOptions`、结果 JSON）**：[`b2bProductOpportunitiesNotYetOnAmazonReport-2020-11-19.md`](../b2bProductOpportunitiesNotYetOnAmazonReport-2020-11-19.md)
-- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[B2B Product Opportunities Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-b2b-product-opportunities#b2b-product-opportunities---not-yet-on-amazon)（章节：**B2B Product Opportunities - Not yet on Amazon**）
+- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[B2B 商品机会 Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-b2b-product-opportunities#b2b-product-opportunities---not-yet-on-amazon)（章节：**B2B Product Opportunities - Not yet on Amazon**）
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
-- **Marketplace availability**：This report is only available in the following marketplaces:
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Comma-separated flat file
+- **角色**：[Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
+- **站点范围**：仅限特定站点，请按本页 Amazon 文档链接核对可用站点清单。
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：逗号分隔的平面文件
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-b2b-product-opportunities#b2b-product-opportunities---not-yet-on-amazon>
 

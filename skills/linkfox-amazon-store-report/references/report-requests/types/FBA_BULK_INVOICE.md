@@ -1,23 +1,29 @@
 # `FBA_BULK_INVOICE`
 
-> **分类**：12. Regulatory Compliance Reports  
-> **说明**：FBA bulk invoice  
-> **可用范围**：Seller only
+> **分类**：12. 监管合规报告  
+> **说明**：FBA 批量发票  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Regulatory Compliance Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-regulatory-compliance#fba-bulk-invoice)（章节：**FBA Bulk Invoice**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [监管合规报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-regulatory-compliance#fba-bulk-invoice)（章节：**FBA Bulk Invoice**）。**与专页其它段落冲突时以官方英文文档为准。**
 
-- **受限报告**：未在相邻 Note 中写明，但 **Role** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
-- **Role**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
-- **Availability**：Sellers
-- **Requested/scheduled**：This report can only be requested.
-- **要点**：Provides the invoices for a seller within a given date range. These invoices include customer orders served by the seller. This report type supports the following report options: A single report option value is limited to 200 characters. The TRANSPORTER_COPY and CUSTOMER_COPY invoiceTypes are only available for the MCF_SHIPMENT transactionType. For any other transactionTypes, SELLER_COPY is the only valid invoiceType. MCF_SHIPMENT will also support SELLER_COPY as the valid invoiceType. orderIds and shipmentId are mutually exclusive fields. Only one should be provided in the request. If both fields are given the request will fail. If none of the fields are set or the report options field itself is absent, then the request will return all the relevant invoices (SHIPMENT and MCF_SHIPMENT transaction types) in the requested date range.
-- **reportOptions（摘录）**：
-  - orderIds: A single string consisting of a comma separated list of order ids to filter. Example: 406-8193317-8698708, 408-0804227-3381000.
-  - shipmentIds: A single string consisting of a comma separated list of shipment ids to filter. Example: 64119752218302, 264552989124123.
-  - transactionTypes: A single string consisting of a comma separated list of transaction types to filter. The possible transactionTypes are SHIPMENT, REFUND, CANCEL, EINVOICE_CANCEL, FC_TRANSFER, FC_TRANSFER_CANCEL, FC_REMOVAL, FC_REMOVAL_CANCEL, MCF_SHIPMENT, MCF_CANCEL, and MCF_REFUND.
-  - invoiceTypes: A single string consisting of a comma separated list of invoice types to filter. Possible invoiceTypes include CUSTOMER_COPY, SELLER_COPY, and TRANSPORTER_COPY.
+- **受限报告**：未在相邻 Note 中写明，但 **角色** 含 *Restricted*；**仍可能**需 RDT/额外审核，以官方为准
+- **角色**：[Tax Invoicing (Restricted)](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#tax-invoicing-restricted)
+- **可用范围**：卖家
+- **按需/计划**：本报告仅可按需请求。
+- **要点**：提供指定日期范围内卖家的发票，包含卖家履约的客户订单。单个 reportOptions 值最多 200 字符。TRANSPORTER_COPY 和 CUSTOMER_COPY 这两种 invoiceTypes 仅适用于 transactionType=MCF_SHIPMENT；其他 transactionTypes 仅允许 SELLER_COPY，MCF_SHIPMENT 也允许 SELLER_COPY。订单筛选与货件筛选互斥，只能提供其中一类，同时提供会失败。两者均未设置或未提供 reportOptions 时，返回日期范围内全部相关发票（SHIPMENT 和 MCF_SHIPMENT）。
+
+货件筛选按官方选项清单列为 `shipmentIds`；官方互斥说明另写作 `shipmentId`，存在拼写差异。这里保留选项清单及二选一条件，不把两种拼写当成可互换参数；脚本原样透传 `reportOptions`，不自动补入或改写另一个键。该解释依据官方清单，不代表已通过实际请求验证差异。
+
+#### reportOptions 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| orderIds | string | 单个字符串，以逗号分隔订单 ID 筛选，例如 406-8193317-8698708, 408-0804227-3381000。 |
+| shipmentIds | string | 单个字符串，以逗号分隔货件 ID 筛选，例如 64119752218302, 264552989124123。 |
+| transactionTypes | string | 单个字符串，以逗号分隔交易类型筛选。可选 SHIPMENT、REFUND、CANCEL、EINVOICE_CANCEL、FC_TRANSFER、FC_TRANSFER_CANCEL、FC_REMOVAL、FC_REMOVAL_CANCEL、MCF_SHIPMENT、MCF_CANCEL、MCF_REFUND。 |
+| invoiceTypes | string | 单个字符串，以逗号分隔发票类型筛选。可选 CUSTOMER_COPY、SELLER_COPY、TRANSPORTER_COPY。 |
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-regulatory-compliance#fba-bulk-invoice>
 

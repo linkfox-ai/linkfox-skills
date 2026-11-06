@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 
 from .utils import load_template, normalize_brand_key, parse_json_from_text, run_subprocess, run_textgen
@@ -70,6 +71,9 @@ def extract_brand_gene(
         raise RuntimeError(f"save_brand_gene 失败: {(proc.stderr or proc.stdout or '').strip()}")
     for line in (proc.stdout or "").splitlines():
         if "Saved full response:" in line:
-            path = line.split("Saved full response:", 1)[1].strip().split(" ", 1)[0]
+            path = line.split("Saved full response:", 1)[1].strip()
+            path = re.sub(r"\s+\(\d+ bytes\)$", "", path)
+            if not os.path.isfile(path):
+                raise RuntimeError(f"save_brand_gene 返回的文件不存在: {path}")
             return os.path.abspath(path)
     raise RuntimeError("save_brand_gene 未返回 Saved full response 路径")

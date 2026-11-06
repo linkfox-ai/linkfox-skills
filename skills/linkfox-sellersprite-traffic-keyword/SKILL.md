@@ -1,107 +1,97 @@
 ---
 name: linkfox-sellersprite-traffic-keyword
-description: 使用卖家精灵流量词反查能力，按ASIN查询关键词流量来源、流量占比类型、转化类型、自然位与广告位等指标，支持历史月份与多维排序。当用户提到ASIN反查流量词、流量关键词列表、关键词流量结构、自然词/广告词分析、关键词转化类型、SellerSprite traffic keyword、Amazon traffic keywords、reverse ASIN keywords时触发此技能。即使用户未明确提及"卖家精灵"，只要需求是围绕某个ASIN查看其关键词流量来源与词列表，也应触发此技能。
+description: 使用卖家精灵按亚马逊 ASIN 反查流量关键词，分析关键词流量来源、流量占比类型、转化类型、自然位、广告位和 SPR，支持历史月份、筛选与多维排序。适用于 ASIN 反查词、自然词与广告词分析、关键词流量结构和转化类型研究；用户无需明确提及卖家精灵。不适用于全站商品搜索、商品详情查询或广告投放管理。
 ---
 
-# SellerSprite Traffic Keyword
+# 卖家精灵流量词反查
 
-This skill helps query and analyze traffic keyword lists for an Amazon ASIN via SellerSprite.
+## 适用范围
 
-## Core Concepts
+### 适用
+
+围绕指定亚马逊商品查看其关键词流量来源与词列表，比较自然流量、广告流量及转化类型。
+
+**场景速查**
+
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 看看这个 ASIN 的流量词 | ASIN 反查：展示流量关键词及排名。 |
+| 区分这个商品的自然词和广告词 | 流量来源：结合词标签与排名分析。 |
+| 找主要流量词、精准词或转化优质词 | 类型筛选：按流量占比类型和转化类型查看。 |
+| 看这个 ASIN 某个历史月份的词 | 历史查询：标注所查月份。 |
+| 按流量占比、搜索量或广告位排序 | 指标比较：按所需维度排列关键词。 |
+
+## 前置条件
+
+先确定目标商品与市场站点；用户希望查看历史数据或特定类型的词时，明确查询周期和分析目标。参数定义、枚举和限制见 `references/api.md`。
+
+## 查询流程
+
+1. 根据用户目标确定待反查商品、站点、查询周期及需要的筛选和排序；按 `references/api.md` 准备请求。
+2. 执行查询并保存完整响应；同一参数组合优先复用本地缓存，失败或空结果按成本约束处理。
+3. 根据响应展示关键词、排名和类型，注明周期、总数与当前页；需要细查字段时从已保存文件提取。
+
+## 执行方式
+
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/sellersprite_traffic_keyword.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
+
+### 输出策略
+
+- 每次均尝试保存完整响应，默认目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sellersprite-traffic-keyword-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。执行前确认任务工作目录可写，禁止将任务输出写入 `/tmp`；目录不可写时先处理权限或更换工作目录。路径选择与保存失败时的行为见 `references/api.md`。
+- 响应体不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8000 字节：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
+
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+
+## 执行规则
+
+### 算力消耗预估
+
+15 算力 / 次
+
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
+
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
+
+### 解决认证和算力问题
+
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
+
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
+
+### 约束与建议
 
 - **ASIN 反查词**：以商品 ASIN 为输入，查看该商品获得流量的关键词列表。
-- **流量占比类型**（`trafficKeywordTypes`）：主要流量词、精准流量词、以及 schema 中的 `preciseLongTail`（工具文案为「转化流失词」）等。
-- **转化类型**（`conversionKeywordTypes`）：如转化优质词、平稳词、流失词等。
-- **词标签**（`badges`）：如自然搜索词、Amazon Choice 推荐词等。
+- **区分三类概念**：流量占比类型反映主要或精准等流量来源；转化类型反映转化质量；词标签反映自然搜索、推荐或广告等曝光位置。完整枚举见 `references/api.md`。`preciseLongTail` 的工具文案为「转化流失词」，按「转化流失词」解释，不凭字段名解释为精准长尾词，也不与转化类型混用。
+- **展示重点**：优先用表格展示关键词、自然位、广告位、SPR、流量占比类型、转化类型。SPR 的含义及历史字段兼容说明见 `references/api.md`。
+- **标注查询周期**：明确展示最近 30 天或指定历史月份，避免混用不同周期的数据。
+- **说明分页情况**：存在分页时，告知总数和当前页；分页限制见 `references/api.md`。
+- **限定分析范围**：除非用户明确要求，不输出与本接口无关的主观商业建议。
+- **解释响应**：依据 `references/api.md` 的响应码规则解释结果和错误；缺失的排名或指标不自行补齐。
 
-## 调用方式
+## 使用示例
 
-- **API 端点**：`POST /sellersprite/traffic/keyword`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/sellersprite_traffic_keyword.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-sellersprite-traffic-keyword-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## Key Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| marketplace | string | Yes | 市场站点，默认 `US` |
-| asin | string | Yes | 要反查的商品 ASIN |
-| month | string | No | 历史月份，格式 `yyyyMM`；不传默认最近30天 |
-| page | integer | No | 页码，默认 1 |
-| size | integer | No | 每页数量，默认 50，最大 100 |
-| keyword | string | No | 关键词筛选 |
-| badges | string | No | 词标签，多值逗号分隔 |
-| trafficKeywordTypes | string | No | 流量占比类型，多值逗号分隔 |
-| conversionKeywordTypes | string | No | 转化类型，多值逗号分隔 |
-| orderField | string | No | 排序字段，默认 `rankPosition` |
-| orderDesc | boolean | No | 是否倒序，默认 `false` |
-
-## Usage Examples
+### 查看指定 ASIN 的流量词
 
 ```json
-{
-  "marketplace": "US",
-  "asin": "B0XXXXXXXXX",
-  "size": 50,
-  "orderField": "rankPosition",
-  "orderDesc": false
-}
+{"marketplace": "US", "asin": "B0XXXXXXXXX", "size": 50, "orderField": "rankPosition", "orderDesc": false}
 ```
+
+### 查看历史月份的主要与精准流量词
 
 ```json
-{
-  "marketplace": "US",
-  "asin": "B0XXXXXXXXX",
-  "month": "202507",
-  "trafficKeywordTypes": "primary,precise",
-  "conversionKeywordTypes": "excellent,stable",
-  "page": 1,
-  "size": 100
-}
+{"marketplace": "US", "asin": "B0XXXXXXXXX", "month": "202507", "trafficKeywordTypes": "primary,precise", "conversionKeywordTypes": "excellent,stable", "page": 1, "size": 100}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. 结果优先展示：关键词、自然位、广告位、SPR、流量占比类型、转化类型。
-2. 明确标注查询周期（最近30天或历史月份）。
-3. 当存在分页时，告知总数与当前页。
-4. 不输出与接口无关的主观商业建议，除非用户明确要求。
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
-## Important Limitations
+---
 
-- 必填参数：`marketplace`、`asin`
-- 单次每页最多 100 条
-- 历史查询需传 `yyyyMM`
-
-## 算力消耗规则
-
-消耗 15 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,223 +1,131 @@
 ---
 name: linkfox-echotik-list-product
-description: 搜索和分析TikTok商品数据，包括销量、达人带货数据、定价和佣金比例，覆盖16个TikTok Shop站点。当用户提到TikTok商品搜索、TikTok Shop商品分析、TikTok销量数据、达人带货销售、TikTok选品、TikTok佣金比例、TikTok商品排名、EchoTik数据查询、TikTok product search, TikTok sales, influencer sales, TikTok commission, TikTok product selection, short-video e-commerce, TikTok data时触发此技能。即使用户未明确提及"EchoTik"或"TikTok"，只要其需求涉及在TikTok Shop上搜索商品或分析TikTok商品表现指标，也应触发此技能。
+description: 搜索和分析 EchoTik 的 TikTok Shop 商品数据，覆盖 16 个站点，支持按销量、销售额、价格、评分、佣金、上架时间及达人带货指标筛选商品。适用于 TikTok 商品选品、热销与新品发现、高佣金商品筛选和区域竞品研究；不适用于达人账号或单条视频分析、广告管理、店铺整体分析、其他平台商品查询、刊登优化及物流履约。
 ---
 
-# EchoTik TikTok Product Search
+# EchoTik TikTok 商品搜索
 
-This skill guides you on how to search and analyze TikTok Shop product data, helping sellers and marketers discover product opportunities, evaluate sales performance, and identify influencer-driven products on TikTok.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-EchoTik is a TikTok Shop analytics platform that tracks product performance across multiple TikTok marketplaces. This tool provides keyword-based product search with rich filtering capabilities, returning detailed product data including sales volumes (1d/7d/15d/30d/60d/90d/total), GMV (revenue), pricing, ratings, review counts, commission rates, and influencer promotion statistics.
+在 TikTok Shop 搜索商品、比较销售表现和发现选品机会。用户希望根据关键词、销量、定价、佣金或达人带货表现寻找商品时使用，无需明确提及 EchoTik。
 
-**Sales metrics**: Products include multi-period sales data — 1-day, 7-day, 15-day, 30-day, 60-day, 90-day, and total sales. The same granularity applies to GMV (Gross Merchandise Value) amounts.
+**场景速查**
 
-**Commission rate**: Stored as a decimal (e.g., 0.05 means 5%). When a user specifies a percentage, convert it to decimal before passing to the API.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 找 TikTok 上热卖的商品 | 关键词搜索，按销量排序。 |
+| 找佣金高的 TikTok 商品 | 按佣金比例筛选。 |
+| 美国 TikTok Shop 什么卖得好 | 目标站点的热销商品研究。 |
+| 找最近上架又卖得快的商品 | 结合上架日期和近期销量筛选。 |
+| 哪些商品有很多达人带货 | 结合带货达人数和播放数筛选。 |
+| 找低价又走量的商品 | 结合价格和销量筛选。 |
+| 看东南亚 TikTok 的商品机会 | 指定区域开展商品研究。 |
+| 找评分和评价表现好的商品 | 结合评分和评价数筛选。 |
 
-**Listing date**: The `firstCrawlDt` field uses a compact integer format `YYYYMMDD` (e.g., `20240101` for January 1, 2024).
+### 边界
 
-## Parameter Guide
+达人账号的粉丝及互动分析、单条视频表现、广告投放、店铺整体分析、内容策略、视频制作、达人邀约、商品刊登创建或优化、物流履约，以及 Amazon、Shopee 等其他平台商品数据均不在范围内。
 
-### Search & Filtering
+## 前置条件
 
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| keyword | string | Product keyword (translate to the local language of the target marketplace) | - |
-| region | string | Marketplace code | US |
-| categoryKeywordCN | string | Product category (must be in Chinese) | - |
+确定用户的选品目标和目标市场；具体筛选条件、默认值及站点范围见 `references/api.md`。
 
-### Sales Filters
+## 查询与分析流程
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| minTotalSaleCnt / maxTotalSaleCnt | integer | Total sales volume range |
-| minTotalSale30dCnt / maxTotalSale30dCnt | integer | 30-day sales volume range |
-| minTotalSaleGmvAmt / maxTotalSaleGmvAmt | string | Total GMV range |
-| minTotalSaleGmv30dAmt / maxTotalSaleGmv30dAmt | string | 30-day GMV range |
+1. 从用户需求确定市场、商品方向及筛选目标；整理当地语言关键词或中文类目，并按接口定义处理佣金和日期等参数。
+2. 根据热销、高佣金、新品、达人带货或价格带等目标选择筛选和排序方式，参数说明见 `references/api.md`。
+3. 按执行方式查询，优先复用同参数缓存；检查响应及商品列表，保留完整结果，按摘要决定是否提取更多字段。
+4. 用表格展示本页商品及关键指标，解释统计周期、币种和分页范围。失败或空结果时说明原因及调整建议，继续检索遵守成本约束。
 
-### Product Attribute Filters
+## 执行方式
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| minSpuAvgPrice / maxSpuAvgPrice | number | SPU average price range |
-| minProductRating / maxProductRating | number | Product rating range |
-| minReviewCount / maxReviewCount | integer | Review count range |
-| minProductCommissionRate / maxProductCommissionRate | number | Commission rate range (decimal, e.g., 0.05 = 5%) |
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/echotik_list_product.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### Influencer & Video Filters
+### 输出策略
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| minTotalIflCnt / maxTotalIflCnt | integer | Number of influencers promoting the product |
-| minTotalVideoCnt / maxTotalVideoCnt | integer | Number of promotion videos |
-| minTotalViewsCnt / maxTotalViewsCnt | integer | Total views on promotion videos |
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-product-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Listing Date & Duration
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| minFirstCrawlDt / maxFirstCrawlDt | integer | Listing date range (YYYYMMDD format, e.g., 20240101) |
-| saleDays | integer | Days since listing |
+## 执行规则
 
-### Sorting & Pagination
+### 算力消耗预估
 
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| productSortField | integer | Sort field: 1=total sales, 2=total GMV, 3=avg price, 4=7d sales, 5=30d sales, 6=7d GMV, 7=30d GMV | 1 |
-| sortType | integer | Sort order: 0=ascending, 1=descending | 1 |
-| pageNum | integer | Page number | 1 |
-| pageSize | integer | Results per page | 50 |
+5 算力 / 次
 
-### Supported Marketplaces
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-US (United States), ID (Indonesia), TH (Thailand), PH (Philippines), MY (Malaysia), VN (Vietnam), GB (United Kingdom), MX (Mexico), SG (Singapore), SA (Saudi Arabia), BR (Brazil), ES (Spain), JP (Japan), DE (Germany), IT (Italy), FR (France)
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-Default marketplace is **US**. Use US when the user doesn't specify a marketplace.
+### 解决认证和算力问题
 
-## 调用方式
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-- **API 端点**：`POST /echotik/listProduct`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/echotik_list_product.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-echotik-list-product-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+### 约束与建议
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **理解数据来源**：EchoTik 跟踪多个 TikTok Shop 市场的商品表现，筛选结果用于商品研究，不代表达人账号、视频或店铺整体的表现。
+- **区分统计周期**：销量和 GMV（商品交易总额）均包含 1、7、15、30、60、90 天和累计口径；比较商品时保持周期一致，不将累计值当作近期销量。
+- **清晰展示数据**：用表格展示商品名称、价格、总销量、30 天销量、GMV、评分、佣金比例及实际返回的带货达人数；字段未返回时说明缺失，不用筛选下限代替实际结果。
+- **标明币种**：价格与 GMV 使用响应中的 `currency`，跨站点比较时不混用不同货币。
+- **佣金展示**：把响应中的小数佣金比例展示为百分比，例如 `0.05` 展示为 `5%`；入参换算规则见接口定义。
+- **说明分页情况**：当 `total` 很大时，展示本页数据并告知总记录数，可建议收紧筛选条件或查看后续页；进一步请求仍遵守成本约束。
+- **提示可用图片**：存在 `imageUrl` 或 `coverUrl` 时，说明有商品图片可供查看。
+- **解释失败或空结果**：根据实际响应说明原因，给出参数调整建议，避免自动连续试探。
+- **提醒关键词本地化**：面向非英语市场时提醒使用当地语言关键词，具体参数要求见接口定义。
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 使用示例
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 基础关键词搜索：查看畅销商品
 
-## Usage Examples
-
-**1. Basic Keyword Search — Find top-selling products for a keyword**
 ```json
-{
-  "keyword": "phone case",
-  "region": "US",
-  "productSortField": 1,
-  "sortType": 1,
-  "pageSize": 20
-}
+{"keyword": "phone case", "region": "US", "productSortField": 1, "sortType": 1, "pageSize": 20}
 ```
 
-**2. High-Commission Product Discovery — Products with commission >= 10%**
+### 高佣金商品：佣金至少 10%
+
 ```json
-{
-  "keyword": "beauty",
-  "region": "US",
-  "minProductCommissionRate": 0.10,
-  "productSortField": 5,
-  "sortType": 1
-}
+{"keyword": "beauty", "region": "US", "minProductCommissionRate": 0.10, "productSortField": 5, "sortType": 1}
 ```
 
-**3. New & Trending Products — Recently listed with strong 30-day sales**
+### 新品与趋势商品：结合上架日期和 30 天销量
+
 ```json
-{
-  "keyword": "gadget",
-  "region": "US",
-  "minFirstCrawlDt": 20250101,
-  "minTotalSale30dCnt": 1000,
-  "productSortField": 5,
-  "sortType": 1
-}
+{"keyword": "gadget", "region": "US", "minFirstCrawlDt": 20250101, "minTotalSale30dCnt": 1000, "productSortField": 5, "sortType": 1}
 ```
 
-**4. Influencer-Hot Products — Products promoted by many influencers**
+### 达人带货热门商品
+
 ```json
-{
-  "keyword": "skincare",
-  "region": "US",
-  "minTotalIflCnt": 50,
-  "minTotalViewsCnt": 1000000,
-  "productSortField": 1,
-  "sortType": 1
-}
+{"keyword": "skincare", "region": "US", "minTotalIflCnt": 50, "minTotalViewsCnt": 1000000, "productSortField": 1, "sortType": 1}
 ```
 
-**5. Budget-Friendly High-Sellers — Low price + high volume**
+### 低价高销量商品
+
 ```json
-{
-  "keyword": "accessories",
-  "region": "US",
-  "maxSpuAvgPrice": 10,
-  "minTotalSaleCnt": 5000,
-  "productSortField": 2,
-  "sortType": 1
-}
+{"keyword": "accessories", "region": "US", "maxSpuAvgPrice": 10, "minTotalSaleCnt": 5000, "productSortField": 2, "sortType": 1}
 ```
 
-**6. Southeast Asia Market Exploration**
+### 东南亚市场探索：泰国时尚商品
+
 ```json
-{
-  "keyword": "fashion",
-  "region": "TH",
-  "minTotalSale30dCnt": 500,
-  "productSortField": 7,
-  "sortType": 1
-}
+{"keyword": "แฟชั่น", "region": "TH", "minTotalSale30dCnt": 500, "productSortField": 7, "sortType": 1}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data clearly**: Show query results in organized tables with key columns — product name, price, total sales, 30-day sales, GMV, rating, commission rate, and number of promoting influencers
-2. **Currency awareness**: Include the currency field from the response when displaying prices and GMV
-3. **Commission formatting**: Display commission rates as percentages for readability (e.g., show 0.05 as "5%")
-4. **Volume notice**: When results have a large `total` count, show the current page data and inform the user of total available records; suggest adjusting filters or pagination to explore more
-5. **Image reference**: If `imageUrl` or `coverUrl` is present, mention it so the user knows product images are available
-6. **Error handling**: When a query fails, explain the reason based on the response and suggest adjusting parameters
-7. **Keyword translation reminder**: When the user targets a non-English marketplace, remind them that the keyword should be in the local language of that marketplace for best results
-## Applicable Scenarios
-
-| User Says | Scenario |
-|-----------|----------|
-| "Find trending products on TikTok" | Keyword search sorted by sales |
-| "TikTok products with high commission" | Filter by commission rate |
-| "What's selling well on TikTok Shop US" | Regional product search by sales |
-| "New products blowing up on TikTok" | Filter by listing date + sales |
-| "Which products have many influencers promoting them" | Filter by influencer count |
-| "Cheap but high-volume TikTok products" | Filter by price + sales |
-| "TikTok product research for Southeast Asia" | Search specific SE Asian regions |
-| "Products with good reviews on TikTok" | Filter by rating + review count |
-
-## Not Applicable Scenarios
-
-- TikTok influencer/creator analytics (follower counts, engagement rates of creators)
-- TikTok video performance analytics (views, likes, shares on specific videos)
-- TikTok advertising / ad campaign management
-- Amazon, Shopee, or other non-TikTok platform product data
-- TikTok Shop store-level analytics
-- Product listing creation or optimization advice
-- Logistics, fulfillment, or shipping analysis
-
-**Boundary judgment**: When users say "product research" or "what should I sell on TikTok", if it involves searching and filtering products by sales data, pricing, or commission rates on TikTok Shop, then this skill applies. If they're asking about content strategy, video creation, or influencer outreach, it does not apply.
-
-## 算力消耗规则
-
-消耗 5 算力。
-
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

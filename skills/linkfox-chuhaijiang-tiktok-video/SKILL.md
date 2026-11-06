@@ -1,118 +1,117 @@
 ---
 name: linkfox-chuhaijiang-tiktok-video
-description: 使用出海匠（Chuhaijiang）研究 TikTok 公开视频，支持多条件视频搜索、单视频详情、带货商品和评论钻取。用户点名出海匠或 Chuhaijiang 时触发；未指定数据源时，仅在需要视频评论或视频到带货商品的关系钻取时触发。通用 TikTok 带货视频榜单或详情使用 linkfox-kalodata-tiktok-video，视频上传发布使用 linkfox-tiktok-video；点名其他数据源时不触发。
+description: 使用出海匠（Chuhaijiang）研究 TikTok 公开视频，支持多条件视频搜索、单视频详情、带货商品和评论钻取。用户点名出海匠时使用；未指定数据源时，仅在需要视频评论或视频到带货商品的关系钻取时使用。适用于公开视频市场调研，不适用于视频上传发布、创作者授权、卖家后台操作、下载、审核、转录或媒体生成编辑；点名其他数据源时不使用。
 ---
 
-# TikTok Video Market Intelligence
+# 出海匠 TikTok 视频市场情报
 
-Use this skill to research public TikTok videos: discover videos with market filters, inspect one video's performance, identify products promoted by a shoppable video, or read its public comments.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- This is a read-only public-market research skill. It does not upload, publish, edit, or delete TikTok videos.
-- Search returns `data.items[]` plus `data.total_count`. Reuse an item's `id` for detail, product, or review drill-downs.
-- Detail returns the main profile in `data.items[]`; `include=core` additionally returns normalized performance metrics in `data.core.items[]`.
-- Related-product and review rows use endpoint-specific prefixed fields. Read `references/api.md` before interpreting them.
-- Money-like values can be objects such as `{ "unit": "US", "value": 402056 }`. Preserve the returned unit and value; do not treat them as plain numbers or silently convert currency.
-- Always preserve the returned `country_code`. Do not relabel a row solely from the requested marketplace.
+研究 TikTok 公开视频，发现候选视频、查看表现，按需钻取带货商品和公开评论。
 
-## Data Fields
+**场景速查**
 
-| Field | Meaning |
+| 用户表达 | 查询场景 |
 |---|---|
-| `id` | Video, product, or comment identifier for the current endpoint |
-| `video_desc` | Video caption or description |
-| `share_url` | Public TikTok URL |
-| `author_id` / `author_unique_id` | Creator identifiers |
-| `video_play_count` / `video_like_count` | Lifetime plays and likes |
-| `video_comment_count` / `video_share_count` / `video_collect_count` | Engagement counts |
-| `video_engagement_rate` | Returned decimal engagement rate; format as a percentage only when clearly labeled |
-| `video_30d_gpm` | 30-day GMV per thousand views; not a percentage |
-| `data.core.items[]` | Optional normalized core metrics from detail `include=core` |
-| `tiktok_video_detail_product_*` | Product and video-commerce fields from related products |
-| `tiktok_video_detail_comment_*` | Comment identity, text, author, likes, replies, and timestamp |
+| 用出海匠搜美国 TikTok 美妆视频 | 按市场和用户要求筛选视频。 |
+| 看这个视频详情和表现 | 查询指定视频资料和表现。 |
+| 这个视频带了哪些商品 | 查询视频关联的带货商品。 |
+| 看这个视频的评论 | 查询公开评论及互动。 |
 
-## Endpoints
+### 边界
 
-| User goal | Endpoint | Script |
-|---|---|---|
-| Search public videos | `/chuhaijiang/videos/search` | `chuhaijiang_video_search.py` |
-| Inspect one video | `/chuhaijiang/videos/detail` | `chuhaijiang_video_detail.py` |
-| Find products promoted by a video | `/chuhaijiang/videos/related-products` | `chuhaijiang_video_related_products.py` |
-| Read video comments | `/chuhaijiang/videos/reviews` | `chuhaijiang_video_reviews.py` |
+未指定数据源的通用带货视频榜单或详情使用 `linkfox-kalodata-tiktok-video`；商品优先研究使用 `linkfox-chuhaijiang-tiktok-product`，达人优先研究使用 `linkfox-chuhaijiang-tiktok-creator`。上传发布使用 `linkfox-tiktok-video`。
 
-Call only the endpoint required by the user's current question. A normal video can legitimately return an empty related-product list; do not replace it with another video without user approval.
+## 接口清单
 
-## Parameter Guide
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 视频搜索 | POST `/chuhaijiang/videos/search` | `scripts/chuhaijiang_video_search.py` | 多条件检索公开视频。 |
+| 视频详情 | POST `/chuhaijiang/videos/detail` | `scripts/chuhaijiang_video_detail.py` | 查看指定视频资料及核心表现。 |
+| 视频带货商品 | POST `/chuhaijiang/videos/related-products` | `scripts/chuhaijiang_video_related_products.py` | 查看视频关联商品。 |
+| 视频评论 | POST `/chuhaijiang/videos/reviews` | `scripts/chuhaijiang_video_reviews.py` | 查看公开视频评论。 |
 
-- `country`: lowercase request context/site code: `br,de,es,fr,gb,id,it,jp,mx,my,ph,sg,th,us,vn`. The row-level `country_code` can differ from the request value, so preserve both.
-- `page`: starts at 1. `pageSize` controls the returned page size and must not exceed 10.
-- `id`: required for detail, related products, and reviews. Pass it as a JSON string to preserve 19-digit identifiers.
-- `include`: detail-only optional string. Use `core` only when normalized core performance metrics are needed.
-- Search supports `keyword`, `category`, `isCommercial`, play/like/30-day-GMV/engagement ranges, `accountType` (`0`, `3`, or `4`), and `sort` (`field:asc|desc`, default `views:desc`). Use the camelCase gateway names in `references/api.md`; do not send the upstream snake_case aliases.
+## 前置条件
 
-## 调用方式
+先确定数据源、目标市场和问题；已有视频标识时直接按目标钻取，无标识时按用户要求搜索候选。调用前阅读 `references/api.md` 中对应接口的完整定义；运行环境与 CLI、缓存约定也见该文档。
 
-- **API 端点**：`POST /chuhaijiang/videos/search`、`POST /chuhaijiang/videos/detail`、`POST /chuhaijiang/videos/related-products` 或 `POST /chuhaijiang/videos/reviews`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/chuhaijiang_video_<entry>.py '<JSON 参数>' [--inline]`，其中 `<entry>` 为 `search`、`detail`、`related_products` 或 `reviews`
-- **成本约束**：业务入口脚本默认只缓存成功响应 24 小时，业务成功的空结果也可缓存；缓存按当前工作目录、调用身份、网关、端点和完整请求参数隔离。相同组合命中时输出 `Cache hit`，不会发起新的付费请求。HTTP 或业务失败不缓存；`--inline` 不绕过缓存；`--no-cache` 会强制真实请求并可能再次消耗算力，仅在用户明确同意额外消耗或调试时使用。
+## 查询与钻取流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-video-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、业务总数、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 确认用户要搜索、查看详情、关联商品还是评论，只执行当前问题需要的接口。
+2. 搜索时按用户明确的筛选条件取候选，复用返回的视频标识进行钻取；已有标识时不额外搜索。
+3. 按需查看视频资料、核心表现、带货商品或评论。普通视频没有关联商品时如实报告，不擅自替换视频。
+4. 先看响应摘要，再从落盘文件按需抽取字段。根据接口参考解释空结果或错误；不自动放宽条件、换词、翻页或连续重试付费请求。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行方式
 
-## 解决认证和算力问题
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：视频详情每次 9 算力，其余接口每次 18 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改筛选条件连续试探；需要继续检索时，先向用户说明额外消耗。
 
-网关返回认证或余额错误时，读取 `references/onboarding.md`，按其中的 auth/billing 分流使用 `scripts/onboarding.py`。不要把 API Key、验证码、支付链接或原始用户消息写入反馈。
+### 输出策略
 
-## Usage Examples
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-chuhaijiang-tiktok-video-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8000 UTF-8 字节：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8000 UTF-8 字节：保存后，标准输出仅展示摘要，包括顶层字段、实际返回的状态与计数字段（含 `data.total_count`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-```bash
-python scripts/chuhaijiang_video_search.py '{"country":"us","keyword":"beauty","isCommercial":true,"sort":"views:desc","page":1,"pageSize":3}'
-python scripts/chuhaijiang_video_detail.py '{"country":"us","id":"6788833646091504902","include":"core"}'
-python scripts/chuhaijiang_video_related_products.py '{"country":"us","id":"7672655263672864013","page":1,"pageSize":3}'
-python scripts/chuhaijiang_video_reviews.py '{"country":"us","id":"6788833646091504902","page":1,"pageSize":3}'
-```
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-These examples were production-validated with non-empty semantic results. IDs are volatile public-market examples; use a fresh search result when they stop resolving.
+## 执行规则
 
-## Display Rules
+### 算力消耗预估
 
-1. State request context/site code, filters, sort, page, page size, and returned total.
-2. For search results, show caption, video ID, creator, country, plays, likes, comments, shares, engagement rate, and product/commerce metrics only when returned.
-3. For detail, group identity, creator, timing, engagement, cover/share URL, and optional `core` metrics.
-4. For related products, show product ID/name, region, price range, rating, commission rate, video 30-day sales/GMV, and product total sales/GMV when present.
-5. For reviews, show comment ID, text, author handle/nickname, likes, replies, and creation time.
-6. Keep 19-digit IDs as strings. Preserve raw timestamps and add a readable date only as a derived label.
-7. Report empty arrays honestly. Never imply that an ordinary video is shoppable when `data.items` is empty.
+| 能力 | 算力 / 次 |
+|---|---:|
+| 视频搜索 | 18 |
+| 视频详情 | 9 |
+| 视频带货商品 | 18 |
+| 视频评论 | 18 |
 
-## Important Limitations
+多接口钻取前，先说明预计调用次数和合计算力。
 
-1. Data reflects the provider's latest indexed public snapshot and can lag TikTok.
-2. The request `country` selects provider context but is not a verified strict row-country predicate; returned `country_code` remains authoritative for each row.
-3. Related products are available only for videos linked to products in the indexed dataset.
-4. Public comments can be partial, deleted, multilingual, or unavailable.
-5. Do not infer sales causality from correlation between views, engagement, and GMV.
-6. Do not expose internal tool identifiers, credentials, cache files, signed asset URLs, or unrelated response fields.
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-## User Expression & Scenario Quick Reference
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**Use this skill**: “用出海匠搜美国 TikTok 美妆视频”, “看这个视频详情和评论”, “这个视频带了哪些商品”, “Chuhaijiang video analytics”.
+### 解决认证和算力问题
 
-**Adjacent**: General public TikTok shoppable-video rankings or detail requests without a named source should use `linkfox-kalodata-tiktok-video`. Product-first research uses `linkfox-chuhaijiang-tiktok-product`; creator-first research uses `linkfox-chuhaijiang-tiktok-creator`. Uploading or publishing videos uses `linkfox-tiktok-video`.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**Not applicable**: video upload/publishing, creator authorization, seller-backend operations, video downloading, moderation, transcription, or media generation/editing.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## 算力消耗规则
+### 约束与建议
 
-按端点分别计费：视频详情 9 算力/次；视频搜索、视频带货商品和视频评论 18 算力/次。
+- **只读研究**：本技能研究公开市场，不上传、发布、编辑或删除视频。数据是供应商最新索引快照，可能落后于 TikTok。
+- **说明检索范围**：展示请求市场、筛选条件、排序、当前页、页大小和返回总数，区分总数与本页条数。请求市场不保证逐行地区一致，保留每行返回的地区，不按请求市场重标。
+- **清晰展示视频**：搜索结果展示文案、视频标识、达人、地区、播放、点赞、评论、分享、互动率和实际返回的带货指标。详情按身份、达人、时间、互动、封面与公开链接及可选核心指标分组。
+- **清晰展示商品和评论**：商品展示标识、名称、地区、价格范围、评分、佣金率、视频近 30 天销量与 GMV、商品总销量与 GMV；评论展示标识、文本、作者账号与昵称、点赞、回复和时间。仅展示实际返回的数据。
+- **保留数值语义**：金额与 GPM 保留单位和值，不擅自换汇或压成无单位数字；互动率展示为百分比时明确标注，GPM 不是百分比。标识保持字符串，原始时间戳保留，可附派生的可读日期；缺失或 null 不补成零。
+- **如实解释数据**：空关联商品不能推断视频带货；公开评论可能不完整、被删除、多语言或不可用。不从播放、互动与 GMV 的相关性推断销量因果。
+- **保护信息**：不展示内部工具标识、凭据、缓存文件、签名素材 URL 或无关响应字段；反馈前脱敏，不含验证码、手机号、支付信息或原始用户消息。仅在用户明确要求或授权后发送反馈。
 
-> 用户会因算力消耗而支付费用。高频调用或多端点钻取前，先说明预计调用次数与算力消耗。
+## 使用示例
+
+### 搜索并查看指定视频
+
+用户：用出海匠找美国美妆视频，再看我选中的视频表现。
+
+确认市场和筛选要求，先搜索；用户选定后查询详情，需要标准化核心表现时再取得相应数据。
+
+### 查看商品或公开评论
+
+用户：看看这个视频带了哪些商品，以及评论里主要说什么。
+
+确认目标视频，估算关联商品与评论查询的合计算力，按需查询并分别展示；空结果如实说明，不替换视频或猜测数据。
+
+## 使用反馈
+
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
 
-**Feedback:** Use the Feedback API in `references/api.md` only when the user explicitly asks to submit feedback or authorizes it after an issue is identified. Sanitize the content and never include credentials, signed URLs, phone numbers, or unrelated task context.
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

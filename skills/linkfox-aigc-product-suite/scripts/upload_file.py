@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read a file or download a source URL, then use the official Base64 upload entry."""
+"""读取文件或下载来源素材，在进程内编码并调用本包上传入口。"""
 import base64
 import importlib.util
 import json
@@ -75,6 +75,8 @@ def main():
         raise SystemExit("Invalid JSON parameters")
     if not isinstance(params, dict):
         raise SystemExit("Parameters must be a JSON object")
+    from material_runtime import check_output_directory
+    check_output_directory()
     entry = Path(__file__).resolve().with_name("upload_by_base64.py")
     spec = importlib.util.spec_from_file_location("aigc_media_upload", entry)
     module = importlib.util.module_from_spec(spec)

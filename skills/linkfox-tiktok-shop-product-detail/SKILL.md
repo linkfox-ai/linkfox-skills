@@ -1,133 +1,102 @@
 ---
 name: linkfox-tiktok-shop-product-detail
-description: 查询 TikTok Shop 公共商品详情。输入完整商品 URL 或 19 位商品 ID，可指定美国、英国、东南亚及欧洲主要站点，返回商品标题、类目、价格、销量、SKU 库存、图片、店铺、评论概况、物流与促销等分组数据。当用户提到 TikTok Shop 商品详情、TikTok 商品链接解析、商品 ID 查询、价格库存核对、SKU 变体、竞品页面拆解、TikTok product details、TikTok Shop listing lookup 时触发。即使用户未明确说“商品详情”，只要希望根据一个 TikTok Shop 商品 URL 或 19 位商品 ID 读取当前公开商品页数据，也应触发此技能。
+description: 查询单个 TikTok Shop 商品当前公开详情，支持通过商品链接或商品 ID 核对标题、类目、价格、公开销量、SKU 库存、图片、店铺、评论概况、物流与促销信息，覆盖美国、英国、东南亚及欧洲主要站点。适用于 TikTok Shop 商品详情查询、链接解析、SKU 变体核对和竞品页面拆解；不适用于商品搜索、榜单筛选、历史销量与价格趋势、达人直播分析或已授权店铺商品编辑。
 ---
 
-# TikTok Shop Product Detail Lookup
+# TikTok Shop 商品详情查询
 
-Fetch the current public detail of one TikTok Shop product by product URL or 19-digit product ID, with an optional marketplace region.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-- **One product per call**: `productInput` identifies one product; this is not a search or ranking tool.
-- **Marketplace context**: `region` selects the storefront context and defaults to `US`.
-- **Readable grouped data**: the service returns a stable, readable set of product-detail groups.
-- **Current snapshot**: values reflect what the public storefront exposes at request time, not historical analytics.
+读取一个已知 TikTok Shop 商品的当前公开页面数据。用户提供商品链接或商品 ID，希望了解商品内容、当前价格、变体、库存、图片或店铺信息时使用，无需明确提及“商品详情”。
 
-## Data Fields
+**场景速查**
 
-Each object in `data` may contain these top-level groups:
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 查这个 TikTok Shop 链接的商品详情 | 解析商品链接，整理当前公开详情。 |
+| 这个 TikTok 商品 ID 卖什么 | 根据已知商品 ID 核对商品。 |
+| 看看这个商品的价格、SKU 和库存 | 对照商品变体、价格和库存。 |
+| 提取这个商品的图片和店铺信息 | 提取可用商品图片与卖家信息。 |
 
-| Field | Description |
-|-------|-------------|
-| productId | TikTok Shop product ID |
-| status | Platform product status code; do not infer availability from this field alone |
-| title | Product title |
-| category | Category name and ID |
-| pricing | Currency, sale price, original price, discount, and source pricing fields |
-| sales | Public sold count and related sales display data |
-| inventory | Total stock, SKUs, variant properties, prices, and default selection |
-| media | Product image URLs and image metadata |
-| seller | Seller ID, shop name, rating, location, and available shop data |
-| reviews | Public review summary when available |
-| shipping | Logistics and shipping modules when available |
-| actions | Purchase-button and favorite-state data |
-| additional | Other readable promotion, rights, review-entry, and product modules |
+### 边界
 
-Nested fields vary by product and region. Preserve the returned values rather than inventing missing fields.
+商品搜索、畅销榜与多商品筛选、历史 GMV、达人/直播/视频归因分析、视频页或达人主页分析不属于本技能范围。已授权店铺的刊登创建、编辑、改价和改库存转交 TikTok Shop ERP 商品管理技能。
 
-## Parameter Guide
+## 前置条件
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| productInput | Yes | - | TikTok HTTPS URL on `tiktok.com` or a subdomain, using the default HTTPS port and a path containing `product/<19-digit-id>`; or a 19-digit product ID passed as a string |
-| region | No | `US` | Uppercase storefront code: `US`, `GB`, `ID`, `MY`, `TH`, `VN`, `PH`, `SG`, `DE`, `FR`, `IT`, or `ES` |
+先确定目标商品与所需站点；接受的链接格式、商品 ID 和站点约定见 `references/api.md`。缺少商品标识时先补齐，不用搜索或地区轮询猜测目标。
 
-## 调用方式
+## 商品详情核验流程
 
-- **API 端点**：`POST /tiktok/shop/product/detail`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/tiktok_shop_product_detail.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+1. 核对用户指定的商品与站点，按 `references/api.md` 校验输入；使用已有相同参数响应或本地缓存，避免重复计费。
+2. 查询一次公开商品详情，保存完整响应；按接口参考判断响应与业务结果。失败或空结果时说明原因，不自动更换地区或商品连续试探。
+3. 先读取摘要，再按任务需要从保存的 JSON 提取商品、价格、SKU、图片和店铺等数据；按下方展示规则整理结果。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-tiktok-shop-product-detail-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+## 执行方式
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/tiktok_shop_product_detail.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-## 解决认证和算力问题
+### 输出策略
 
-发生以下异常情况时，采用 `references/onboarding.md` 引导解决问题：
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-tiktok-shop-product-detail-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### 异常情况
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-- **未配置 API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应 401 或 402 状态码**。
-- **响应提示算力或余额不足**：消息含“算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值”或类似含义。
+## 执行规则
 
-## Usage Examples
+### 算力消耗预估
 
-**Product URL**
+63 算力 / 次
 
-```bash
-python scripts/tiktok_shop_product_detail.py '{"productInput":"https://shop.tiktok.com/view/product/1729937400435937604","region":"US"}'
-```
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**Product ID for the UK storefront**
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-```bash
-python scripts/tiktok_shop_product_detail.py '{"productInput":"1729937400435937604","region":"GB"}'
-```
+### 解决认证和算力问题
 
-## Display Rules
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-1. Lead with the product title, product ID, requested region, category, and returned status.
-2. Show sale/original price with the returned currency; never convert currencies unless the user asks separately.
-3. Present SKU variants, variant prices, and stock in a table when available.
-4. Render product images inline when useful, but avoid flooding the response with every image.
-5. Show seller, public sold count, review summary, and shipping information only when present.
-6. Treat `status`, stock, and purchase-button data together; do not call a product “available” from one field alone.
-7. Report missing, empty, or inconsistent fields as unavailable rather than estimating them.
-8. For large nested sections, summarize first and read exact fields from the saved JSON only as needed.
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-## Important Limitations
+### 约束与建议
 
-1. Public fields can vary by product, seller, region, and storefront context.
-2. URL inputs must include a `product/<19-digit-id>` path segment; use the 19-digit product ID directly when another TikTok URL format is unavailable.
-3. A product may be removed, unavailable, or out of stock and still return structured metadata.
-4. This tool does not provide historical price/stock trends, ranking lists, or guaranteed sales analytics.
-5. This tool does not manage an authorized seller account or edit listings; use the TikTok Shop ERP product skill for seller operations.
-6. The readable response can be large because SKU, media, shipping, and additional modules retain nested source fields.
+- **当前公开快照**：展示的是请求时公开页面所提供的数据；缓存命中时说明是缓存结果。历史趋势、排名和保证准确的销量分析不在此查询范围，具体数据限制见 `references/api.md`。
+- **先展示商品身份**：先列出标题、商品 ID、请求站点、类目及返回的商品状态，再展示其他可用信息。
+- **标明币种**：售价和原价使用响应币种，除非用户另有要求，不自行换算汇率。
+- **表格展示变体**：有 SKU 数据时，用表格展示变体属性、对应价格与库存，保留返回值。
+- **适量展示图片**：有助于核验时内联展示部分商品图片，避免一次堆满所有图片。
+- **按实际数据展示**：仅在返回时展示卖家、公开售出数量、评论概况和物流信息；缺失、空值或相互矛盾的字段说明不可用，不估算、不补造。
+- **综合判断可售性**：结合商品状态、库存与购买按钮数据解释，不根据单一状态字段就认定商品可购买；下架或缺货商品仍可能返回结构化资料。
+- **分组阅读**：商品详情按可读业务分组整理，嵌套分组保留来源字段。SKU、图片、物流与附加模块较大时先概括，再按需提取原始字段。
+- **额外消耗**：不同商品或地区的重复查询分别计费；继续调用前向用户说明额外消耗，并遵守上述成本约束。
 
-## User Expression & Scenario Quick Reference
+## 使用示例
 
-**Applicable** — one known TikTok Shop product:
+### 查询商品链接
 
-| User Says | Scenario |
-|-----------|----------|
-| “查这个 TikTok Shop 链接的商品详情” | URL detail lookup |
-| “这个 19 位 TikTok 商品 ID 卖什么？” | Product ID lookup |
-| “看看这个商品的价格、SKU 和库存” | Current listing audit |
-| “提取这个 TikTok 商品的图片和店铺信息” | Media and seller extraction |
+用户：查这个 TikTok Shop 商品链接的详情。
 
-**Not applicable**:
+核对链接和站点，查询并保存数据，再展示商品身份、价格和可用 SKU、图片、卖家及物流信息。
 
-- TikTok product search, bestseller rankings, or multi-product screening
-- Historical GMV, creator, livestream, or video-attribution analytics
-- Authorized shop listing creation, editing, price changes, or stock changes
-- TikTok video-page or creator-profile analysis
+### 核对英国站商品
 
-## 算力消耗规则
+用户：看看这个商品在英国站的价格和库存。
 
-消耗 63 算力。
+使用用户给定的商品与英国站点，按 SKU 展示返回的价格、币种及库存，并结合状态与购买按钮解释可售性。
 
-> 用户会因算力消耗而支付费用。重复查询不同地区或不同商品会分别计费；继续调用前应让用户知晓额外消耗。
+## 使用反馈
 
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when the described capability differs from actual behavior, results miss the user's intent, the user expresses praise or dissatisfaction, or the skill can be improved. Follow `references/api.md` without interrupting the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, visit [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

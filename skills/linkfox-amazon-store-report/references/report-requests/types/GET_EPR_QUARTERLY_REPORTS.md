@@ -1,19 +1,19 @@
 # `GET_EPR_QUARTERLY_REPORTS`
 
-> **分类**：12. Regulatory Compliance Reports  
-> **说明**：EPR quarterly reports  
-> **可用范围**：Seller only
+> **分类**：12. 监管合规报告  
+> **说明**：EPR 季度报告  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
-以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Regulatory Compliance Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-regulatory-compliance#epr-quarterly-report)（章节：**EPR Quarterly Report**）。**与专页其它段落冲突时以官方英文文档为准。**
+以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [监管合规报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-regulatory-compliance#epr-quarterly-report)（章节：**EPR Quarterly Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
-- **Availability**：Sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Comma-separated flat file
-- **要点**：Contains data used to declare EPR compliance to regulatory bodies and pay EPR fees, aggregated by quarter. Amazon Extended Producer Responsibility Reports (Amazon EPR Reports) allow sellers to programmatically retrieve all the necessary data required for EPR reporting to regulatory bodies and pay EPR fees. Amazon EPR Reports offer a significant time savings to sellers by generating reports without requiring manual data compilation across several data sources and manual product classification.
+- **角色**：[Product Listing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#product-listing)
+- **可用范围**：卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：逗号分隔的平面文件
+- **要点**：按季度汇总用于向监管机构申报 EPR 合规和支付 EPR 费用的数据。Amazon EPR Reports 支持程序化获取申报和缴费所需全部数据，免去手工合并多个数据源与手工商品分类，节省整理时间。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-regulatory-compliance#epr-quarterly-report>
 

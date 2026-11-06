@@ -1,19 +1,19 @@
 # `GET_VENDOR_FORECASTING_REPORT`
 
-> **分类**：2. Analytics Reports  
-> **说明**：Vendor forecasting data  
-> **可用范围**：Vendor only
+> **分类**：2. 分析报告  
+> **说明**：Vendor 需求预测  
+> **可用范围**：仅 Vendor
 
 ## 官方索引（Report type values）
 
 - **Schema 专页（请求体、`reportOptions`、结果 JSON）**：[`vendorForecastingReport.md`](../vendorForecastingReport.md)
-- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[Analytics Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#vendor-forecasting-report)（章节：**Vendor Forecasting Report**）
+- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[分析报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#vendor-forecasting-report)（章节：**Vendor Forecasting Report**）
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
-- **Availability**：Vendors
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：JSON
+- **角色**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
+- **可用范围**：Vendor
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：JSON
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#vendor-forecasting-report>
 

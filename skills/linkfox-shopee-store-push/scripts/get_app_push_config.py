@@ -1,26 +1,23 @@
 #!/usr/bin/env python3
-"""
-Shopee Store — get_app_push_config
-
-官方: https://open.shopee.com/documents/v2/v2.push.get_app_push_config?module=105&type=1
-
-入参说明见 references/apis/get-app-push-config.md。
-"""
-
-from __future__ import annotations
-
+"""获取推送配置；参数见 references/apis/get-app-push-config.md。"""
 import json
 import sys
-
 from _push_api_runner import run_push_api
 
 
-def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: get_app_push_config.py '<JSON>'", file=sys.stderr)
-        sys.exit(1)
-    params = json.loads(sys.argv[1])
-    print(json.dumps(run_push_api("get_app_push_config", params, "get_app_push_config.py"), indent=2, ensure_ascii=False))
+def main():
+    args = [a for a in sys.argv[1:] if a not in ("--inline", "--no-cache")]
+    if not args:
+        print("Usage: get_app_push_config.py '<JSON>' [--inline] [--no-cache]", file=sys.stderr)
+        raise SystemExit(1)
+    try:
+        params = json.loads(args[0])
+        if not isinstance(params, dict):
+            raise ValueError("JSON parameters must be an object")
+    except (ValueError, TypeError) as exc:
+        print(f"Invalid parameter format: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    run_push_api("get_app_push_config", params, "get_app_push_config.py")
 
 
 if __name__ == "__main__":

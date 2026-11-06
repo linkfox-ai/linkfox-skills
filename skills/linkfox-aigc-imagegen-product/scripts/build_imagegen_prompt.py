@@ -50,8 +50,10 @@ def extract_white_bg_prompt() -> str:
 
 def build_params(img_type: str, image_urls: list) -> dict:
     """构建 imagegen 参数 dict（供 CLI 与 collection_pipeline/single_task.py 共用）。"""
-    if not isinstance(image_urls, list):
-        raise ValueError("image_urls 必须是 list")
+    if not isinstance(image_urls, list) or not image_urls or not all(
+        isinstance(u, str) and u.startswith(("http://", "https://")) for u in image_urls
+    ):
+        raise ValueError("image_urls 必须是非空 http(s) URL 数组")
     if img_type == "WHITE_BG":
         return {"prompt": extract_white_bg_prompt(), "imageUrls": image_urls}
     raise ValueError(f"不支持的 imagegen 静态直出类型: {img_type}")

@@ -1,24 +1,67 @@
-# Keepa-亚马逊-商品详情 API 参考
+# Keepa 亚马逊商品详情 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：商品详情（productRequest）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/keepa/productRequest`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
 
-## 请求参数
+### 请求参数
 
 POST Body（JSON）：
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | asin | string | 是 | 亚马逊标准识别号(ASIN)，多个ASIN用英文逗号分隔，最多5个，最大长度300字符。示例：`B0088PUEPK` 或 `B0088PUEPK,B00U26V4VQ,B07M68S376` |
-| domain | string | 是 | 亚马逊域名ID。可选值：`1`（美国）、`2`（英国）、`3`（德国）、`4`（法国）、`5`（日本）、`6`（加拿大）、`8`（意大利）、`9`（西班牙）、`10`（印度）、`11`（墨西哥）、`12`（巴西） |
-| history | integer | 否 | 返回值是否包含历史数据、历史销量。`1` = 包含价格历史、销售排名、历史销量等时间序列数据（前几个月的销量），`0` = 仅返回基本商品信息。默认：`0` |
+| domain | string | 是 | 亚马逊域名 ID，是数字站点 ID 的字符串，不是国家代码。可选值：`1`（Amazon.com，美国）、`2`（Amazon.co.uk，英国）、`3`（Amazon.de，德国）、`4`（Amazon.fr，法国）、`5`（Amazon.co.jp，日本）、`6`（Amazon.ca，加拿大）、`8`（Amazon.it，意大利）、`9`（Amazon.es，西班牙）、`10`（Amazon.in，印度）、`11`（Amazon.com.mx，墨西哥）、`12`（Amazon.com.br，巴西）。用户未指定站点时，调用方采用 `"1"`（美国）；脚本不自动补齐必填参数。 |
+| history | integer | 否 | 返回值是否包含历史数据、历史销量。`1` = 包含价格历史、销售排名、历史销量等时间序列数据（前几个月的销量），其中可用字段包括前 12 个月月销量及近 30/90/180 天平均销售排名；`0` = 仅返回基本商品信息。默认：`0`。具体历史数据范围见下方接口使用限制。 |
 
-## 响应结构
+#### 脚本选项与运行约定
 
-### 顶层字段
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|-------------|------|------|------|
+| JSON 参数 | object | 是 | 位置参数；按上述请求参数原样发送，不自动修改 ASIN、站点或历史选项。 |
+| --inline | CLI flag | 否 | 强制全量打印，同时保存完整响应。 |
+| --no-cache | CLI flag | 否 | 同时禁用本次缓存读取与写入，不删除已有缓存。默认开启 24 小时缓存。 |
+| --help / -h | CLI flag | 否 | 仅显示本地帮助，不请求接口。 |
+| LINKFOX_TOOL_GATEWAY | 环境变量 | 否 | 自定义网关优先，未配置时使用公共规则中的默认地址。 |
+| LINKFOX_AGENT_API_KEY / LINKFOXAGENT_API_KEY | 环境变量 | 是（未命中缓存时） | 优先读取前者，兼容后者；缓存命中不要求重新读取密钥。 |
+| SESSION_ID / MESSAGE_ID / MODE_ID / APP_NAME | 环境变量 | 否 | 保留同名请求头；SESSION_ID 也用于聚合会话，缺省在进程内生成稳定会话标识。会话目录须位于当前工作目录的 linkfox 内。 |
+
+缓存路径为 `<cwd>/linkfox/.cache/linkfox-keepa-product-request/`，文件名为 `linkfox-keepa-product-request-<hash>.json`；`<hash>` 仅由参数 JSON（`json.dumps(params, ensure_ascii=False, sort_keys=True)`）的 UTF-8 字节计算 SHA-256，再取前 16 位，不将技能标识加入哈希输入。命中时保留 `_cache.hit=true` 标记；过期或损坏时重新请求。结果（包括错误或空结果）默认保存缓存，不对错误自动重试；使用 `--no-cache` 前先遵守算力消耗约束。
+
+业务入口仅使用公共调用器这一层缓存，未叠加业务缓存。完整响应以 UTF-8 保存，按 8000 字节阈值决定打印全量还是摘要。业务入口在请求前检查当前工作目录下的会话数据目录可写性，不因 `ACPX_WORKSPACES` 或目录不可写而改写到家目录、临时目录。
+
+#### 接口使用限制
+
+- 批量数量与字符串长度上限见请求参数表。超出范围需分批，额外调用仍遵守成本约束，不自动批量试探。
+- 不返回完整商品描述或评论正文，Item Highlights 不等于五点描述或完整描述。
+- Item Highlights 无需额外请求参数，`history=0` 也可返回；是否有值依赖后端已部署透传能力及上游数据，不能承诺每个 ASIN 均有值。
+- `history=1` 可请求价格历史、销售排名等时间序列数据；本接口未定义完整价格或 Buy Box 历史序列的响应结构，不承诺历史价格图表。
+- 数据新鲜度以 `lastUpdate` 为准；历史数据仅在启用历史选项且上游可用时展示。
+
+### 响应结构
+
+#### 顶层字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -32,7 +75,7 @@ POST Body（JSON）：
 | type | string | 渲染的样式 |
 | products | array | 商品列表（详见下方） |
 
-### 商品对象字段
+#### products[] 商品对象字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -103,64 +146,58 @@ POST Body（JSON）：
 | sourceType | string | 来源类型：keepa |
 | sourceTool | string | 来源工具 |
 
-## 错误码
+#### 状态字段与兼容说明
 
-正常情况下，接口的 HTTP 状态码均为 200，业务的成功与否通过响应体中的 errorCode 字段区分（errorCode = 200 表示成功，其他值表示业务错误）。当遇到未授权等情况时，HTTP 状态码为 401，且对应的 errorCode 也是 401。
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 业务状态码，按公共规则判断。 |
+| errmsg | string | 错误消息，据此解释具体原因。 |
+| errorCode | 未明确 | 兼容状态字段，类型以实际返回为准；未约定独立响应结构与成功判定，不替代公共规则，也不另设成功条件。 |
+| _cache.hit | boolean | 本地脚本缓存命中标记，非服务端字段。 |
 
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析业务字段 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 402 | 算力不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
+#### products[].subcategories[] 子类目对象
 
-错误响应示例：
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| code | 未明确 | 类目 ID，保持实际返回类型。 |
+| rank | 未明确 | 排名，保持实际返回类型。 |
+| label | 未明确 | 类目名称，保持实际返回类型。 |
 
-```json
-{
-    "errcode": 401,
-    "errmsg": "authorized error"
-}
-```
+`columns`、`productImageUrls` 的元素结构以实际完整响应为准，不补造嵌套字段。商品的 `0` / `-1` 不可用值、毫米尺寸、克重量、历史月份及 Item Highlights 缺失约定按字段表处理。
 
-## curl 示例
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 本技能没有已确认的额外业务成功码；查询失败时根据实际错误消息建议核对 ASIN 格式或站点，不自动更改参数重试。
+- 正常响应中的空商品列表应解释为本次未返回可用商品数据，不能补造商品，也不能仅凭空结果认定 ASIN 不存在。
+
+### curl 示例
 
 ```bash
-curl -X POST https://tool-gateway.linkfox.com/keepa/productRequest \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/keepa/productRequest" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{"asin": "B0088PUEPK", "domain": "1", "history": 1}'
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{"asin": "B0088PUEPK,B00U26V4VQ,B07M68S376", "domain": "1", "history": 1}'
 ```
 
-### 批量查询示例
+## Feedback
 
-```bash
-curl -X POST https://tool-gateway.linkfox.com/keepa/productRequest \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"asin": "B0088PUEPK,B00U26V4VQ,B07M68S376", "domain": "1", "history": 0}'
-```
-
----
-
-## Feedback API
-
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "skillName": "linkfox-xxx-xxx",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "skillName": "linkfox-keepa-product-request",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter
-- `sentiment`: Choose ONE — `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE — `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

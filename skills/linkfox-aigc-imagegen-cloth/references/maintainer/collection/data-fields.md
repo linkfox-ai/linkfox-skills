@@ -1,6 +1,6 @@
 # 字段汇总表：服饰套图
 
-供运行时快速查字段，不必重读 SKILL.md。
+供维护时快速查字段；运行时只读取 `references/runtime/`。
 
 ## S0 场景路由
 
@@ -43,8 +43,9 @@
 | image-urls.json | 全部图 URL | 输入 | 步骤 1 校验后落盘 |
 | collection-state.json | run_one_task / summary 入参 | 中间产物 | plan phase 落盘（含 `task_specs[]` / 脚本路径 / brandKey） |
 | task-result-*.json | 单任务结果片段 | 中间产物 | 每个 `run_one_task.py` 落盘，summary 读后汇总 |
-| brandGeneJson | 品牌基因 | 输入/生成 | S3 `save_brand_gene.py` 落盘路径 → state `brand_gene_file` |
+| brandGeneJson | 品牌基因 | 输入/生成 | plan 阶段 `save_brand_gene.py` 落盘路径或已有文件 → state `brand_gene_file` |
 | provider | 生图模型 | 输入 | 用户选择 |
-| resolution | 分辨率 | 输入 | 从所选模型当前支持的分辨率选择；原默认/必填约定不变，旧2K/4K仅作历史示例 |
+| resolution | 分辨率 | 输入 | 首轮未指定时用 1K；确认画面后询问是否重出 2K、medium；只有用户明确要求才传 4K |
+| quality | 图片质量 | 输入 | 首轮未指定时用 low；用户指定时原样透传 |
 | imageUrls | 全部图 key | 输入 | 用户上传（必须全量传） |
 | 图片产物 | 共享流水线步骤 3 输出 | 输出 | 直接交付用户 |

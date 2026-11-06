@@ -1,12 +1,31 @@
-# SIF-关键词竞品数量 API 参考
+# SIF 关键词竞争概览 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：关键词竞争概览（keywordOverview）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/sif/keywordOverview`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
 
-## 请求参数
+### 请求参数
 
 POST Body（JSON）：
 
@@ -19,12 +38,22 @@ POST Body（JSON）：
 | endDate | string | 否 | 结束日期 `yyyy-MM-dd`（与 `startDate` 配套） |
 
 
-## 响应结构
+#### 参数约束与使用限制
 
-### 顶层字段
+- 每次请求只查询一个关键词；多关键词或多站点对比分别请求。
+- 关键词应使用目标站点的当地语言；用户提供其他语言时，先翻译再查询，例如德国站使用德语、日本站使用日语。
+- `country` 支持的 13 个站点分别为：美国（US）、英国（UK）、德国（DE）、加拿大（CA）、日本（JP）、法国（FR）、西班牙（ES）、意大利（IT）、墨西哥（MX）、澳大利亚（AU）、阿联酋（AE）、巴西（BR）、沙特阿拉伯（SA）。用户未指定时使用 `US`；列表外代码会被接口校验拒绝。`IN`、`NL`、`SE`、`PL`、`TR`、`SG` 不支持。
+- 默认查询最近 7 天；自定义 ABA 周区间时同时传入 `last7d=false`、`startDate` 和 `endDate`。
+- 接口通常每个关键词仅返回一条记录，`total` 通常为 1。关键词在目标站点未找到时会返回空结果。
+
+### 响应结构
+
+#### 顶层字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| errcode | integer | 网关状态码；基础判断见公共规则，本接口以 `200` 表示网关调用成功 |
+| errmsg | string | 网关错误消息，如 `authorized error`；异常时用于解释原因 |
 | msg | string | 消息 |
 | total | integer | 数据总量。注意：本接口通常只返回单条数据，total 通常为1 |
 | code | string | SIF 业务返回码，`"1"` 表示成功 |
@@ -35,7 +64,7 @@ POST Body（JSON）：
 | type | string | 渲染的样式 |
 | title | string | 标题 |
 
-### 数据字段（`data` 数组中的每个对象）
+#### 数据字段（`data` 数组中的每个对象）
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -61,64 +90,57 @@ POST Body（JSON）：
 | dataPeriodEndDate | string | 数据周期结束日期。本次返回数据对应的 ABA 周结束日期（`yyyy-MM-dd`） |
 | keywordDataUpdateTime | string | 关键词数据更新时间 |
 
-## 错误码
+### 响应码规则
 
-接口包含两层状态码：网关调用状态通过 `errcode` 字段区分，`errcode = 200` 表示网关调用成功；SIF 业务成功通过响应体中的 `code` 字段区分，`code = "1"` 表示成功。当遇到未授权等网关错误时，HTTP 状态码和 `errcode` 为对应的错误码。
+#### 基础规则
 
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析业务字段 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 402 | 余额不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
+基本规则参考 `公共规则` -> `响应码基本规则`。
 
-错误响应示例：
+#### 业务规则
 
-```json
-{
-    "errcode": 401,
-    "errmsg": "authorized error"
-}
-```
+- 网关基础判断之外，还需检查 SIF 业务字段 `code`：`"1"` 表示业务成功，不应套用其他接口的 `code="200"` 约定；业务失败依据 `msg` 解释。
+- 关键词在查询站点未找到会返回空结果；结合 `data` 与 `total` 判断，不将空结果解释为零竞争。
 
-## curl 示例
+### curl 示例
 
 ```bash
 curl -X POST https://tool-gateway.linkfox.com/sif/keywordOverview \
   -H "Authorization: $LINKFOXAGENT_API_KEY" \
   -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{"keyword": "wireless charger", "country": "US"}'
 ```
 
-### 指定日期区间
+## 脚本运行约定
 
-```bash
-curl -X POST https://tool-gateway.linkfox.com/sif/keywordOverview \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"keyword": "yoga mat", "country": "US", "last7d": false, "startDate": "2026-03-08", "endDate": "2026-03-14"}'
-```
+入口为 `scripts/sif_keyword_overview.py`，使用同目录公共调用器处理请求、缓存、落盘和输出，只使用一层缓存。
 
----
+| 选项或约定 | 类型 | 说明 |
+|------------|------|------|
+| JSON 参数 | string | 首个位置参数为请求 JSON，字段见上方请求参数表。缺少参数或 JSON 格式非法时退出码为 1。 |
+| --inline | CLI flag | 强制全量打印，仍保存完整响应。 |
+| --no-cache | CLI flag | 禁用 24 小时响应缓存，本次不读取也不写入缓存内容。 |
+| 本地缓存 | 文件 | 默认保留 24 小时缓存，位置为 `<cwd>/linkfox/.cache/linkfox-sif-keyword-overview/`。键为参数 JSON 按键排序后计算 SHA-256 的前 16 位；参数相同且在有效期内复用，命中时附 `_cache.hit=true`。过期或损坏的缓存不复用。 |
+| LINKFOX_TOOL_GATEWAY | 环境变量 | 优先使用自定义网关，去掉结尾 `/`，未设置时使用公共规则中的地址。 |
+| LINKFOX_AGENT_API_KEY / LINKFOXAGENT_API_KEY | 环境变量 | 优先使用前者，兼容后者；两者均为空时退出码为 1，按认证指引处理。 |
+| SESSION_ID / MESSAGE_ID / MODE_ID / APP_NAME | 环境变量 | 作为同名请求头转发；未配置时为空字符串。 |
+| 输出目录 | 运行要求 | 按 SKILL.md 的输出策略在可写的当前项目目录运行，禁止将结果放入 `/tmp`。业务入口在请求前检查项目输出目录、会话数据目录和缓存目录可写，并在本次运行内将公共调用器的输出根目录固定为 `<cwd>/linkfox`，不受 `ACPX_WORKSPACES` 重定向，也不回退到家目录或临时目录；不可写时退出码为 1。 |
+| 输出阈值 | integer | 输出阈值为 `8000` UTF-8 字节：不超过阈值全量输出，否则摘要列出顶层字段、常见计数及最大列表的前 3 条样本。 |
 
-## Feedback API
+完整响应使用 UTF-8 保存，按日期和会话聚合，并登记会话 `_meta.json` 和 `linkfox/index.jsonl`。缓存位于当前工作目录，命中也会保存本次完整输出。公共调用器保留 HTTP JSON 错误体和非 JSON 错误详情，不自动重试关键词查询。
 
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "skillName": "linkfox-xxx-xxx",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "skillName": "linkfox-sif-keyword-overview",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter
-- `sentiment`: Choose ONE — `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE — `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

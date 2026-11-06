@@ -18,11 +18,8 @@ from urllib.parse import quote
 from _spapi_aplus_common import (
     APLUS_PATH_PREFIX,
     ensure_auth_skill_available,
-        developer_proxy_post,
+    run_proxy,
     resolve_marketplace_id,
-    merge_success_json,
-    emit_result,
-    lf_inline_flag,
 )
 
 
@@ -35,8 +32,8 @@ def _append_asin_query(parts: list[str], asin_set: object | None) -> None:
         vals = [str(x).strip() for x in asin_set if str(x).strip()]
     else:
         raise ValueError("asinSet must be string, comma string, or array")
-    for a in vals:
-        parts.append(f"asinSet={quote(a, safe='')}")
+    if vals:
+        parts.append(f"asinSet={quote(','.join(vals), safe=',')}")
 
 
 def main() -> None:
@@ -52,6 +49,10 @@ def main() -> None:
         params = json.loads(sys.argv[1])
     except json.JSONDecodeError as e:
         print(f"Invalid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not isinstance(params, dict):
+        print("JSON parameters must be an object", file=sys.stderr)
         sys.exit(1)
 
     if not params.get("skipDepCheck"):
@@ -82,17 +83,8 @@ def main() -> None:
     seller_id = str(params["sellerId"])
     region = str(params["region"])
 
-    proxy = developer_proxy_post(
-        region, path, seller_id, query_string=query_string, body_obj=body
-    )
-    out: dict = {
-        "developerProxy": proxy,
-        "resolvedPath": path,
-        "queryString": query_string,
-    }
-    merge_success_json(out, proxy, "validateContentDocumentAsinRelationsResponse")
-    inline = lf_inline_flag()
-    emit_result(out, inline)
+    run_proxy("validateContentDocumentAsinRelations", "POST", region, path, seller_id,
+              query_string, result_field="validateContentDocumentAsinRelationsResponse", body_obj=body)
 
 
 if __name__ == "__main__":

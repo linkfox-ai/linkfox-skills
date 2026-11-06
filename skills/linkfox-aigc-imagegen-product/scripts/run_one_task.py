@@ -10,7 +10,7 @@ stdout 输出一行 ``Saved full response: ["/abs/img.png"]``（成功）或失�
 同时落盘 ``<datadir>/task-result-<id>.json`` 片段（含 product 专用 ``assets[]`` 字段，
 供 summary 阶段合并 ``collection-asset-manifest.json``）。
 
-由 agent 在 plan 确认后，并发 N 次调用本脚本（每个任务 1 次 Bash，--index 1..N）。
+由 dispatch 阶段在线程池中调用本脚本（--index 1..N），Agent 不另行并发。
 完整交付协议见 ``references/runtime/03-deliver.md``。
 """
 
@@ -19,7 +19,7 @@ import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILL_ROOT = os.path.dirname(SCRIPT_DIR)
-sys.path.insert(0, SCRIPT_DIR)  # 本地 collection_pipeline 包，不再外引 _shared
+sys.path.insert(0, SCRIPT_DIR)  # 使用本地自包含的 collection_pipeline 包
 
 from collection_pipeline.single_task import main  # noqa: E402
 

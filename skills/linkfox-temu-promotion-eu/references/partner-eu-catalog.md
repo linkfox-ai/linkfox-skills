@@ -55,3 +55,8 @@ Partner Platform for EU 菜单：**Promotion / 电商促销**（与 US 版对齐
 ## Token 说明
 
 建议使用 **`tokenPurpose=product-inventory`**。详见 [access-token.md](./access-token.md)。
+
+
+## 接入新操作的维护约定
+
+仅在取得 Partner 的 type、sub_menu_code、URL 及完整 Request/Response 参数表后扩展：新增 `references/apis/<type-slug>.md`，新增调用 `_eu_promotion_script.run_cli` 的 `scripts/eu_promotion_<slug>.py`，同步本目录、`references/apis/README.md` 和 SKILL.md 接口清单。不根据菜单名推测活动创建或优惠券接口。

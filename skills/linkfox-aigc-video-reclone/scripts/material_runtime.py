@@ -1,4 +1,4 @@
-"""Shared orchestration; HTTP API calls and response storage stay in official entries."""
+"""素材编排、任务状态判断及下载；LinkFox 请求统一交给接口入口。"""
 import contextlib
 import importlib.util
 import io
@@ -62,7 +62,26 @@ def invoke(path, params, no_cache=False):
 
 
 def api_error(result):
-    return bool(result.get("error")) or result.get("errcode") not in (None, 0, 200, "0", "200") or result.get("code") not in (None, 0, 200, "0", "200")
+    def success_or_empty(value):
+        if value is None:
+            return True
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return True
+            if len(value) != 3 or not value.isascii() or not value.isdigit():
+                return False
+            value = int(value)
+        return type(value) in (int, float) and 200 <= value < 300 and value % 1 == 0
+
+    http_status = result.get("transportHttpStatus", 200)
+    code = result.get("code")
+    # 旧响应的 code=0 表示成功；不改变公共 errcode=0 为失败的规则。
+    legacy_code_ok = (type(code) is int and code == 0) or code == "0"
+    return (type(http_status) is not int or not 200 <= http_status < 300
+            or bool(result.get("error"))
+            or not success_or_empty(result.get("errcode"))
+            or not (legacy_code_ok or success_or_empty(code)))
 
 
 def prepare_media(params, scripts):

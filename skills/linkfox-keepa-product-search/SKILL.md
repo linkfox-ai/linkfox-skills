@@ -1,278 +1,149 @@
 ---
 name: linkfox-keepa-product-search
-description: 基于Keepa数据的亚马逊高级商品搜索与筛选，支持品类、价格、月销量、关键词、BSR排名、评论数、评分、包装尺寸、重量、配送方式等多维度条件。当用户提到Keepa选品、亚马逊商品查找、高级选品、BSR筛选、按销售排名选品、月销量过滤、关键词选品、品类选品、竞品筛选、小众商品发掘、历史排名筛选、Keepa product selection, advanced product selection, BSR filtering, sales filtering, category search, competitor screening, historical data filtering, Amazon product selection时触发此技能。即使用户未明确提及"Keepa"，只要其需求涉及多条件亚马逊商品搜索、按销售指标筛选商品或超越简单关键词搜索的高级选品，也应触发此技能。
+description: 基于 Keepa 数据搜索和筛选亚马逊商品，支持类目、关键词、价格、月销量、BSR、评论、评分、品牌、上架日期、包装尺寸、重量及配送方式，并按需查看历史排名和销量。适用于高级选品、竞品筛选、新品发掘、小众市场研究及多条件商品查找，无需明确提及 Keepa。不适用于实时前台搜索排名、搜索词流量趋势、评论正文或情感分析、广告管理、Listing 文案优化及库存供应链查询。
 ---
 
-# Keepa Product Search
+# Keepa 亚马逊商品搜索
 
-This skill guides you on how to search and filter Amazon products using Keepa's extensive product database, helping Amazon sellers find products that match specific criteria across multiple dimensions.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-This tool provides advanced Amazon product search powered by Keepa data. Unlike a simple Amazon storefront search, it supports multi-criteria filtering: category, price range, monthly sales volume, BSR (Best Sellers Rank), keyword matching (positive and negative), review counts, ratings, package dimensions, weight, fulfillment type, historical sales rank, and more. It returns detailed product data including pricing, titles, images, listing dates, materials, weights, monthly sales for the past 12 months, and more.
+基于 Keepa 商品数据库进行多条件亚马逊选品和筛选，查看匹配商品的价格、品牌、排名、销量及可用历史数据。
+用户希望按销售指标、类目、价格等结构化条件找商品时，使用本技能。
 
-**BSR (Best Sellers Rank)**: A lower `salesRank` value means better sales performance. Rank 1 is the best-selling product in its category. When a user says "top-selling products", they want low BSR values.
+**场景速查**
 
-**Price unit**: Prices are expressed in the smallest currency unit (e.g., cents for USD). So `$25.99` = `2599`. Always convert when building queries and when displaying results.
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 找月销超过某个数量的商品 | 销量筛选。 |
+| 看这个类目或品牌有哪些产品 | 类目发现、品牌筛选。 |
+| 找 BSR 靠前、评论少的商品 | 排名与竞争指标筛选。 |
+| 找最近几个月上架的新品 | 上架日期筛选。 |
+| 找某个价格区间、评分好的 FBA 商品 | 价格、配送方式和评分组合筛选。 |
+| 找轻小、容易运输的商品 | 包装尺寸与重量筛选。 |
+| 看历史销量、BSR 趋势或历史月份排名 | 历史数据研究。 |
+| 高级选品、找小众或低竞争产品 | 多条件商品研究，以返回指标支持判断。 |
 
-**Category names**: The `categoriesIncludeNames` parameter supports multi-level category paths separated by a colon `:` or the `>` character. Automatically convert user input into the correct format.
+### 边界
 
-## Parameters
+需要查看真实亚马逊搜索结果页及实时关键词排位时，使用 Amazon Search；需要搜索词历史搜索量、排名等流量分析时，使用 ABA 数据。评论正文或情感分析、广告管理、Listing 优化、库存和供应链查询不属于本技能范围。
 
-### Marketplace (Required)
+## 前置条件
 
-| Parameter | Type | Required | Description | Default |
-|-----------|------|----------|-------------|---------|
-| domain | string | Yes | Amazon marketplace ID | - |
+先确定目标站点和筛选意图；参数、默认值、单位、枚举及使用限制见 `references/api.md`。
 
-**Domain ID mapping:**
+## 查询流程
 
-| ID | Marketplace |
-|----|-------------|
-| 1 | Amazon.com (United States) |
-| 2 | Amazon.co.uk (United Kingdom) |
-| 3 | Amazon.de (Germany) |
-| 4 | Amazon.fr (France) |
-| 5 | Amazon.co.jp (Japan) |
-| 6 | Amazon.ca (Canada) |
-| 8 | Amazon.it (Italy) |
-| 9 | Amazon.es (Spain) |
-| 10 | Amazon.in (India) |
-| 11 | Amazon.com.mx (Mexico) |
+1. 确定目标站点，将国家映射为站点标识；用户未指定时采用接口参考中的默认站点。
+2. 根据标题关键词准备包含与排除条件，保留短语匹配意图。
+3. 确定类目范围，将用户提供的多级类目路径规范化后使用类目名称或编号。
+4. 将销量、价格、BSR、评论、评分和包装要求映射到对应的上下界筛选条件；价格单位按接口参考转换。
+5. 根据用户要看的销量、价格或评分安排排序；研究月销量趋势或价格历史时按需获取历史数据。
+6. 调用后先查看摘要与保存文件，按用户意图展示商品及分页情况；失败或空结果时解释原因，后续检索遵守成本约束。
 
-Default marketplace is **1** (US). Use domain `1` when the user doesn't specify a marketplace.
+## 执行方式
 
-### Keyword Filtering
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/keepa_product_search.py '<JSON 参数>' [--inline]`。
+- **成本约束**：本工具按 Keepa token 用量动态计费（见“算力消耗预估”）。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| keyword | string | Title keyword filter (case-insensitive; space = AND; wrap phrases in double quotes; prefix with `-` to exclude; `&` is replaced by space; max 50 keywords, max 1000 chars) |
+### 输出策略
 
-### Category Filtering
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-keepa-product-search-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| rootCategory | array[int] | Root category IDs (max 50) |
-| rootCategoryNames | array[string] | Root category names (max 50); used when rootCategory is empty; system auto-resolves IDs |
-| categoriesInclude | array[int] | Sub-category IDs to include (max 50) |
-| categoriesIncludeNames | array[string] | Sub-category names to include (max 50); supports full category paths with `:` or `>` separators |
-| categoriesExclude | array[int] | Sub-category IDs to exclude (max 50) |
-| categoriesExcludeNames | array[string] | Sub-category names to exclude (max 50); supports full category paths |
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-### Sales & Ranking Filters
+## 执行规则
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| currentSalesGte | integer | Current BSR -- minimum (higher number = worse rank) |
-| currentSalesLte | integer | Current BSR -- maximum (lower number = better rank) |
-| avg90SalesGte | integer | 90-day average BSR -- minimum |
-| avg90SalesLte | integer | 90-day average BSR -- maximum |
-| deltaPercent90SalesGte | integer | 90-day BSR change percentage -- minimum |
-| deltaPercent90SalesLte | integer | 90-day BSR change percentage -- maximum |
-| monthlySoldGte | integer | Monthly sales units -- minimum |
-| monthlySoldLte | integer | Monthly sales units -- maximum |
-| srAvgGte | integer | Historical average BSR -- minimum (for a specific month) |
-| srAvgLte | integer | Historical average BSR -- maximum (for a specific month) |
-| srAvgMonth | string | Historical BSR month selection (format: YYYYMM, within last 36 months) |
+### 算力消耗预估
 
-### Price Filters
+按动态规则计费：消耗算力 = 0.045 ×（找商品阶段消耗的 Keepa token + 拉取商品详情阶段消耗的 Keepa token）。先找商品，再拉取商品详情；若第一阶段未找到商品，则只计找商品阶段消耗。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| currentNewGte | integer | Current new price -- minimum (smallest currency unit) |
-| currentNewLte | integer | Current new price -- maximum (smallest currency unit) |
-| currentBuyBoxShippingGte | integer | Current Buy Box price including shipping -- minimum (smallest currency unit) |
-| currentBuyBoxShippingLte | integer | Current Buy Box price including shipping -- maximum (smallest currency unit) |
+本服务按倍数动态计算，一次调用可能消耗大量算力；调用前必须提醒用户，由用户决定是否继续。
 
-### Review & Rating Filters
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| currentCountReviewsGte | integer | Review count -- minimum |
-| currentCountReviewsLte | integer | Review count -- maximum |
-| currentRatingGte | number | Rating -- minimum (0.0-5.0) |
-| currentRatingLte | number | Rating -- maximum (0.0-5.0) |
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-### Package & Dimensions Filters
+### 解决认证和算力问题
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| packageLengthGte / packageLengthLte | integer | Package length range (mm) |
-| packageWidthGte / packageWidthLte | integer | Package width range (mm) |
-| packageHeightGte / packageHeightLte | integer | Package height range (mm) |
-| packageWeightGte / packageWeightLte | integer | Package weight range (grams) |
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### Other Filters
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| brand | array[string] | Brand names (OR match) |
-| color | array[string] | Colors (OR match) |
-| size | array[string] | Sizes (OR match) |
-| availableDateGte / availableDateLte | string | Listing date range (yyyy-MM-dd) |
-| buyBoxIsAmazon | boolean | Buy Box seller is Amazon |
-| buyBoxIsFBA | boolean | Buy Box is FBA fulfilled |
-| isHazMat | boolean | Hazardous material flag |
-| variationCountGte / variationCountLte | integer | Variation count range |
-| currentCountNewGte / currentCountNewLte | integer | Number of new offers range |
-| outOfStockPercentage90Gte / outOfStockPercentage90Lte | integer | 90-day out-of-stock percentage range |
-| singleVariation | boolean | Return only one variation per parent ASIN |
-| productType | array[int] | Product types: 0=standard, 1=downloadable, 2=ebook, 5=variation parent |
+### 约束与建议
 
-### Data Options
+- **理解数据来源**：本技能使用 Keepa 数据库，并非实时亚马逊前台搜索；返回的标题、图片、上架时间、材质、重量及历史数据以实际可用字段为准。
+- **理解 BSR**：`salesRank` 数值越小，类目销售排名越好；第 1 名代表该类目最畅销的商品。用户要“畅销商品”时，应按低 BSR 或销量条件理解；展示 BSR 时提醒用户数值越小排名越好。
+- **清晰展示结果**：表格优先展示 ASIN、标题、价格、BSR、月销量、评分、评论数和品牌，并注明站点及币种。
+- **正确展示价格**：筛选条件和结果的金额口径分别见 `references/api.md`。将筛选金额转换为所需单位；结果按字段定义与币种展示，避免对已经是标准货币单位的价格再次除以 100。
+- **展示历史数据**：取得历史销量时，清晰列出最近 12 个月的趋势；缺失月份保持缺失，不补造数据。
+- **说明分页情况**：说明返回范围和总结果数，按用户需要建议查看后续页；继续查询遵守成本约束。
+- **保留图片链接**：图片链接可供用户使用，用户未要求时不内联渲染图片。
+- **解释错误与空结果**：按接口参考判断响应，说明失败原因并建议调整筛选；不自动试探新条件。
 
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| history | integer | Include historical data (price history, sales rank, monthly sales per month) | 0 (no) |
-| rating | integer | Include rating info | 1 (yes) |
+## 使用示例
 
-### Pagination & Sorting
+### 美国站电子类目月销量超过 1000
 
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| page | integer | Page number (starting from 1) | 1 |
-| perPage | integer | Results per page (min 50, max 100) | 50 |
-| sort | array[object] | Sort rules (max 3); each object: `{"fieldName": "...", "sortDirection": "asc|desc"}` | - |
-
-**Sortable fields**: `availableDate`, `currentSales`, `monthlySold`, `currentRating`, `currentCountReviews`, `currentBuyBoxShipping`, `currentNew`
-
-## 调用方式
-
-- **API 端点**：`POST /keepa/productSearch`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/keepa_product_search.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
-
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-keepa-product-search-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
-
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
-
-## How to Build Queries
-
-Construct the request parameters based on the user's intent:
-
-1. **Determine the marketplace**: Map the user's target country to the correct `domain` ID value
-2. **Set keyword filters**: Use `keyword` for title-based filtering with positive and negative terms
-3. **Set category scope**: Use `categoriesIncludeNames` or `rootCategoryNames` to scope by category; convert user input into proper category path format
-4. **Apply numeric filters**: Map sales volume, price, BSR, review, and rating requirements to the appropriate Gte/Lte parameters
-5. **Set sort order**: If the user wants results sorted by sales, price, or rating, configure the `sort` array
-6. **Enable historical data**: Set `history` to `1` if the user needs monthly sales trends or price history
-
-### Usage Examples
-
-**1. Search for electronics with monthly sales over 1000 on US marketplace**
 ```json
 {"domain": "1", "rootCategoryNames": ["Electronics"], "monthlySoldGte": 1000}
 ```
 
-**2. Find products in a price range with good ratings**
+### 按价格区间和评分找无线充电器
+
 ```json
 {"domain": "1", "currentBuyBoxShippingGte": 1500, "currentBuyBoxShippingLte": 5000, "currentRatingGte": 4.0, "keyword": "wireless charger"}
 ```
 
-**3. New products listed in the last 6 months with low review counts**
+### 找指定日期后上架、评论较少的新品
+
+相对日期需求先换算为实际日期；下例为固定日期示意。
+
 ```json
 {"domain": "1", "availableDateGte": "2025-10-01", "currentCountReviewsLte": 50, "monthlySoldGte": 500}
 ```
 
-**4. BSR rank filtering for competitive analysis**
+### 家居类目 BSR 筛选并按月销量排序
+
 ```json
 {"domain": "1", "categoriesIncludeNames": ["Home & Kitchen"], "currentSalesLte": 5000, "sort": [{"fieldName": "monthlySold", "sortDirection": "desc"}]}
 ```
 
-**5. Find non-Amazon FBA products with good sales**
+### 非亚马逊自营的 FBA 商品
+
 ```json
 {"domain": "1", "buyBoxIsAmazon": false, "buyBoxIsFBA": true, "monthlySoldGte": 300, "currentRatingGte": 4.0}
 ```
 
-**6. Lightweight small products for easy shipping**
+### 轻小包装商品
+
 ```json
 {"domain": "1", "packageWeightLte": 500, "packageLengthLte": 200, "packageWidthLte": 150, "packageHeightLte": 100, "monthlySoldGte": 200}
 ```
 
-**7. Search on Japan marketplace with historical data**
+### 日本站搜索并获取历史数据
+
 ```json
 {"domain": "5", "keyword": "USB charger", "history": 1, "monthlySoldGte": 100}
 ```
 
-**8. Brand-specific search excluding hazardous materials**
+### 指定品牌并排除危险品
+
 ```json
 {"domain": "1", "brand": ["Anker", "UGREEN"], "isHazMat": false, "sort": [{"fieldName": "monthlySold", "sortDirection": "desc"}]}
 ```
 
-## Display Rules
+## 使用反馈
 
-1. **Present data clearly**: Show search results in well-structured tables with key fields: ASIN, title, price, BSR, monthly sales, rating, review count, brand
-2. **Price conversion**: Convert prices from smallest currency unit to standard format (e.g., 2599 -> $25.99)
-3. **BSR clarification**: When showing BSR data, remind users that lower values mean better sales ranking
-4. **Monthly sales history**: When historical data is included, present the 12-month sales trend clearly
-5. **Pagination notice**: Inform users of the total result count and suggest fetching additional pages if needed
-6. **Image links**: If image URLs are available, mention them but do not attempt to render them inline unless the user requests it
-7. **Error handling**: When a query fails, explain the reason and suggest adjusting filter criteria
-## Important Limitations
-
-- **Result cap**: Maximum 100 results per page, minimum 50
-- **Sort limit**: Maximum 3 sort rules per query
-- **Category limit**: Maximum 50 category IDs or names per filter
-- **Keyword limit**: Maximum 50 keywords in keyword parameter
-- **Historical data cost**: Setting `history=1` increases response size and token cost significantly
-- **Price unit**: All price values are in the smallest currency unit (cents, pence, etc.)
-
-## User Expression & Scenario Quick Reference
-
-**Applicable** -- Multi-criteria Amazon product search and filtering:
-
-| User Says | Scenario |
-|-----------|----------|
-| "Find products with monthly sales over X" | Sales volume filtering |
-| "Search for products in XX category" | Category-based product discovery |
-| "Products with BSR under X" | Sales rank filtering |
-| "New products listed in the last N months" | New product discovery |
-| "Products priced between $X and $Y" | Price range filtering |
-| "FBA products with good ratings" | Fulfillment + rating filter |
-| "Lightweight products under X grams" | Package dimension filtering |
-| "Products from brand XX" | Brand-specific search |
-| "Show me historical sales data for XX" | Historical sales analysis |
-| "Advanced product selection", "product screening" | Multi-criteria product research |
-| "Niche product hunting", "find low-competition products" | Competitive gap analysis |
-| "BSR trends", "sales rank history" | Historical rank filtering |
-
-**Not applicable** -- Needs beyond product search:
-- Real-time Amazon search result page simulation (use Amazon Search)
-- Historical search term volume or ranking trends (use ABA data)
-- Product review content or sentiment analysis
-- Advertising campaign management or bid optimization
-- Listing optimization or copywriting suggestions
-- Inventory or supply chain data
-
-**Boundary judgment**: When users say "product research" or "find products", if it involves filtering by sales metrics, BSR, price, category, and other structured criteria, this skill applies. If they want to see what appears on the actual Amazon search page for a keyword, use Amazon Search instead. If they want search term analytics, use ABA data.
-
-## 算力消耗规则
-
-按动态规则计费：消耗算力 = 0.045 × (找商品阶段消耗的 Keepa token + 拉取商品详情阶段消耗的 Keepa token)。先找商品，再拉商品详情；若第一段未找到商品，则只计找商品阶段消耗。
-
-> **重要**：本技能的服务按倍数动态计算，可能一次性消耗大量算力，必须提醒用户，由用户决定是否继续。
-
-**Feedback:**
-
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

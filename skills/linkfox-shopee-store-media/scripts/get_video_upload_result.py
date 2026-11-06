@@ -13,7 +13,6 @@ import json
 import sys
 
 from _media_api_runner import run_media_api
-from _shopee_media_common import emit_result, lf_inline_flag
 
 
 def main() -> None:
@@ -21,8 +20,7 @@ def main() -> None:
         print("Usage: get_video_upload_result.py '<JSON>'", file=sys.stderr)
         sys.exit(1)
     params = json.loads(sys.argv[1])
-    inline = lf_inline_flag()
-    emit_result(run_media_api("get_video_upload_result", params, "get_video_upload_result.py"), inline)
+    run_media_api("get_video_upload_result", params, "get_video_upload_result.py")
 
 
 if __name__ == "__main__":

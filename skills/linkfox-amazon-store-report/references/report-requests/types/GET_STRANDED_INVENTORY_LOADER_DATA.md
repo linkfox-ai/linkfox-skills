@@ -1,19 +1,19 @@
 # `GET_STRANDED_INVENTORY_LOADER_DATA`
 
-> **分类**：6.2 FBA Inventory  
-> **说明**：Stranded inventory (bulk format)  
-> **可用范围**：Seller only
+> **分类**：6.2 FBA 库存  
+> **说明**：滞留库存（批量格式）  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-bulk-fix-stranded-inventory-report)（章节：**FBA Bulk Fix Stranded Inventory Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Availability**：FBA sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **要点**：Contains a list of stranded inventory. Update the listing information in this report file and then submit the file using the Flat File Inventory Loader Feed (POST_FLAT_FILE_INVLOADER_DATA) of the Feeds API. Content updated in near real-time.
+- **可用范围**：FBA 卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **要点**：包含滞留库存列表。可更新报告文件中的刊登信息，再通过 Feeds API 的 Flat File Inventory Loader Feed（POST_FLAT_FILE_INVLOADER_DATA）提交。近实时更新；提交文件属于其他技能范围。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-bulk-fix-stranded-inventory-report>
 

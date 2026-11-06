@@ -1,16 +1,65 @@
-# SKU 外部编码（Contribution SKU）— `bg.local.goods.sku.out.sn.set`
+# Temu 美国站SKU 外部编码（Contribution SKU）接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_manage_sku_out_sn_set.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=2a343c65a03d42d380e9ad835aa7b54b |
-| **网关** | `POST /temu/proxy`，`type`=`bg.local.goods.sku.out.sn.set`，业务载荷放在 Body 的 `params` |
+对应脚本：`scripts/us_manage_sku_out_sn_set.py`。网关及兼容运行约定见 [api.md](../api.md)。
 
-**Description:** Set contribution ID for SKU（批量设置 SKU 的 Contribution SKU / 外部 SKU 编码 `outSkuSn`）。
+## 公共规则
 
----
+### 调用规范
 
-## Request 结构（官方顶层）
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：SKU 外部编码（Contribution SKU）（bg.local.goods.sku.out.sn.set）
+
+> Partner 官方文档：https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a&sub_menu_code=2a343c65a03d42d380e9ad835aa7b54b
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+**用途说明：**SKU 外部编码（Contribution SKU）。
+
+#### 网关 POST Body
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| site | string | 是 | 本技能默认 `us`；兼容 `cn`、`partner`、`global`、`eu`，须与令牌来源一致。 |
+| managementType | string | 是 | 默认 `semi-managed`，兼容 `full-managed`；区分店铺托管类型。 |
+| accessToken | string | 与 storeKey 二选一 | Temu 店铺令牌；传入时优先于本地令牌。 |
+| storeKey | string | 脚本兼容 | 本地店铺键，脚本读取令牌后仅发送 accessToken，不将 storeKey 发给网关。 |
+| tokenPurpose | string | 否 | 本技能店铺令牌默认用途 `product-inventory`；用于本地定位，不发往网关。 |
+| type | string | 是 | 固定为 `bg.local.goods.sku.out.sn.set`；大小写与原值一致。 |
+| params | object | 否 | Temu 业务参数；本接口的 request 及其子字段见下文。 |
+
+#### 脚本参数与运行约定
+
+| 参数 / 选项 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| token / linkfoxToken / linkfox_token | string | 否 | 按此顺序优先于环境变量读取 LinkFox Key；不进入业务参数。 |
+| site / managementType / tokenPurpose | string | 否 | 美国站包装器使用上表默认值；通用 temu_proxy.py 要求显式提供 site、managementType，本地令牌用途默认 default。 |
+| params | object | 否 | 如为对象，优先作为完整业务参数；否则美国站包装器将顶层非保留字段作为业务参数。 |
+| --inline | CLI flag | 否 | 强制全量打印响应，仍保存完整文件。 |
+| --no-cache | CLI flag | 否 | 兼容选项；业务封装始终传入，禁用响应缓存。 |
+
+#### Temu 业务参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| request | OBJECT | 否 | 官方业务参数对象；下文子字段必填性、嵌套关系和限制仍须遵守。 |
 
 ```text
 params
@@ -22,58 +71,39 @@ params
     └── language
 ```
 
-### `request` 内字段
+##### `request` 内字段
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | modifyList | OBJECT[] | 否 | Contribution SKU 修改列表；每项为一条 SKU 的外部编码设置 |
-| language | STRING | 否 | Language（语言） |
+| language | STRING | 否 | 语言 |
 
-### `modifyList[]`
+##### `modifyList[]`
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| goodsId | LONG | 否 | Goods Id（商品 ID） |
+| goodsId | LONG | 否 | 商品 ID |
 | outSkuSn | STRING | 否 | Contribution SKU（外部 SKU 编码 / 贡献 SKU）；**单条编码字符长度不得超过 40 字符** |
-| skuId | LONG | 否 | Goods Sku Id（商品 SKU ID） |
+| skuId | LONG | 否 | 商品 SKU 编号 |
 
 > 批量修改时，`modifyList` 中每项通常需同时提供 **`goodsId`**、**`skuId`** 与目标 **`outSkuSn`**，以唯一定位要修改的 SKU。
 
-### 网关 `params` 写法
-
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "modifyList": [
-      {
-        "goodsId": 123456789,
-        "skuId": 58224724203874,
-        "outSkuSn": "MY-SKU-001"
-      }
-    ],
-    "language": "en"
-  }
-}
-```
-
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "modifyList": [
-      { "goodsId": 111, "skuId": 1001, "outSkuSn": "SKU-A" },
-      { "goodsId": 111, "skuId": 1002, "outSkuSn": "SKU-B" }
-    ]
-  }
-}
-```
-
 > **勿**将 `goodsId`、`skuId`、`outSkuSn` 仅放在 `params` 顶层（须放在 **`request.modifyList[]`** 内，除非网关另有兼容）。
 
----
+### 响应结构
 
-## Response（Temu `body` 解析后）
+#### LinkFox 网关与脚本输出
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| errcode | integer / string / null | 如存在，严格按公共响应码基本规则判断。 |
+| errmsg | string | 网关错误说明；保留原始内容。 |
+| code | integer | 本技能网关业务错误码，1002 表示参数或 Token 问题，1003 表示转发失败；不能用它替代公共 errcode 规则。 |
+| body | string | Temu 原始 JSON 字符串；按原始内容保存。 |
+| temuBody | object / array / scalar | 仅脚本加工字段：body 为有效 JSON 字符串时解析生成；无效或空字符串不补造。 |
+| _httpStatus | integer / null | 仅脚本附加：本次请求网关的实际 HTTP 状态，连接失败为 null；用于判断 HTTP 401/402 等传输结果。完整响应和标准输出均保留，不是网关或 Temu 业务字段。 |
+
+以下表格描述 body 解析后的 Temu 业务对象（脚本输出的 temuBody），不表示网关顶层字段。
 
 ```text
 response
@@ -90,60 +120,93 @@ response
 └── errorMsg
 ```
 
-### `response` 顶层字段
+##### `response` 顶层字段
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| result | OBJECT | result（业务结果对象） |
+| result | OBJECT | 业务结果对象 |
 | success | BOOLEAN | 当前请求是否成功：成功返回 `true`，否则返回 `false` |
 | errorCode | INTEGER | 错误码：用于对照下方错误码表，定位对应解决方案 |
 | errorMsg | STRING | 错误信息：与 `errorCode` 对应的反馈内容 |
 
-### `result`
+##### `result`
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| resultList | OBJECT[] | resultList（逐条修改结果列表） |
+| resultList | OBJECT[] | 逐条修改结果列表 |
 
-### `result.resultList[]`
+##### `result.resultList[]`
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| goodsId | LONG | Goods Id（商品 ID） |
-| outSkuSn | STRING | Contribution SKU Code Modification List（本次提交/回显的外部 SKU 编码） |
-| modifySuccess | BOOLEAN | Is Modification Successful（该条是否修改成功） |
-| duplicateSkuId | LONG | Duplicate goodsId（官方字段名；若 `outSkuSn` 重复，冲突的 SKU ID，以实网返回为准） |
-| duplicateGoodsId | LONG | Duplicate skuId（官方字段名；若 `outSkuSn` 重复，冲突的商品 ID，以实网返回为准） |
-| skuId | LONG | Goods Sku Id（商品 SKU ID） |
+| goodsId | LONG | 商品 ID |
+| outSkuSn | STRING | 本次提交/回显的外部 SKU 编码 |
+| modifySuccess | BOOLEAN | 该条是否修改成功 |
+| duplicateSkuId | LONG | 官方描述为“重复的 goodsId”；若 `outSkuSn` 重复，冲突的 SKU 编号，以实网返回为准。 |
+| duplicateGoodsId | LONG | 官方描述为“重复的 skuId”；若 `outSkuSn` 重复，冲突的商品 ID，以实网返回为准。 |
+| skuId | LONG | 商品 SKU 编号 |
 
 > 批量调用时以 **`result.resultList[]`** 中每条 **`modifySuccess`** 为准判断是否成功；`duplicateSkuId` / `duplicateGoodsId` 有值时表示 `outSkuSn` 已被其他 SKU 或商品占用（含义以 Partner 实网返回为准）。
 
----
-
-## 与商品外部编码接口区分
+#### 与商品外部编码接口区分
 
 | 项 | `bg.local.goods.out.sn.set` | `bg.local.goods.sku.out.sn.set`（本接口） |
 |----|------------------------------|------------------------------------------|
-| 粒度 | 商品（goods） | SKU |
+| 粒度 | 商品（goods） | SKU。 |
 | 编码字段 | `outGoodsSn` | `outSkuSn` |
 | 定位字段 | `goodsId` | `goodsId` + `skuId` |
 | 列表字段 | `modifyList[]` | `modifyList[]` |
 
----
+### 响应码规则
 
-## 示例
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 按公共基础规则确认网关正常后，检查本技能 code（1002 / 1003 为失败），再解析 body；Temu success 为 false 时依据 errorCode / errorMsg 解释原因，保留原始响应。
+- 逐项检查 result.resultList[].modifySuccess 和 duplicateSkuId / duplicateGoodsId；保留冲突 ID，不将请求级成功当作全部成功。
+
+### curl 示例
 
 ```bash
-python scripts/us_manage_sku_out_sn_set.py '{
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "us",
+  "managementType": "semi-managed",
   "accessToken": "TOKEN",
-  "request": {
-    "modifyList": [
-      {
-        "goodsId": 123456789,
-        "skuId": 58224724203874,
-        "outSkuSn": "CONTRIBUTION-SKU-001"
-      }
-    ]
+  "type": "bg.local.goods.sku.out.sn.set",
+  "params": {
+    "request": {
+      "modifyList": [
+        {
+          "goodsId": 123456789,
+          "skuId": 58224724203874,
+          "outSkuSn": "CONTRIBUTION-SKU-001"
+        }
+      ]
+    }
   }
 }'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
+```json
+{
+  "skillName": "linkfox-temu-manage-product-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

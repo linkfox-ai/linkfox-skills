@@ -1,4 +1,4 @@
-# plan phase
+# plan 阶段
 
 ## 前置
 
@@ -11,8 +11,9 @@
 {
   "scene": "D",
   "imageUrls": ["https://..."],
-  "provider": "BANANA_PRO",
-  "resolution": "2K",
+  "provider": "GPT_2_5_IMAGE",
+  "resolution": "1K",
+  "quality": "low",
   "aspectRatio": "1:1",
   "aplusRatio": "1464:600",
   "point": "",

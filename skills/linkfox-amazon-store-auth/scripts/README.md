@@ -1,95 +1,21 @@
-# Amazon Store Auth Scripts Usage Guide
+# 店铺授权脚本指南
 
-本目录包含 **授权与店铺/令牌管理** 相关的 Python 脚本。若需要拉取报告，请使用 `linkfox-amazon-store-report` skill。
+## 运行环境
 
-## Prerequisites
+使用 Python 3.10 或更高版本。身份凭据、网关环境变量优先级、脚本选项、限制及错误定义统一见 [接口说明](../references/api.md)。未配置凭据按 [认证引导](../references/onboarding.md) 处理。
 
-- Python 3.6 或更高
-- 已设置 `LINKFOXAGENT_API_KEY` 环境变量
-- 可访问 LinkFox 后端 API（默认 `https://tool-gateway.linkfox.com`）
+## CLI
 
 ```bash
-export LINKFOXAGENT_API_KEY="your-api-key-here"
-```
-
-## Available Scripts
-
-### 1. authorize_url.py
-
-为新店铺生成授权 URL。
-
-**`sellerName`（店铺名）必填**：必须为非空字符串。脚本会在缺失或为空白时直接退出并报错——调用前请先向用户询问一个可识别的店铺名。
-
-```bash
-python authorize_url.py '{"region": "NA", "sellerName": "My Store"}'
-```
-
-### 2. authorized_stores.py
-
-列出当前用户已授权的所有亚马逊店铺。
-
-```bash
+python authorize_url.py '{"region":"NA","sellerName":"我的店铺","central":"seller","marketplace":"US"}'
 python authorized_stores.py
+python refresh_token.py '{"sellerId":"A1234567890","region":"NA"}'
+python store_tokens.py '{"sellerId":"A1234567890","region":"NA"}'
+python cancel_authorization.py '{"sellerId":"A1234567890","region":"NA"}'
+python automatic_authorize_url.py --region NA --seller-name '我的店铺' --central seller --marketplace US
+python automatic_verify.py
 ```
 
-### 3. refresh_token.py
+JSON 入口支持 `'<JSON 参数>' [--inline] [--no-cache]`；店铺列表支持无参数调用。自动脚本保持单 JSON stdout，链接仅内存传递，接收方必须安全捕获，不直接回显到聊天或工具日志。自动流程请先读 [自动授权文档](../references/automatic-authorization.md)，不能仅凭脚本可运行就假定宿主满足本机要求。
 
-刷新某店铺的 accessToken。
-
-```bash
-python refresh_token.py '{"sellerId": "A1234567890", "region": "NA"}'
-```
-
-### 4. store_tokens.py
-
-查询某店铺的授权/令牌状态。响应只用于状态确认，不作为下游 raw token 来源。
-
-```bash
-python store_tokens.py '{"sellerId": "A1234567890", "region": "NA"}'
-```
-
-### 5. cancel_authorization.py
-
-本地取消/解绑某店铺授权。该脚本调用 `/spApi/cancelAuthorization`，不会撤销 Amazon Seller Central 侧授权。
-
-```bash
-python cancel_authorization.py '{"sellerId": "A1234567890", "region": "NA"}'
-```
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| LINKFOXAGENT_API_KEY | API 鉴权 key | 必需 |
-| STORE_API_BASE_URL / SPAPI_BASE_URL | 后端网关 base URL（优先读前者） | https://tool-gateway.linkfox.com |
-
-## Error Codes
-
-- `0`：成功
-- `1`：缺少 API key、参数错误、网络/HTTP/权限错误
-
-## Troubleshooting
-
-**API Key 未配置**
-```bash
-export LINKFOXAGENT_API_KEY="your-key-here"
-```
-
-**Connection Refused / 网络错误**
-- 确认 `https://tool-gateway.linkfox.com` 能从你的网络访问（或设置 `STORE_API_BASE_URL` / `SPAPI_BASE_URL` 指向其他网关）
-- 检查防火墙、代理设置
-
-**403 Unauthorized**
-- 店铺可能缺少必要的亚马逊接口权限
-- 用更完整的权限集合重新授权
-
-**查询令牌返回 1004**
-- 核对 sellerId 与 region
-- 确认该店铺已完成授权
-
-## Further Documentation
-
-- API Reference: `../references/api.md`
-- 授权流程详解: `../references/authorization-flow.md`
-- 快速上手: `../references/quick-start.md`
-- Skill 文档: `../SKILL.md`
+业务封装通过 `_auth_common.py` 调用 `call_api.run`，在公共输出前完成令牌脱敏、XML 错误及计费头兼容。所有业务调用均关闭响应缓存并无自动重试。参数与业务错误退出 1，完成退出 0；网关业务码按接口定义中的基础响应规则判断，兼容整数 0 和字符串 "0"。

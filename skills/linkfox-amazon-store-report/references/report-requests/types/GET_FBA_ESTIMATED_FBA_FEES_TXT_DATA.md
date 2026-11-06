@@ -1,19 +1,19 @@
 # `GET_FBA_ESTIMATED_FBA_FEES_TXT_DATA`
 
-> **分类**：6.3 FBA Fees & Charges  
-> **说明**：Estimated FBA fees  
-> **可用范围**：Seller only
+> **分类**：6.3 FBA 费用  
+> **说明**：FBA 费用估算  
+> **可用范围**：仅卖家
 
 ## 官方说明（Report type values）
 
 以下内容整理自官方 [Report type values](https://developer-docs.amazon.com/sp-api/docs/report-type-values) 子页 [Fulfillment by Amazon (FBA) Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-fee-preview-report)（章节：**FBA Fee Preview Report**）。**与专页其它段落冲突时以官方英文文档为准。**
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Availability**：FBA sellers
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：Tab-delimited flat file
-- **Roles**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
-- **要点**：Contains the estimated Amazon Selling and Fulfillment Fees for the seller's FBA inventory with active offers. The content is updated at least once every 72 hours. To successfully generate a report, specify the dataStartTime parameter for a minimum 72 hours prior to NOW and dataEndTime to NOW. 🚧CautionThis report can only be requested once per day per seller.
+- **可用范围**：FBA 卖家
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：制表符分隔的平面文件
+- **角色**：[Pricing](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#pricing), [Amazon Fulfillment](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#amazon-fulfillment)
+- **要点**：包含卖家有效报价所对应 FBA 库存的预计销售与配送费用，至少每 72 小时更新一次。生成报告时，dataStartTime 至少为 NOW 前 72 小时，dataEndTime 为 NOW。每个卖家每天仅可请求一次。
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-fba#fba-fee-preview-report>
 

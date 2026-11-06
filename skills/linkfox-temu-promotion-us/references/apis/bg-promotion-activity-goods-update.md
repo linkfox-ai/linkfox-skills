@@ -1,141 +1,185 @@
-# 活动商品更新 — `bg.promotion.activity.goods.update`
+# Temu 美国站促销：活动商品更新 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_promotion_activity_goods_update.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=873ac072a78249c893e5f8d0e656a11f&sub_menu_code=29959238217c41f38f5904e32bf1d14f |
-| **网关** | `POST /temu/proxy`，`type`=`bg.promotion.activity.goods.update`，业务载荷放在 Body 的 `params` |
+> Partner 接口文档：<https://partner-us.temu.com/documentation?menu_code=873ac072a78249c893e5f8d0e656a11f&sub_menu_code=29959238217c41f38f5904e32bf1d14f>；脚本：`scripts/us_promotion_activity_goods_update.py`。
 
-**Description:** Update enrolled promotion activity goods.
+## 公共规则
 
-> **`activityId`**、**`goodsId`**、**`operateType`** 必填。
-> **`operateType`** 决定必填子参数（见下表）；**`updateSkuList`/`addSkuList`** 按 Request Example 展开。
+### 调用规范
 
-> **网关鉴权字段**由本 skill 网关脚本处理；业务参数见下方 **`request`**。建议使用 **`tokenPurpose=product-inventory`**，**`managementType=semi-managed`**。
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
----
+### 响应码基本规则
 
-## Request 结构（官方顶层）
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-```text
-params
-└── request (OBJECT, 选填)
-    ├── traceCode (STRING, 否)
-    ├── activityId (LONG, 必填)
-    ├── activityQuantity (LONG, 否)
-    ├── goodsId (LONG, 必填)
-    ├── operateType (INTEGER, 必填)
-    ├── updateSkuList[] (OBJECT[], 否)
-    │   ├── skuId (LONG)
-    │   └── activitySupplierPrice (LONG)
-    └── addSkuList[] (OBJECT[], 否)
-        ├── skuId (LONG)
-        └── activitySupplierPrice (LONG)
-```
+## 接口：活动商品更新（bg.promotion.activity.goods.update）
 
-### `request` 内字段
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关 POST Body
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| traceCode | STRING | 否 | Optional. The traceCode is an Idempotent Key for single operations. Its length cannot exceed 32 characters. |
-| activityId | LONG | **是** | unique identifier for the activity |
-| activityQuantity | LONG | 否 | activity quantity, the quantity you set for participating activities. This is independent of product quantity. The updated activity quantity must be more than the original one. |
-| goodsId | LONG | **是** | goods id |
-| operateType | INTEGER | **是** | the type of operation. It determines which parameters are required. For example, if the operation type is 20, then the "activityQuantity" parameter must not be null, while all other parameters should be null. If the operation type is 30, then all other parameters must be null. 10 - update activity supplier price 20 - update activity quantity 30 - deactivate activity goods 40 - add activity sku |
-| updateSkuList | OBJECT[] | 否 | sku information required for updating activity sku information |
-| addSkuList | OBJECT[] | 否 | sku information required for adding activity sku information |
+| site | string | 是 | 美国站使用 us；US 脚本默认 us。通用兼容脚本支持 cn / partner / us / global / eu，须小写。 |
+| managementType | string | 是 | US 脚本默认 semi-managed；通用脚本支持 full-managed / semi-managed，须小写；具体权限以授权店铺为准。 |
+| accessToken | string | 是 | Temu 店铺令牌；脚本可用本地 storeKey 解析后填入，不能以 LinkFox API key 替代。 |
+| type | string | 是 | 本接口操作标识，见本节接口标题；它位于 Body，不是 URL path。 |
+| tokenPurpose | string | 否 | 建议使用 product-inventory；脚本仅将其用于本地令牌匹配，不发送此字段。 |
+| params | object | 否 | 本接口的业务载荷，按下方 params.request 结构提供。 |
+| params.request | OBJECT | 否（官方顶层标记） | 官方请求表将 request 标为选填（False）；下表标为必填的子字段仍须在 params.request 提供。 |
+
+#### 脚本认证与业务参数约定
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| accessToken / storeKey | string | 二选一 | 直接令牌优先；storeKey 仅为本地令牌索引，不发送网关。 |
+| site | string | 否 | US 脚本默认 us；通用脚本必填，支持站点见网关表。 |
+| managementType | string | 否 | US 脚本默认 semi-managed；通用脚本必填。 |
+| tokenPurpose | string | 否 | US 脚本默认 product-inventory；通用脚本默认 default。令牌按 storeKey + site + managementType + tokenPurpose 精确匹配，不跨店铺或用途回退。 |
+| token / linkfoxToken / linkfox_token | string | 否 | 兼容的 LinkFox 鉴权字段，依次取首个非空值，优先于两种 API key 环境变量；仅用于请求头，不混入业务载荷。 |
+| params | object | 否 | 显式对象优先；未提供对象时 US 脚本将顶层非保留业务字段（如 request）收集为 params；通用 temu_proxy.py 只接受显式 params 对象。 |
+| --inline | CLI flag | 否 | 强制全量打印，仍保存完整响应。 |
+| --no-cache | CLI flag | 否 | 保留兼容选项；业务封装始终向 call_api.run 添加此选项，不读取或保存响应缓存。 |
+
+保留参数集合为 token、linkfoxToken、linkfox_token、accessToken、storeKey、site、managementType、tokenPurpose、type、params。通用 temu_us_proxy.py 的 type 必填，专用促销脚本固定 type。授权步骤见 [access-token.md](../access-token.md)。
+
+#### `params.request` 内字段
+
+| 参数 | 类型 | 必填 | 说明 |
+| ------ | ------ | ------ | ------ |
+| traceCode | STRING | 否 | 可选，单次操作的幂等键，长度不能超过 32 字符。 |
+| activityId | LONG | **是** | 活动的唯一标识。 |
+| activityQuantity | LONG | 否 | 参加活动设置的活动数量，与商品库存数量独立；更新后的活动数量必须大于原活动数量。 |
+| goodsId | LONG | **是** | 商品 ID。 |
+| operateType | INTEGER | **是** | 操作类型，决定条件必填字段：10 更新活动供货价，20 更新活动数量，30 停用活动商品，40 新增活动 SKU。20 时 activityQuantity 不可为 null，其他操作载荷应为 null；30 时其他操作载荷应为 null。activityId、goodsId、operateType 等操作标识仍须提供；对应字段见下表。 |
+| updateSkuList | OBJECT[] | 否 | 更新活动 SKU 所需的信息。 |
+| addSkuList | OBJECT[] | 否 | 新增活动 SKU 所需的信息。 |
 
 #### `operateType`（必填）
 
 | 值 | 说明 | 必填参数 |
-|----|------|----------|
-| `10` | update activity supplier price | `updateSkuList`（其他参数应为 null） |
-| `20` | update activity quantity | `activityQuantity`（须大于原活动数量；其他参数应为 null） |
-| `30` | deactivate activity goods | 其他参数应为 null |
-| `40` | add activity sku | `addSkuList` |
+| ---- | ------ | ---------- |
+| `10` | 更新活动供货价 | `updateSkuList`（其他参数应为 null） |
+| `20` | 更新活动数量 | `activityQuantity`（须大于原活动数量；其他参数应为 null） |
+| `30` | 停用活动商品 | 其他参数应为 null |
+| `40` | 新增活动 SKU | `addSkuList` |
 
-#### `updateSkuList[]` / `addSkuList[]`（Request Example 展开）
+#### `params.request.updateSkuList[]` / `params.request.addSkuList[]`（依据请求示例展开）
 
 | 参数 | 类型 | 说明 |
+| ------ | ------ | ------ |
+| skuId | LONG | SKU ID。 |
+| activitySupplierPrice | LONG | 活动供货价。 |
+
+### 响应结构
+
+#### LinkFox 网关与脚本输出
+
+| 字段 | 类型 | 说明 |
 |------|------|------|
-| skuId | LONG | sku id |
-| activitySupplierPrice | LONG | Activity supplier price |
+| errcode | integer / string / null | 若返回，依公共响应码基本规则判断。 |
+| errmsg | string | 网关错误消息，若返回则按实际内容解释。 |
+| body | string | Temu 原始 JSON 字符串，脚本保留原文并尝试解析。 |
+| code | integer | 网关业务错误码：1002 参数或 Token 无效；1003 转发失败。不能替代 errcode 的公共判断。 |
+| temuBody | 任意 JSON 类型 | 脚本解析字段：body 能解析为 JSON 时的业务对象；解析失败时不添加，仍保留 body。 |
+| transportHttpStatus | integer / null | 脚本记录的 LinkFox 外层 HTTP 状态；连接失败时为 null。 |
+| rawResponse | 任意 JSON 类型 | 仅网关返回非对象 JSON 时，脚本用此字段保留原值。 |
+| error / details | string | 连接错误或非 JSON 响应的说明与原文；HTTP 成功但响应非 JSON 时也保留，不自动重试。 |
 
-> 官方 Request 表将顶层 **`request`** 标为选填（False）；标 **必填** 的字段须在 **`params.request`** 中提供。
+#### Temu 顶层字段
 
-### 网关 `params` 写法
+以下字段位于解析后的 temuBody 根级或其 response 内；须按实际层级读取。
+
+| 参数 | 类型 | 说明 |
+| ------ | ------ | ------ |
+| success | BOOLEAN | 当前请求是否成功。 |
+| errorCode | INTEGER | Temu 业务错误码。 |
+| errorMsg | STRING | Temu 业务错误消息。 |
+| result | OBJECT 或 OBJECT[] | 业务结果支持 OBJECT 或 OBJECT[]；本接口按对象读取。 |
+
+#### `result`
+
+| 参数 | 类型 | 说明 |
+| ------ | ------ | ------ |
+| draftId | LONG | 异步操作草稿 ID。 |
+| operationStatus | INTEGER | 操作状态码；具体数值含义须结合实际返回核实，不预设枚举。 |
+| failReason | STRING | 失败原因。 |
+| goodsId | LONG | 商品 ID。 |
+
+### 响应码规则
+
+#### 基础规则
+
+基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关 code=1002 表示参数或 Token 无效，code=1003 表示转发失败。网关正常时解析 body，并按 Temu 的 success / errorCode / errorMsg 判断业务结果。
+- body 不能解析时保留原文，不将传输完成或空结果当作业务成功。
+- draftId 是异步操作线索，不能视为报名或更新已完成；operationStatus 不预设数值枚举或成功值，结合 failReason 与后续已报名商品核验。按用户任务范围查询，避免无间隔或无限轮询。
+
+| errorCode | errorMsg | 说明 / 处理建议 |
+|-----------|----------|----------------------|
+| 220010001 | parameter is illegal | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
+| 220010002 | system error, please try again later | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
+| 220010003 | The activity has been cancelled, please select another activity to participate | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
+| 220010004 | The activity has ended, please select another activity to participate | 按 Partner 文档核对入参、活动状态或服务异常；后续调用遵守成本约束。 |
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{
+  "site": "us",
+  "managementType": "semi-managed",
+  "accessToken": "TOKEN",
+  "type": "bg.promotion.activity.goods.update",
+  "params": {
+    "request": {
+      "activityId": 123456,
+      "goodsId": 100001,
+      "operateType": 10,
+      "traceCode": "update-001",
+      "updateSkuList": [
+        {
+          "skuId": 200001,
+          "activitySupplierPrice": 1899
+        }
+      ]
+    }
+  }
+}'
+```
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "accessToken": "TOKEN",
-  "tokenPurpose": "product-inventory",
-  "request": {
-    "activityId": 123456,
-    "goodsId": 100001,
-    "operateType": 10,
-    "traceCode": "update-001",
-    "updateSkuList": [
-      {
-        "skuId": 200001,
-        "activitySupplierPrice": 1899
-      }
-    ]
-  }
+  "skillName": "linkfox-temu-promotion-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
----
-
-## Response（Temu `body` 解析后）
-
-Partner **Response** 表嵌套子行在导出 HTML 中多为折叠状态，下列层级按 **Response 表 + Response Example** 全部展开。
-
-```text
-response
-├── success / errorCode / errorMsg
-└── result
-    ├── draftId (LONG)
-    ├── operationStatus (INTEGER)
-    ├── failReason (STRING)
-    └── goodsId (LONG)
-```
-
-### 顶层字段（`response` 内，或根级）
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | success（当前请求是否成功） |
-| errorCode | INTEGER | error code |
-| errorMsg | STRING | error message |
-| result | OBJECT 或 OBJECT[] | 业务结果（见下表；**goods.operation.query** 的 `result` 为数组） |
-
-### `result`
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| draftId | LONG | Draft id for async operation |
-| operationStatus | INTEGER | Operation status |
-| failReason | STRING | Failure reason |
-| goodsId | LONG | goods id |
-
----
-
-## Error Code（Partner 表）
-
-| errorCode | errorMsg | Error SOP / 处理建议 |
-|-----------|----------|----------------------|
-| 220010001 | parameter is illegal | 见 Partner 文档；修正入参或活动状态后重试 |
-| 220010002 | system error, please try again later | 见 Partner 文档；修正入参或活动状态后重试 |
-| 220010003 | The activity has been cancelled, please select another activity to participate | 见 Partner 文档；修正入参或活动状态后重试 |
-| 220010004 | The activity has ended, please select another activity to participate | 见 Partner 文档；修正入参或活动状态后重试 |
-
----
-
-## 脚本
-
-```bash
-export LINKFOXAGENT_API_KEY="<key>"
-python scripts/us_promotion_activity_goods_update.py '{"accessToken": "TOKEN", "tokenPurpose": "product-inventory", "request": {"activityId": 123456, "goodsId": 100001, "operateType": 10, "traceCode": "update-001", "updateSkuList": [{"skuId": 200001, "activitySupplierPrice": 1899}]}}'
-```
-
-**典型流程：** 按 **`operateType`** 更新价/量/下架/加 SKU → 用 **goods.operation.query** 查 **`draftId`** 结果。

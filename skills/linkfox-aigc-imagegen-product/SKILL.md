@@ -1,243 +1,126 @@
 ---
 name: linkfox-aigc-imagegen-product
-description: 商品图生成（非服饰类）。支持单张或套图：白底主图、场景图、特写图、卖点版式图、A+详情页图。单张单类型直接出图；多张多类型自动编排规划。用户说"做套图""做白底图""做场景图""做卖点图""做A+图""做特写图"时触发。纯图片编辑操作走 linkfox-aigc-imagegen。
+description: 为非服饰类商品制作白底主图、场景图、特写图、卖点版式图和 A+ 详情页图，支持单张生成和多类型套图规划、确认与交付。适用于美妆、数码、家居、食品等商品视觉制作；不适用于服饰模特图、纯图片编辑、纯文字或视频生成。
 ---
 
 # 商品图生成
 
-统一入口：非服饰类商品（美妆、数码、家居、食品等）的全类型电商出图能力。单张直出 & 套图编排都从这一个 skill 进入。
+## 适用范围
 
-## 动态模型配置（动态完整列表）
+### 适用
 
-本 skill 是普通图片生成场景，**不设置专用模型白名单**。商品套图、服装套图、人台换模特均从图片 bizType=201 的动态完整列表选择模型，不能因旧文档曾列出五个、六个或七个模型而拒绝其它模型。
+为非服饰类商品生成单张图片，或规划并生成一套电商商品图。
 
-在介绍、推荐或确认模型前，按下游文档调用查询模式（实际使用绝对路径）：
+**场景速查**
+
+| 用户表达 | 制作场景 |
+|----------|----------|
+| 做一张白底主图 | 静态模板精修，保持商品外观与原拍摄角度。 |
+| 做场景图或特写图 | 围绕卖点设计真实使用场景或局部质感。 |
+| 做卖点图或 A+ 图 | 按品牌调性组织版式和图片内文案。 |
+| 做一套图、出多张图 | 规划、确认、生成与汇总交付。 |
+| 本地参考图需要用于生成 | 确认可公开后上传，保留输入顺序。 |
+
+### 边界
+
+服饰及模特图片使用 `linkfox-aigc-imagegen-cloth` 系列；纯图片编辑使用 `linkfox-aigc-imagegen`，纯文字和视频分别使用 `linkfox-aigc-textgen`、`linkfox-aigc-videogen`。
+
+## 前置条件
+
+准备商品参考图和制作目标。需要公开本地素材时先阅读 [文件上传](references/file-upload.md)；仅在确认内容可以公开后上传，禁止上传敏感或私密内容，无需安装额外上传技能。
+
+先 Read 下游 `linkfox-aigc-imagegen`、需要生文时 Read `linkfox-aigc-textgen` 的 SKILL.md，解析其官方脚本绝对路径；品牌基因提取及落盘使用 `linkfox-aigc-imagegen-brand-gene-extract`。所有脚本均用绝对路径调用，不依赖当前工作目录。
+
+## 商品图工作流程
+
+1. **确定入口**：单张单类型 Read 下表对应 reference；多张、多类型或套图仅按 [运行时索引](references/runtime/00-index.md) → [规划](references/runtime/01-plan.md) → [确认与调度](references/runtime/02-confirm.md) 渐进读取。套图运行时禁止 Read `references/maintainer/collection/`，出图阶段禁止 Read `references/types/*.md`；禁止 Agent 手工执行 S1。
+2. **校验素材**：保留全部参考图及顺序。缺失、空数组或全部无效时立即停止，优先从上下文补齐，仍无图则请求重新提供；禁止带空图调用下游。公开 http/https URL 直接透传；本地路径按文件上传文档获得公开 HTTPS URL 后替换。出图 pipeline 本身不自动上传。
+3. **选择模型与规格**：在介绍、推荐或确认模型前，通过下游 `aigc_imagegen.py --list-models --inline` 查询图片动态完整列表。按 [参数与模型约定](references/parameters.md) 处理能力与参数。未指定时先用 LF智能模型 G-2.5 Sunburst、1K、low 出预览，确认画面后询问是否重出 2K、medium；用户明确指定的参数原样透传。不注入 `--allowed-models`，不以静态模型对照表限制当前可用模型，不自动换模型。
+4. **单张构参和出图**：白底图必须用本技能 `scripts/build_imagegen_prompt.py --type WHITE_BG` 从 reference 的 `text` 围栏动态读取完整正文，不手抄或经 shell 变量传长正文。其余类型必须用 `scripts/build_textgen_params.py` 构参，再按下游 textgen 文档链式调用。生文用 `--stdin --content-only`，单行 content 中的 `⏎` 交下游还原；禁止用 Write 手工构参、用 `jq -r` 抽出真实换行或自行直连生文/生图 HTTP。将最终 prompt 交下游官方生图脚本。
+5. **套图三阶段**：按运行时文档准备 job，用 `run_collection_pipeline.py --phase plan --job <绝对路径>` 生成方案、state 和表格；先原样展示表格再确认，场景 E 可跳过确认。用户确认后仅发一个 `--phase dispatch --state <绝对路径>`，由 skill 内部 ThreadPoolExecutor 并发跑 `run_one_task.py --index 1..N`；随后立即执行一个 `--phase summary --state <绝对路径>`。禁止 Agent 自拆 N 个 Bash 或重复调度；单任务失败不阻断其余任务。确认后的 plan 是唯一执行依据，条目数须与任务计划数一致，任务 description 明确将使用的模型。单张直出不使用计划管理工具。
+6. **交付与回写**：按 [交付协议](references/runtime/03-deliver.md) 解析 stdout。单张成功后以类型中文名追加内联图片，业务失败读取错误 JSON，不凭退出码判成功。套图原样转发 summary markdown，保留每张图的 `![]()` 行；status JSON 和 `Saved full response:` 协议原文仅供内部解析，不贴给用户。保留 `collection-asset-manifest.json`；Listing HTML 只交给 `agent-listing-result-html-skill/scripts/merge-listing-assets.mjs` 合并重渲染，本地 media 路径须先经确认上传并更新 manifest，禁止直接 patch HTML。
+
+| type | 名称 | 单张时读取 |
+|------|------|-----------|
+| WHITE_BG | 白底图 | [白底图](references/types/white-bg.md) |
+| SCENE | 场景图 | [场景图](references/types/scene.md) |
+| CLOSE_UP | 特写图 | [特写图](references/types/close-up.md) |
+| SELLING_POINT | 卖点图 | [卖点图](references/types/selling-point.md) |
+| PREMIUM_APLUS | 高级 A+ 图 | [A+ 图](references/types/aplus.md) |
+| STANDARD_APLUS | 普通 A+ 图 | [A+ 图](references/types/aplus.md) |
+| PHONE_APLUS | 手机 A+ 图 | [A+ 图](references/types/aplus.md) |
+
+单张 textgen 链式调用示意（各根目录均先解析为绝对路径）：
 
 ```bash
-python <linkfox-aigc-imagegen根目录>/scripts/aigc_imagegen.py --list-models --inline
+python <本skill根目录>/scripts/build_textgen_params.py --type <TYPE> --image-urls '<全部URL数组>' --point '<卖点>' --out <data目录>/textgen_params.json
+PROMPT=$(python <textgen根目录>/scripts/aigc_textgen.py --stdin --content-only < <data目录>/textgen_params.json)
+PARAMS=$(jq -nc --arg p "$PROMPT" --argjson imgs '<全部URL数组>' '{prompt:$p,imageUrls:$imgs,provider:"<provider>",outputNum:1,aspectRatio:"<ratio>",resolution:"<resolution>",quality:"<quality>"}')
+# 按下游 linkfox-aigc-imagegen 文档将 "$PARAMS" 交官方脚本出图。
 ```
 
-- 查询和生成都不注入 `--allowed-models`；编排脚本原样透传所选模型，不新增提交前校验或参数重写。
-- 返回 `name` 用于展示，`requestValue` 用于构造内部请求。未命中旧模型表但存在于当前列表的模型，正常接受。
-- 只按实际任务能力筛选：参考图数量、支持比例、分辨率和质量档位等。例如不支持参考图的模型不能用于本场景，但不是因历史白名单而排除。
-- 仅配置查询失败时使用底层返回的静态兜底列表；下方旧表只是历史请求值参考，不作为本 skill 的可选模型上限。成功但缺失/维护中不恢复旧选项，不自动换模型。
-- 原默认模型、缺参确认方式和业务流水线保持不变；默认参数不再合法时提示补充或重选，不跟随后台 `isDefault` 自动替换。
+## 执行方式
 
-## 入口路由
+- **上传凭证接口**：接口端点、完整参数、响应和错误码见 [接口定义](references/api.md)。生文和生图按上述工作流程调用下游官方脚本。
+- **本地素材上传**：`python <本skill根目录>/scripts/upload_files.py '{"files":["/abs/product.png"]}' [--inline]`；位置参数形式及公开确认要求见 [文件上传](references/file-upload.md)。
+- **成本约束**：算力按所选参数动态计算，见下方“算力消耗预估”。上传凭证禁用持久响应缓存，同批上传复用有效凭证；不重复上传成功项或重复调度已确认的出图任务。失败按“约束与建议”处理，需要额外生成时先说明额外消耗。
 
-| 条件 | 路径 | 操作 |
-|------|------|------|
-| 只要一张特定类型的图（如"做一张白底图"） | **单张直出** | 确定 type → **Read** 对应 `references/types/<type>.md` → 执行共享流水线 |
-| 要多张 / 多类型 / 套图（如"做一套图""出5张图"） | **套图编排** | Read `references/runtime/00-index.md` → 按步 Read `01-plan` / `02-confirm` → 调 `scripts/run_collection_pipeline.py` **三阶段**（plan / dispatch / summary，agent 顺序发 3 个 Bash；dispatch 在 skill 层用 `ThreadPoolExecutor` 并发跑 `scripts/run_one_task.py`，agent 自己**不**并发；**禁止** Read `maintainer/collection/` 或套图阶段 Read `types/*.md`） |
+### 输出策略
 
-## 类型路由表
+- 上传凭证完整响应始终保存到会话 `data/linkfox-aigc-imagegen-product-sts-<timestamp>.json`，仅供本地排查，不分享响应文件或其中的临时凭证。常规会话路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/`；会话根目录按 `ACPX_WORKSPACES` 第一项、cwd、home、临时目录依序选择可写位置，`<session>` 优先取环境变量 `SESSION_ID`。
+- 公共调用层对不超过 8 KB 的响应打印完整 JSON，超过 8 KB 时打印摘要及文件路径；这些输出均由上传封装捕获，凭证不进入用户可见 stdout/stderr。
+- 上传脚本无论是否传 `--inline`，均输出完整上传结果 JSON 数组及成功项的 URL 协议行，不输出凭证。完整字段和部分失败规则见 [文件上传](references/file-upload.md)。
+- 生图及套图的 stdout、图片内联展示和 manifest 交付遵循 [交付协议](references/runtime/03-deliver.md)，不套用上传凭证的 JSON 输出规则。
 
-| type | 名称 | 与卖点关联 | 是否有画面描述 | 默认比例 | 详情 reference |
-|------|------|-----------|-------------|---------|----------------|
-| WHITE_BG | 白底图 | 否 | 否 | 1:1 | `references/types/white-bg.md` |
-| SCENE | 场景图 | 是 | 是 | 1:1 | `references/types/scene.md` |
-| CLOSE_UP | 特写图 | 是 | 是 | 1:1 | `references/types/close-up.md` |
-| SELLING_POINT | 卖点图 | 是 | 是 | 1:1 | `references/types/selling-point.md` |
-| PREMIUM_APLUS | 高级A+图 | 是 | 是 | 1464:600 | `references/types/aplus.md` |
-| STANDARD_APLUS | 普通A+图 | 是 | 是 | 970:600 | `references/types/aplus.md` |
-| PHONE_APLUS | 手机A+图 | 是 | 是 | 600:450 | `references/types/aplus.md` |
+需要错误详情时，优先用 `jq` 或 `ConvertFrom-Json` 从本地响应文件按需提取，避免将整份凭证响应载入上下文或用户对话。
 
-确定 type 后，**必须 Read** 对应的 type reference 文件获取该类型的步骤 2 差异逻辑和提示词模板，**禁止跳过**。
+## 执行规则
 
-## 不适用
+### 算力消耗预估
 
-- 服饰 / 模特类图片（上装/下装/连衣裙/外套/鞋帽等）→ 走 `linkfox-aigc-imagegen-cloth` 系列。
-- 纯图片编辑操作（换背景、去水印、换角度等已有明确创意方向的操作）→ 走 `linkfox-aigc-imagegen`。
-- 纯文字生成 → `linkfox-aigc-textgen`。
-- 视频生成 → `linkfox-aigc-videogen`。
+算力按所选参数动态计算，没有统一固定扣费数。本地构参和编排不单独调用生图接口；总消耗由实际生文、品牌基因提取、生图及必要重试共同决定，执行前按所选模型、规格、数量及各下游当前标准估算。上传凭证接口的独立扣费数未明确，不据此认定免费。
 
-## 共享流水线
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-所有类型都走同一条 3 步流水线，差异部分由各 type reference 定义。
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-### 步骤 1：校验图片 URL 可访问性（所有类型通用）
+### 解决认证和算力问题
 
-- **输入**：`imageUrls`
-- **空数组护栏（强制）**：若 `imageUrls` 为空数组 / 缺失 / 全部无效，**立即停止**，不得带空图调下游。优先从上下文（用户本轮/历史上传的原始图片路径）补齐；仍无法补齐时如实向用户报错并请求重新上传，**禁止**带空 `imageUrls` 继续执行。
-- **操作**：逐项检查 `imageUrls` 中的值（保持原顺序）：已是公开 URL（http/https 开头）→ 直接透传；本地文件路径（非 http/https）→ 读取并按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 执行上传，获得公开 URL 后替换；无需安装额外上传 skill。
-- **输出**：`imageUrls`（全部为公开可访问的 HTTPS URL）
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-### 步骤 2：构造最终 prompt（差异部分见各 type reference）
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-各类型的步骤 2 逻辑不同（是否调 textgen、用哪个模型、是否做敏感词规避等），详见已 Read 的 `references/types/<type>.md`。
+### 约束与建议
 
-> **白底图静态直出约束（WHITE_BG）**：用 `scripts/build_imagegen_prompt.py --type WHITE_BG` 构建 imagegen 参数文件，脚本会自动从 `references/types/white-bg.md` 的 ```text``` 代码块提取白底图静态正文作为最终 prompt。正文较长，一律交脚本读取，**不要手动复制或经 shell 变量传递**。
->
-> **textgen 链式调用约束（适用于除白底图外的所有类型）**：凡需调 `linkfox-aigc-textgen` 的类型，必须使用本 skill 的 `build_textgen_params.py` 辅助脚本构建 textgen 参数文件（脚本自动完成模板读取、占位符填充、模型/thinkingLevel 设置、敏感词规避指令追加），然后按 textgen SKILL.md 的**链式调用方式**执行。
->
-> **套图强制走 pipeline 三阶段**：套图路径用 `scripts/run_collection_pipeline.py` 跑 plan / dispatch / summary 三阶段，agent 按顺序发 3 个 Bash；并发由 skill 层 dispatch 用 `ThreadPoolExecutor` 完成，**agent 自己不并发**：
->
-> 1. `--phase plan` 写 `image-plan.json` / `collection-state.json`，stdout 直接打 markdown 表格 + 1 行 status JSON（含 `specs[]` / `run_one_task_script` / `state_file` / `total`）
-> 2. 用户确认后，agent 只发 1 个 dispatch Bash：`python <本skill根>/scripts/run_collection_pipeline.py --phase dispatch --state <state_file>`；dispatch 内部用 `ThreadPoolExecutor` 并发跑 `run_one_task.py --index 1..N`，每个子任务落 `task-result-<id>.json` 片段；dispatch 自身 stdout **不** emit `Saved full response`，仅末尾 1 行 `{"status":"dispatch_complete",...}` 供 agent 内部解析（这条 Bash 不渲染图，是正常的）
-> 3. `--phase summary --state <state_file>` 读片段 → stdout 打末尾 markdown 明细（**每张成功图自带 `![label](abs_path)` 内联引用**，前端 markdown 渲染器据此渲染整组图）+ 1 行 status JSON；同时合并写 `collection-asset-manifest.json`
->
-> **禁止** Agent 手工 S1 或 Read S0~S3 全文；**禁止**用户确认后自己拆 N 个 Bash 跑 `run_one_task.py`（旧协议；现在并发已在 skill 层完成，自己并发只会重复出图）；**禁止**转发 summary markdown 时把 `![]()` 行剥掉（整组图就靠这些行渲染）；**禁止**在 summary 之外另贴 `Saved full response: [...]`（与 markdown `![]()` 双重渲染）。下方 bash 单步链路**仅适用于单张直出**。
->
-> **路径铁律**：本链路横跨两个 skill 目录（构参脚本属本 skill，生文与注参脚本属 `linkfox-aigc-textgen`），当前工作目录不固定，**所有脚本一律用绝对路径调用，不要用裸 `scripts/...` 相对路径**（相对路径会指向错误目录导致执行失败）。其中 `<本skill根目录>` = 本 SKILL.md 所在目录的绝对路径；`<textgen根目录>` 通过 `skill:linkfox-aigc-textgen` 解析其 SKILL.md 所在目录的绝对路径取得。
->
-> 1. 构参（本 skill）：`python <本skill根目录>/scripts/build_textgen_params.py --type <TYPE> ... --out <textgen_params.json>`
-> 2. 生文（textgen skill）：`PROMPT=$(python <textgen根目录>/scripts/aigc_textgen.py --stdin --content-only < <textgen_params.json>)` —— `--content-only` 输出单行 content 捕获进变量（换行压平为 `⏎`、下游自动还原的机制见 textgen SKILL.md）。
-> 3. 注参（步骤 3，用 `jq` 内联）：用 `jq` 把 `$PROMPT` 内联拼进下游 imagegen 参数 JSON，再交 `linkfox-aigc-imagegen` 出图。
->    ```bash
->    PROMPT=$(python <textgen根目录>/scripts/aigc_textgen.py --stdin --content-only < <textgen_params.json>)
->    PARAMS=$(jq -nc --arg p "$PROMPT" --argjson imgs '<步骤1的URL JSON数组>' \
->      '{prompt:$p, imageUrls:$imgs, provider:"<provider>", outputNum:1, aspectRatio:"<ratio>", resolution:"<resolution>"}')
->    # 然后按 linkfox-aigc-imagegen SKILL.md 的调用方式把 $PARAMS 传入出图
->    ```
->
-> **禁止**手动用 Write 工具构造 textgen 参数文件（必须经 `build_textgen_params.py`）、用 `jq -r` 抽取原始 content（会重新引入真实换行符破坏拼接）、或直接写 Python 调 API 绕过此链路。
+- **动态模型含义**：展示用 `name`，请求用 `requestValue`；只按参考图能力、比例、分辨率和质量档位等实际能力选择。仅配置查询失败才用底层静态兜底；查询成功但缺失或维护中的选项不恢复，不跟随后台 `isDefault` 自动替换本地默认模型。
+- **流程与重做**：按场景 A–G 路由，部分重做仅处理指定图；品牌基因变更须重新提取，其余未变字段沿用。首次默认卖点图×3、场景图×2、白底图×1，不擅加特写或 A+。明确指定类型时只做指定类型；多商品按整体规划，发现独立拆套意图先解释并让用户选择整体制作或分次提供。具体场景与数量规则见运行时索引。
+- **内容与品牌**：用户完整卖点和画面描述优先，历史卖点及同批同类型去重；品牌主色只控制版式与背景，不染到商品本身。场景和特写保持产品结构、真实尺度和原文字，不额外添加文字；卖点/A+ 使用图片内文案和敏感词规避。提示词与参数细则见类型 reference。
+- **产物保存**：跨步骤复用的品牌基因、image-plan、image-urls、state、task-result、manifest 和单张构参文件放会话 `data/`，结果图放 `media/`。品牌基因经下游品牌基因技能的 `scripts/save_brand_gene.py` 落盘，state 仅传文件路径；plan/summary 由脚本写盘，禁止凭记忆重建整份大 JSON。目录解析按 `ACPX_WORKSPACES` 第一项、cwd、home、临时目录依序选择可写位置，实际落盘路径以脚本输出为准。
+- **凭证与缓存**：本技能唯一自有业务接口为上传凭证；完整字段、临时凭证脱敏输出及禁用缓存的约定见 [接口定义](references/api.md)。上传脚本支持位置参数 CLI 和 JSON 形式，凭证不使用持久响应缓存。公共调用层的输出在业务封装内捕获，凭证不进入用户可见 stdout/stderr；用户只看到上传结果。
+- **失败处理**：生图业务失败即便 exit 0 也不能当成功；参数不接受时请用户重选，认证失败停止，网络/连接超时最多重试一次，已由子任务完成重试后 Agent 不再重试。已有 `taskId` 或返回 `canQuery`/`pollTimedOut` 的轮询、交付失败不重新提交，保留原错误文件与任务标识，按下游官方文档恢复查询；服务端 5xx、配额、内容拒绝和未知业务码均不重试，读取失败 JSON 如实告知，不换技能试图生图。凭证接口的有限重试规则见接口定义。
+- **展示分工**：套图展示规划表和成功/失败明细；单张类型内联图与 bridge 资源卡同时出现是交付协议的预期行为。A+ 推荐、Listing 落库、跨 agent 卡片及 suggestion 标签由调用方在交付后按自身上下文规则处理，skill stdout 只输出业务结果，全部失败时不推荐 A+ 或跨 agent 卡片。
+- **已知局限**：白底模板统一去背精修，透明/反光/异形物边缘可能欠佳；场景/特写依赖模型品类和结构判定；卖点/A+ 共享模板，仅版式意图区分，模板含服装口吻时由模型适配；多参考图可能误判主体。白底/场景/特写不做敏感词改写，由上游或人工把关。
 
-### 步骤 3：调 `linkfox-aigc-imagegen` 出图（所有类型通用）
+## 使用示例
 
-- **输入**：步骤 2 的 `prompt`、步骤 1 的 `imageUrls`、`ratio`、`resolution`、`provider`
-- **操作**：**Read `skill:linkfox-aigc-imagegen` 的 SKILL.md，按其调用方式执行出图脚本**。传入参数：
-  - `prompt`：步骤 2 产出的最终 prompt
-  - `imageUrls`：步骤 1 的全部图片 URL
-  - `provider`：入参指定的模型（默认 `BANANA_PRO`）
-  - `aspectRatio`：`ratio` 原样透传
-  - `resolution`：原样透传
-  - `outputNum`：`1`
-- **输出**：图片（`Saved full response:` 后的本地路径）
-- **单张直出交付（按类型）**：本 skill 单张直出场景按 `references/runtime/03-deliver.md` §3.1 走，agent 在 imagegen Bash 完成后必须：
-  1. 解析 stdout 的 `Saved full response: ["..."]` 取本地路径（成功时 1 张）
-  2. 在对话回复正文里**追加** markdown 内联块：
+### 单张白底图
 
-     ```markdown
-     - 第 1 张 · <类型中文名>
-       ![<类型中文名>](<abs_path>)
-     ```
+用户：把这张商品实拍图做成白底主图。
 
-  3. **类型中文名对照**：SCENE→场景图 / CLOSE_UP→特写图 / SELLING_POINT→卖点图 / WHITE_BG→白底图 / PREMIUM_APLUS→高级A+图 / STANDARD_APLUS→普通A+图 / PHONE_APLUS→手机A+图
-  4. **禁止**把 `Saved full response: [...]` / `Saved full response: <json路径>` 协议原文复述进对话回复——它是 skill ↔ bridge 内部协议行，复述会让用户看到裸露的 JSON 数组路径（即"协议行裸露"故障）；只读它取路径，不抄字面
-  5. **禁止**自行 echo 一遍 `Saved full response:` 字面让 bridge 再渲染——bridge 路径 A 的「任务产出」资源卡是 imagegen Bash stdout 自动触发的，agent 不要手动复制
-  6. **双重渲染**（markdown 内联图 + bridge「任务产出」资源卡同时呈现）是当前协议下的预期行为，不算故障
-  7. 失败情形（stdout 是 `Saved full response: <data 路径>.json` 单文件）按本 SKILL.md「错误处理与失败护栏」如实告知，不追加内联图
+确认素材、模型和规格，读取白底图 reference，经静态正文构参后调用下游生图，再按单张协议交付。
 
-### 中间产物落盘（强制）
+### 首次商品套图
 
-所有要跨步骤复用或交付的文件一律落到会话目录 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/{data|media}/`（协议见仓库 `CLAUDE.md`「输出文件位置」）。
+用户：用这些商品图做一套图。
 
-| 产物类型 | 目录 | 获取方式 |
-|---------|------|---------|
-| 品牌基因 JSON | `data/` | `linkfox-aigc-imagegen-brand-gene-extract` 的 `save_brand_gene.py` |
-| 套图规划 image-plan.json | `data/` | S2 确认后 `scripts/save_image_plan.py` 逐条追加落盘 |
-| imageUrls 数组 | `data/` | 步骤 1 校验后 Write 到 `$DATADIR/image-urls.json`（通常很小） |
-| task-result-*.json | `data/` | 每个 `run_one_task.py` 完成后落盘的任务结果片段，summary phase 读后汇总末尾 markdown + asset manifest |
-| collection-asset-manifest.json | `data/` | summary phase 自动从 task-result 片段中合并 `assets[]` 写出，记录每张结果图的 `src`、`slot`、`type`、`label`，供 Listing HTML 合并重渲染 |
-| 单张构参 JSON（textgen/imagegen 入参） | `data/` | `build_textgen_params.py` / `build_imagegen_prompt.py` 的 `--out`（仅单张直出场景） |
-| 结果图 | `media/` | `linkfox-aigc-imagegen` 脚本自动落盘 |
+整体规划默认组合，执行 plan，原样展示表格并确认，再依次 dispatch、summary，交付图片和结构化资产清单。
 
-`DATADIR=$(python <brand-gene根目录>/scripts/save_brand_gene.py --datadir)`；下游 `--brand-gene-file` 指向 S1 落盘的品牌基因绝对路径。
+## 使用反馈
 
-## 下游 skill 调用约定
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
-本 skill 依赖下表两个下游 skill，**按文档化方式调用**：先 Read 对方 SKILL.md 了解其调用方式，单张直出按步骤 2/3 的链式命令、套图按 `scripts/run_collection_pipeline.py` + `scripts/run_one_task.py` 编排——两者都按文档以**绝对路径**调用下游官方脚本（这是允许的）。本 skill 自带的 `build_textgen_params.py` / `build_imagegen_prompt.py` / `run_collection_pipeline.py` / `run_one_task.py` 等是参数构建与编排辅助脚本，可直接运行。脱离上述文档化链路自行拼调用、或直连下游 HTTP API 才是不允许的。
+---
 
-| 下游 skill | 用途 | 调用时机 |
-|------------|------|---------|
-| `linkfox-aigc-imagegen` | AI 生图 | 步骤 3（所有类型） |
-| `linkfox-aigc-textgen` | 提示词改写 | 步骤 2（除白底图外的所有类型） |
-
-调用方式：Read `skill:<skill-name>` 的 SKILL.md，按其中的调用方式章节执行。
-
-## 共享输入参数
-
-以下参数为所有类型通用（类型特有参数见各 type reference）：
-
-| 参数 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| `imageUrls` | string[] | 必填 | 商品参考图 URL。步骤 1 会校验可访问性 |
-| `ratio` | string | 随类型 | 图片比例，原样透传给 imagegen 的 `aspectRatio` |
-| `resolution` | string | 2K | 按所选模型当前支持的分辨率选择；默认2K不变，旧2K/4K不是完整选项目录 |
-| `provider` | string | — | 从图片 bizType=201 动态完整列表中选择能力匹配的模型，内部使用 requestValue；未指定时沿用原确认/默认策略，不以历史模型表作枚举限制 |
-
-## 错误处理与失败护栏
-
-> `linkfox-aigc-imagegen` skill 对**业务失败也返回 exit 0**（不是非零退出），所以**不能靠命令退出码判断成败，必须解析 stdout**。
-
-**1. 怎么判一次调用成败**
-- **成功**：stdout 含 `Saved full response: ["xxx.png", ...]`（JSON 数组路径）→ 图片已落盘 media/，取路径展示。
-- **失败**：stdout 含 `Saved full response: xxx.json`（单个 JSON 文件路径，非数组）→ 无图片产物，需读该 JSON 查看错误详情（`errcode`/`errmsg`/`error`）。
-
-**2. 失败怎么处理（按类型分流）**
-| 失败类型 | 判断依据 | 处理 |
-|----------|----------|------|
-| 参数非法 | `errmsg`/`errorMsg` 指向 `provider`、`aspectRatio`、`resolution`、`quality` 等入参不被接受 | 用 `AskUserQuestion` 让用户重选对应参数 |
-| 认证失败 | `errcode==401` 或提示 API Key | 停止并提示用户配置 `LINKFOX_AGENT_API_KEY`，不重试 |
-| 瞬时错误 | `error` 为网络/超时/连接失败（`Connection failed`、timeout 等） | **最多自动重试 1 次**；再失败转「其它错误」 |
-| 其它错误 | 配额、内容被拒、服务端 5xx、未知 errcode 等 | **不重试**，如实告知用户失败原因 |
-
-**3. 硬性护栏（违反即视为故障）**
-- ❌ **禁止因生图失败改调任何其它 skill**——本 skill 的生图路径唯一（`linkfox-aigc-imagegen`），失败就按上表处理或上报，绝不"换一个 skill 试试"。
-- ❌ **禁止无上限重试**：除"瞬时错误最多 1 次"外，同一类失败不得反复重试。
-- ❌ **禁止把失败的返回体当成功**继续往下走（展示空图、告诉用户"已生成"）。
-
-## 全局规则
-
-### 动态模型选择与历史请求值参考
-
-本 skill 不限定模型枚举。当前可选模型以底层动态完整列表及任务能力为准；下表仅记录旧请求值，供兼容历史调用，不能用于拒绝新增模型。未传模型时仍沿用原确认方式。
-
-| 模型名称 | 内部代码 |
-|---------|---------|
-| LFBanana Pro | `BANANA_PRO` |
-| Img2 | `GPT_2_IMAGE` |
-| Img2.5 sunburst | `GPT_2_5_IMAGE` |
-| Img 2.5 flare | `GPT_2_5_F_IMAGE` |
-| LFBanana2 | `BANANA_2` |
-| Linkfox-Image-1 | `AIDRAW_EDIT` |
-| Wan 2.7 | `WAN2_7` |
-
-**模型确认**：未传 `provider` 时，沿用原确认方式，让用户从当前可用列表选择；已指定且存在于当前列表、能力满足任务时直接下发对应请求值，即使不在旧表内也正常接受。确实不在当前列表或能力不匹配时再提示重选，不用旧模型表作校验。
-
-### 分辨率规则
-
-**分辨率仍是步骤 3 的必传参数**。选项读取所选模型当前支持的分辨率；旧2K/4K目录不构成选项上限，原默认策略不变。
-
-1. agent 层透传了 `resolution`：沿用原参数透传方式，不以旧2K/4K目录额外拒绝当前模型支持的值
-2. agent 层未透传：使用 `AskUserQuestion` 让用户从所选模型当前支持的分辨率中选择
-
-### 任务独立性声明
-
-套图中的每张图片都是**独立任务**，各任务之间互不依赖。单个类型出图失败不影响其余任务继续执行。
-
-### 执行期约束
-
-1. **上传边界**：出图流水线接收 `imageUrls`，不自动上传。本地输入图或需公开的产物由调用方按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 执行上传后传入；无需查找或安装额外上传 skill。
-2. **计划管理工具使用规范**：单张直出时不使用计划工具。套图并发出图前须为 N 张图创建任务计划（见 `references/runtime/02-confirm.md`）。
-3. **套图落盘**：plan / summary 由 `run_collection_pipeline.py` 写盘；**禁止** Agent 凭记忆 Write 整份 manifest / image-plan。
-4. **Listing 报告回写资产清单（强制）**：套图 summary 完成后保留 `$DATADIR/collection-asset-manifest.json`。Listing HTML 合并只用 `agent-listing-result-html-skill/scripts/merge-listing-assets.mjs`。如果 manifest 中仍是本地 `media/` 路径，由调用方先按本 skill 内置的 [references/file-upload.md](references/file-upload.md) 执行上传，换成公开 OSS URL 并更新 manifest，再执行 merge；出图流水线不自动上传，但不得暗示本地路径可直接写入 HTML。
-
-## 套图编排流程（runtime，渐进 Read）
-
-**仅套图路径触发**；单张直出不要 Read 本节。
-
-| 步骤 | Read | 操作 |
-|------|------|------|
-| 入口 | `references/runtime/00-index.md` | S0 场景判定 |
-| plan | `references/runtime/01-plan.md` | 写 job.json → `--phase plan`，stdout markdown 表格原样转发 + AskUserQuestion |
-| 确认 → dispatch → summary | `references/runtime/02-confirm.md` | 用户确认 → agent 发 1 个 `--phase dispatch` Bash（skill 层并发跑全部 `run_one_task.py`，不渲染图）→ 紧接 1 个 `--phase summary` Bash 写 manifest + 打含 `![]()` 的 markdown 明细 |
-
-维护细则见 `references/maintainer/collection/`，**运行时禁止 Read**。
-
-## 已知局限
-
-- 白底图模板为静态指令，无品类识别与结构判定，全品类统一按"去背 + 精修 + 居中放大"处理；异形 / 透明 / 反光类产品的边缘处理可能不及预期。
-- 场景图/特写图强依赖 `linkfox-aigc-textgen`（`GEM_3_FLASH`）对品类与结构的判定，判定错误会直接传导到构图。
-- 卖点图/A+ 共用字典模板，靠 `{layoutInfo}` 区分；意图填错会导致版式串型。
-- 模板正文以服装品类口吻写就（"面料质感 / 版型优势"），用于非服饰商品时由模型自适应。
-- 多张参考图时由模型自行判断主体，复杂组合下可能误判。
-- 不做敏感词改写（场景图/特写图/白底图）：若卖点/场景含违禁内容，本链路不拦截，由上游或人工把关。卖点图/A+ 图在 textgen 环节含敏感词规避。
-
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
-
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

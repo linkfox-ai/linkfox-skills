@@ -1,19 +1,38 @@
-# 店雷达-1688商品榜单 API 参考
+# 店雷达1688商品热销榜单 接口说明
 
-## 调用规范
+## 公共规则
 
+### 调用规范
+
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
+
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 接口：1688商品热销榜单
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
 - **请求地址**：`${LINKFOX_TOOL_GATEWAY}/dld/productBillboard`
-- **请求方式**：POST，Content-Type: application/json
-- **认证方式**：Header `Authorization: <api_key>`，api_key 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取（如未配置 按 SKILL.md 的 **## 解决认证和算力问题** 处理）
 
-## 请求参数
+### 请求参数
 
 POST Body（JSON）：
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | keyWord | string | 否 | 商品搜索关键字（搜索关键词必须是中文，如果不是请先翻译），最大长度50 |
-| date | string | 否 | 查询时间。周榜：传入该周的周天日期，如 `2025-06-15`（最长近90天）；月榜：传入该月第一天，如 `2025-06-01`（最长近一年） |
+| date | string | 否 | 查询时间，格式 `YYYY-MM-DD`。周榜：传入该周的周日日期，如 `2025-06-15`（最长近90天）；月榜：传入该月第一天，如 `2025-06-01`（最长近一年，即12个月） |
 | pageType | integer | 否 | 榜单类型：`2` = 周榜，`3` = 月榜。默认 `3` |
 | pageIndex | integer | 否 | 页码（从1开始），默认 `1` |
 | pageSize | integer | 否 | 每页返回数量（10-100），默认 `20` |
@@ -44,20 +63,34 @@ POST Body（JSON）：
 | shopService | string | 否 | 卖家服务（多选），多个使用","号隔开。可选值：`4057409`（安心购）、`888777`（深度认证报告） |
 | buyerProtections | string | 否 | 权益保障（多选），多个用","隔开。可选值：`商品包邮`、`7天包退货`、`支持运费险` |
 | faceToFaceSupport | string | 否 | 面单支持（多选），多个使用","号隔开。可选值：`441218`（淘宝）、`386434`（抖音）、`422914`（拼多多）、`422978`（小红书）、`386370`（快手） |
-| productIds | string | 否 | 商品ID，顿号隔开搜索多个，最多20个 |
+| productIds | string | 否 | 商品ID，以顿号 `、` 隔开搜索多个，最多20个；不能与服务筛选使用的英文逗号混淆 |
 | goodsUrl | string | 否 | 商品链接地址 |
 
+#### 脚本选项与缓存
 
-## 响应结构
+| 选项或约定 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| JSON 参数 | object | 是 | 命令行首个位置参数，内容为上表所列POST请求体。 |
+| --inline | CLI flag | 否 | 强制打印完整响应，同时仍保存文件。 |
+| --no-cache | CLI flag | 否 | 绕过本地缓存的读取和写入，重新请求并保存本次响应。 |
+| 响应缓存 | 本地文件 | 否 | 默认启用24小时缓存，目录为 `<cwd>/linkfox/.cache/linkfox-dld-product-billboard/`；键为参数排序JSON的SHA-256前16位，同参数缓存可继续复用。缓存由公共调用器统一管理。 |
+| 完整响应 | 本地文件 | 是 | 按SKILL.md输出策略保存；固定当前工作目录，不回退到家目录或临时目录。请求前检查实际会话元数据与 data 目录，路径被文件占用或不可写时直接报错；不要在 `/tmp` 执行。 |
+
+`LINKFOX_TOOL_GATEWAY` 可覆盖网关地址，缺省回退正式地址，移除末尾斜杠。密钥优先取 `LINKFOX_AGENT_API_KEY`，兼容 `LINKFOXAGENT_API_KEY`。透传 `SESSION_ID`、`MESSAGE_ID`、`MODE_ID`、`APP_NAME` 请求头，并记录会话元数据和索引文件。
+
+### 响应结构
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| errcode | integer / string / null | 业务状态码，按公共响应码基本规则判断；认证失败示例值为401。 |
+| errmsg | string | 响应消息或错误原因；认证失败示例值为 `authorized error`。 |
+| errorCode | integer | 业务状态字段，200表示成功，其他值表示业务异常；返回该字段时结合下方业务规则解释。错误响应也可使用 `errcode`。 |
 | total | integer | 记录数 |
 | type | string | 渲染的样式 |
 | columns | array | 渲染的列 |
 | products | array | 商品列表（见下方商品对象） |
 
-### 商品对象
+#### products[*] 商品对象
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -85,31 +118,23 @@ POST Body（JSON）：
 | sourceType | string | 来源平台（1688） |
 | sourceTool | string | 来源工具 |
 
-## 错误码
+### 响应码规则
 
-正常情况下，接口的 HTTP 状态码均为 200，业务的成功与否通过响应体中的 errorCode 字段区分（errorCode = 200 表示成功，其他值表示业务错误）。当遇到未授权等情况时，HTTP 状态码为 401，且对应的 errorCode 也是 401。
+#### 基础规则
 
-| errcode | 含义 | 处理建议 |
-|---------|------|----------|
-| 200 | 成功 | 正常解析业务字段 |
-| 401 | 认证失败 | HTTP 401 或 authorized error：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 402 | 算力不足 | HTTP 402：按 SKILL.md 的 **## 解决认证和算力问题** 处理。|
-| 其他非200值 | 业务异常 | 参考 `errmsg` 字段获取具体错误原因 |
+基本规则参考 `公共规则` -> `响应码基本规则`。
 
-错误响应示例：
+#### 业务规则
 
-```json
-{
-    "errcode": 401,
-    "errmsg": "authorized error"
-}
-```
+- 先按公共基础规则判断 HTTP 状态与 `errcode`；错误响应可使用 `errcode`，如 `{"errcode":401,"errmsg":"authorized error"}`。
+- 若返回 `errorCode`，`200` 表示该业务字段成功，其他值表示业务异常，结合 `errmsg` 说明原因；不能因 `errcode` 缺失便忽略明确的 `errorCode` 失败，也不能用 `errorCode=200` 覆盖 HTTP 或 `errcode` 已指示的失败。保留实际返回字段供核对。
 
-## curl 示例
+### curl 示例
 
 ```bash
-curl -X POST https://tool-gateway.linkfox.com/dld/productBillboard \
-  -H "Authorization: $LINKFOXAGENT_API_KEY" \
+curl -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/dld/productBillboard" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
   -H "Content-Type: application/json" \
   -d '{
     "keyWord": "手机壳",
@@ -122,26 +147,18 @@ curl -X POST https://tool-gateway.linkfox.com/dld/productBillboard \
   }'
 ```
 
----
+## Feedback
 
-## Feedback API
-
-> This endpoint is **separate** from the tool API above. Do not mix the two base URLs.
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
 - **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
-- **Content-Type:** `application/json`
+- **请求内容类型**：`Content-Type: application/json`
 
 ```json
 {
-  "skillName": "linkfox-xxx-xxx",
-  "sentiment": "POSITIVE",
-  "category": "OTHER",
-  "content": "Results were accurate, user was satisfied."
+  "skillName": "linkfox-dld-product-billboard",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
 }
 ```
-
-**Field rules:**
-- `skillName`: Use this skill's `name` from the YAML frontmatter
-- `sentiment`: Choose ONE — `POSITIVE` (praise), `NEUTRAL` (suggestion without emotion), `NEGATIVE` (complaint or error)
-- `category`: Choose ONE — `BUG` (malfunction or wrong data), `COMPLAINT` (user dissatisfaction), `SUGGESTION` (improvement idea), `OTHER`
-- `content`: Include what the user said or intended, what actually happened, and why it is a problem or praise

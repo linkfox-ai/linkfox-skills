@@ -12,6 +12,24 @@ import json
 import sys
 
 from _temu_common import PROXY_URL, call_temu_api, get_linkfox_token, is_linkfox_auth_error, load_json_arg
+from _temu_runtime import last_http_status
+
+
+def gateway_ok(status, result):
+    """按公共基础规则检查响应；0、false 和非空的非 2xx errcode 均失败。"""
+    if status is None or not 200 <= status < 300:
+        return False
+    code = result.get('errcode')
+    if code is None:
+        return True
+    if isinstance(code, str):
+        code = code.strip()
+        if not code:
+            return True
+        if len(code) != 3 or not code.isascii() or not code.isdigit():
+            return False
+        code = int(code)
+    return type(code) in (int, float) and 200 <= code < 300 and code % 1 == 0
 
 def main():
     params = load_json_arg(sys.argv) if len(sys.argv) >= 2 else {}
@@ -30,8 +48,9 @@ def main():
         "type": "probe",
     }
     result = call_temu_api(PROXY_URL, probe_body, timeout=150, linkfox_params=params)
+    status = last_http_status()
 
-    if is_linkfox_auth_error(result):
+    if is_linkfox_auth_error(result) or status == 401 or str(result.get('errcode')).strip() == '401':
         print(
             json.dumps(
                 {
@@ -44,6 +63,17 @@ def main():
                 ensure_ascii=False,
             )
         )
+        sys.exit(1)
+
+    if not gateway_ok(status, result) or result.get('error') or str(result.get('code')).strip() == '1003':
+        print(json.dumps({
+            'ok': False,
+            'reason': 'gateway_probe_failed',
+            'gatewayReachable': status is not None,
+            'httpStatus': status,
+            'message': result,
+            'hint': '按 references/onboarding.md 或网关错误说明处理；不要自动重试。',
+        }, indent=2, ensure_ascii=False))
         sys.exit(1)
 
     print(

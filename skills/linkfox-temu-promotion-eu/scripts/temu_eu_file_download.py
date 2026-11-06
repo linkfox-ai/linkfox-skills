@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""US site signed file download via /temu/fileDownload."""
+"""EU site signed file download via /temu/fileDownload."""
 
 import json
 import sys

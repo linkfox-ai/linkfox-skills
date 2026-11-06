@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read a file or download a source URL, then use the official Base64 upload entry."""
+"""读取本地素材或下载源 URL，再通过内置 Base64 入口上传。"""
 import base64
 import importlib.util
 import json
@@ -84,10 +84,14 @@ def main():
     payload = {"fileName": name, "base64": base64.b64encode(content).decode("ascii")}
     inline = "--inline" in sys.argv[2:]
     # File bytes stay in this process, outside the OS command line and request files.
-    sys.argv = [str(entry), json.dumps(payload, ensure_ascii=False), "--no-cache"]
-    if inline:
-        sys.argv.append("--inline")
-    module.main()
+    previous_argv = sys.argv
+    try:
+        sys.argv = [str(entry), json.dumps(payload, ensure_ascii=False), "--no-cache"]
+        if inline:
+            sys.argv.append("--inline")
+        module.main()
+    finally:
+        sys.argv = previous_argv
 
 
 if __name__ == "__main__":

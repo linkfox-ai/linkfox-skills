@@ -1,259 +1,226 @@
-# 定价单列表查询 — `bg.local.goods.priceorder.query`
+# 定价单列表查询 接口说明
 
-| 项 | 值 |
-|----|-----|
-| **脚本** | `scripts/us_price_priceorder_query.py` |
-| **Partner 文档** | https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a（`sub_menu_code` 以 Partner 后台该接口页为准） |
-| **网关** | `POST /temu/proxy`，`type`=`bg.local.goods.priceorder.query`，业务载荷放在 Body 的 `params` |
+脚本运行、无缓存和认证兼容见 [公共运行约定](../api.md#脚本运行约定)；认证或用量引导见 [onboarding.md](../onboarding.md)。
 
-**Description:** Support merchants within the **white list** to query the price offer list（支持白名单商家查询定价单/报价列表）。
+## 公共规则
 
-> 须在 Temu 白名单内方可调用；非白名单店铺可能返回业务错误。
+### 调用规范
 
----
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-## Request 结构（官方业务参数）
+### 响应码基本规则
 
-```text
-params
-└── request (OBJECT, 选填)
-    ├── page
-    ├── size
-    ├── priceOrderType
-    ├── priceOrderSubType
-    ├── goodsName
-    ├── goodsId
-    ├── priceOrderSnList[]
-    ├── orderBy
-    ├── orderByType
-    ├── goodsCreateTimeFrom / goodsCreateTimeTo
-    ├── priceOrderCreateTimeFrom / priceOrderCreateTimeTo
-    ├── goodsIdList[]
-    └── status
-```
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-### `request` 内字段
+## 接口：定价单列表查询（bg.local.goods.priceorder.query）
+
+> Partner US：[商品菜单](https://partner-us.temu.com/documentation?menu_code=fb16b05f7a904765aac4af3a24b87d4a)，具体 `sub_menu_code` 以后台接口页为准。
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/temu/proxy`
+
+### 请求参数
+
+#### 网关请求体
 
 | 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| page | INTEGER | 否 | Page number（页码） |
-| size | INTEGER | 否 | Page size（每页条数），**须小于 100** |
-| priceOrderType | INTEGER | 否 | Pricing type（定价单类型）；**默认**为定价评估报价 |
-| priceOrderSubType | INTEGER | 否 | price order sub type（定价单子类型） |
-| goodsName | STRING | 否 | Search param: goodsName（按商品名搜索） |
-| goodsId | STRING | 否 | Search param: goodsId（按商品 ID 搜索） |
-| priceOrderSnList | STRING[] | 否 | search param: list of price order sn（定价单编号列表） |
+|---|---|---|---|
+| site | string | 是 | 本技能默认 `us`；通用入口支持 `cn` / `partner` / `us` / `global` / `eu`，值须小写。 |
+| managementType | string | 是 | 本技能默认 `semi-managed`；通用入口支持 `full-managed` / `semi-managed`，值须小写。 |
+| accessToken | string | 是 | Temu 店铺令牌；脚本也可用 `storeKey` 本地解析后填入。 |
+| type | string | 是 | `bg.local.goods.priceorder.query`；不是 URL path。 |
+| params | object | 否 | Temu 业务参数，当前接口业务块放在 `params.request`。 |
+
+#### 脚本认证与控制参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| accessToken | string | 与 storeKey 二选一 | 直接传入优先于本地保存的令牌。 |
+| storeKey | string | 与 accessToken 二选一 | 本地店铺键，结合 site、managementType、tokenPurpose 精确取令牌。 |
+| tokenPurpose | string | 否 | 美国站包装默认 `product-inventory`；通用入口默认 `default`。仅用于本地取令牌，不发往网关。 |
+| token / linkfoxToken / linkfox_token | string | 否 | LinkFox 用户密钥，按列出的顺序取首个非空值，优先于两种环境变量；仅用于请求头。 |
+| --inline | CLI flag | 否 | 全量打印，仍保存响应。 |
+| --no-cache | CLI flag | 否 | 兼容通用调用器选项；本技能业务封装始终加入，不读取或保存响应缓存。 |
+
+业务 JSON 优先使用对象类型的 `params`；否则将顶层非认证、非控制字段整体作为 `params`，保留 `request` 包装。`type`、`app_key`、`access_token`、`sign`、`timestamp` 不应放入业务 `params`，上游加签由网关处理。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| params.request | OBJECT | 否 | 官方业务参数包装对象；内部必填字段见下表。 |
+
+#### `request` 内字段
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| page | INTEGER | 否 | 页码 |
+| size | INTEGER | 否 | 每页条数，**须小于 100** |
+| priceOrderType | INTEGER | 否 | 定价单类型；**默认**为定价评估报价 |
+| priceOrderSubType | INTEGER | 否 | 定价单子类型 |
+| goodsName | STRING | 否 | 按商品名搜索 |
+| goodsId | STRING | 否 | 按商品 ID 搜索 |
+| priceOrderSnList | STRING[] | 否 | 定价单编号列表 |
 | orderBy | STRING | 否 | 排序字段；**默认** `order_create_time` |
 | orderByType | INTEGER | 否 | 排序方向；**默认** `0`（DESC） |
-| goodsCreateTimeFrom | LONG | 否 | Search param: The starting time of goods creation（商品创建起始时间） |
-| goodsCreateTimeTo | LONG | 否 | Search param: The end time of goods creation（商品创建结束时间） |
-| priceOrderCreateTimeFrom | LONG | 否 | Search param: The starting time of price order creation（定价单创建起始时间） |
-| priceOrderCreateTimeTo | LONG | 否 | Search param: The end time of price order creation（定价单创建结束时间） |
-| goodsIdList | STRING[] | 否 | goodsIdList（商品 ID 列表） |
-| status | INTEGER | 否 | price order status（定价单状态） |
+| goodsCreateTimeFrom | LONG | 否 | 商品创建起始时间 |
+| goodsCreateTimeTo | LONG | 否 | 商品创建结束时间 |
+| priceOrderCreateTimeFrom | LONG | 否 | 定价单创建起始时间 |
+| priceOrderCreateTimeTo | LONG | 否 | 定价单创建结束时间 |
+| goodsIdList | STRING[] | 否 | 商品 ID 列表 |
+| status | INTEGER | 否 | 定价单状态 |
 
-#### `priceOrderType`
-
-| 值 | 说明 |
-|----|------|
-| 不传 / 默认 | offer for pricing assessment（定价评估报价，默认） |
-| `1` | offer for pricing assessment（定价评估报价） |
-| `2` | offer for pricing opportunities or modification（定价机会或改价报价） |
-
-#### `priceOrderSubType`
+##### `priceOrderType`
 
 | 值 | 说明 |
-|----|------|
-| `2002` | base price increase invitations（基础价上调邀请） |
-| `2003` | sales boost（销量提升） |
+|---|---|
+| 不传 / 默认 | 定价评估报价（默认） |
+| `1` | 定价评估报价 |
+| `2` | 定价机会或改价报价 |
 
-#### `orderBy`
+##### `priceOrderSubType`
 
 | 值 | 说明 |
-|----|------|
+|---|---|
+| `2002` | 基础价上调邀请 |
+| `2003` | 销量提升 |
+
+##### `orderBy`
+
+| 值 | 说明 |
+|---|---|
 | `goods_create_time` | 按商品创建时间排序 |
 | `order_create_time` | 按定价单创建时间排序（**默认**） |
 
-#### `orderByType`
+##### `orderByType`
 
 | 值 | 说明 |
-|----|------|
+|---|---|
 | `0` | DESC（降序，**默认**） |
 | `1` | ASC（升序） |
 
-### 网关 `params` 写法
+### 响应结构
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "page": 1,
-    "size": 20,
-    "priceOrderType": 1,
-    "orderBy": "order_create_time",
-    "orderByType": 0
-  }
-}
-```
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| transportHttpStatus | integer / null | 脚本追加的 LinkFox 外层 HTTP 状态码，连接失败时为 null；与网关 code、errcode 和内层 Temu errorCode 分别判断。直接调用网关时从 HTTP 响应读取。 |
+| errcode | integer / string / null | 若返回，按公共响应码基本规则判断；不将 0 或 false 当作空值。 |
+| errmsg | string | 网关消息，若返回则保留并解释。 |
+| code | integer | 网关业务错误码：1002 为参数或 Token 问题，1003 为转发失败。 |
+| body | string | Temu 原始 JSON 字符串；须先判断网关状态，再解析。 |
+| temuBody | object / array / 标量 / null | 代理脚本在 body 为合法 JSON 字符串时追加的解析结果；body 为空、非字符串或解析失败时不追加。此字段是脚本输出，非网关原生字段。 |
 
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "page": 1,
-    "size": 50,
-    "goodsId": "123456789",
-    "priceOrderSubType": 2002,
-    "status": 1
-  }
-}
-```
-
-```json
-{
-  "accessToken": "TOKEN",
-  "request": {
-    "priceOrderSnList": ["PO-SN-001", "PO-SN-002"],
-    "goodsIdList": ["111", "222"]
-  }
-}
-```
-
----
-
-## Response（Temu `body` 解析后）
-
-```text
-response
-├── success
-├── errorCode
-├── errorMsg
-└── result
-    ├── pageNum
-    ├── total
-    └── priceAuditList[]          ← Price offer list
-        ├── priceOrderId
-        ├── goodsId
-        ├── pricingType
-        ├── specName[]
-        ├── skuIdList[]
-        ├── status
-        ├── suggestSupplierPrice
-        ├── targetSupplierPrice
-        ├── sourceSupplierPrice
-        ├── supplierPrice
-        ├── reason
-        ├── rejectTypeDesc
-        ├── priceCommitId
-        └── priceCommitVersion
-```
-
-### `response` 顶层字段
+#### Temu 业务响应顶层字段
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| success | BOOLEAN | Is success（当前请求是否成功） |
-| errorCode | INTEGER | Error code（错误码） |
-| errorMsg | STRING | Error message（错误信息） |
-| result | OBJECT | Return specific information（业务结果） |
+|---|---|---|
+| success | BOOLEAN | 当前请求是否成功 |
+| errorCode | INTEGER | 错误码 |
+| errorMsg | STRING | 错误信息 |
+| result | OBJECT | 业务结果 |
 
-### `result`
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| pageNum | INTEGER | Page number（当前页码） |
-| total | LONG | Total（总记录数） |
-| priceAuditList | OBJECT[] | Price offer list（定价单/报价列表） |
-
-### `result.priceAuditList[]`
+#### `result`
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| priceOrderId | LONG | Pricing ID（定价单 ID） |
-| goodsId | LONG | Goods ID（商品 ID） |
-| pricingType | INTEGER | pricing type，见下表 |
-| specName | STRING[] | Specification Name（规格名称列表） |
-| skuIdList | LONG[] | SKU id list（SKU ID 列表） |
-| status | INTEGER | Status of price offer（报价/定价单状态） |
-| suggestSupplierPrice | OBJECT | Reference Base Price（参考基础价/建议供货价） |
-| targetSupplierPrice | OBJECT | New Base Price（目标新基础价） |
-| sourceSupplierPrice | OBJECT | source supplier price（原供货价） |
-| supplierPrice | OBJECT | Final Base Price（最终基础价/供货价） |
-| reason | STRING | Rejection Reason（拒绝原因） |
-| rejectTypeDesc | STRING | Rejection Type Description（拒绝类型描述） |
-| priceCommitId | LONG | Price commit id（价格提交 ID） |
-| priceCommitVersion | INTEGER | Price commit version（价格提交版本） |
+|---|---|---|
+| pageNum | INTEGER | 当前页码 |
+| total | LONG | 总记录数 |
+| priceAuditList | OBJECT[] | 定价单/报价列表 |
 
-#### `pricingType`（响应字段，与入参 `priceOrderType` 枚举略有差异）
+#### `result.priceAuditList[]`
+
+| 参数 | 类型 | 说明 |
+|---|---|---|
+| priceOrderId | LONG | 定价单 ID |
+| goodsId | LONG | 商品 ID |
+| pricingType | INTEGER | 定价类型，见下表 |
+| specName | STRING[] | 规格名称列表 |
+| skuIdList | LONG[] | SKU ID 列表 |
+| status | INTEGER | 报价/定价单状态 |
+| suggestSupplierPrice | OBJECT | 参考基础价/建议供货价 |
+| targetSupplierPrice | OBJECT | 目标新基础价 |
+| sourceSupplierPrice | OBJECT | 原供货价 |
+| supplierPrice | OBJECT | 最终基础价/供货价 |
+| reason | STRING | 拒绝原因 |
+| rejectTypeDesc | STRING | 拒绝类型描述 |
+| priceCommitId | LONG | 价格提交 ID |
+| priceCommitVersion | INTEGER | 价格提交版本 |
+
+##### `pricingType`（响应字段，与入参 `priceOrderType` 枚举略有差异）
 
 | 值 | 说明 |
-|----|------|
-| `0` | offer for pricing assessment（定价评估报价） |
-| `1` | offer for pricing opportunities（定价机会报价） |
-| `2` | offer for pricing modification（改价报价） |
+|---|---|
+| `0` | 定价评估报价 |
+| `1` | 定价机会报价 |
+| `2` | 改价报价 |
 
-### 价格对象结构（`suggestSupplierPrice` / `targetSupplierPrice` / `sourceSupplierPrice` / `supplierPrice`）
+#### 价格对象结构（`suggestSupplierPrice` / `targetSupplierPrice` / `sourceSupplierPrice` / `supplierPrice`）
 
 | 参数 | 类型 | 说明 |
-|------|------|------|
-| amount | STRING | Amount（金额） |
-| currency | STRING | Currency Type（币种） |
+|---|---|---|
+| amount | STRING | 金额 |
+| currency | STRING | 币种 |
 
-### 响应示例（结构示意）
+### 响应码规则
 
-```json
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 网关 `code=1002` 表示参数或 Token 问题；`code=1003` 表示转发失败，应检查 Temu 令牌、IP 白名单或网络。网关失败时不能将嵌套数据解释成业务成功。
+- 网关正常后解析 `body`，检查 Temu 的 `success`、`errorCode`、`errorMsg` 和 `result`；业务示例的 `success=true`、`errorCode=0` 属于内层 Temu 状态，不改变外层 `errcode` 规则。
+- 仅支持 Temu 白名单商家，非白名单店铺可能返回业务错误。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/temu/proxy" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Token: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '
 {
-  "success": true,
-  "errorCode": 0,
-  "errorMsg": "",
-  "result": {
-    "pageNum": 1,
-    "total": 2,
-    "priceAuditList": [
-      {
-        "priceOrderId": 90001,
-        "goodsId": 123456789,
-        "pricingType": 0,
-        "specName": ["Color: Red", "Size: M"],
-        "skuIdList": [58224724203874],
-        "status": 1,
-        "suggestSupplierPrice": { "amount": "12.00", "currency": "USD" },
-        "targetSupplierPrice": { "amount": "10.99", "currency": "USD" },
-        "sourceSupplierPrice": { "amount": "13.50", "currency": "USD" },
-        "supplierPrice": { "amount": "10.99", "currency": "USD" },
-        "reason": "",
-        "rejectTypeDesc": "",
-        "priceCommitId": 80001,
-        "priceCommitVersion": 1
-      }
-    ]
+  "site": "us",
+  "managementType": "semi-managed",
+  "accessToken": "TOKEN",
+  "type": "bg.local.goods.priceorder.query",
+  "params": {
+    "request": {
+      "page": 1,
+      "size": 20,
+      "priceOrderType": 1,
+      "orderBy": "order_create_time",
+      "orderByType": 0
+    }
   }
-}
+}'
 ```
 
 ---
 
-## 与相关接口区分
+## Feedback
 
-| 接口 | 场景 |
-|------|------|
-| `bg.local.goods.priceorder.query`（本接口） | **白名单**商家分页查询定价单/报价列表 |
-| `bg.local.goods.priceorder.change.sku.price` | **白名单**商家批量修改 SKU 基础价 |
-| `linkfox-temu-add-product-us` `temu.goods.price.list.get` | 半托管侧按 `productSkuIds` 查供货价 |
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
 
----
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
 
-## 示例
-
-```bash
-python scripts/us_price_priceorder_query.py '{
-  "accessToken": "TOKEN",
-  "request": {
-    "page": 1,
-    "size": 20,
-    "priceOrderType": 1,
-    "orderBy": "order_create_time",
-    "orderByType": 0
-  }
-}'
+```json
+{
+  "skillName": "linkfox-temu-price-us",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

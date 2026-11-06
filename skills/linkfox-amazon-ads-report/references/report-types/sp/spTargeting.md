@@ -17,31 +17,31 @@ dateRange:
   dataRetentionDays: 95
 ---
 
-# SP Targeting
+# SP 定向
 
-Targeting reports contain performance metrics broken down by both targeting expressions and keywords.
+定向报告按定向表达式与关键词拆分效果指标。
 
-> **Note**
-> Targeting reports are not supported for Sponsored TV non-endemic advertisers.
+> **说明**
+> 定向报告不支持 Sponsored TV 的非 Amazon 站内销售商品广告主（non-endemic advertisers）。
 
-## Requesting keywords vs. targets
+## 关键词与定向表达式选择
 
-To see only targeting expressions, set the keywordType filter to TARGETING_EXPRESSION and TARGETING_EXPRESSION_PREDEFINED. To see only keywords, set the keywordType filter to BROAD, PHRASE, and EXACT.
+仅查看定向表达式时，将 `keywordType` 设为 `TARGETING_EXPRESSION` 与 `TARGETING_EXPRESSION_PREDEFINED`；仅查看关键词时设为 `BROAD`、`PHRASE`、`EXACT`。
 
-## Configuration
+## 配置
 
-| Configuration | Value |
+| 配置项 | 值 |
 |---|---|
 | reportTypeId | spTargeting |
-| Maximum date range | 31 days |
-| Data retention | 95 days |
-| timeUnit | SUMMARY or DAILY |
+| 最大日期跨度 | 31 天 |
+| 数据保留期 | 95 天 |
+| timeUnit | SUMMARY / DAILY |
 | groupBy | targeting |
 | format | GZIP_JSON |
 
-## Base metrics
+## 基础指标
 
-| Field |
+| 字段 |
 |------|
 | impressions |
 | addToList |
@@ -103,111 +103,108 @@ To see only targeting expressions, set the keywordType filter to TARGETING_EXPRE
 | targeting |
 | topOfSearchImpressionShare |
 
-## Group by targeting
+## 分组：targeting
 
-**Additional metrics**: adKeywordStatus
+附加指标：
 
-**Filters**:
-- adKeywordStatus (values: ENABLED, PAUSED, ARCHIVED)
-- keywordType (values: BROAD, PHRASE, EXACT, TARGETING_EXPRESSION, TARGETING_EXPRESSION_PREDEFINED)
+| 字段 |
+|---|
+| adKeywordStatus |
 
-## Sample calls
+**筛选**：
 
-### Targeting expressions only
+| 筛选字段 | values 类型 | 可选值 |
+|---|---|---|
+| adKeywordStatus | array[string] | ENABLED, PAUSED, ARCHIVED |
+| keywordType | array[string] | BROAD, PHRASE, EXACT, TARGETING_EXPRESSION, TARGETING_EXPRESSION_PREDEFINED |
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxx' \
---data '{
-    "name": "SP targeting report 9/5-9/10",
-    "startDate": "2023-09-05",
-    "endDate": "2023-09-10",
-    "configuration": {
-        "adProduct": "SPONSORED_PRODUCTS",
-        "groupBy": [
-            "targeting"
-        ],
-        "columns": [
-            "adGroupId",
-            "campaignId",
-            "targeting",
-            "keywordId",
-            "matchType",
-            "impressions",
-            "clicks",
-            "cost",
-            "purchases1d",
-            "purchases7d",
-            "purchases14d",
-            "purchases30d",
-            "startDate",
-            "endDate"
-        ],
-        "filters": [
-            {
-                "field": "keywordType",
-                "values": [
-                    "TARGETING_EXPRESSION",
-                    "TARGETING_EXPRESSION_PREDEFINED"
-                ]
-            }
-        ],
-        "reportTypeId": "spTargeting",
-        "timeUnit": "SUMMARY",
-        "format": "GZIP_JSON"
-    }
-}'
+## 配置示例
+
+### 仅定向表达式
+
+```json
+{
+  "name": "SP targeting report 9/5-9/10",
+  "startDate": "2023-09-05",
+  "endDate": "2023-09-10",
+  "configuration": {
+    "adProduct": "SPONSORED_PRODUCTS",
+    "groupBy": [
+      "targeting"
+    ],
+    "columns": [
+      "adGroupId",
+      "campaignId",
+      "targeting",
+      "keywordId",
+      "matchType",
+      "impressions",
+      "clicks",
+      "cost",
+      "purchases1d",
+      "purchases7d",
+      "purchases14d",
+      "purchases30d",
+      "startDate",
+      "endDate"
+    ],
+    "filters": [
+      {
+        "field": "keywordType",
+        "values": [
+          "TARGETING_EXPRESSION",
+          "TARGETING_EXPRESSION_PREDEFINED"
+        ]
+      }
+    ],
+    "reportTypeId": "spTargeting",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```
 
-### Keywords only
+### 仅关键词
 
-```bash
-curl --location 'https://advertising-api.amazon.com/reporting/reports' \
---header 'Content-Type: application/vnd.createasyncreportrequest.v3+json' \
---header 'Amazon-Advertising-API-ClientId: amzn1.application-oa2-client.xxxxxxxxx' \
---header 'Amazon-Advertising-API-Scope: xxxxxxx' \
---header 'Authorization: Bearer Atza|xxxxxxxxx' \
---data '{
-    "name": "SP keywords report 9/5-9/10",
-    "startDate": "2023-09-05",
-    "endDate": "2023-09-10",
-    "configuration": {
-        "adProduct": "SPONSORED_PRODUCTS",
-        "groupBy": [
-            "targeting"
-        ],
-        "columns": [
-            "adGroupId",
-            "campaignId",
-            "keywordId",
-            "matchType",
-            "keyword",
-            "impressions",
-            "clicks",
-            "cost",
-            "purchases1d",
-            "purchases7d",
-            "purchases14d",
-            "purchases30d",
-            "startDate",
-            "endDate"
-        ],
-        "filters": [
-            {
-                "field": "keywordType",
-                "values": [
-                    "BROAD",
-                    "PHRASE",
-                    "EXACT"
-                ]
-            }
-        ],
-        "reportTypeId": "spTargeting",
-        "timeUnit": "SUMMARY",
-        "format": "GZIP_JSON"
-    }
-}'
+```json
+{
+  "name": "SP keywords report 9/5-9/10",
+  "startDate": "2023-09-05",
+  "endDate": "2023-09-10",
+  "configuration": {
+    "adProduct": "SPONSORED_PRODUCTS",
+    "groupBy": [
+      "targeting"
+    ],
+    "columns": [
+      "adGroupId",
+      "campaignId",
+      "keywordId",
+      "matchType",
+      "keyword",
+      "impressions",
+      "clicks",
+      "cost",
+      "purchases1d",
+      "purchases7d",
+      "purchases14d",
+      "purchases30d",
+      "startDate",
+      "endDate"
+    ],
+    "filters": [
+      {
+        "field": "keywordType",
+        "values": [
+          "BROAD",
+          "PHRASE",
+          "EXACT"
+        ]
+      }
+    ],
+    "reportTypeId": "spTargeting",
+    "timeUnit": "SUMMARY",
+    "format": "GZIP_JSON"
+  }
+}
 ```

@@ -120,8 +120,10 @@ def _http_body_param(body_type: str) -> dict:
 # A 类:线上导出件实测
 # ---------------------------------------------------------------------------
 
-# 逐字取自 BusinessStart 组件定义(C 类,见文件头「收录标准」)。schedule* 那一组不收:
+# 逐字取自 BusinessStart 组件定义(C 类,见文件头「收录标准」,version 1.9)。schedule* 那一组不收:
 # 字段多且带 frequency 联动,凭字段表反推 label / options 就是在编 —— 与 Agent / LLM 同处理。
+# 2026-10-30 起「店铺授权」触发连同 amazonStore / storeChangeType / storeCheckIntervalMinutes
+# 三个字段一起删除(没有店铺事件服务,那个分支从来不会自己跑)。
 _BUSINESS_START = [
     {
         "label": "启动方式",
@@ -131,39 +133,9 @@ _BUSINESS_START = [
         "options": [
             {"label": "手动启动", "name": "chatInput"},
             {"label": "按业务时间启动", "name": "scheduleInput"},
-            {"label": "店铺授权", "name": "storeAuthorization"},
             {"label": "多维表格记录触发", "name": "tableRecordTrigger"},
         ],
         "default": "chatInput",
-    },
-    {
-        "label": "授权店铺",
-        "name": "amazonStore",
-        "type": "asyncOptions",
-        "loadMethod": "listAmazonStores",
-        "refresh": True,
-        "show": {"startInputType": "storeAuthorization"},
-    },
-    {
-        "label": "检查哪些数据变化",
-        "name": "storeChangeType",
-        "type": "options",
-        "options": [
-            {"label": "Listing", "name": "listing"},
-            {"label": "订单列表", "name": "orderList"},
-            {"label": "售后订单", "name": "afterSalesOrder"},
-            {"label": "FBA 库存明细", "name": "fbaInventory"},
-            {"label": "移除订单", "name": "removalOrder"},
-        ],
-        "default": "orderList",
-        "show": {"startInputType": "storeAuthorization"},
-    },
-    {
-        "label": "查询间隔（分钟）",
-        "name": "storeCheckIntervalMinutes",
-        "type": "number",
-        "default": 10,
-        "show": {"startInputType": "storeAuthorization"},
     },
     {
         "label": "多维表格",

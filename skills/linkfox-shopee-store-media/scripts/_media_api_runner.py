@@ -12,6 +12,8 @@ from _shopee_media_common import (
     ensure_auth_skill_available,
     merge_shopee_body,
     qs_add,
+    response_ok,
+    SLUG,
 )
 
 
@@ -114,7 +116,25 @@ def run_media_api(api_name: str, params: dict, caller: Optional[str] = None) -> 
         print("Missing required field: shopId OR merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    def build_result(http_status, proxy):
+        out = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": http_status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            try:
+                out["requestBody"] = json.loads(body) if body else None
+            except json.JSONDecodeError:
+                out["requestBody"] = body
+        if response_ok(http_status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
         path,
         method,
         shop_id=shop_id,
@@ -122,17 +142,7 @@ def run_media_api(api_name: str, params: dict, caller: Optional[str] = None) -> 
         query_string=query_string or None,
         body=body,
         content_type=content_type,
+        access_token=params.get("accessToken"),
+        transform=build_result,
+        slug=f"{SLUG}-{api_name}",
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

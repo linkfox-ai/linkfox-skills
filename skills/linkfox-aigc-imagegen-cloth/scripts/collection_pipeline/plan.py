@@ -85,15 +85,18 @@ def run_plan_phase(job: dict, *, skill_root: str, variant_name: str) -> dict[str
     os.makedirs(datadir, exist_ok=True)
 
     image_urls = job.get("imageUrls") or []
-    if not image_urls or not all(isinstance(u, str) and u.startswith(("http://", "https://")) for u in image_urls):
+    if not isinstance(image_urls, list) or not image_urls or not all(isinstance(u, str) and u.startswith(("http://", "https://")) for u in image_urls):
         raise ValueError("job.imageUrls 须为非空 https URL 数组")
 
-    aspect_ratio = job.get("aspectRatio") or job.get("ratio") or "1:1"
+    aspect_ratio = job.get("aspectRatio") or job.get("ratio") or ""
     aplus_ratio = job.get("aplusRatio") or ""
     scene = (job.get("scene") or "D").upper()
     brand_key = normalize_brand_key(job.get("brandKey"))
 
     slots = expand_type_slots(job.get("types"), cfg["default_plan_d"])
+    unknown = set(slots) - cfg["type_labels"].keys()
+    if unknown:
+        raise ValueError(f"不支持的服饰类型: {sorted(unknown)}")
     skeleton = build_slots_skeleton(
         slots,
         aspect_ratio=aspect_ratio,
@@ -128,6 +131,28 @@ def run_plan_phase(job: dict, *, skill_root: str, variant_name: str) -> dict[str
         if not isinstance(s1_list, list):
             raise ValueError("S1 输出须含 imagePlanList 数组")
         plan = merge_s1_result(skeleton, s1_list)
+        # 比例与版式由规划槽位决定，不能被模型示例中的 1:1 等值覆盖。
+        for row, slot in zip(plan, skeleton):
+            row["ratio"] = slot["ratio"]
+            row["layout"] = slot["layout"]
+
+    supplied_points = job.get("point") or []
+    if isinstance(supplied_points, str):
+        supplied_points = [supplied_points]
+    point_index = 0
+    for row in plan:
+        if row["type"] in {"SCENE", "SELLING_POINT", "PREMIUM_APLUS", "STANDARD_APLUS", "PHONE_APLUS"}:
+            if point_index < len(supplied_points) and supplied_points[point_index]:
+                row["point"] = supplied_points[point_index]
+            point_index += 1
+        if job.get("imageDesc") and row["type"] not in {"WHITE_BG", "SIZE"}:
+            row["image_desc"] = job["imageDesc"]
+        if row["type"] == "WHITE_BG":
+            row.update(point="", desc="", image_desc="")
+        elif row["type"] == "SIZE":
+            row["point"] = ""
+            row["image_desc"] = "这是一张商品尺码示意图，图中详细标注了产品的各项关键参数"
+            row["language"] = brand_key.get("language") or "英文"
 
     brand_gene_file = job.get("brand_gene_file")
     if brand_gene_file:
@@ -161,8 +186,9 @@ def run_plan_phase(job: dict, *, skill_root: str, variant_name: str) -> dict[str
         "scene": scene,
         "imageUrls": image_urls,
         "image_urls_file": urls_path,
-        "provider": job.get("provider") or "BANANA_PRO",
-        "resolution": job.get("resolution") or "2K",
+        "provider": job.get("provider") or "GPT_2_5_IMAGE",
+        "resolution": job.get("resolution") or "1K",
+        "quality": job.get("quality") or "low",
         "plan_file": plan_path,
         "brandKey": brand_key,
         "brand_gene_file": brand_gene_file,
@@ -192,5 +218,39 @@ def run_plan_phase(job: dict, *, skill_root: str, variant_name: str) -> dict[str
             {"index": i, "id": s["id"], "type": s["type"], "label": s["label"]}
             for i, s in enumerate(task_specs, start=1)
         ],
+        "summary": plan_summary(plan, cfg["type_labels"]),
+    }
+
+
+def refresh_plan_phase(state_file: str, *, variant_name: str) -> dict[str, Any]:
+    """重新展示用户编辑后的规划并同步任务元数据，不调用下游、不覆盖规划。"""
+    state_path = os.path.abspath(state_file)
+    with open(state_path, encoding="utf-8") as f:
+        state = json.load(f)
+    if state.get("variant") != variant_name:
+        raise ValueError("state.variant 与当前技能不一致")
+    cfg = get_variant(variant_name)
+    plan_path = os.path.abspath(state["plan_file"])
+    with open(plan_path, encoding="utf-8") as f:
+        plan = json.load(f).get("imagePlanList")
+    if not isinstance(plan, list) or not plan:
+        raise ValueError("imagePlanList 须为非空数组；取消全部条目后不得 dispatch")
+    specs = []
+    for i, row in enumerate(plan, 1):
+        if not isinstance(row, dict) or row.get("type") not in cfg["type_labels"]:
+            raise ValueError(f"第 {i} 条规划须含有效服饰 type")
+        label = cfg["type_labels"][row["type"]]
+        specs.append({"id": f"{i}-{label}", "type": row["type"], "label": label})
+    state["task_specs"] = specs
+    with open(state_path, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+    return {
+        "status": "awaiting_confirm", "skip_confirm": False,
+        "state_file": state_path, "plan_file": plan_path,
+        "brand_gene_file": state.get("brand_gene_file"),
+        "image_urls_file": state.get("image_urls_file"),
+        "run_one_task_script": state.get("run_one_task_script"),
+        "total": len(specs),
+        "specs": [{"index": i, **s} for i, s in enumerate(specs, 1)],
         "summary": plan_summary(plan, cfg["type_labels"]),
     }

@@ -1,75 +1,73 @@
-# linkfox-shopee-store-orders — 参数与字段参考
+# Shopee 店铺订单接口说明
 
-> 单接口入参/响应说明已拆到 **`apis/`**（按 API 一份）；本文件保留模块总览与 Feedback。
-Shopee **Order 模块**全部 22 个 API，经 **`POST /shopee/developerProxy`** 转发。
+本技能包含 22 个 Order 操作及 1 个 storeTokens 兼容函数，除 Feedback 共 23 个操作；订单业务均由 POST `/shopee/developerProxy` 转发。
 
-授权见 **`linkfox-shopee-store-auth`**。官方文档：[Order module](https://open.shopee.com/documents/v2/v2.order.get_order_list?module=94&type=1)
+| 操作 | 独立接口文档 |
+|---|---|
+| `get_order_list` | [apis/get-order-list.md](apis/get-order-list.md) |
+| `get_order_detail` | [apis/get-order-detail.md](apis/get-order-detail.md) |
+| `get_shipment_list` | [apis/get-shipment-list.md](apis/get-shipment-list.md) |
+| `search_package_list` | [apis/search-package-list.md](apis/search-package-list.md) |
+| `get_package_detail` | [apis/get-package-detail.md](apis/get-package-detail.md) |
+| `split_order` | [apis/split-order.md](apis/split-order.md) |
+| `unsplit_order` | [apis/unsplit-order.md](apis/unsplit-order.md) |
+| `cancel_order` | [apis/cancel-order.md](apis/cancel-order.md) |
+| `handle_buyer_cancellation` | [apis/handle-buyer-cancellation.md](apis/handle-buyer-cancellation.md) |
+| `set_note` | [apis/set-note.md](apis/set-note.md) |
+| `get_pending_buyer_invoice_order_list` | [apis/get-pending-buyer-invoice-order-list.md](apis/get-pending-buyer-invoice-order-list.md) |
+| `get_buyer_invoice_info` | [apis/get-buyer-invoice-info.md](apis/get-buyer-invoice-info.md) |
+| `upload_invoice_doc` | [apis/upload-invoice-doc.md](apis/upload-invoice-doc.md) |
+| `download_invoice_doc` | [apis/download-invoice-doc.md](apis/download-invoice-doc.md) |
+| `handle_prescription_check` | [apis/handle-prescription-check.md](apis/handle-prescription-check.md) |
+| `get_warehouse_filter_config` | [apis/get-warehouse-filter-config.md](apis/get-warehouse-filter-config.md) |
+| `get_booking_list` | [apis/get-booking-list.md](apis/get-booking-list.md) |
+| `get_booking_detail` | [apis/get-booking-detail.md](apis/get-booking-detail.md) |
+| `generate_fbs_invoices` | [apis/generate-fbs-invoices.md](apis/generate-fbs-invoices.md) |
+| `get_fbs_invoices_result` | [apis/get-fbs-invoices-result.md](apis/get-fbs-invoices-result.md) |
+| `download_fbs_invoices` | [apis/download-fbs-invoices.md](apis/download-fbs-invoices.md) |
+| `get_estimiate_cancel_value` | [apis/get-estimiate-cancel-value.md](apis/get-estimiate-cancel-value.md) |
+| `storeTokens` | [apis/store-tokens.md](apis/store-tokens.md) |
 
-## 通用约定
+## 公共规则
 
-- **Base URL**：`https://tool-gateway.linkfox.com`
-- **Method**：POST（网关），上游 Method 见各接口
-- **Auth**：Header `Authorization: <api_key>`（`LINKFOXAGENT_API_KEY`）
-- **流程**：`POST /shopee/storeTokens` → `POST /shopee/developerProxy`
-- **path**：须 `api/v2/order/...`（不含域名）
-- **紫鸟代理**：自动追加 `partner_id`、`timestamp`、`sign`；`access_token`/`shop_id` 由 `developerProxy` 写入
+### 调用规范
 
-**developerProxy Request**：
-| 参数 | 必填 | 说明 |
-|------|------|------|
-| `path` | 是 | 如 `api/v2/order/get_order_list` |
-| `method` | 是 | `GET` / `POST` |
-| `accessToken` | 是 | 店铺 token |
-| `shopId` / `merchantId` | 二选一 | 转发为 `shop_id` / `merchant_id` |
-| `queryString` | GET 时 | 业务 query，不含 `?` |
-| `body` | POST 时 | JSON 字符串 |
-| `contentType` | 否 | 默认 `application/json` |
+- **请求基础地址**：`LINKFOX_TOOL_GATEWAY` 默认 `https://tool-gateway.linkfox.com`
+- **请求方式**：POST, HTTP 超时 150s
+- **请求头**
+  - Content-Type: application/json
+  - User-Agent: LinkFox-Skill/2.0
+  - Authorization: <api_key> (<api_key> 从环境变量 `LINKFOX_AGENT_API_KEY` 或 `LINKFOXAGENT_API_KEY` 读取，未配置则按 SKILL.md 的 **## 解决认证和算力问题** 处理)
 
-**developerProxy Response**：
+### 响应码基本规则
+
+- **正常响应**: HTTP 状态码为 `200`–`299`，且响应体的 `errcode` 不存在、为 `null`、为空字符串（含纯空白）或为 `200`–`299`（数字或数字字符串）。
+- **未正常响应**: HTTP 状态码不属于 `200`–`299`，或响应体的 `errcode` 为非空且不属于 `200`–`299` 的值；`0` 和 `false` 不视为空。
+- **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
+- **其他情况**: 依据响应体的 `errmsg` 判断具体原因
+
+## 运行约定
+
+- **依赖与选店**：运行 `python scripts/check_auth_dependency.py [--json]`；返回 0 表示已安装认证技能，返回 42 且 stderr 含 `DEPENDENCY_MISSING:` 表示需安装 `linkfox-shopee-store-auth`。检查脚本保留环境变量、多平台和常用安装目录探测。`skipDepCheck=true` 仅跳过安装检查，不能替代授权。
+- **认证兼容**：API Key 读取顺序为 `LINKFOX_AGENT_API_KEY`、`LINKFOXAGENT_API_KEY`；网关优先 `LINKFOX_TOOL_GATEWAY`，其次兼容变量 `SHOPEE_API_BASE_URL`，默认正式地址。每次调用保留 SESSION_ID、MESSAGE_ID、MODE_ID、APP_NAME 请求头；HTTP POST 超时 150 秒。
+- **令牌与授权状态**：订单脚本由服务端依 shopId / merchantId 解析并注入 token；调用方提供的 accessToken 不参与认证。resolve_store_tokens 可单独查询已授权状态，不返回原始令牌；订单 CLI 不自动串联此查询。本技能不实现授权或刷新流程。
+- **CLI**：`python scripts/<操作名>.py '<JSON 参数>' [--inline] [--no-cache]`；或 `python scripts/order_api.py '{"api":"<操作名>", ...}' [--inline] [--no-cache]`。`--help` 展示本地帮助，无网络请求。GET 顶层业务标量组成 queryString；值百分号编码、布尔小写、编号列表逗号连接。POST 优先 body，再 requestBody，再注册表中的顶层业务字段；显式 null 在请求前拒绝，不回退到其他来源。
+- **缓存**：订单脚本无响应缓存，全部业务封装始终向公共 `call_api.run` 传 `--no-cache`；不读写响应缓存，不增加另一层缓存。公共调用器可能创建空 `.cache` 目录。
+- **完整响应与目录**：每次请求通过公共 run 保存完整的加工后结果，其中含原始 developerProxy。路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-shopee-store-orders-<接口标识>-<timestamp>.json`。SESSION_ID 优先，否则进程内生成；不得是路径。响应不超过 8000 UTF-8 字节时完整打印，超过则打印摘要及最大列表前三项；--inline 强制完整打印。业务封装在请求前检查当前目录，并创建本次会话下的完整响应文件；任一目录或文件不可写时不发送请求。固定根目录为 cwd/linkfox，禁止回退家目录或 /tmp。
+- **错误和重试**：没有自动重试、自动换参或自动翻页；写操作结果不确定时先核对订单状态，避免重复提交。网关错误及代理错误见各接口业务规则，重新授权交给认证技能。
+
+## Feedback
+
+> 该接口与上方工具接口不同，**请勿混用两个基础地址**。
+
+- **POST** `https://skill-api.linkfox.com/api/v1/public/feedback`
+- **请求内容类型**：`Content-Type: application/json`
+
 ```json
-{"httpStatus": 200, "contentType": "application/json", "body": "{\"error\":\"\",\"response\":{...}}"}
-```
-
-脚本在 `httpStatus==200` 时解析 `body` 为 `{responseKey}` / `{responseKey}Response`。
-
----
-
-## Order 模块总览
-
-| # | API | Method | path | 脚本 | 官方文档 |
-|---|-----|--------|------|------|----------|
-| 1 | get_order_list | GET | `api/v2/order/get_order_list` | `get_order_list.py` | [apis/get-order-list.md](./apis/get-order-list.md) |
-| 2 | get_order_detail | GET | `api/v2/order/get_order_detail` | `get_order_detail.py` | [apis/get-order-detail.md](./apis/get-order-detail.md) |
-| 3 | get_shipment_list | GET | `api/v2/order/get_shipment_list` | `get_shipment_list.py` | [apis/get-shipment-list.md](./apis/get-shipment-list.md) |
-| 4 | search_package_list | POST | `api/v2/order/search_package_list` | `search_package_list.py` | [apis/search-package-list.md](./apis/search-package-list.md) |
-| 5 | get_package_detail | GET | `api/v2/order/get_package_detail` | `get_package_detail.py` | [apis/get-package-detail.md](./apis/get-package-detail.md) |
-| 6 | split_order | POST | `api/v2/order/split_order` | `split_order.py` | [apis/split-order.md](./apis/split-order.md) |
-| 7 | unsplit_order | POST | `api/v2/order/unsplit_order` | `unsplit_order.py` | [apis/unsplit-order.md](./apis/unsplit-order.md) |
-| 8 | cancel_order | POST | `api/v2/order/cancel_order` | `cancel_order.py` | [apis/cancel-order.md](./apis/cancel-order.md) |
-| 9 | handle_buyer_cancellation | POST | `api/v2/order/handle_buyer_cancellation` | `handle_buyer_cancellation.py` | [apis/handle-buyer-cancellation.md](./apis/handle-buyer-cancellation.md) |
-| 10 | set_note | POST | `api/v2/order/set_note` | `set_note.py` | [apis/set-note.md](./apis/set-note.md) |
-| 11 | get_pending_buyer_invoice_order_list | GET | `api/v2/order/get_pending_buyer_invoice_order_list` | `get_pending_buyer_invoice_order_list.py` | [apis/get-pending-buyer-invoice-order-list.md](./apis/get-pending-buyer-invoice-order-list.md) |
-| 12 | get_buyer_invoice_info | POST | `api/v2/order/get_buyer_invoice_info` | `get_buyer_invoice_info.py` | [apis/get-buyer-invoice-info.md](./apis/get-buyer-invoice-info.md) |
-| 13 | upload_invoice_doc | POST | `api/v2/order/upload_invoice_doc` | `upload_invoice_doc.py` | [apis/upload-invoice-doc.md](./apis/upload-invoice-doc.md) |
-| 14 | download_invoice_doc | GET | `api/v2/order/download_invoice_doc` | `download_invoice_doc.py` | [apis/download-invoice-doc.md](./apis/download-invoice-doc.md) |
-| 15 | handle_prescription_check | POST | `api/v2/order/handle_prescription_check` | `handle_prescription_check.py` | [apis/handle-prescription-check.md](./apis/handle-prescription-check.md) |
-| 16 | get_warehouse_filter_config | GET | `api/v2/order/get_warehouse_filter_config` | `get_warehouse_filter_config.py` | [apis/get-warehouse-filter-config.md](./apis/get-warehouse-filter-config.md) |
-| 17 | get_booking_list | GET | `api/v2/order/get_booking_list` | `get_booking_list.py` | [apis/get-booking-list.md](./apis/get-booking-list.md) |
-| 18 | get_booking_detail | GET | `api/v2/order/get_booking_detail` | `get_booking_detail.py` | [apis/get-booking-detail.md](./apis/get-booking-detail.md) |
-| 19 | generate_fbs_invoices | POST | `api/v2/order/generate_fbs_invoices` | `generate_fbs_invoices.py` | [apis/generate-fbs-invoices.md](./apis/generate-fbs-invoices.md) |
-| 20 | get_fbs_invoices_result | POST | `api/v2/order/get_fbs_invoices_result` | `get_fbs_invoices_result.py` | [apis/get-fbs-invoices-result.md](./apis/get-fbs-invoices-result.md) |
-| 21 | download_fbs_invoices | POST | `api/v2/order/download_fbs_invoices` | `download_fbs_invoices.py` | [apis/download-fbs-invoices.md](./apis/download-fbs-invoices.md) |
-| 22 | get_estimiate_cancel_value | POST | `api/v2/order/get_estimiate_cancel_value` | `get_estimiate_cancel_value.py` | [apis/get-estimiate-cancel-value.md](./apis/get-estimiate-cancel-value.md) |
-
-通用入口：`order_api.py`（JSON 含 `"api": "<上表 API 名>"`）。
-
----
-
-## Feedback API
-
-```bash
-curl -X POST https://skill-api.linkfox.com/api/v1/public/feedback \
-  -H "Content-Type: application/json" \
-  -d '{"skillName":"linkfox-shopee-store-orders","sentiment":"POSITIVE",
-       "category":"OTHER","content":"订单接口正常"}'
+{
+  "skillName": "linkfox-shopee-store-orders",
+  "sentiment": "<可选项: POSITIVE / NEUTRAL / NEGATIVE>",
+  "category": "<可选项: BUG / COMPLAINT / SUGGESTION / OTHER>",
+  "content": "<反馈内容>"
+}
 ```

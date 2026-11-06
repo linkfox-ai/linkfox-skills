@@ -1,144 +1,117 @@
 ---
 name: linkfox-ruiguan-copyright-detection
-description: 图片版权侵权检测与风险分析。当用户提到版权检测、版权核查、图片侵权检查、图片版权风险、版权相似度搜索、TRO风险分析、权利人查询、版权合规验证、copyright detection, image infringement, copyright risk, TRO risk, copyright lookup, infringement analysis, Ruiguan时触发此技能。即使用户未明确提及"版权"，只要其需求涉及检查图片是否可能侵犯已登记的版权作品，也应触发此技能。
+description: 检查图片与已登记版权作品的相似度，汇总权利人、版权来源、侵权雷达判定和 TRO 维权历史，帮助电商卖家与设计人员评估商品图、设计图和批量图片的版权风险。适用于图片版权核查、相似版权作品查找、权利人查询及 TRO 风险筛查；支持公开图片和本地图片。不适用于商标或专利检索、文字或音乐版权检查、图片编辑、普通反向搜图或法律意见。
 ---
 
-# Ruiguan Copyright Detection
+# 睿观图片版权检测
 
-This skill guides you on how to perform image copyright detection, helping e-commerce sellers and designers identify potential copyright infringement risks before using images.
+## 适用范围
 
-## Core Concepts
+### 适用
 
-Copyright detection works by comparing a given image against a database of registered copyrighted works. The system returns visually similar copyrighted images along with key risk indicators such as similarity score, rights owner information, TRO (Temporary Restraining Order) litigation history, and radar-based infringement assessment.
+在使用商品图或设计图前，检查其与版权库中已登记作品的匹配情况，整理版权、权利人和诉讼风险线索。
 
-**Similarity**: A decimal string (e.g., `"0.85"`) representing how closely the input image matches a copyrighted work. Higher values indicate greater risk.
+**场景速查**
 
-**Radar detection**: An additional layer of analysis that provides a binary infringement judgment (`1` = infringing, `0` = not infringing). When enabled, each result includes this secondary assessment.
+| 用户表达 | 查询场景 |
+| -------- | -------- |
+| 检查这张图片是否有版权问题，能否使用 | 单图版权风险核查。 |
+| 找出与这张图片相似的版权作品 | 相似作品检索。 |
+| 这张图有 TRO 风险吗 | 查看权利人及 TRO 维权历史。 |
+| 谁拥有这张图的版权 | 查询匹配作品的权利人及来源。 |
+| 批量核查这些商品图片 | 逐图检测并汇总。 |
+| 看看这个设计是否有抄袭风险 | 检查版权库匹配线索，避免作原创性法律结论。 |
 
-**TRO history**: TRO (Temporary Restraining Order) is a legal mechanism commonly used in copyright enforcement. Results flagged with TRO history indicate the rights owner has previously pursued legal action, signaling elevated risk.
+### 边界
 
-## Parameters
+不处理商标或专利检索、文字或音乐版权、图片编辑、非版权用途的反向搜图，也不制定诉讼策略。
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| imageUrl | string | Yes | - | URL of the image to check for copyright infringement (max 1000 characters) |
-| topNumber | integer | No | 100 | Number of results to return (min: 10, max: 200) |
-| enableRadar | boolean | No | true | Whether to enable radar-based infringement detection |
+## 接口清单
 
-### Parameter Guidelines
+| 接口 | 端点 | 对应脚本 | 说明 |
+|---|---|---|---|
+| 图片版权检测 | POST `/ruiguan/copyrightDetection` | `scripts/ruiguan_copyright_detection.py` | 返回相似版权作品、权利人与风险线索。 |
+| 申请图片上传预签名地址 | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 为本地图片取得预签名地址，随后向 OSS PUT 文件并返回公开 URL。 |
 
-1. **imageUrl**: Must be a publicly accessible image URL. Supports common image formats. The URL must not exceed 1000 characters.
-2. **topNumber**: Controls how many matching copyrighted works are returned. Use a smaller number (e.g., 10-20) for quick checks; use the maximum (200) for thorough audits.
-3. **enableRadar**: When set to `true`, each result includes a radar-based infringement judgment. Keep enabled for comprehensive analysis; disable only when a faster, similarity-only scan is sufficient.
+## 前置条件
 
-## 调用方式
+准备待检测的图片。用户给出本地路径时，先使用本技能自带的上传脚本取得公开链接；已有公开图片链接时直接进入检测。参数与上传使用限制见 `references/api.md`。
 
-- **API 端点**：`POST /ruiguan/copyrightDetection`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/ruiguan_copyright_detection.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+## 检测流程
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-copyright-detection-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+1. 确认用户要检查的图片及单图、快速扫描、全面审查、仅相似度或批量核查目标；按 `references/api.md` 准备参数。
+2. 本地图片先运行 `python scripts/upload_image.py <本地图片路径>`；上传失败即停止，不将本地路径作为图片链接提交。公开图片链接无需重复上传。
+3. 运行 `python scripts/ruiguan_copyright_detection.py '<JSON 参数>' [--inline] [--no-cache]`。批量任务每张图片检测一次，复用同参数缓存，并按费用规则决定是否继续。
+4. 保存结果，先检查摘要，再按需读取完整数据；汇总匹配作品与风险线索，按下方展示规则向用户说明结果。失败或空结果的处理遵守成本约束。
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+## 执行方式
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python <脚本路径> '<JSON 参数>' [--inline] [--no-cache]`。
+- **成本约束**：本工具会消耗算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+### 输出策略
 
-## Local Image Upload
+- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-ruiguan-copyright-detection[-upload]-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-This tool requires a **publicly accessible image URL**. If the user provides a local image file path (e.g., `C:\Users\...\photo.png`, `/home/.../image.jpg`), you must upload it first to obtain a public URL.
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-Run the upload script:
-```bash
-python scripts/upload_image.py /path/to/local/image.png
-```
+## 执行规则
 
-The script will return a public URL (valid for 24 hours) that can be used as the image URL parameter.
+### 算力消耗预估
 
-## Usage Examples
+开启雷达检测为 71 算力 / 次，关闭为 36 算力 / 次。按待检测图片数量与模式预估，实际消耗优先使用返回的费用信息。图片上传费用未明确，不承诺免费。
 
-**1. Basic Copyright Check for a Single Image**
-User: "Check if this image has any copyright issues: https://example.com/my-image.jpg"
-Action: Call with `imageUrl` set to the provided URL, using defaults for other parameters.
+**超过 5 次调用前必须二次确认**：使用 `AskUserQuestion`（可用时）或对话告知已消耗算力及继续调用预计消耗，取得用户决定后再继续；已有明确覆盖该数量和费用的授权时遵从用户授权范围。
 
-**2. Quick Scan with Fewer Results**
-User: "Do a quick copyright scan on this product image, I just need the top matches: https://example.com/product.png"
-Action: Call with `topNumber` set to 10 for faster results.
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**3. Thorough Audit with Maximum Results**
-User: "I need a full copyright audit on this design: https://example.com/design.jpg"
-Action: Call with `topNumber` set to 200 for the most comprehensive scan.
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**4. Similarity-Only Check (No Radar)**
-User: "Just check the similarity of this image against copyrighted works, no need for detailed infringement analysis: https://example.com/photo.jpg"
-Action: Call with `enableRadar` set to `false`.
+### 解决认证和算力问题
 
-**5. Batch Checking (Multiple Images)**
-User: "Check these three images for copyright: url1, url2, url3"
-Action: Call the API once for each image URL and consolidate results.
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-## Display Rules
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- HTTP 状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-1. **Present data clearly**: Show detection results in a well-structured table. Key columns to display include: similarity score, rights owner, copyright code, radar result, TRO history, and copyright source link.
-2. **Highlight high-risk results**: When similarity is high (e.g., >= 0.80) or radar detection flags infringement (`subRadarResult` = 1), clearly mark these as high-risk entries.
-3. **TRO warnings**: When `troCase` or `troHolder` is `true`, prominently warn the user about existing TRO litigation history associated with the rights owner.
-4. **Image previews**: When `path` or `pathThumb` URLs are available, mention that thumbnail previews of the copyrighted works can be viewed at those URLs.
-5. **Result count notice**: Inform the user of the `total` number of matches found. If many results are returned, show the most relevant (highest similarity) entries first.
-6. **Error handling**: When a request fails, explain the reason and suggest checking that the image URL is publicly accessible and correctly formatted.
-7. **No legal advice**: Present detection results factually. Do not provide legal conclusions — recommend the user consult legal counsel for definitive copyright assessments.
-## Important Limitations
+### 约束与建议
 
-- **Image URL required**: The tool accepts image URLs only, not local file uploads. The image must be publicly accessible.
-- **URL length**: The image URL must not exceed 1000 characters.
-- **Result cap**: A maximum of 200 results can be returned per query.
-- **Detection scope**: Results are limited to the copyrighted works database maintained by the detection service.
+- **解释检测依据**：系统将图片与服务维护的已登记版权作品数据库比对。相似度越高，风险线索越强；不能把未命中解释为绝对无风险。
+- **理解雷达与 TRO**：雷达是相似度之外的附加判定；未进行雷达检测时不能当作“无侵权”。TRO（Temporary Restraining Order，临时限制令）维权史意味着权利人曾诉诸法律，应突出提醒。
+- **表格展示**：展示相似度、权利人、版权标识码、雷达结果、TRO 历史和版权来源链接。先告知匹配总数，再优先展示相似度最高的作品。
+- **突出高风险线索**：相似度较高（例如达到 0.80 或更高）或雷达标记侵权时，明确标注高风险；存在 TRO 案件或属于 TRO 权利人的版权时突出提示。字段含义见接口定义。
+- **图片预览**：有原图或缩略图链接时提供可查看的预览链接，保留版权来源与官网链接，便于复核。
+- **处理失败**：说明原始错误及可能原因，建议核对图片链接是否可公开访问、格式是否正确；不自动重试或改参消耗算力。
+- **法律边界**：如实呈现检测结果与风险线索，不作确定侵权、原创性或可安全使用的法律结论；需要确定版权结论时建议咨询法律顾问。
+- **兼容上传输出**：上传脚本的标准输出仍只返回公开链接 JSON，预签名接口完整响应会保存，运行信息输出至标准错误；检测脚本沿用标准输出策略。缓存、文件格式与上传约定见 `references/api.md`。
 
-## User Expression & Scenario Quick Reference
+## 使用示例
 
-**Applicable** -- Image copyright risk assessment:
+### 单张公开图片的基本核查
 
-| User Says | Scenario |
-|-----------|----------|
-| "Check if this image has copyright issues" | Basic copyright detection |
-| "Is this image safe to use" | Infringement risk check |
-| "Find similar copyrighted images" | Copyright similarity search |
-| "Does this image have TRO risk" | TRO litigation risk analysis |
-| "Who owns the copyright for this image" | Rights owner lookup |
-| "Copyright audit for product images" | Batch copyright compliance check |
-| "Is this design original or copied" | Originality verification |
+用户：检查这张商品图的版权风险。
 
-**Not applicable** -- Needs beyond image copyright detection:
-- Trademark or patent searches
-- Text or music copyright checks
-- Image editing or modification
-- Reverse image search for non-copyright purposes
-- Legal advice or litigation strategy
+使用用户给出的公开链接检测，整理相似作品、权利人与风险线索。
 
-## 算力消耗规则
+### 快速扫描、全面审查或仅相似度检查
 
-雷达检测开启消耗 71 算力，未开启消耗 36 算力。
+用户说明只看主要匹配、全面核查或无需雷达时，分别按接口文档选择召回规模和检测模式，并在调用前说明相应费用。
 
-> **重要**：本技能消耗大量算力，如果调用次数超过5次，必须用`AskUserQuestion` 和用户进行二次确认，要明确告知用户已消耗算力和继续调用的话预计消耗的算力，让用户自行决定是否继续。
+### 本地图片与批量核查
 
-**Feedback:**
+用户：检查我本地的这几张设计图。
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
+先逐张上传取得公开链接，再按授权范围逐张检测，汇总结果；达到调用次数确认阈值时先说明累计及预计费用。
 
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
+## 使用反馈
 
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

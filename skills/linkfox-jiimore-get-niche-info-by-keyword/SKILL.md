@@ -1,274 +1,132 @@
 ---
 name: linkfox-jiimore-get-niche-info-by-keyword
-description: 按关键词深度分析亚马逊细分市场，涵盖垄断程度、品牌集中度、新品成功率和市场机会评分。当用户提到细分市场分析、关键词市场调研、垄断评估、品牌集中度分析、新品成功率、市场需求评分、竞争格局、亚马逊子市场探索、niche market analysis, keyword market, monopoly level, brand concentration, new product success rate, market opportunity score, competitive landscape, Jiimore data时触发此技能。即使用户未明确提及"细分市场"，只要其需求涉及评估某个关键词维度的亚马逊市场竞争格局、品牌密度或机会潜力，也应触发此技能。
+description: 按关键词查询和分析亚马逊细分市场，展示需求评分、搜索与销量、转化、价格、品牌与商品集中度、新品成功率、退货率及 CPC。适用于关键词市场调研、垄断程度评估、低竞争市场发现和新品机会分析，无需明确提及极目或 Jiimore。不适用于单个 ASIN 表现或销量估算、搜索词排名趋势、广告活动管理与竞价优化、评论分析、Listing 优化、供应商采购、物流规划或综合经营战略。
 ---
 
-# Jiimore Niche Info by Keyword
+# 极目亚马逊关键词细分市场分析
 
-This skill guides you on how to query and analyze Amazon niche market data by keyword, helping Amazon sellers evaluate market segments for competitive intensity, brand maturity, pricing structure, and entry opportunity.
+## 适用范围
 
-## 调用方式
+### 适用
 
-- **API 端点**：`POST /jiimore/getNicheInfoByKeyword`（完整参数/响应/错误码见 `references/api.md`）
-- **Python 脚本**：`python scripts/jiimore_get_niche_info_by_keyword.py '<JSON 参数>' [--inline]`
-- **成本约束**：本工具会消耗算力；同一会话同一参数组合默认只调用一次，脚本带 24h 本地缓存。失败/空结果不得自动换关键词、翻页或改邮编连续试探；需要继续检索时先向用户说明会产生额外消耗。
+从关键词出发查看亚马逊细分市场的需求潜力、竞争格局、品牌成熟度、价格结构和进入机会。
+用户泛称“市场调研”或“产品机会”时，若关注关键词层面的细分市场，使用本技能。
 
-**输出策略（脚本默认行为）**：
-- **始终**将完整响应写入 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-jiimore-get-niche-info-by-keyword-<timestamp>.json`（`<cwd>` 为脚本执行时的工作目录，在 Claude Code 里即当前项目目录；`<session>` 取自环境变量 `SESSION_ID`，按用户任务自动聚合；**禁止写入 /tmp**，当前目录不可写则报错）
-- 响应体 ≤ 8 KB：落盘后把完整 JSON 打印到 stdout
-- 响应体 > 8 KB：落盘后 stdout 只输出摘要（顶层字段、常见计数如 `total`/`costToken`、最大列表字段的长度 + 前 3 条样本）
-- 加 `--inline` 强制全量打印到 stdout（同样落盘）
+**场景速查**
 
-**读数据建议**：先看摘要判断是否足够；需要具体字段时优先用 `jq`或`ConvertFrom-Json` 从保存的 json 文件按需抽取，避免整份 JSON 进入上下文。
+| 用户表达 | 查询场景 |
+|----------|----------|
+| 这个市场有没有机会 | 细分市场机会评估。 |
+| 这个关键词竞争激烈吗 | 垄断程度与品牌集中度分析。 |
+| 找这个词下低竞争的市场 | 低竞争细分市场发现。 |
+| 这个市场新品成功率怎样 | 新进入者机会评估。 |
+| 看这个词的细分市场数据 | 细分市场概览。 |
+| 哪些细分市场需求较高 | 按需求潜力查看市场。 |
+| 这些市场的广告成本怎样 | CPC 与广告竞争分析。 |
+| 找高转化的细分市场 | 转化表现比较。 |
+| 这个市场是否被少数品牌控制 | 品牌集中度评估。 |
 
-## 解决认证和算力问题
-发生以下异常情况时，采用 references/onboarding.md 引导解决问题：
+## 前置条件
 
-### 异常情况
-- **未配置API Key**：环境变量未配置 `LINKFOX_AGENT_API_KEY`，也未配置 `LINKFOXAGENT_API_KEY`。
-- **响应401或402状态码**
-- **响应提示算力或余额不足**：消息含"算力余额不足/计费不足/余额不足/quota exceeded/insufficient balance/套餐到期/需充值/请充值"，或类似含义的内容。
+先明确用户希望研究的关键词、目标站点和筛选目标；构造请求前阅读 `references/api.md` 的参数与使用限制。
 
-## Core Concepts
+## 查询流程
 
-A **niche** (sub-market segment) is a grouping of products that share a common keyword theme on Amazon. This tool returns rich analytical dimensions for each niche, including search volume, sales volume, click-through rates, brand count, top-brand concentration, new product launch success rates, CPC estimates, and a composite demand score. Data is available for **US**, **JP**, and **DE** marketplaces.
+1. 确定用户意图属于关键词细分市场研究，结合目标站点整理关键词；语言处理要求见 `references/api.md`。
+2. 根据用户关注的需求、价格、转化、品牌集中度、新品表现或广告成本，选择筛选条件和排序，避免额外扩大查询范围。
+3. 先复用同一参数的已有结果或缓存；需要获取新数据时调用一次，保存完整响应并查看摘要。
+4. 按接口参考判断响应，展示市场表格及查询范围。需要补页或调整筛选时，先说明已有结果和额外消耗，不自动连续试探。
 
-**Keyword is required**: Every query must include a `keyword`. The keyword should be provided in the language of the target marketplace (e.g., English for US, Japanese for JP, German for DE). When the user provides a keyword in a different language, translate it to the marketplace language before calling the API.
+## 执行方式
 
-**Percentage fields**: Several parameters and response fields use a 0-1 decimal range representing 0%-100%. When displaying these values to users, convert them to percentages (e.g., 0.35 -> 35%).
+- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
+- **脚本调用（推荐）**：`python scripts/jiimore_get_niche_info_by_keyword.py '<JSON 参数>' [--inline]`。
+- **成本约束**：每次调用消耗 9 算力。同一会话、同一参数组合默认只调用一次，脚本提供 24 小时本地缓存。失败或空结果时，不得自动更换关键词、翻页或修改邮编连续试探；需要继续检索时，先向用户说明额外消耗。
 
-**Demand score**: The `demand` field is a composite opportunity score assigned to each niche. A higher value indicates greater market demand potential.
+### 输出策略
 
-## Parameter Guide
+- 完整响应默认保存到 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-jiimore-get-niche-info-by-keyword-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录；`<session>` 优先取环境变量 `SESSION_ID`，未设置时自动生成，用于聚合同一任务的数据。
+- 数据根目录依次尝试 `ACPX_WORKSPACES` 的首个路径、当前工作目录、用户主目录和系统临时目录下的 `linkfox/`，使用首个可写位置。运行前将工作目录及 `ACPX_WORKSPACES`（如已设置）定位到可写的任务目录，禁止将响应写入 `/tmp`。若最终文件写入失败，脚本向标准错误输出失败信息，仍继续输出响应或摘要；此时不能声称完整响应已保存。
+- 响应体不超过 8 KB（8000 字节）：保存后，将完整 JSON 打印到标准输出。
+- 响应体超过 8 KB（8000 字节）：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`）、最大列表字段的长度和前 3 条样本。
+- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
 
-### Required
+先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| keyword | string | Search keyword (max 1000 chars). Translate to the target marketplace language. |
+## 执行规则
 
-### Marketplace & Pagination
+### 算力消耗预估
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| countryCode | string | US | Country code: US, JP, DE |
-| page | integer | 1 | Page number (starts from 1) |
-| pageSize | integer | 50 | Results per page (10-100) |
-| sortField | string | unitsSoldT7 | Field to sort by (see Sorting Options below) |
-| sortType | string | desc | Sort direction: `desc` or `asc` |
+9 算力 / 次
 
-### Filter Parameters (all optional, min/max ranges)
+**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
 
-**Product & Pricing**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| productCountMin / productCountMax | integer | Product count range |
-| avgPriceMin / avgPriceMax | number | Average price range |
+用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
 
-**Search & Sales (7-day)**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| searchVolumeT7Min / searchVolumeT7Max | integer | Weekly search volume range |
-| unitsSoldT7Min / unitsSoldT7Max | integer | Weekly units sold range |
-| clickCountT7Min / clickCountT7Max | integer | Weekly click count range |
-| clickConversionRateT7Min / clickConversionRateT7Max | number | Weekly click conversion rate (0-1) |
+### 解决认证和算力问题
 
-**Brand Metrics**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| brandCountMin / brandCountMax | integer | Number of brands in niche |
-| top5BrandsClickShareMin / top5BrandsClickShareMax | number | Top 5 brands click share (0-1) |
-| avgBrandAgeMin / avgBrandAgeMax | number | Average brand age (current) |
-| avgBrandAgeQoqMin / avgBrandAgeQoqMax | number | Average brand age (90-day) |
-| avgBrandAgeYoyMin / avgBrandAgeYoyMax | number | Average brand age (360-day) |
+出现以下情况时，按 `references/onboarding.md` 的指引处理：
 
-**Seller Metrics**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| avgSellingPartnerAgeMin / avgSellingPartnerAgeMax | number | Average seller age (current) |
-| avgSellingPartnerAgeQoqMin / avgSellingPartnerAgeQoqMax | number | Average seller age (90-day) |
-| avgSellingPartnerAgeYoyMin / avgSellingPartnerAgeYoyMax | number | Average seller age (360-day) |
+- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
+- 响应状态码为 `401` 或 `402`。
+- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
 
-**Competition & Advertising**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| top5ProductsClickShareMin / top5ProductsClickShareMax | number | Top 5 products click share (0-1) |
-| sponsoredProductsPercentageMin / sponsoredProductsPercentageMax | number | SP ad percentage (0-1) |
-| cpcMediumMin / cpcMediumMax | number | CPC median value range |
+### 约束与建议
 
-**New Product & Returns**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| launchRateT180Min / launchRateT180Max | number | 180-day new product success rate (0-1) |
-| newProductRateT180 | number | 180-day new product ratio minimum (0-1) |
-| returnRateT360Min / returnRateT360Max | number | 360-day return rate (0-1) |
+- **细分市场概念**：细分市场是共享同一关键词主题的商品集合，数据覆盖需求、搜索、销售、点击、品牌、新品和广告成本等维度。
+- **评分含义**：`demand` 是综合需求机会评分，值越高表示需求潜力越大。
+- **展示核心指标**：使用清晰表格，始终将市场标题、需求评分、周搜索量、周销量、品牌数量及前五品牌点击份额作为核心列展示。
+- **标题语言**：用户偏好中文且存在 `translationZh` 时，与原始 `nicheTitle` 一并展示。
+- **比例与统计口径**：将小数比例转为百分比，例如 0.35 展示为 35%；注明周、季度、半年或全年口径，避免混为同一区间。
+- **广告成本**：有 CPC 数据时，同时展示低、中、高三档，呈现完整成本区间。
+- **分页说明**：告知总量和本次返回范围；还有数据时可建议查看后续页，继续调用遵守成本约束。
+- **错误与空结果**：依据实际响应消息解释原因，可建议核对关键词或放宽筛选范围；保留已取得的数据，后续调用遵守成本约束。
+- **客观表达**：客观呈现数据，不主动附加商业建议；仅在用户明确要求时进行机会解读或经营判断。
 
-### Sorting Options
+## 使用示例
 
-| Value | Meaning |
-|-------|---------|
-| unitsSoldT7 | Weekly units sold |
-| searchVolumeT7 | Weekly search volume |
-| demand | Demand score |
-| avgPrice | Average price |
-| maximumPrice | Maximum price |
-| minimumPrice | Minimum price |
-| productCount | Product count |
-| searchConversionRateT7 | Weekly search conversion rate |
-| clickConversionRateT7 | Weekly click conversion rate |
-| searchVolumeGrowthT7 | Search volume growth rate |
-| clickCountT7 | Weekly click count |
-| clickCountT90 | 90-day click count |
-| brandCount | Brand count |
-| top5BrandsClickShare | Top 5 brands click share |
-| top5ProductsClickShare | Top 5 products click share |
-| newProductsLaunchedT180 | 180-day new products launched |
-| successfulLaunchesT180 | 180-day successful launches |
-| launchRateT180 | 180-day launch success rate |
-| returnRateT360 | Annual return rate |
-| clickConversionRateT90 | 90-day click conversion rate |
-| searchConversionRateT90 | 90-day search conversion rate |
-| searchVolumeT90 | 90-day search volume |
-| unitsSoldT90 | 90-day units sold |
-| unitsSoldGrowthT90 | 90-day sales growth rate |
-| searchVolumeGrowthT90 | 90-day search volume growth rate |
-| acos | Advertising cost of sales |
-| profitRate50 | Profit margin at 50% organic sales |
+以下场景的具体 JSON 参数见 `references/api.md` 的“场景请求示例”。
 
-## Usage Examples
+### 基础市场探索
 
-**1. Basic niche exploration by keyword**
-Query niches related to "wireless earbuds" in the US market, sorted by weekly sales volume:
-```json
-{
-  "keyword": "wireless earbuds",
-  "countryCode": "US",
-  "sortField": "unitsSoldT7",
-  "sortType": "desc"
-}
-```
+用户：看看美国无线耳机相关的细分市场，按周销量排序。
 
-**2. Low-competition niche discovery**
-Find niches for "yoga mat" where the top 5 brands hold less than 50% click share and brand count exceeds 20:
-```json
-{
-  "keyword": "yoga mat",
-  "countryCode": "US",
-  "top5BrandsClickShareMax": 0.5,
-  "brandCountMin": 20,
-  "sortField": "demand",
-  "sortType": "desc"
-}
-```
+确定目标市场与关键词，查询并展示需求、销售和竞争指标。
 
-**3. High-demand, high-conversion niches**
-Find niches for "phone case" with weekly search volume above 10000 and click conversion rate above 10%:
-```json
-{
-  "keyword": "phone case",
-  "countryCode": "US",
-  "searchVolumeT7Min": 10000,
-  "clickConversionRateT7Min": 0.1,
-  "sortField": "searchVolumeT7",
-  "sortType": "desc"
-}
-```
+### 低竞争市场发现
 
-**4. New product opportunity analysis**
-Find niches for "LED light" with high new product success rate (above 20%) and low return rate (below 5%):
-```json
-{
-  "keyword": "LED light",
-  "countryCode": "US",
-  "launchRateT180Min": 0.2,
-  "returnRateT360Max": 0.05,
-  "sortField": "launchRateT180",
-  "sortType": "desc"
-}
-```
+用户：找美国瑜伽垫市场里前五品牌点击份额低于一半、品牌数超过二十的细分市场。
 
-**5. Japanese market niche research**
-Explore niches related to headphones in Japan, sorted by demand score:
-```json
-{
-  "keyword": "\u30d8\u30c3\u30c9\u30db\u30f3",
-  "countryCode": "JP",
-  "sortField": "demand",
-  "sortType": "desc"
-}
-```
+按用户条件筛选并按需求评分排序，展示品牌集中度和市场需求。
 
-**6. Price-range-specific niche analysis**
-Find niches for "backpack" with average price between $20 and $50 and low advertising saturation:
-```json
-{
-  "keyword": "backpack",
-  "countryCode": "US",
-  "avgPriceMin": 20,
-  "avgPriceMax": 50,
-  "sponsoredProductsPercentageMax": 0.3,
-  "sortField": "unitsSoldT7",
-  "sortType": "desc"
-}
-```
+### 高需求与高转化市场
 
-## Display Rules
+用户：找美国手机壳市场中周搜索量超过一万、点击转化率高于百分之十的市场。
 
-1. **Present data clearly**: Show query results in well-structured tables. Convert decimal ratios to percentages for readability (e.g., 0.25 -> 25%).
-2. **Highlight key metrics**: Always surface the niche title, demand score, weekly search volume, weekly sales, brand count, and top 5 brands click share as primary columns.
-3. **Translate niche titles**: When the `translationZh` field is present and the user prefers Chinese, show it alongside the original `nicheTitle`.
-4. **Pagination guidance**: When `total` exceeds the current page size, inform the user of the total count and suggest fetching additional pages if needed.
-5. **Error handling**: When a query fails, explain the reason based on the response message and suggest adjusting filter criteria (e.g., broadening ranges or checking the keyword).
-6. **CPC display**: When CPC data is present, show all three tiers (low, medium, high) to give a complete advertising cost picture.
-7. **No subjective advice**: Present data objectively without adding unsolicited business recommendations. Only provide interpretation when explicitly requested by the user.
-## Important Limitations
+整理筛选条件，按周搜索量排序，展示搜索量、销量和转化表现。
 
-- **Supported marketplaces**: Only US, JP, and DE are available. Other marketplace codes will be rejected.
-- **Keyword required**: Every query must include a keyword. The API will not return results without one.
-- **Result cap**: Maximum 100 results per page.
-- **Percentage values**: All rate/share parameters use 0-1 range, not 0-100. Ensure correct values when constructing filters.
+### 新品机会分析
 
-## User Expression & Scenario Quick Reference
+用户：看看美国 LED 灯市场中新品成功率高于百分之二十、退货率低于百分之五的市场。
 
-**Applicable** -- Niche-level market segment analysis by keyword:
+按新品成功率排序，展示新品表现和退货率，并标明统计区间。
 
-| User Says | Scenario |
-|-----------|----------|
-| "Is there opportunity in the XX market" | Niche opportunity assessment |
-| "How competitive is XX keyword" | Monopoly / brand concentration |
-| "Find low-competition niches for XX" | Blue ocean niche discovery |
-| "What's the new product success rate for XX" | New entrant viability |
-| "Show me niche data for XX" | General niche exploration |
-| "Which XX niches have high demand" | Demand-driven niche ranking |
-| "What's the CPC / ad cost for XX niches" | Advertising cost analysis |
-| "Find niches with high conversion for XX" | Conversion-optimized segments |
-| "Brand concentration in XX market" | Brand dominance assessment |
+### 日本市场调研
 
-**Not applicable** -- Needs beyond niche-level segment data:
-- Individual ASIN performance or sales estimation
-- Search term ranking trends (use ABA data tools instead)
-- Advertising campaign management or bid optimization
-- Product review analysis or listing optimization
-- Supplier sourcing or logistics planning
+用户：研究日本耳机市场，按需求评分排序。
 
-**Boundary judgment**: When users say "market research" or "product opportunity", if their intent focuses on evaluating the competitive landscape and demand potential of keyword-level market segments, this skill applies. If they need ASIN-level data, search term ranking trends, or comprehensive business strategy, direct them to the appropriate tool.
+将关键词整理为目标市场语言，查询并展示原始标题与可用中文标题。
 
-## 算力消耗规则
+### 指定价格带研究
 
-消耗 9 算力。
+用户：找美国背包市场中均价二十至五十美元、广告占比低于百分之三十的市场。
 
-> 用户会因算力消耗而支付费用。请充分评估：当需要高频调用本技能，或用户对算力消耗量预期不足时，务必提醒用户，由用户决定是否继续。
+根据用户价格要求和广告占比目标筛选，按周销量排序。
 
-**Feedback:**
+## 使用反馈
 
-Auto-detect and report feedback via the Feedback API when any of the following apply:
-1. The functionality or purpose described in this skill does not match actual behavior
-2. The skill's results do not match the user's intent
-3. The user expresses dissatisfaction or praise about this skill
-4. Anything you believe could be improved
-
-Call the feedback API as specified in `references/api.md`. Do not interrupt the user's flow.
-
+当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
 
 ---
-*For more high-quality, professional cross-border e-commerce skills, set [LinkFox Skills](https://skill.linkfox.com/).*
+
+更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。

@@ -1,4 +1,4 @@
-"""Run any Shopee Shop Flash Sale module API via developerProxy."""
+"""秒杀操作编排：参数映射、依赖检查与上游结果加工。"""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from _shop_flash_sale_endpoints import LIST_QUERY_FIELDS, SHOP_FLASH_SALE_ENDPOI
 from _shopee_shop_flash_sale_common import (
     developer_proxy_call,
     ensure_auth_skill_available,
-    emit_result,
     lf_inline_flag,
     merge_shopee_body,
     qs_add,
+    response_is_normal,
 )
 
 
@@ -24,13 +24,13 @@ def _comma_join_list(val: object, field: str, max_items: int) -> str:
     elif isinstance(val, list):
         items = [str(x).strip() for x in val if str(x).strip()]
     else:
-        print(f"{field} must be string or string[]", file=sys.stderr)
+        print(f"{field} 必须为字符串或字符串数组", file=sys.stderr)
         sys.exit(1)
     if not items:
-        print(f"{field} cannot be empty", file=sys.stderr)
+        print(f"{field} 不能为空", file=sys.stderr)
         sys.exit(1)
     if len(items) > max_items:
-        print(f"{field} supports at most {max_items} values", file=sys.stderr)
+        print(f"{field} 最多支持 {max_items} 个值", file=sys.stderr)
         sys.exit(1)
     return ",".join(items)
 
@@ -76,22 +76,26 @@ def _build_post_body(params: dict, spec: dict) -> str:
 
     if not body_obj:
         print(
-            "POST requires 'body' / 'requestBody' or documented body fields in params",
+            "POST 必须提供 body / requestBody 或注册表声明的顶层业务字段",
             file=sys.stderr,
         )
         sys.exit(1)
     return json.dumps(body_obj, ensure_ascii=False, separators=(",", ":"))
 
 
-def run_shop_flash_sale_api(api_name: str, params: dict, caller: Optional[str] = None) -> dict:
+def run_shop_flash_sale_api(api_name: str, params: dict, caller: Optional[str] = None,
+                           *, display: bool = False, inline: bool = False) -> dict:
+    if not isinstance(params, dict):
+        print("JSON 参数必须为对象", file=sys.stderr)
+        sys.exit(1)
     if api_name not in SHOP_FLASH_SALE_ENDPOINTS:
-        print(f"Unknown api: {api_name}. Valid: {', '.join(sorted(SHOP_FLASH_SALE_ENDPOINTS))}", file=sys.stderr)
+        print(f"未知 api: {api_name}。可用操作: {', '.join(sorted(SHOP_FLASH_SALE_ENDPOINTS))}", file=sys.stderr)
         sys.exit(1)
 
     spec = SHOP_FLASH_SALE_ENDPOINTS[api_name]
     for field in spec.get("required") or []:
         if field not in params or params[field] is None or params[field] == "":
-            print(f"Missing required field: {field}", file=sys.stderr)
+            print(f"缺少必填字段: {field}", file=sys.stderr)
             sys.exit(1)
 
     if not params.get("skipDepCheck"):
@@ -113,10 +117,34 @@ def run_shop_flash_sale_api(api_name: str, params: dict, caller: Optional[str] =
     shop_id = params.get("shopId")
     merchant_id = params.get("merchantId")
     if not shop_id and not merchant_id:
-        print("Missing required field: shopId OR merchantId", file=sys.stderr)
+        print("缺少必填字段: shopId 或 merchantId", file=sys.stderr)
         sys.exit(1)
 
-    proxy = developer_proxy_call(
+    # 先验证 JSON，避免写入店铺后才发现无法生成兼容输出。
+    request_body = None
+    if body is not None:
+        try:
+            request_body = json.loads(body) if body else None
+        except json.JSONDecodeError:
+            print("body / requestBody 必须为有效 JSON", file=sys.stderr)
+            sys.exit(1)
+
+    def build_result(http_status, proxy):
+        out = {
+            "api": api_name,
+            "developerProxy": proxy,
+            "resolvedPath": path,
+            "transportHttpStatus": http_status,
+        }
+        if query_string:
+            out["queryString"] = query_string
+        if body is not None:
+            out["requestBody"] = request_body
+        if response_is_normal(http_status, proxy):
+            merge_shopee_body(out, proxy, response_key)
+        return out
+
+    return developer_proxy_call(
         path,
         method,
         shop_id=shop_id,
@@ -124,17 +152,7 @@ def run_shop_flash_sale_api(api_name: str, params: dict, caller: Optional[str] =
         query_string=query_string or None,
         body=body,
         content_type=content_type,
+        result_builder=build_result,
+        display=display,
+        inline=inline,
     )
-
-    out: dict = {
-        "api": api_name,
-        "developerProxy": proxy,
-        "resolvedPath": path,
-    }
-    if query_string:
-        out["queryString"] = query_string
-    if body is not None:
-        out["requestBody"] = json.loads(body) if body else None
-
-    merge_shopee_body(out, proxy, response_key)
-    return out

@@ -14,7 +14,7 @@ import json
 import sys
 
 from _temu_eu_common import DEFAULT_SITE, eu_proxy_call
-from _temu_common import load_json_arg, parse_nested_body, require_text, emit_result, lf_inline_flag
+from _temu_common import load_json_arg, require_text
 def main():
     if len(sys.argv) < 2:
         print("Usage: temu_eu_proxy.py '<JSON>'", file=sys.stderr)
@@ -22,8 +22,7 @@ def main():
     params = load_json_arg(sys.argv)
     params.setdefault("site", DEFAULT_SITE)
     api_type = require_text(params, "type")
-    result = parse_nested_body(eu_proxy_call(params, api_type))
-    emit_result(result, inline=lf_inline_flag())
+    eu_proxy_call(params, api_type, display=True)
 
 if __name__ == "__main__":
     main()

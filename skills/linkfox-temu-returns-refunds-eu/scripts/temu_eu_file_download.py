@@ -18,7 +18,7 @@ def main():
     params.setdefault("site", DEFAULT_SITE)
     result = eu_file_download_call(params)
     inline = lf_inline_flag()
-    emit_result(result, inline)
+    emit_result(result, inline=inline)
 
 if __name__ == "__main__":
     main()

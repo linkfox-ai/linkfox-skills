@@ -1,20 +1,20 @@
 # `GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT`
 
-> **分类**：2. Analytics Reports  
-> **说明**：Search catalog performance metrics  
-> **可用范围**：Seller only
+> **分类**：2. 分析报告  
+> **说明**：搜索目录表现指标  
+> **可用范围**：仅卖家
 
 ## 官方索引（Report type values）
 
 - **Schema 专页（请求体、`reportOptions`、结果 JSON）**：[`sellingPartnerSearchCatalogPerformanceReport.md`](../sellingPartnerSearchCatalogPerformanceReport.md)
-- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[Analytics Reports](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#search-catalog-performance-report)（章节：**Search Catalog Performance Report**）
+- **Amazon 文档（权限/站点等；与 Schema 专页技术描述重复处以 Schema 专页为准）**：[分析报告](https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#search-catalog-performance-report)（章节：**Search Catalog Performance Report**）
 
 - **受限报告**：按当前小节文本为否（仍以官方为准）
-- **Role**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
-- **Availability**：Sellers who have the Brand Analytics Selling Partner API role and are registered in [Amazon Brand Registry](https://brandservices.amazon.com).
-- **Marketplace availability**：NA (all marketplaces), EU (Spain, United Kingdom, France, Netherlands, Germany, Italy, Sweden, Turkey, Saudi Arabia, United Arab Emirates, India), FE (all marketplaces).
-- **Requested/scheduled**：This report can only be requested.
-- **Report output type**：JSON
+- **角色**：[Brand Analytics](https://developer-docs.amazon.com/sp-api/docs/roles-in-the-selling-partner-api#brand-analytics)
+- **可用范围**：具备 Brand Analytics Selling Partner API 角色且已注册品牌备案的卖家： [Amazon Brand Registry](https://brandservices.amazon.com).
+- **站点范围**：NA (all marketplaces), EU (Spain, United Kingdom, France, Netherlands, Germany, Italy, Sweden, Turkey, Saudi Arabia, United Arab Emirates, India), FE (all marketplaces).
+- **按需/计划**：本报告仅可按需请求。
+- **输出格式**：JSON
 
 - **官方直达**：<https://developer-docs.amazon.com/sp-api/docs/report-type-values-analytics#search-catalog-performance-report>
 
