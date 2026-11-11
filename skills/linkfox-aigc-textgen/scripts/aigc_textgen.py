@@ -27,6 +27,7 @@ Usage:
 """
 
 import json
+import math
 import sys
 import time
 from _runtime import run_json, response_failed, retryable, session_id
@@ -191,12 +192,12 @@ def get_api_base():
     return _get_base()
 
 
-def _post(url, params):
+def _post(url, params, timeout=150):
     base = get_api_base()
     path = url[len(base):] if url.startswith(base) else url
     operation = "create" if path == CREATE_PATH else "query"
     try:
-        return run_json(path, params, f"{SLUG}-{operation}")
+        return run_json(path, params, f"{SLUG}-{operation}", timeout=timeout)
     except (OSError, ValueError, RuntimeError) as exc:
         return {"error": str(exc), "localError": True}
 
@@ -214,19 +215,25 @@ def create_task(params):
     return _post(get_api_base() + CREATE_PATH, params)
 
 
-def query_task(task_id, member_id):
-    return _post(get_api_base() + QUERY_PATH, {"taskId": task_id, "memberId": member_id})
+def query_task(task_id, member_id, timeout=150):
+    return _post(get_api_base() + QUERY_PATH, {"taskId": task_id, "memberId": member_id}, timeout=timeout)
 
 
-def poll_until_done(task_id, member_id):
+def poll_until_done(task_id, member_id, poll_timeout=None):
+    budget = MAX_POLL_TIME if poll_timeout is None else poll_timeout
     start = time.monotonic()
     interval = POLL_INTERVAL_START
     failures = 0
-    while time.monotonic() - start < MAX_POLL_TIME:
-        time.sleep(min(interval, max(0, MAX_POLL_TIME - (time.monotonic() - start))))
-        if time.monotonic() - start >= MAX_POLL_TIME:
+    last_status = "UNKNOWN"
+    while True:
+        remaining = budget - (time.monotonic() - start)
+        if remaining <= 0:
             break
-        result = query_task(task_id, member_id)
+        time.sleep(min(interval, remaining))
+        remaining = budget - (time.monotonic() - start)
+        if remaining <= 0:
+            break
+        result = query_task(task_id, member_id, timeout=min(150, remaining))
         result.setdefault("taskId", task_id)
         if _is_failure(result):
             if retryable(result) and failures < 3:
@@ -235,12 +242,15 @@ def poll_until_done(task_id, member_id):
                 interval = max(interval - POLL_INTERVAL_STEP, POLL_INTERVAL_MIN)
                 continue
             return result
-        if _payload(result).get("status") in ("SUCCESS", "FAILED", 4):
+        last_status = _payload(result).get("status", "UNKNOWN")
+        if last_status in ("SUCCESS", "FAILED", 3, 4):
             return result
         elapsed = int(time.monotonic() - start)
-        print(f"查询中：taskId={task_id}, status={_payload(result).get('status')}, elapsed={elapsed}s", file=sys.stderr)
+        print(f"查询中：taskId={task_id}, status={last_status}, elapsed={elapsed}s", file=sys.stderr)
         interval = max(interval - POLL_INTERVAL_STEP, POLL_INTERVAL_MIN)
-    return {"error": f"轮询超过 {MAX_POLL_TIME} 秒；可用 taskId 恢复查询", "taskId": task_id}
+    return {"error": f"客户端轮询超过 {budget:g} 秒；服务端任务状态未据此改变，可用 taskId 恢复查询",
+            "errorCode": "POLL_TIMEOUT", "status": "TIMEOUT", "taskStatus": last_status,
+            "taskId": task_id, "pollTimedOut": True, "canQuery": True}
 
 
 def _find_main_list(obj):
@@ -340,12 +350,63 @@ def _read_params(argv):
         sys.exit(1)
 
 
+def _poll_options(argv):
+    """仅消费客户端等待选项，绝不把它作为模型参数发送。"""
+    remaining = []
+    timeout = None
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg == "--poll-timeout" or arg.startswith("--poll-timeout="):
+            if timeout is not None:
+                raise ValueError("--poll-timeout不能重复传入")
+            if arg == "--poll-timeout":
+                index += 1
+                if index >= len(argv):
+                    raise ValueError("--poll-timeout需要正数秒数")
+                value = argv[index]
+            else:
+                value = arg.split("=", 1)[1]
+            try:
+                timeout = float(value)
+            except ValueError as exc:
+                raise ValueError("--poll-timeout需要正数秒数") from exc
+            if not math.isfinite(timeout) or timeout <= 0:
+                raise ValueError("--poll-timeout需要有限正数秒数")
+        else:
+            remaining.append(arg)
+        index += 1
+    return remaining, timeout
+
+
+def _billing_fields(result):
+    payload = _payload(result)
+    return {key: payload[key] for key in ("count", "points", "costToken", "billingStatus", "pricingVersion")
+            if key in payload}
+
+
+def _warn_billing(result):
+    fields = _billing_fields(result)
+    if fields.get("billingStatus") in ("USAGE_UNAVAILABLE", "DEDUCTION_UNCONFIRMED"):
+        print(f"BILLING-WARNING: taskId={result.get('taskId', _payload(result).get('taskId', ''))} "
+              f"billingStatus={fields['billingStatus']}；保留生成内容，核对原任务/账本；"
+              "不能把零点判为正常免费，不要重新创建收费任务或盲目退款。", file=sys.stderr)
+
+
 def main():
-    argv = sys.argv[1:]
+    raw_argv = sys.argv[1:]
+    if "--help" in raw_argv or "-h" in raw_argv:
+        argv, poll_timeout = raw_argv, None
+    else:
+        try:
+            argv, poll_timeout = _poll_options(raw_argv)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            sys.exit(1)
     if "--help" in argv or "-h" in argv:
         print("用法：aigc_textgen.py '<JSON>' [--inline] [--content-only] [--no-cache]\n"
               "      aigc_textgen.py --stdin [--inline] [--content-only]\n"
-              "仅查询已有任务：JSON 传 taskId 和可选 memberId；始终禁用响应缓存。")
+              "仅查询已有任务：JSON 传 taskId 和可选 memberId；--poll-timeout正数秒控制客户端等待；始终禁用响应缓存。")
         return
     inline = "--inline" in argv
     content_only = "--content-only" in argv
@@ -356,7 +417,7 @@ def main():
     member_id = params.get("memberId", "")
     task_id = params.get("taskId")
     if task_id:
-        result = poll_until_done(task_id, member_id)
+        result = poll_until_done(task_id, member_id, poll_timeout=poll_timeout)
     else:
         create_result = create_task(params)
         task_id = _payload(create_result).get("taskId")
@@ -366,13 +427,14 @@ def main():
                 result = dict(result, error="创建响应缺少 taskId")
         else:
             print(f"任务已创建：taskId={task_id}", file=sys.stderr)
-            result = poll_until_done(task_id, member_id)
+            result = poll_until_done(task_id, member_id, poll_timeout=poll_timeout)
     if task_id:
         result.setdefault("taskId", task_id)
     _encode_content_in_result(result)
+    _warn_billing(result)
     failed = _is_failure(result)
     # SUCCESS 的空内容不作为可用文本交付；保留原响应和任务标识。
-    if _payload(result).get("status") == "SUCCESS" and not _extract_content(result):
+    if _payload(result).get("status") in ("SUCCESS", 3) and not _extract_content(result):
         result["error"] = "任务返回空内容；请核查媒体可读性或考虑视频抽帧"
         failed = True
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
@@ -398,6 +460,7 @@ def main():
         print(json.dumps({
             "ok": not failed, "truncated": True, "savedPath": out_path,
             "bytes": len(serialized.encode("utf-8")), "content": _extract_content(result),
+            **_billing_fields(result),
         }, ensure_ascii=False))
         summarize(result)
     sys.exit(1 if failed else 0)

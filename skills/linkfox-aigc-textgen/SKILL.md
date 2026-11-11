@@ -1,118 +1,96 @@
 ---
 name: linkfox-aigc-textgen
-description: 根据提示词生成和分析文本，支持商品标题、五点描述、营销文案、翻译、数据总结，以及结合图片或视频理解内容。适用于 AI 生文、AI 写作、图片识别和视频分析；不适用于图片生成、视频生成或报告文件排版。
+description: AI 生文与图片理解，支持商品标题、五点描述、营销文案、翻译和数据总结。支持 GEM_3_1_PRO、GEM_3_7_FLASH、GEM_4_A、GT_6_1_S、GT_6_1_T、GT_6_L、GT_6_A；兼容旧模型别名。创建后查询同一任务，展示文本并以 count 读取 AI 实扣；不用于图片或视频生成。
 ---
-# AI 生文与多模态内容理解
+# AI 生文与图片理解
 
-## 适用范围
+## 适用与边界
 
-### 适用
+- 按提示词生成商品标题、五点、营销文案、翻译、数据分析总结，或结合最多10张图片理解商品。
+- 生图使用 linkfox-aigc-imagegen，生视频使用 linkfox-aigc-videogen，报告文件排版使用 linkfox-report-generator。
+- 标准生文契约以文本和图片为输入，不把原生视频或音频当成图片传入。GT明确不支持原生音视频。视频任务先按对应业务技能的既有能力准备图片帧；帧图不能恢复音轨，不猜测口播。旧入口的视频能力必须单独确认，不能沿用为所有新模型的承诺。
 
-根据用户目标生成文本，或结合用户提供的图片、视频进行理解和分析。
+## 接口与文件
 
-**场景速查**
+| 操作 | 端点 | 实现 |
+|---|---|---|
+| 创建任务 | POST /aigc/textGenAsync | scripts/aigc_textgen.py |
+| 查询已有任务 | POST /aigc/textTaskQuery | scripts/aigc_textgen.py |
+| 本地图片上传 | POST /oss/getStsVoucherByAPI | scripts/upload_file.py |
 
-| 用户表达 | 查询场景 |
-|---|---|
-| 帮我写商品标题、五点或一段营销文案 | 按目标语言、受众和卖点生成文本。 |
-| 翻译这段文字、总结这些数据 | 翻译、提炼和分析。 |
-| 分析商品图片的构图和卖点 | 图片内容理解。 |
-| 分析视频的节奏和分镜 | 视频内容理解。 |
-| 先写提示词，再做图片或视频 | 生成文本并交给用户要求的下游任务。 |
+详细接口、兼容与计费见 [references/api.md](references/api.md)。上传前确认图片可公开，再按 [references/file-upload.md](references/file-upload.md) 操作。禁止运行未获授权的真实收费测试。
 
-### 边界
+## 模型与参数
 
-图片生成交给 `linkfox-aigc-imagegen`，视频生成交给 `linkfox-aigc-videogen`，报告文件排版交给 `linkfox-report-generator`。
+| 标准 model 编码 | 场景 | thinkingLevel |
+|---|---|---|
+| GEM_3_1_PRO | 高质量生成、复杂分析；接口默认模型 | low / medium / high |
+| GEM_3_7_FLASH | 常规文案、翻译、图片理解 | minimal / low / medium / high |
+| GEM_4_A | 复杂推理、代码与高质量长文 | low / medium / high |
+| GT_6_1_S | 复杂分析、文本生成 | low / medium / high / xhigh / max |
+| GT_6_1_T | 图片理解、自然文本写作 | none / low / medium / high / xhigh / max |
+| GT_6_L | 轻量、高频生文 | none / low / medium / high / xhigh / max |
+| GT_6_A | 深度分析、高难度生成 | low / medium / high / xhigh / max |
 
-## 接口清单
+- 仅 prompt 必填，最多100000字符。model建议显式传入；不传仍默认GEM_3_1_PRO，不是Flash。可用模型以环境实际部署版本和模型开通为准；新版接口的新建任务统一走AI生文计费。不可用时报告真实错误，不自动换模型试收费。
+- 兼容 LF_GEM_1→GEM_3_FLASH、LF_GEM_2→GEM_3_1_PRO；GEM_3_FLASH仅作旧调用兼容，不把LF_GEM_1重定向到3.7。未知model报错，不静默回退。
+- thinkingLevel可选，非法组合不自动降级。GT不传为medium；GEM不传交模型处理。GT不接受minimal/ultra；none仅GT_6_1_T、GT_6_L支持。
+- systemPrompt仅GT支持。GEM应把指令放进prompt。
+- imageUrlList为标准图片字段，可省略或传[]；最多10张HTTP(S)图片。兼容旧imageUrls，两个字段同时传入时内容必须一致。
 
-| 接口 | 端点 | 接口文档 | 对应脚本 | 说明 |
-|---|---|---|---|---|
-| 创建生文任务（textGenAsync） | POST `/aigc/textGenAsync` | [references/api.md](references/api.md) | `scripts/aigc_textgen.py` | 创建异步任务。 |
-| 查询生文任务（textTaskQuery） | POST `/aigc/textTaskQuery` | [references/api.md](references/api.md) | `scripts/aigc_textgen.py` | 轮询状态并取回生成文本。 |
-| 获取上传凭证（getStsVoucherByAPI） | POST `/oss/getStsVoucherByAPI` | [references/file-upload.md](references/file-upload.md) | `scripts/upload_file.py` | 为本地媒体获取 OSS 临时凭证。 |
+## 安全执行流程
 
-以上均为直接端点，无统一转发 path。公共认证引导及 Feedback 不计入业务接口。
+1. 明确目标、语言、模型和输入图片。已有公开URL直接复用；本地图片按上传规范准备，失败不创建生文任务，不把本地路径传给接口。
+2. 只创建一次，取得并保存taskId；轮询同一任务直至SUCCESS或FAILED。网络状态不明、客户端超时、会话中断时只恢复查询，不自动重建收费任务。
+3. 新任务由AI在生成成功后结算，查询不新增收费；旧任务保留原服务链路，不以客户端判断重算旧费用。
+4. 新任务以count为实际扣点，points只是按用量计算的点数；costToken=0表示不要让网关再扣一次，不代表免费。实扣可能因余额或成员限额封顶小于points。
+5. billingStatus为USAGE_UNAVAILABLE或DEDUCTION_UNCONFIRMED时，保留内容和taskId、明确提示核对原任务/账本；不能将count=0称为正常免费，也不自动重试创建或退款。
+6. 需要继续用户已要求的生图等流程时，用--content-only提取文本，用JSON编码器构造下游参数；不手工拼接未转义引号。
 
-## 前置条件
+## 脚本调用
 
-确认文本目标、语言、风格及所需素材。媒体准备和上传前公开确认要求见 [references/file-upload.md](references/file-upload.md)；完整参数和脚本契约见 [references/api.md](references/api.md)。
+推荐stdin避免提示词转义：
 
-## 生文与链式调用流程
+~~~bash
+python scripts/aigc_textgen.py --stdin < params.json
+python scripts/aigc_textgen.py --stdin --content-only < params.json
+# 恢复同一任务；不会创建新任务
+python scripts/aigc_textgen.py '{"taskId":"123456789"}'
+# 高思考等级可延长本次客户端等待；不改变AI任务期限和计费标准
+python scripts/aigc_textgen.py --stdin --poll-timeout 1800 < params.json
+~~~
 
-1. 明确生成或分析目标；按任务选择模型与思考深度，参数要求见接口文档。
-2. 按输入顺序准备素材：已有公开 HTTP(S) URL 直接复用；本地媒体在确认可公开后按上传文档处理。上传失败时停止生文，说明原因并保留成功 URL；生文脚本不会自动上传。
-3. 仅创建一次任务，保存任务标识，再查询同一任务直到完成。结果不确定或会话中断时沿用已有标识查询，恢复方法见接口文档；不要重复创建。
-4. 失败时展示真实原因并保留任务标识；视频不可读或结果为空时，按接口文档评估抽帧兜底及额外费用。
-5. 用户后续任务涉及作图、换模特或视频生成时，自动选择 `--content-only`，捕获文本，用 JSON 编码器构造下游参数并继续用户已要求的流程；仅生文时使用默认输出。
+- 默认等待600秒，每次HTTP最多150秒；查询间隔10秒递减至5秒。--poll-timeout可指定正数秒数。客户端等待超时不代表服务端任务失败，按保留的taskId恢复查询。
+- 创建只调用一次，不重试；查询仅对暂时的传输错误额外重试最多3次。认证、额度、明确业务失败以及本地保存/解析错误立即停止，查询失败不触发创建。
+- 创建和查询始终禁用响应缓存；--no-cache保留兼容。
 
-## 执行方式
+## 输出与展示
 
-- **直接调用接口**：接口端点、完整参数、响应和错误码见 `references/api.md`。
-- **脚本调用（推荐）**：`python scripts/aigc_textgen.py --stdin [--inline] [--content-only] [--no-cache]`；简单且不含换行的参数可用 `python scripts/aigc_textgen.py '<JSON 参数>'`。
-- **成本约束**：本工具按所选参数动态计费。同一会话、同一参数组合默认只创建一次任务，后续查询沿用任务标识；确需重新创建时，先排除重复任务并向用户说明额外消耗。创建、查询和临时凭证请求均禁用响应缓存。
+- 默认/--inline：stdout为响应JSON，诊断与计费警告只写stderr。--content-only仅输出内容，不混入计费提示。
+- 原始响应和最终结果均保存到当前目录linkfox/<YYYY-MM-DD>/<session>/data/；SESSION_ID优先，禁止失败后回退到/tmp。
+- 大结果默认stdout为含ok、truncated、savedPath、bytes、完整content的JSON信封；服务端实际提供的count、points、costToken、billingStatus、pricingVersion也保留。--inline强制全量。
+- 内容换行保持既有⏎占位符机制，向用户展示时还原换行；下游AIGC脚本会解码。缺少用量或未返回count时不编造费用。
+- 失败非零退出；成功文本但计费需核对时保留成功内容并在stderr警告，不通过重新创建任务来“修复”计费。
 
-### 输出策略
+## 请求示例
 
-- 始终保存完整响应，接口原始响应路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-aigc-textgen-<接口标识>-<timestamp>.json`，最终输出的文件名前缀为 `linkfox-aigc-textgen-`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
-- 默认模式下，UTF-8 序列化后的响应体不超过 8000 字节：保存后，将完整 JSON 打印到标准输出。
-- 默认模式下，响应体超过 8000 字节：保存后，标准输出为 JSON 信封，含 `ok`、`truncated`、`savedPath`、`bytes` 和完整 `content`；顶层字段、常见计数、最大列表字段的长度及前 3 条样本等摘要仅写 stderr。
-- 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
-- 使用 `--content-only` 时，标准输出仅为单行文本，同时仍保存完整响应；失败时不输出文本，错误写 stderr，并以非零状态退出。
+快速文案（明确指定支持minimal的模型）：
+~~~json
+{"prompt":"写三条无线音箱卖点","model":"GEM_3_7_FLASH","thinkingLevel":"minimal","imageUrlList":[]}
+~~~
 
-先通过摘要判断数据是否足够。需要具体字段时，优先使用 `jq` 或 `ConvertFrom-Json` 从保存的 JSON 文件按需提取，避免将整份响应载入上下文。
+图片分析：
+~~~json
+{"prompt":"分析商品图片的构图和卖点","model":"GEM_3_1_PRO","thinkingLevel":"high","imageUrlList":["https://example.com/product.jpg"]}
+~~~
 
-## 执行规则
+GT系统指令：
+~~~json
+{"prompt":"生成三条商品卖点","model":"GT_6_L","thinkingLevel":"none","systemPrompt":"使用中文，每条一句话","imageUrlList":[]}
+~~~
 
-### 算力消耗预估
+## 认证、额度与反馈
 
-按所选参数动态计费，算力消耗与所选参数相关；具体数值以实际扣除为准，不编造固定单价或计费公式。
+缺少LINKFOX_AGENT_API_KEY/LINKFOXAGENT_API_KEY、HTTP401/402或提示额度不足时，按[references/onboarding.md](references/onboarding.md)处理。执行前可用额度至少100点；成功按实际usage计价，应扣最低1点，正常生成失败不扣点。具体价格与缓存/长上下文规则以AI配置和Wiki为准，不在技能内维护第二套单价。
 
-**声明**：算力消耗以实际扣除为准；如因需要调整算力消耗标准，恕不另行通知。最终解释权归 LinkFox 官方所有。
-
-用户会因算力消耗而支付费用。需要高频调用或用户对消耗量预期不足时，提醒用户，并由用户决定是否继续。
-
-### 解决认证和算力问题
-
-出现以下情况时，按 `references/onboarding.md` 的指引处理：
-
-- 未配置接口密钥：`LINKFOX_AGENT_API_KEY` 和 `LINKFOXAGENT_API_KEY` 均为空。
-- HTTP 状态码为 `401` 或 `402`。
-- 响应提示算力或余额不足、计费不足、配额超限、套餐到期或需要充值。英文错误消息也按其含义判断。
-
-### 约束与建议
-
-- **模型选择**：`GEM_3_FLASH` 适合常规文案、简单分析、翻译；`GEM_3_1_PRO` 适合深度分析、长文和复杂推理。提示词越具体越好，速度和推理深度按任务权衡；模型组合限制见接口文档。
-- **直接展示文本**：向用户展示生成内容。脚本为链式传递使用的 `⏎` 是换行占位符，展示时可还原换行；下游 AIGC 脚本会自动解码。
-- **机器输出契约**：生文默认和 `--inline` 的 stdout 为 JSON，大结果为包含完整 content 的 JSON 信封；`--content-only` 为纯文本。诊断、提示和摘要只写 stderr，供链式调用解析，细节见接口文档。
-- **异步查询**：业务封装始终传 `--no-cache`，创建、状态查询、临时凭证均不复用响应缓存；同一任务沿用已有任务标识，避免读取过期状态或重复创建任务。
-- **安全构造下游 JSON**：用 `jq --arg` 或 Python `json.dumps` 处理引号、反斜杠与占位符，不直接拼接未转义内容。下游所需字段和链式调用示例见接口文档。
-- **上传素材**：保留素材顺序与源文件，失败不使用本地路径替代 URL，不重复上传成功项，不展示 STS 凭证。
-
-## 使用示例
-
-### 常规文案与翻译
-
-用户：帮我写无线音箱商品文案，再翻译成德语。
-
-明确卖点和目标语言，选择快速模型生成并直接展示文本。
-
-### 图片或视频分析
-
-用户：分析这个视频的镜头节奏、卖点和可复刻分镜。
-
-准备可读素材，选择适合复杂分析的模型，创建任务后查询结果；失败时解释媒体问题和可行兜底。
-
-### 生文后继续作图
-
-用户：分析这张主图，写场景提示词，再生成图片。
-
-完成素材准备后，以纯文本模式取得提示词，经 JSON 编码传入下游图片任务，保留换行传递机制。
-
-## 使用反馈
-
-当技能有BUG，或技能描述有错误/疏漏/歧义/表述模糊，或技能结果与用户预期不符，或用户表达不满/赞扬，或发现其他可改进之处时，按 `references/api.md#Feedback` 的指引反馈，不要打断用户当前流程。
-
----
-
-更多优质、专业的跨境电商技能，请访问 [LinkFox Skill](https://skill.linkfox.com/)。
+使用反馈遵循[references/api.md#Feedback](references/api.md#Feedback)，不得因反馈打断用户当前任务，也不在本次开发中发送外部反馈。

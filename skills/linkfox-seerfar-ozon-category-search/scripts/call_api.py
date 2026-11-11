@@ -41,6 +41,7 @@ def get_api_key():
 
 
 def call_api(api_path, params):
+    """返回 (HTTP 状态码, 响应体)；连接失败时状态码为 None。"""
     api_url = get_api_url(api_path)
     api_key = get_api_key()
     data = json.dumps(params).encode("utf-8")
@@ -61,15 +62,46 @@ def call_api(api_path, params):
     )
     try:
         with urlopen(req, timeout=150) as response:
-            return json.loads(response.read().decode("utf-8"))
+            try:
+                return response.status, json.loads(response.read().decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return response.status, {"error": "Invalid JSON response"}
     except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
+        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
         try:
-            return json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
-        except Exception:
-            return {"error": f"HTTP {e.code}: {e.reason}", "details": body}
+            payload = json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
+        except json.JSONDecodeError:
+            payload = {"error": f"HTTP {e.code}: {e.reason}", "details": body}
+        return e.code, payload
     except URLError as e:
-        return {"error": f"Connection failed: {e.reason}"}
+        return None, {"error": f"Connection failed: {e.reason}"}
+    except OSError as e:
+        return None, {"error": f"Connection failed: {e}"}
+
+
+def _response_error(http_status, payload):
+    """检查 HTTP、网关 errcode 和 Ozon 业务状态。"""
+    if http_status is None:
+        return payload["error"]
+    if type(http_status) is not int or not 200 <= http_status < 300:
+        return f"HTTP {http_status}: request failed"
+    if not isinstance(payload, dict):
+        return "Invalid response: expected a JSON object"
+    if payload.get("error"):
+        return str(payload["error"])
+
+    errcode = payload.get("errcode")
+    if isinstance(errcode, str):
+        errcode = errcode.strip() or None
+        if errcode and len(errcode) == 3 and errcode.isascii() and errcode.isdigit():
+            errcode = int(errcode)
+    if errcode is not None and not (
+        type(errcode) in (int, float) and 200 <= errcode < 300 and errcode % 1 == 0
+    ):
+        return f"Business error: errcode={payload['errcode']!r}"
+    if "code" in payload and payload["code"] not in (200, "200"):
+        return f"Business error: code={payload['code']!r}"
+    return None
 
 
 def _cache_key(params):
@@ -85,24 +117,31 @@ def _cache_path(slug, params):
 
 
 def _load_cache(path):
-    if not os.path.isfile(path):
-        return None
-    if time.time() - os.path.getmtime(path) > CACHE_TTL_SEC:
-        return None
     try:
+        if time.time() - os.path.getmtime(path) > CACHE_TTL_SEC:
+            return None
         with open(path, encoding="utf-8") as f:
-            payload = json.load(f)
-        if isinstance(payload, dict):
-            payload.setdefault("_cache", {})["hit"] = True
+            cached = json.load(f)
+        # 旧缓存未记录 HTTP 状态，无法确认请求正常，不再复用。
+        if not isinstance(cached, dict) or cached.get("_cache_version") != 1:
+            return None
+        payload = cached.get("body")
+        status = cached.get("http_status")
+        if type(status) is not int or _response_error(status, payload):
+            return None
+        payload["_cache"] = {"hit": True}
         return payload
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
 
 
-def _save_cache(path, payload):
+def _save_cache(path, payload, http_status):
     try:
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+            json.dump(
+                {"_cache_version": 1, "http_status": http_status, "body": payload},
+                f, ensure_ascii=False, indent=2,
+            )
     except OSError:
         pass
 
@@ -310,12 +349,15 @@ def run(api_path, slug, argv=None):
         print(f"Invalid parameter format: {e}", file=sys.stderr)
         sys.exit(1)
 
-    cache_path = _cache_path(slug, params)
-    result = _load_cache(cache_path) if use_cache else None
-    if result is None:
-        result = call_api(api_path, params)
-        if use_cache:
-            _save_cache(cache_path, result)
+    cache_path = _cache_path(slug, params) if use_cache else None
+    result = _load_cache(cache_path) if cache_path else None
+    cache_hit = result is not None
+    error = None
+    if not cache_hit:
+        http_status, result = call_api(api_path, params)
+        error = _response_error(http_status, result)
+        if cache_path and error is None:
+            _save_cache(cache_path, result, http_status)
 
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
     ts = int(time.time())
@@ -324,14 +366,18 @@ def run(api_path, slug, argv=None):
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(serialized)
         print(f"Saved full response: {out_path} ({len(serialized)} bytes)")
-        if result.get("_cache", {}).get("hit"):
+        if cache_hit:
             print(f"Cache hit: {cache_path}")
     except OSError as e:
         print(f"Failed to save to {out_path}: {e}", file=sys.stderr)
 
     if inline or len(serialized.encode("utf-8")) <= SMALL_THRESHOLD:
-        if result.get("_cache", {}).get("hit"):
+        if cache_hit:
             print(f"Cache hit: {cache_path}", file=sys.stderr)
         print(serialized)
     else:
         summarize(result)
+
+    if error is not None:
+        print(error, file=sys.stderr)
+        sys.exit(1)

@@ -32,10 +32,10 @@
 | | `image` | `attachment` |
 |---|---|---|
 | 值 | 一个 URL 字符串 | 附件对象数组（含 token） |
-| 怎么写 | `createRecords` / `updateRecords` **直接给字符串**，如 `{"主图": "https://example.com/a.jpg"}` | 只能用 `uploadAttachment`（见 `references/attachment.md`）一张张追加，或写 `[{name, token}]`（**整格替换**，不是追加）；**直接写 URL 会 400** |
+| 怎么写 | `createRecords` / `updateRecords` **直接给字符串**，如 `{"主图": "https://example.com/a.jpg"}` | 只能用 `uploadAttachment`（见 `references/attachment.md`）一份份追加，或写 `[{name, token}]`（**整格替换**，不是追加）；**直接写 URL 会 400** |
 | 怎么读 | 就是那个字符串 | `listRecords` 返回的 `presignedUrl`（见 `references/records-read.md`；临时，最长约 3 小时） |
 | 文件在哪 | 别人的服务器（原站） | 我们的对象存储 |
-| 一格几张 | 一个链接 | 多张 |
+| 一格几份 | 一个链接 | 多份（任意类型的文件） |
 
 - `image` **服务端不校验** URL 形态（单行文本的校验就是"是个字符串"），写什么存什么；链接失效、或压根不是图片时，表格里显示占位图，不会报错。
 - ⚠️ 反过来也成立：一列报成 `singleLineText` 就**不是**图片列，往它写 URL 只会显示成一串文字。要图片列得在建列时指定 `image`（`addFields` / `createTable` / `addTable`），或让用户在页面上改这一列的展示形态。
@@ -104,7 +104,7 @@
 
 > `conditionalRollup` 带 `lookup` 对象时就是**查找引用**（按计算方式聚合的那种），见上一节；不带的是页面上建的普通条件汇总。
 
-**为什么只开放那十一种**：刻意只放"自足"的类型——只看这个字段的定义本身就能建出来，不需要引用别的表、别的字段（`attachment` 建列本身无需任何选项，往里放图另有专门接口）。被排除的不是不重要，而是**外部调用极难一次填对**、且填错时报的是内部错误：
+**为什么只开放那十一种**：刻意只放"自足"的类型——只看这个字段的定义本身就能建出来，不需要引用别的表、别的字段（`attachment` 建列本身无需任何选项，往里放文件另有专门接口）。被排除的不是不重要，而是**外部调用极难一次填对**、且填错时报的是内部错误：
 
 - `link`（关联）：要另一张表的 `tblXXX`，还会产生跨表的对称字段。要从别的表取值，用 `lookup`（查找引用）按条件匹配，不需要关联列
 - `formula` / `rollup` / `conditionalRollup`（公式 / 汇总）：表达式里要引用内部字段 id（`fldXXX`），而这套接口的**入参**全程按字段名寻址、不接受字段 id（出参里的 `fieldId` 是给工作流配触发条件用的，不能拿来写表达式：建表这一刻那些 id 还不存在）
@@ -250,7 +250,7 @@
 **何时用 / 不该用**：
 - 用户明确要往某张表加列；或写数据时发现缺一列，需要先补上。
 - **调用前先用 `listFields` 看现有列**，这一步不能省：既避免重名报错，也避免加一列其实已经有的东西。
-- 想加一列显示图片的（主图、商品图、封面）：只存外链用 `image`（值是图片 URL 字符串、不用上传文件）；要把图存进表格自己的存储用 `attachment`（加完用 `uploadAttachment` 放图，见 `references/attachment.md`）。
+- 想加一列显示图片的（主图、商品图、封面）：只存外链用 `image`（值是图片 URL 字符串、不用上传文件）；要把文件（图片、视频、PDF、Excel 等）存进表格自己的存储用 `attachment`（加完用 `uploadAttachment` 放进去，见 `references/attachment.md`）。
 - 手上只有表名没有 `tableId` → 先 `listMyTables` / `listSharedTables`（见 `references/tables.md`；⚠️ 出参两层，数据表在 `notebooks[].tables[]` 和 `looseTables.tables[]` 里，两处都要找；顶层 `notebookId` 不能当 `tableId`）。
 - 往已有**多维表**里加一张**表**（不是加列）→ `addTable`；要建一张**新表** → `createTable`（都见 `references/tables.md`）。
 - 只是想知道有哪些列 → `listFields`；要**删列** → `deleteFields`；要加**行**（数据）不是列 → `createRecords`（见 `references/records-write.md`）。

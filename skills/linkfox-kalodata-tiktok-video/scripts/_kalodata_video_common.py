@@ -34,7 +34,6 @@ def run_video(api_path, operation, argv=None):
     root = Path.cwd() / "linkfox"
     previous_root = call_api._SESSION_CACHE.get("_root")
     previous_output_path = call_api._resolve_output_path
-    previous_call_api = call_api.call_api
     phase = "当前工作目录数据保存"
     try:
         root.mkdir(parents=True, exist_ok=True)
@@ -65,25 +64,15 @@ def run_video(api_path, operation, argv=None):
             return str(output)
 
         call_api._resolve_output_path = unique_output_path
-
-        def video_request(path, request_params):
-            http_status, payload = previous_call_api(path, request_params)
-            if http_status is not None and not 200 <= http_status < 300:
-                print(f"HTTP 状态码：{http_status}", file=sys.stderr)
-            return http_status, payload
-
-        call_api.call_api = video_request
         # 缓存仅由 call_api.run 管理，使用单层缓存。
         phase = "接口调用或响应处理"
-        call_api.run(api_path, f"linkfox-kalodata-tiktok-video-{operation}", argv=argv)
+        return call_api.run(api_path, f"linkfox-kalodata-tiktok-video-{operation}", argv=argv)
     except OSError as exc:
         print(f"{phase}失败（{type(exc).__name__}）：{exc}", file=sys.stderr)
         return 1
     finally:
-        call_api.call_api = previous_call_api
         call_api._resolve_output_path = previous_output_path
         if previous_root is None:
             call_api._SESSION_CACHE.pop("_root", None)
         else:
             call_api._SESSION_CACHE["_root"] = previous_root
-    return 0

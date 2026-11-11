@@ -7,7 +7,7 @@
 ## listRecords —— 读一张表里的记录（筛行 + 分页 + 取列）
 
 **何时用 / 不该用**：
-- 用：拿表里的数据做分析、汇总、生成报告；改/删/传图之前先看现状、拿 `recordId`；看附件列里的图（取查看地址）。
+- 用：拿表里的数据做分析、汇总、生成报告；改/删/传附件之前先看现状、拿 `recordId`；看附件列里的文件（取查看地址）。
 - 手上只有表名没有 `tableId` → 先用 `listMyTables` / `listSharedTables`（见 `references/tables.md`）。
 - 只想知道**有哪些列**（不要数据）→ 用 `listFields`（见 `references/fields.md`）。比读一行推字段可靠：空单元格整个不出现，空表更是什么都推不出来。
 - 要改已有行 → `updateRecords`；要加新行 → `createRecords`（见 `references/records-write.md`）。
@@ -66,7 +66,7 @@
 | perPage | integer | 每页条数（回显） |
 | currentPage | integer | 当前页码（回显） |
 | records | array | 每项 `{recordId, fields}` |
-| records[].recordId | string | 以 `rec` 开头。改/删记录、往附件列传图都要用它 |
+| records[].recordId | string | 以 `rec` 开头。改/删记录、往附件列传文件都要用它 |
 | records[].fields | object | key 是**字段名**，value 是单元格值。**空单元格的 key 整个不出现** |
 
 ```json
@@ -79,15 +79,15 @@
 
 响应过大时脚本 stdout 只打摘要：`total` / `perPage` / `currentPage`、记录数 + 前 3 条，以及**所有记录里出现过的字段名清单**。宽表/大表先看摘要，再用 `jq` 从落盘的 json 里按需抽字段，别让整份 JSON 进上下文。
 
-**附件列（`type: attachment`）的取值**：`cellFormat: json`（默认）时是**对象数组**，一张图一项：
+**附件列（`type: attachment`）的取值**：`cellFormat: json`（默认）时是**对象数组**，一份文件一项：
 
 | 字段 | 说明 |
 |---|---|
 | id / name / token | 附件 id（`act` 开头）、文件名、存储 token。`token` 可复用，见下 |
-| size / mimetype / width / height | 字节数、类型、像素宽高 |
+| size / mimetype / width / height | 字节数、类型、像素宽高（宽高只有图片有） |
 | path | 存储内部路径，调用方用不上 |
-| presignedUrl | **原图**查看地址 |
-| smThumbnailUrl / lgThumbnailUrl | 小 / 大缩略图地址 |
+| presignedUrl | **原文件**查看地址（打开是下载） |
+| smThumbnailUrl / lgThumbnailUrl | 小 / 大缩略图地址（**只有图片和 PDF 有**，其余没有缩略图） |
 
 ```json
 {"recordId": "recAAAAAAAA", "fields": {"商品图": [
@@ -124,12 +124,12 @@
 **翻页要稳**：大表分页读取期间有人改数据，行序可能变化。要求严格一致时缩小时间窗，或一次取完（`perPage` 100 内）。
 
 **附件格的地址是临时的**：
-- `presignedUrl` 是原图，`smThumbnailUrl` / `lgThumbnailUrl` 是小 / 大缩略图。
+- `presignedUrl` 是原文件，`smThumbnailUrl` / `lgThumbnailUrl` 是小 / 大缩略图（**只有图片和 PDF 有**）。
 - ⚠️ 三个地址都是**临时签名地址**，最长约 **3 小时**有效（受签名角色会话时长截断，可能更短）。**不要存下来长期用**，要用时再调 `listRecords` **现取**。
 - `presignedUrl` 在浏览器里直接打开是**下载**而不是预览，放进 `<img src>` 正常显示（详见 `references/attachment.md`）。
-- `cellFormat: "text"` 时附件格是 `文件名 (token)`，多张用逗号拼接（如 `a.png (tokA),b.jpg (tokB)`），**没有任何地址**。要看图就用默认的 `json`。
-- `token` 可复用：用 `updateRecords` 写 `[{name, token}]` 能把同一张图挂到别的格子，但那是**整格替换**（见 `references/records-write.md`）。
-- 往附件列**放新图**用 `uploadAttachment`（见 `references/attachment.md`），不是 `updateRecords`。
+- `cellFormat: "text"` 时附件格是 `文件名 (token)`，多份用逗号拼接（如 `a.png (tokA),b.jpg (tokB)`），**没有任何地址**。要看文件就用默认的 `json`。
+- `token` 可复用：用 `updateRecords` 写 `[{name, token}]` 能把同一份文件挂到别的格子，但那是**整格替换**（见 `references/records-write.md`）。
+- 往附件列**放新的文件**用 `uploadAttachment`（见 `references/attachment.md`），不是 `updateRecords`。
 
 **权限与副作用**：只能读**自己团队 base 内、且自己有读权限**的表。读取不写历史、不影响表的修改时间。
 

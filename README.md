@@ -306,6 +306,11 @@ Get your API key and configure the environment before using any skill.
 | `linkfox-geekbi-temu-product` | Search and filter Temu products and retrieve product details and 30-day history via GeekBI, with internal region and category ID resolution |
 | `linkfox-geekbi-temu-search-by-image` | Find visually similar or matching Temu products from an image for product research and competitor discovery |
 | `linkfox-geekbi-temu-shop` | Search and benchmark Temu shops by marketplace, category, sales, revenue, ratings, followers, product count, average order value, hosting mode, and opening date, with internal region and category ID resolution |
+| `linkfox-lazada-store-auth` | Connect and manage Lazada seller stores, and look up store details and performance metrics |
+| `linkfox-lazada-store-finance` | Look up Lazada seller payouts, transaction details, and account transactions |
+| `linkfox-lazada-store-marketing` | Manage Lazada seller vouchers, free shipping, bundle promotions, and Sponsored Max campaigns and reports |
+| `linkfox-lazada-store-orders` | Look up and manage Lazada seller orders, fulfillment, returns, reviews, chats, and store events |
+| `linkfox-lazada-store-product` | Look up and manage Lazada seller products, listings, prices, stock, and media |
 | `linkfox-lingxing-erp` | Lingxing Erp |
 | `linkfox-maidalv-product-tro-detection` | Detect product TRO (Temporary Restraining Order) and trademark/patent/copyright infringement risk from a product image, returning risk level, infringement items, TRO plaintiff info, and an AI legal report |
 | `linkfox-mercado-product-selection` | Query Mercado Libre (Mexico, Brazil, Argentina, Chile, Colombia) product, catalog, keyword, category, trend, seller, review, exchange-rate, and plan-usage data via 24 tools through the LinkFox gateway |

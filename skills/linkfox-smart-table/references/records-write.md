@@ -41,15 +41,15 @@
 |---|---|---|
 | `image` | 一个图片外链字符串，如 `"https://example.com/a.jpg"` | 写入/覆盖这一格（换图就是覆盖）。**不用上传、不用 token** |
 | `image` | `null` | 清空（不要传 `""`） |
-| `attachment` | `[{"name": "a.png", "token": "<token>"}]` | **整格替换**成这些附件（不是追加，原有的图会被换掉） |
+| `attachment` | `[{"name": "a.png", "token": "<token>"}]` | **整格替换**成这些附件（不是追加，原有的文件会被换掉） |
 | `attachment` | `null` | 清空 / 留空 |
 
 - ⚠️ `image` 列**服务端不校验** URL 形态（底层是单行文本，校验就是「是个字符串」）：写进去的不是图片链接也会成功，只是表格里显示占位图。**不会报错，链接对不对要自己把住。**
-- `image` 列一格只存一个链接，多张图塞不进去；要一格多张用 `attachment` 列 + `uploadAttachment`。
+- `image` 列一格只存一个链接，多张图塞不进去；要一格放多份文件用 `attachment` 列 + `uploadAttachment`。
 - 报成 `singleLineText` 的列**不是**图片列，往它写 URL 只会显示成一串文字。
 - ⚠️ 往 `attachment` 列写**裸 URL 字符串**（或其它任意形状）会 **400**，`errmsg` 指向 `uploadAttachment`。以前这种写法会被**静默丢弃**还返回 200（格子是空的），现在改成显式报错。
-- `token` 来自 `uploadAttachment` 的响应，或 `listRecords` 读到的附件对象。同一张图挂到别的格子不用重新上传，写 `[{name, token}]` 即可，但记住是整格替换。
-- 要往附件列**放新图**用 `uploadAttachment`（见 `references/attachment.md`）：新行先用 `createRecords` 建出来（附件列不写），拿 `recordId` 后一张张追加。
+- `token` 来自 `uploadAttachment` 的响应，或 `listRecords` 读到的附件对象。同一份文件挂到别的格子不用重新上传，写 `[{name, token}]` 即可，但记住是整格替换。
+- 要往附件列**放新的文件**用 `uploadAttachment`（见 `references/attachment.md`）：新行先用 `createRecords` 建出来（附件列不写），拿 `recordId` 后一份份追加。
 
 ## createRecords —— 往已有表里批量加行，返回服务端生成的 recordId
 
@@ -98,7 +98,7 @@
 | `缺少 tableId` / `缺少 records（非空数组）` / `必须是对象` / `的 fields 必须是非空对象`（本地预检） | 入参形状不对 | 照提示补全；`fields` 的 key 用字段名 |
 | `不该带 recordId`（本地预检）/ `新增记录不接受 recordId` | 拿 create 去改已有行 | 改已有行用 `updateRecords`；真要新增就去掉 `recordId` |
 | `Too many cells in one call: X > Y` | 单元格数超上限 | 分批写，每批核对 `created` |
-| `是附件列，值必须是 [{"name": ..., "token": ...}] 或 null` | 往附件列写了 URL 等其它形状 | 附件列先不写，建完行用 `uploadAttachment` 传图 |
+| `是附件列，值必须是 [{"name": ..., "token": ...}] 或 null` | 往附件列写了 URL 等其它形状 | 附件列先不写，建完行用 `uploadAttachment` 传文件 |
 | `Attachment(token) not found` | `[{name, token}]` 里的 token 不存在 | token 从 `uploadAttachment` 响应或 `listRecords` 的附件对象里取 |
 | 字段名对不上 / 类型不匹配的 400 | 字段名与表里不一致；`typecast: false` 时值类型不对 | 用 `listFields` 核对字段名与类型；或去掉 `typecast: false` |
 | `No access to table` / `Missing permission record\|create` | 表不在你团队里，或没有新增权限 | 换表，或找表的所有者 |
@@ -132,7 +132,7 @@
 - 用：把分析/生成结果回写到表里；批量修正某几列的值；改某一格（见下「改某一格的标准做法」）。
 - 加新行 / 往表里加数据 → `createRecords`。本操作**只改已有行**，`recordId` 必须已存在。
 - 删记录 → `deleteRecords`。改**表结构**（加列/删列）→ `addFields` / `deleteFields`（见 `references/fields.md`）。
-- 往附件列**追加**新图 → `uploadAttachment`（见 `references/attachment.md`），不是本操作。
+- 往附件列**追加**新的文件 → `uploadAttachment`（见 `references/attachment.md`），不是本操作。
 
 **调用**：`python scripts/smart_table.py updateRecords '<JSON>'`
 
@@ -206,7 +206,7 @@
 | `缺少 recordId（以 rec 开头）；这个接口不能新增行`（本地预检） | 拿 update 去新增 | 加新行用 `createRecords` |
 | `必须是记录 id（以 rec 开头）` | `recordId` 不是记录 id | 从 `listRecords` 重新取 |
 | `Too many cells in one call: X > Y` | 单元格数超上限 | 分批改，每批核对 `updated` |
-| `是附件列，值必须是 [{"name": ..., "token": ...}] 或 null` | 往附件列写了 URL 等其它形状 | 追加图片用 `uploadAttachment`；整格替换才写 `[{name, token}]` |
+| `是附件列，值必须是 [{"name": ..., "token": ...}] 或 null` | 附件列写了 URL 等其它形状 | 追加文件用 `uploadAttachment`；整格替换才写 `[{name, token}]` |
 | `Attachment(token) not found` | token 不存在 | token 从 `uploadAttachment` 响应或 `listRecords` 的附件对象里取 |
 | `validation.field.not_null` | 对 `notNull` 字段传了 `null` | 这一列不能清空，给一个值 |
 | 字段名对不上 / 类型不匹配的 400 | 字段名与表里不一致；`typecast: false` 时值类型不对 | 用 `listFields` 核对；或去掉 `typecast: false` |

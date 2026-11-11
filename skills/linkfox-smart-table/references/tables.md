@@ -226,7 +226,7 @@ looseTables                  ← 不属于任何多维表的散表，为空时�
 
 **何时用 / 不该用**：用户要一个新表来存结果/清单/记录；工作流需要落地一张结构化的表；用户要「新建一个多维表」。
 ⚠️ **与 `addTable` 分流**：手上**没有** `notebookId`、要一个新容器 → `createTable`；往**已有多维表**里再加一张表（有 `notebookId`）→ `addTable`（见本文件）。用错会**多建一个容器**。
-不该用：往已有表里**加行** → `createRecords`、改已有行的值 → `updateRecords`（都见 `references/records-write.md`）；找已有的表 → `listMyTables` / `listSharedTables`（见本文件）；想知道**已有表**有哪些列 → `listFields`、往**已有表**加列 → `addFields`（都见 `references/fields.md`）；往附件列里放图 → `uploadAttachment`（见 `references/attachment.md`）；删除多维表或表 → `deleteNotebook` / `deleteTable`（见本文件，进回收站）；重命名多维表或表 → `renameNotebook` / `renameTable`（见本文件）；飞书/Lark 多维表格 → `lark-base`（不是同一个系统）。
+不该用：往已有表里**加行** → `createRecords`、改已有行的值 → `updateRecords`（都见 `references/records-write.md`）；找已有的表 → `listMyTables` / `listSharedTables`（见本文件）；想知道**已有表**有哪些列 → `listFields`、往**已有表**加列 → `addFields`（都见 `references/fields.md`）；往附件列里放文件（图片、视频、PDF 等任意类型） → `uploadAttachment`（见 `references/attachment.md`）；删除多维表或表 → `deleteNotebook` / `deleteTable`（见本文件，进回收站）；重命名多维表或表 → `renameNotebook` / `renameTable`（见本文件）；飞书/Lark 多维表格 → `lark-base`（不是同一个系统）。
 
 **调用**：`python scripts/smart_table.py createTable '<JSON>'`
 

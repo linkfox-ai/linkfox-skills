@@ -7,7 +7,7 @@
 2. 未配置 → 询问：自助去 https://agent.linkfox.com/ 取 key，或提供手机号让脚本注册
 3. 手机号路径：
    - `python scripts/onboarding.py send-code <phone>` → 展示 JSON 里的 phone/agreements
-   - 收到验证码后：`python scripts/onboarding.py login <phone> <code>`
+   - 收到验证码后：`python scripts/onboarding.py login <phone> <code> [--channel skill|workbuddy]`（不传默认 `skill`；workbuddy 传 `workbuddy`）
    - 拿到 `api_key` 后把下面三平台配置转发给用户，提示重启会话生效：
      - Windows PowerShell（永久）：`setx LINKFOX_AGENT_API_KEY "<key>"`
      - macOS zsh：`echo 'export LINKFOX_AGENT_API_KEY="<key>"' >> ~/.zshrc && source ~/.zshrc`

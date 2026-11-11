@@ -6,7 +6,16 @@
 
 <op> 用接口名（与 /smartTable/<op> 一致），也接受旧 skill 后缀的写法（如 create-records）：
 
+  官方模板 listOfficialTemplates（公开 Agent 接口 /agent-studio/table-template/list，只读）
   表      listMyTables  listSharedTables  createTable  addTable  copyNotebook
+  应用    listApplications  createApplication  publishApplication  unpublishApplication
+          （listApplications：扁平一层，带 sessionId；含协作给我的，可按应用名 / 多维表名 / 多维表 id / 来源筛）
+          （createApplication：往已有多维表里**按模板**建应用，传 notebookId + templateId；
+           回 applicationId / 进编辑器的 sessionId / 源码包 sourceUrl；同一用户同时只能建一个，撞上回 409）
+          （publishApplication：把改完代码的应用发上线，传 sessionId + **自己上传的**源码包地址；
+           回 publishUrl（已落库）；同一 session 并发发布撞 409）
+          （unpublishApplication：把已发布的应用下线，传 applicationId（不是 sessionId）；
+           清 publishUrl / 可见性回 private，公开分享凭据一并撤销且**不可逆**；幂等）
   删除    deleteNotebook  deleteTable  deleteNotebookItem（一律进回收站；还原只能在页面上）
   改名    renameNotebook  renameTable  renameNotebookItem（只改名字；列名改不了）
   表头    listFields  addFields  deleteFields
@@ -31,8 +40,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 # op（接口名）→ 模块文件名后缀（也是旧 skill 的后缀，kebab 写法）
 OPS = {
+    "listOfficialTemplates": "list-official-templates",
     "listMyTables": "list-my-tables",
     "listSharedTables": "list-shared-tables",
+    "listApplications": "list-applications",
+    "createApplication": "create-application",
+    "publishApplication": "publish-application",
+    "unpublishApplication": "unpublish-application",
     "createTable": "create-table",
     "addTable": "add-table",
     "copyNotebook": "copy-notebook",

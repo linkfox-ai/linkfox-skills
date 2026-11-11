@@ -74,7 +74,13 @@ def _env_base(name: str, default: str, *fallbacks: str) -> str:
 
 
 def _agent_base() -> str:
-    return _env_base("LINKFOX_AGENT_API_URL", "https://tool-gateway.linkfox.com", "LINKFOX_TOOL_GATEWAY")
+    # 网关地址统一走同目录 linkfox_paths（LINKFOX_TOOL_GATEWAY / 缺省正式地址）；
+    # LINKFOX_AGENT_API_URL 显式设置时优先，保持旧行为。
+    explicit = (os.environ.get("LINKFOX_AGENT_API_URL") or "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+    import linkfox_paths
+    return linkfox_paths.get_api_base()
 
 
 def _login_base() -> str:

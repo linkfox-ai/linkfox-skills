@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """LinkFox 通用 API 调用、缓存、会话数据落盘和命令行输出。"""
 
+import base64
 import json
 import hashlib
 import os
@@ -40,6 +41,25 @@ def get_api_key():
     return key
 
 
+def _decode_response(status, raw_body, headers, reason=None):
+    """JSON 原样透传；非 JSON 保留真实 HTTP 状态和原始响应用于核对原任务。"""
+    try:
+        return json.loads(raw_body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        payload = {
+            "error": f"HTTP {status}: response is not valid UTF-8 JSON"
+                     + (f" ({reason})" if reason else ""),
+            "errorCode": "INVALID_JSON_RESPONSE",
+            "transportHttpStatus": status,
+            "httpStatus": status,
+            "contentType": headers.get("Content-Type", "") if headers is not None else "",
+            "details": raw_body.decode("utf-8", errors="replace"),
+        }
+        if isinstance(exc, UnicodeDecodeError):
+            payload["rawBodyBase64"] = base64.b64encode(raw_body).decode("ascii")
+        return payload
+
+
 def call_api(api_path, params):
     """返回 (HTTP 状态码, 响应体)；连接失败时状态码为 None。"""
     api_url = get_api_url(api_path)
@@ -48,6 +68,7 @@ def call_api(api_path, params):
     headers = {
         "Authorization": api_key,
         "Content-Type": "application/json",
+        "Accept": "application/json",
         "User-Agent": "LinkFox-Skill/2.0",
         "SESSION_ID": os.environ.get("SESSION_ID", ""),
         "MESSAGE_ID": os.environ.get("MESSAGE_ID", ""),
@@ -62,21 +83,17 @@ def call_api(api_path, params):
     )
     try:
         with urlopen(req, timeout=150) as response:
-            return response.status, json.loads(response.read().decode("utf-8"))
+            return response.status, _decode_response(response.status, response.read(), response.headers)
     except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        try:
-            payload = json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
-            return e.code, payload
-        except Exception:
-            return e.code, {"error": f"HTTP {e.code}: {e.reason}", "details": body}
+        raw_body = e.read() if e.fp else b""
+        return e.code, _decode_response(e.code, raw_body, e.headers, e.reason)
     except URLError as e:
         return None, {"error": f"Connection failed: {e.reason}"}
 
 
 def _is_cacheable(http_status, payload):
     """仅缓存 HTTP 200 且 errcode 缺失、为空或为 2xx 的 JSON 对象。"""
-    if http_status != 200 or not isinstance(payload, dict):
+    if http_status != 200 or not isinstance(payload, dict) or "error" in payload:
         return False
     errcode = payload.get("errcode")
     if errcode is None:

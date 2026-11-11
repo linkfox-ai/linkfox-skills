@@ -332,17 +332,35 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 | errcode | integer / string / null | 网关状态，按公共基础规则判断。 |
 | errmsg | string | 网关消息，错误时保留原因。 |
 | costToken | number | 若实际返回才报告消耗，不补造。 |
-| status | boolean | 业务预览是否通过，收到正常响应不等于可下单。 |
-| message | string | 上游业务提示，失败时展示。 |
-| sumPayment | number | 订单金额，单位分。 |
-| sumCarriage | number | 运费，单位分。 |
-| discountFee | number | 优惠金额，单位分。 |
-| cargoList | array<object> | 预览商品行，必须有效。 |
-| cargoList[].finalUnitPrice | number | 最终单价，单位元。 |
-| cargoList[].amount | number | 商品行金额，单位元。 |
-| tradeModelList | array | 交易模型，元素内部字段以实际返回为准。 |
-| payChannelInfos | array | 支付渠道；有可读名称则展示名称，否则原样展示编码。 |
-| shopPromotionList | array | 店铺优惠，元素内部字段以实际返回为准。 |
+| status | boolean / null | 全部预览分组 status=true 时为 true，任一组 false 时为 false，其余情况为 null；正常响应不等于可下单。 |
+| message | string / null | 各组非空提示信息去重后合并，失败时展示；保留每组原始提示见 previewResults。 |
+| authorizeUrl | string | 授权失效时可能返回的重新授权链接，供用户手动打开。 |
+| sumPayment | number / null | 全部分组应付总额之和，单位分；任一组该字段缺失时为 null，不返回不完整的小计。 |
+| sumCarriage | number / null | 全部分组运费之和，单位分；任一组该字段缺失时为 null。 |
+| discountFee | number / null | 全部分组优惠金额之和，单位分；任一组该字段缺失时为 null。 |
+| sumPaymentNoCarriage | number / null | 全部分组不含运费的应付金额之和，单位分；任一组该字段缺失时为 null。 |
+| cargoList | array<object> | 按上游分组及组内顺序合并的全部商品行，不是第一组的明细。 |
+| cargoList[].offerId | string / null | 商品 ID，按数字字符串保留，禁止转为 JavaScript number。 |
+| cargoList[].specId | string / null | 规格 ID，匹配请求商品规格时使用。 |
+| cargoList[].skuId | string / null | SKU ID，按字符串保留，避免大数精度丢失。 |
+| cargoList[].finalUnitPrice | number / null | 最终单价，单位元；缺失时不以 SKU 参考价格补造。 |
+| cargoList[].amount | number / null | 商品行金额，单位元；缺失时不自行推算。 |
+| tradeModelList | array<object> | 各组交易方式合并列表；具体适用范围以 previewResults 中所属组为准。 |
+| payChannelInfos | array<object> | 各组支付渠道合并列表；具体适用范围以所属组为准。有可读名称则展示名称，否则原样展示编码。 |
+| shopPromotionList | array<object> | 各组店铺优惠合并列表；不可把某组优惠套用到其他分组。 |
+| tradeModeNameList | array<string> | 各组交易方式名称合并列表，具体适用范围以所属组为准。 |
+| previewResults | array<object> | 全部预览分组；为空时可能省略，旧版后端可能不提供。多组不代表可以合并为一笔订单。 |
+| previewResults[].status | boolean / null | 该组上游预览状态，未提供时保持 null。 |
+| previewResults[].message | string / null | 该组上游业务提示。 |
+| previewResults[].sumPayment | number / null | 该组应付总额，单位分。 |
+| previewResults[].sumCarriage | number / null | 该组运费，单位分。 |
+| previewResults[].discountFee | number / null | 该组优惠金额，单位分。 |
+| previewResults[].sumPaymentNoCarriage | number / null | 该组不含运费的应付金额，单位分。 |
+| previewResults[].cargoList | array<object> | 该组商品行，元素字段及元/分约定与上方 cargoList 相同。 |
+| previewResults[].tradeModelList | array<object> | 仅适用于该组的交易方式。 |
+| previewResults[].payChannelInfos | array<object> | 仅适用于该组的支付渠道，amountLimit 单位分。 |
+| previewResults[].shopPromotionList | array<object> | 仅适用于该组的店铺优惠，discountFee 单位分。 |
+| previewResults[].tradeModeNameList | array<string> | 仅适用于该组的交易方式名称。 |
 
 本地错误字段与脱敏约定见本文件“采购脚本本地错误与脱敏”。
 
@@ -354,7 +372,9 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 
 #### 业务规则
 
-- 即使 errcode=200，status=false、金额为 0、交易/支付/优惠列表为空也可能是业务失败。必须预览明确通过、金额和商品行有效才可进入创建订单；否则展示 message 并复核规格、起批量、售卖单位、quantity 和地址。
+- 只有 status=true 且全部请求商品、规格及数量均能核对、商品行单价/金额及订单总额有效时，才可进入创建订单。status=false 或 null 均不得下单；展示整体及各组提示并复核采购条件。
+- 金额缺失与真实零值不同：null 不按 0 处理；不能仅凭运费/优惠为 0 或交易/支付/优惠列表为空判定失败。商品行金额仍为元，总额及运费仍为分，禁止混算或用参考价补齐成交价。
+- 提供 previewResults 时核对全部分组，不得只检查第一组；未提供时使用顶层字段并核对全部请求商品，不能把缺失明细当作预览完整。请求仍遵守同一供应商限制；不能按预览组与创建结果的数组位置推断商品归属。
 - `1002` 表示参数缺失或不合法；检查必填项、枚举及数字字符串订单号。`1003` 为上游调用或业务失败，不自动重试；`1005` 为 1688 授权缺失或失效，重新走授权检查。
 - `authorization_required` 为脚本本地授权拒绝，先发起授权再验证；不以动态数据库查询代替。
 
@@ -418,10 +438,22 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 | errcode | integer / string / null | 网关状态，按公共基础规则判断。 |
 | errmsg | string | 网关消息，错误时保留原因。 |
 | costToken | number | 若实际返回才报告消耗，不补造。 |
-| success | boolean | 下单业务结果。 |
-| orderId | string | 1688 订单号；支付使用 orderIdList，状态、物流、取消和收货使用 aliOrderId。 |
-| message | string | 业务消息。 |
-| code | string / number | 业务码，与外层 errcode 分开判断。 |
+| success | boolean | 是否全部创建成功；部分成功时为 false，但 orderList 仍保留已经创建成功的订单。 |
+| orderId | string / null | 兼容单订单的订单号；仅成功订单唯一时返回，多笔成功订单时为空。部分失败但成功订单唯一时也可能有值，不能据此推断全部成功。 |
+| orderList | array<object> | 全部子订单结果，含成功和失败项；单订单也会列出成功项。完整遍历，不只取第一笔。旧版后端可能不提供。 |
+| orderList[].orderId | string / null | 子订单号，按数字字符串保留，失败项可能为空；不得转为 number。 |
+| orderList[].success | boolean | 该子订单是否确认创建成功，由后端依据上游状态及订单号确定；不得用顶层 success 替代。 |
+| orderList[].orderAmmount | number / null | 上游订单金额原值，单位分；字段拼写为 orderAmmount，不改为 orderAmount，不据此断言已支付。 |
+| orderList[].postFee | number / null | 该子订单运费原值，单位分；缺失时不填 0。 |
+| orderList[].message | string / null | 该子订单提示信息。 |
+| orderList[].resultCode | string / null | 该子订单返回码。 |
+| failedOfferList | array<object> | 下单失败的商品及原因，非空表示本次未全部成功。 |
+| failedOfferList[].offerId | string / null | 下单失败的商品 ID，按字符串保留。 |
+| failedOfferList[].specId | string / null | 下单失败的规格 ID。 |
+| failedOfferList[].errorCode | string / null | 商品失败错误码。 |
+| failedOfferList[].errorMessage | string / null | 商品失败原因。 |
+| message | string / null | 整体业务消息。 |
+| code | string / null | 整体业务码，与外层 errcode 分开判断。 |
 
 本地错误字段与脱敏约定见本文件“采购脚本本地错误与脱敏”。
 
@@ -433,9 +465,48 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 
 #### 业务规则
 
-- 须使用与已通过预览一致的商品、规格、数量、地址和 flow。下单不包含发票信息，发票在订单完成后独立申请；结果不确定时禁止自动重放。
+- 须使用与已通过预览一致的商品、规格、数量、地址和 flow，且仍遵守同一供应商限制。下单不包含发票信息，发票在订单完成后独立申请。
+- 先保留完整的脱敏响应，再遍历全部 orderList：记录每个 success=true 且订单号为有效数字字符串的成功项，按字符串去重。多订单时 orderId 为空是合法返回，不表示下单失败；不能只保留第一笔，也不能只处理摘要展示的前 3 项。
+- 没有子订单列表的旧版响应，仅在 success=true 且 orderId 为有效数字字符串时按一笔成功订单处理。后续支付从已确认成功的订单号选择本次用户明确确认的订单；状态、物流、取消和收货每次使用具体订单号。
+- success=false 时仍须检查并保留所有成功子订单，再逐项说明失败的子订单和 failedOfferList。部分成功不得整单重放；单笔成功结果保存失败时也须保留原响应与全部已知订单号，不重新调用 createOrder。
+- 不把整次预览的金额、商品或数量复制到每个子订单，也不按数组顺序猜测归属；只使用该子订单实际返回的字段。缺失值保持缺失，不能据订单金额推断已付款。
+- 上游确认创建但没有可识别订单号、连接中断、超时，或收到“创建订单成功但订单号为空”等旧版报错时，结果按待核实处理，先核对 1688 买家订单。不得因提示“稍后重试”自动重放，也不得生成新外部订单标识绕过原请求。
 - `1002` 表示参数缺失或不合法；检查必填项、枚举及数字字符串订单号。`1003` 为上游调用或业务失败，不自动重试；`1005` 为 1688 授权缺失或失效，重新走授权检查。
 - `authorization_required` 为脚本本地授权拒绝，先发起授权再验证；不以动态数据库查询代替。
+
+#### 多订单响应示例
+
+以下仅为响应结构示例，不执行下单；省略实际未提供的消息和金额字段。
+
+```json
+{
+  "success": true,
+  "orderId": null,
+  "orderList": [
+    {"success": true, "orderId": "9007199254740993", "orderAmmount": 10000, "postFee": 0},
+    {"success": true, "orderId": "9007199254740995", "orderAmmount": 20000, "postFee": 500}
+  ],
+  "failedOfferList": []
+}
+```
+
+#### 部分成功响应示例
+
+须保留成功的订单号并展示失败原因，不能因整体 success=false 再创建整批订单。
+
+```json
+{
+  "success": false,
+  "orderId": "9007199254740993",
+  "orderList": [
+    {"success": true, "orderId": "9007199254740993"},
+    {"success": false, "orderId": null, "message": "库存不足", "resultCode": "OUT_OF_STOCK"}
+  ],
+  "failedOfferList": [
+    {"offerId": "1234567890123456789", "specId": "red", "errorCode": "OUT_OF_STOCK", "errorMessage": "库存不足"}
+  ]
+}
+```
 
 ### curl 示例
 
@@ -461,7 +532,7 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `confirmGetPaymentUrl` | boolean | 是 | 必须是 JSON boolean `true`。只获取支付链接，不自动打开、不自动支付。 |
-| `orderIdList` | array<string> | 是 | 1688 订单 ID 字符串数组。使用 `createOrder` 返回的 `orderId`。 |
+| `orderIdList` | array<string> | 是 | 本次用户明确确认支付的已创建成功订单号数组，从 createOrder.orderList 成功项选择并去重；单订单兼容使用 createOrder.orderId。不得包含失败或结果未确认的子订单。 |
 
 #### 脚本选项与运行约定
 
@@ -520,7 +591,7 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `aliOrderId` | string | 是 | 1688 订单 ID 字符串；可使用 `createOrder` 返回的 `orderId`。 |
+| `aliOrderId` | string | 是 | 具体 1688 订单的数字字符串；创建后从 createOrder.orderList 已确认成功的子项取得，单订单兼容使用 createOrder.orderId。 |
 
 #### 脚本选项与运行约定
 
@@ -576,7 +647,7 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `aliOrderId` | string | 是 | 1688 订单 ID 字符串；可使用 `createOrder` 返回的 `orderId`。 |
+| `aliOrderId` | string | 是 | 具体 1688 订单的数字字符串；创建后从 createOrder.orderList 已确认成功的子项取得，单订单兼容使用 createOrder.orderId。 |
 
 #### 脚本选项与运行约定
 
@@ -635,7 +706,7 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `aliOrderId` | string | 是 | 1688 订单 ID 字符串；可使用 `createOrder` 返回的 `orderId`。 |
+| `aliOrderId` | string | 是 | 具体 1688 订单的数字字符串；创建后从 createOrder.orderList 已确认成功的子项取得，单订单兼容使用 createOrder.orderId。 |
 | `logisticsId` | string | 否 | 物流订单 ID；多个物流单时建议从 `logistics` 返回中选择。 |
 
 #### 脚本选项与运行约定
@@ -696,7 +767,7 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `aliOrderId` | string | 是 | 1688 订单 ID 字符串；可使用 `createOrder` 返回的 `orderId`。 |
+| `aliOrderId` | string | 是 | 具体 1688 订单的数字字符串；创建后从 createOrder.orderList 已确认成功的子项取得，单订单兼容使用 createOrder.orderId。 |
 | `confirmReceive` | boolean | 是 | 必须是 JSON boolean `true`。确认收货不可逆，需用户单独中文确认。 |
 
 #### 脚本选项与运行约定
@@ -754,7 +825,7 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `aliOrderId` | string | 是 | 1688 订单 ID 字符串；可使用 `createOrder` 返回的 `orderId`。 |
+| `aliOrderId` | string | 是 | 具体 1688 订单的数字字符串；创建后从 createOrder.orderList 已确认成功的子项取得，单订单兼容使用 createOrder.orderId。 |
 | `confirmCancel` | boolean | 是 | 必须是 JSON boolean `true`。取消订单不可逆，需用户单独中文确认。 |
 | `cancelReason` | string | 否 | 取消原因，非空时透传。 |
 | `remark` | string | 否 | 备注，非空时透传。 |
@@ -816,7 +887,7 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `orderIds` | array<string> | 是 | 1688 订单 ID 字符串数组，至少 1 项，每项必须为数字字符串；可使用 `createOrder` 返回的 `orderId`。 |
+| `orderIds` | array<string> | 是 | 至少 1 个待查订单号，每项为数字字符串；创建后从 createOrder.orderList 已确认成功的子项取得并去重，单订单兼容使用 createOrder.orderId。 |
 
 #### 脚本选项与运行约定
 
@@ -975,4 +1046,3 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
   "content": "<反馈内容>"
 }
 ```
-

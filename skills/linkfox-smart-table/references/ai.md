@@ -63,7 +63,7 @@
 
 ## fillAiField —— 触发一列 AI 出图
 
-**何时用**：AI 列已经配好（配了参考列的话，参考图也已经传好），要生成图。**不该用**：往附件列放一张现成的图 → `uploadAttachment`。
+**何时用**：AI 列已经配好（配了参考列的话，参考图也已经传好），要生成图。**不该用**：往附件列放一份现成的文件 → `uploadAttachment`。
 
 **调用**：`python scripts/smart_table.py fillAiField '<JSON>'`
 

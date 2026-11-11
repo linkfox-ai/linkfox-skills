@@ -41,7 +41,7 @@ def get_api_key():
 
 
 def call_api(api_path, params):
-    """返回 (HTTP 状态码, 响应体)；连接失败时状态码为 None。"""
+    """返回 (HTTP 状态码, 响应体)；连接失败时状态码为 None，无法解析的 2xx 响应体为 None。"""
     api_url = get_api_url(api_path)
     api_key = get_api_key()
     data = json.dumps(params).encode("utf-8")
@@ -62,9 +62,13 @@ def call_api(api_path, params):
     )
     try:
         with urlopen(req, timeout=150) as response:
-            return response.status, json.loads(response.read().decode("utf-8"))
+            try:
+                payload = json.loads(response.read().decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                payload = None
+            return response.status, payload
     except HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
+        body = e.read().decode("utf-8", errors="replace") if e.fp else ""
         try:
             payload = json.loads(body) if body else {"error": f"HTTP {e.code}: {e.reason}"}
             return e.code, payload
@@ -74,9 +78,14 @@ def call_api(api_path, params):
         return None, {"error": f"Connection failed: {e.reason}"}
 
 
-def _is_cacheable(http_status, payload):
-    """仅缓存 HTTP 200 且 errcode 缺失、为空或为 2xx 的 JSON 对象。"""
-    if http_status != 200 or not isinstance(payload, dict):
+def _is_success_response(http_status, payload):
+    """校验 HTTP 状态、JSON 对象及网关的业务错误字段。"""
+    if (
+        http_status is None
+        or not 200 <= http_status < 300
+        or not isinstance(payload, dict)
+        or payload.get("error")
+    ):
         return False
     errcode = payload.get("errcode")
     if errcode is None:
@@ -93,6 +102,10 @@ def _is_cacheable(http_status, payload):
         and 200 <= errcode < 300
         and errcode % 1 == 0
     )
+
+
+def _is_cacheable(http_status, payload):
+    return http_status == 200 and _is_success_response(http_status, payload)
 
 
 def _cache_key(params):
@@ -119,6 +132,8 @@ def _load_cache(path):
         if not isinstance(cached, dict) or cached.get("_cache_version") != 1:
             return None
         payload = cached.get("body")
+        if not _is_cacheable(cached.get("http_status"), payload):
+            return None
         payload["_cache"] = {"hit": True}
         return payload
     except (OSError, json.JSONDecodeError):
@@ -343,9 +358,23 @@ def run(api_path, slug, argv=None):
 
     cache_path = _cache_path(slug, params)
     result = _load_cache(cache_path) if use_cache else None
+    exit_status = 0
     if result is None:
         http_status, result = call_api(api_path, params)
-        if use_cache:
+        if not isinstance(result, dict):
+            print(f"HTTP {http_status} 响应不是有效的 JSON 对象", file=sys.stderr)
+            return 1
+        if not _is_success_response(http_status, result):
+            status = "连接失败" if http_status is None else f"HTTP {http_status}"
+            errcode = result.get("errcode")
+            if errcode is not None:
+                status += f", errcode={errcode}"
+            message = result.get("errmsg") or result.get("error") or result.get("msg")
+            if message:
+                status += f", {message}"
+            print(f"接口调用失败（{status}）", file=sys.stderr)
+            exit_status = 1
+        elif use_cache:
             _save_cache(cache_path, result, http_status)
 
     serialized = json.dumps(result, ensure_ascii=False, indent=2)
@@ -366,3 +395,4 @@ def run(api_path, slug, argv=None):
         print(serialized)
     else:
         summarize(result)
+    return exit_status

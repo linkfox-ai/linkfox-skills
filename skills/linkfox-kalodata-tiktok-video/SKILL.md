@@ -50,7 +50,8 @@ description: 通过 Kalodata 查看 TikTok Shop 热门带货视频榜单和单�
 
 ### 输出策略
 
-- 始终保存完整响应，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-video-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- 完整响应以 JSON 保存，目标路径为 `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-kalodata-tiktok-video-<接口标识>-<timestamp>.json`。`<cwd>` 为脚本运行时的工作目录，`<session>` 优先取环境变量 `SESSION_ID`，用于聚合同一任务的数据。禁止写入 `/tmp`，当前目录不可写时应报错。
+- HTTP、业务或响应格式错误时，脚本报告原因并以非零状态退出。HTTP 成功但响应不是 JSON 对象时，没有结果文件。
 - 响应体不超过 8 KB：保存后，将完整 JSON 打印到标准输出。
 - 响应体超过 8 KB：保存后，标准输出仅展示摘要，包括顶层字段、常见计数（如 `total`、`costToken`，仅在响应中存在时展示）、最大列表字段的长度和前 3 条样本。
 - 添加 `--inline` 可强制全量打印到标准输出，同时仍保存文件。
