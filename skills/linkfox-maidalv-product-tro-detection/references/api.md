@@ -134,6 +134,123 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/maid
   -d '{"mainProductImage":"https://example.com/product.jpg","referenceImages":["https://example.com/ref.jpg"],"ipKeywords":["apple","iphone"],"language":"zh"}'
 ```
 
+## 接口：POD 图片检测（checkLite）
+
+### 调用规范
+
+- 基本规则参考 `公共规则` -> `调用规范`
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/maidalv/checkLite`
+- **上游接口**：同步 `POST /check_lite`，后端将 `mainProductImage` 映射为 `main_product_image`。无需提交或轮询另一任务。
+- **官方资料**：[卖大律 POD 图片检测文档](https://api.maidalv.com/documentation/check_lite/zh)。
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|---|---|---|---|---|
+| mainProductImage | string | 是 | 无 | POD 印花、图案主图；公开 HTTP(S) URL、`data:image/...;base64,...` 或纯 Base64。图片仅支持 JPEG、PNG、WEBP、GIF，原始图像不超过 10 MB。 |
+| description | string | 否 | 无 | 用户提供的产品、印花或图案说明，不自动扩写；网关校验最大 1000 字符。 |
+| language | string | 否 | zh | 返回文本语言，仅支持 `zh` 或 `en`；不表示生成法律报告。 |
+
+本接口不接收 `referenceImages`、`otherProductImages`、`ipImages`、`referenceText` 或 `ipKeywords`。优先传公开图片 URL；本地图片或附件按 [file-upload.md](file-upload.md) 确认可以公开后，用 `scripts/upload_file.py` 上传并取成功项 `url`。POD 不接受 HEIC。URL 的实际图像格式与大小由服务端检查，检测脚本不为预检额外下载远程图像。Base64 仅在用户明确要求时由程序读取原图自动编码，Agent 不手工拼接。
+
+#### 脚本选项与运行约定
+
+| 选项 / 约定 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| JSON 参数 | JSON object | 是 | 第一个位置参数，使用上表网关字段；仅接受这三个字段，JSON、必填字段、语言及 Base64 格式错误在网络前报错。 |
+| --inline | CLI flag | 否 | 强制全量打印，同时保存完整响应。 |
+| --no-cache | CLI flag | 否 | 跳过成功缓存读写，仍保存响应，不允许自动重复收费检测。 |
+| 24 小时缓存 | 本地行为 | 默认启用 | 单层缓存，由业务适配层按网关、端点、API key 的不可逆哈希及排序 JSON 参数隔离；仅保存 HTTP、网关及检测状态均成功的响应，`results=[]` 可缓存。 |
+| 缓存目录 | path | 自动 | `<cwd>/linkfox/.cache/linkfox-maidalv-product-tro-detection-check-lite/`；不与 Flash 缓存混用，不保存原 key，命中带 `_cache.hit=true`。 |
+| 响应文件 | path | 自动 | `<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/linkfox-maidalv-product-tro-detection-check-lite-<timestamp>.json`。使用原 Skill slug 加接口后缀，不新建 Skill。 |
+| 会话目录 | path | 自动 | 发请求前检查实际数据及元数据目录可写，固定在当前工作目录，无家目录或临时目录回退；Python 3.10+，标准库即可运行检测与现有预签名上传。 |
+
+POD CLI 使用独立的 `scripts/pod_api_support.py` 与 `scripts/pod_call_api.py` 完成传输、原始响应落盘和成功缓存，不启用第二层缓存。网络响应和缓存输出均附 `_transportHttpStatus`；错误返回非零，保留可取得的脱敏诊断，无自动重试。
+
+### 响应结构
+
+网关响应为下列平铺结构；后端已从上游 `result` 中提取候选，不应再读取 `result.results`。`costToken` 是否保留在正文以网关实际返回为准。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| errcode | integer / string / null | 网关状态，按公共规则判断。 |
+| errmsg | string | 网关状态说明。 |
+| checkId | string | 本次检测标识；有标识不单独代表检测成功。 |
+| status | string | 上游外层任务状态；本同步接口正常完成为 `completed`。 |
+| resultStatus | string | 上游结果状态；正常为 `success`。 |
+| checkMode | string | 正常为 `lite`。 |
+| results | array | 候选 IP 列表，可以为空；不是已确认侵权列表。 |
+| total | integer | 候选数量，等于 `results.length`。 |
+| type | string | 展示类型元数据。 |
+| columns | array | 展示列元数据，其长度不是候选数量。 |
+| costToken | integer | 本次消耗，按实际返回展示；可能由网关移入响应头。 |
+
+#### 检测脚本附加元数据
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| _transportHttpStatus | integer / null | 本地脚本附加的 HTTP 状态，不是上游业务字段。 |
+| _cache | object | 本地缓存命中元数据，命中时 `_cache.hit=true`。 |
+
+#### results[*] 候选 IP 字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| ipType | string | IP 类型，按实际响应展示，例如 `Trademark`、`Copyright`、`Patent`。 |
+| text | string | 商标文字、版权或专利标题。 |
+| ipOwner | string | 权利人。 |
+| regNo | string | 注册号；可能是字符串化 JSON 数组，保持原值。 |
+| ipAssetUrls | string[] | IP 证据图片 URL。 |
+| normalizedScore | number | 0–1 的标准化相关性或相似度，越高表示检索候选越相关；不是侵权概率或 0–10 风险评分。 |
+| plaintiffId | integer | 可用时返回的 TRO 原告 ID。 |
+| plaintiffName | string | 可用时返回的 TRO 原告名称。 |
+| caseId | integer | 可用时返回的案件 ID。 |
+| numberOfCases | integer | 可用时返回的案件数量。 |
+| lastCaseDocket | string | 可用时返回的最近法院案号。 |
+| lastCaseDateFiled | string | 可用时返回的最近立案日期。 |
+
+TRO 字段按实际情况缺失或为 null，不补造记录。本接口不返回 `riskLevel`、`riskScore`、`report` 或 `nonResults`；不自动生成法律结论。
+
+### 响应码规则
+
+#### 基础规则
+
+- 基本规则参考 `公共规则` -> `响应码基本规则`。
+
+#### 业务规则
+
+- 同时满足 HTTP/网关正常、`status=completed`、`resultStatus=success`、`checkMode=lite` 及 `results` 为数组才判定成功。仅 HTTP 200 或仅 `checkId` 不足以判断完成。
+- `results=[]` 是成功的无候选结果，可以缓存；这不保证不存在侵权或 TRO 风险，不自动换图、改词或转调用 Flash。
+- 状态错误、缺少结果数组、非 JSON、HTTP 及业务失败均保留可取得的脱敏诊断、非零退出且不缓存。401/402 结合错误来源处理：LinkFox 鉴权或余额问题按 onboarding 处理；卖大律上游密钥、套餐或配额问题交由平台处理，不将充值 LinkFox 算力当作修复上游凭据的方式。403 不引导重复注册或充值。
+- 本操作消耗 **57 算力 / 次**。额外检测前说明额外消耗，不自动重试；超时后先说明本次状态未知，不把重复请求当免费续查。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/maidalv/checkLite" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: LinkFox-Skill/2.0" \
+  -d '{"mainProductImage":"https://example.com/pod-pattern.png","description":"T 恤印花图案","language":"zh"}'
+```
+
+### 响应示例
+
+以下为空候选的结构示例，不是生产调用记录。
+
+```json
+{
+  "errcode": 200,
+  "errmsg": "ok",
+  "checkId": "example-check-id",
+  "status": "completed",
+  "resultStatus": "success",
+  "checkMode": "lite",
+  "results": [],
+  "total": 0
+}
+```
+
 ## 接口：获取图片上传预签名（presignedPut）
 
 ### 调用规范

@@ -15,9 +15,6 @@ OPERATIONS = {
     "listReverseOrderHistory": False,
     "listReviewHistory": False,
     "getReviews": False,
-    "listChatSessions": False,
-    "getChatSession": False,
-    "listChatMessages": False,
     "packOrder": True,
     "repackOrder": True,
     "readyToShip": True,
@@ -29,10 +26,6 @@ OPERATIONS = {
     "updateReverseOrder": True,
     "decideOnlyRefund": True,
     "replyReview": True,
-    "sendChatMessage": True,
-    "markChatRead": True,
-    "openChatSession": True,
-    "recallChatMessage": True,
 }
 
 

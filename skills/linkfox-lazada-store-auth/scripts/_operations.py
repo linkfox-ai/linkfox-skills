@@ -22,7 +22,9 @@ KNOWN_ERRORS = {
     "Lazada 代理拒绝访问，请检查出口 IP 白名单": "LAZADA_PROXY_FORBIDDEN",
 }
 UPSTREAM_ERROR = re.compile(
-    r"(?:Lazada 拒绝了查询|Lazada 应用缺少该接口权限|Lazada 请求频率超限，请稍后重试)"
+    r"(?:Lazada 拒绝了查询|Lazada 应用缺少该接口权限|Lazada 请求频率超限，请稍后重试"
+    r"|Lazada 操作结果待核实，请使用原 requestId 查询状态"
+    r"|Lazada 请求签名校验失败，请联系紫鸟排查代理签名与参数转发)"
     r"(?:，上游错误码 (?P<upstreamCode>[0-9]{1,9}|[A-Za-z][A-Za-z0-9_.-]{0,47}))?"
     r"(?:，请求编号 (?P<upstreamRequestId>[A-Za-z0-9_.-]{1,64}))?"
 )
