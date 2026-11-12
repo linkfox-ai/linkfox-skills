@@ -77,8 +77,9 @@ description: 根据商品图片及品牌主色、字体、平台、地区和语�
   1. 用 Write 工具将 `brandGeneJson` 写到 `$DATADIR/brand_gene_assembled.json`（`DATADIR` 同步骤 3）；
   2. 运行落盘脚本，自动注册 `_meta.json`：
      ```bash
-     python <本skill根目录>/scripts/save_brand_gene.py "$DATADIR/brand_gene_assembled.json"
+     python <本skill根目录>/scripts/save_brand_gene.py --data-dir "$DATADIR" "$DATADIR/brand_gene_assembled.json"
      ```
+     `--data-dir` 复用步骤 3 取得的绝对目录，跨工具调用时也必须传递；不依赖后续进程自动继承会话环境或重新探测目录。
      stdout 会打印 `Saved full response: <绝对路径> (<N> bytes)`——**将该绝对路径记入上下文**，后续 S3 套图编排通过 `--brand-gene-file <绝对路径>` 或 manifest 的 `brand_gene_json` 消费。
 - **用途**：透传给下游出图链路（`linkfox-aigc-imagegen-cloth` 的种草图/卖点图/A+图 等类型 / `linkfox-aigc-imagegen-product` 等）作为 `brandGeneJson` 参数
 
@@ -122,7 +123,7 @@ description: 根据商品图片及品牌主色、字体、平台、地区和语�
 - **主色和字体锁定**：用户给定主色或字体时直接采用对应值；仅对空值自动提取。其他背景策略、标题颜色等仍按完整品牌视觉规范生成，不被这两个透传值替代。
 - **完整视觉定义**：必须包含风格定义、场景关键词、光影与品牌植入四项背景策略。自动选色时仅定义一个核心色，除商品本身为黑白灰外不得选黑白灰主色。自动选择字体时使用预设库，保持非斜体与适中行距。完整字体库和颜色规范见 [品牌视觉规范](references/brand-gene.md#品牌视觉基因提取指令)。
 - **展示与复用**：最终交付完整品牌基因 JSON 及其落盘绝对路径，JSON 正文不夹带解释或代码块标记；同一上下文直接复用，只有首次或用户明确要求修改品牌基因时重新提取。
-- **产物管理**：中间参数与最终结果放在会话 `data/`，最终路径必须记入上下文，供 `--brand-gene-file` 或 manifest 的 `brand_gene_json` 使用。`save_brand_gene.py` 支持文件/stdin、`--datadir` 及 `_meta.json` 注册；会话目录按 ACPX_WORKSPACES 首个路径、当前目录、家目录、临时目录的顺序选择可写根目录，详见 [运行约定](references/brand-gene.md#产物与-cli)。
+- **产物管理**：中间参数与最终结果放在会话 `data/`，最终路径必须记入上下文，供 `--brand-gene-file` 或 manifest 的 `brand_gene_json` 使用。`save_brand_gene.py` 支持文件/stdin、`--datadir`、`--data-dir` 及 `_meta.json` 注册；会话目录按 ACPX_WORKSPACES 首个路径、当前目录、家目录、临时目录的顺序选择可写根目录，详见 [运行约定](references/brand-gene.md#产物与-cli)。
 - **上传保密与复用**：上传凭证必须关闭响应缓存，且只将脱敏响应保存和展示，STS 密钥仅留在进程内交给 OSS。上传不重复处理已成功项，任一图片上传失败即停止后续视觉推理。同一上下文中的完整品牌结果直接复用，不使用额外的品牌结果响应缓存。
 - **已知局限**：视觉主色判断可能与设计师有偏差；字体库限制与地域语义理解局限见 [已知局限](references/brand-gene.md#已知局限)。
 

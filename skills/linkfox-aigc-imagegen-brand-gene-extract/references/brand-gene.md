@@ -139,13 +139,14 @@
 | `brand_gene_params.json` | `<session>/data/` | textgen 入参（步骤 3 中间文件） |
 | `brandGeneJson` 最终结果 | `<session>/data/linkfox-aigc-imagegen-brand-gene-extract-<ts>.json` | 经 `save_brand_gene.py` 落盘，供套图 S3 与单张 `--brand-gene-file` 复用 |
 
-路径协议：`<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/`（`<session>` 取自 `SESSION_ID`），与仓库 `CLAUDE.md`「输出文件位置」一致。
+路径协议：`<cwd>/linkfox/<YYYY-MM-DD>/<session>/data/`，与仓库 `CLAUDE.md`「输出文件位置」一致。首次运行 `--datadir` 后，保存时用 `--data-dir` 复用返回的目录和 `_meta.json`。
 
 | 脚本参数 | 类型 | 必填 | 约定 |
 |---|---|---|---|
 | save_brand_gene.py input | 文件路径 | 否 | UTF-8 JSON；省略则从 stdin 读取。序列化保留中文与完整嵌套结构。 |
 | --datadir | flag | 否 | 创建并打印会话 data/ 绝对路径，不读取 JSON。 |
-| SESSION_ID | 环境变量 | 否 | 优先用此聚合同一会话；未设置时进程内生成稳定 ID。 |
+| --data-dir | 目录路径 | 否 | 显式复用首次 `--datadir` 返回的绝对目录；最终保存时传入，也适用于 stdin。目录必须已存在并具有对应会话的 `_meta.json`。 |
+| SESSION_ID | 环境变量 | 否 | 优先用此聚合同一会话；未设置时仅在进程内生成稳定 ID，不保证两次独立调用得到同一 ID，因此分步保存须传 `--data-dir`。 |
 | ACPX_WORKSPACES | 环境变量 | 否 | 使用路径列表中的首个工作区作为候选根；其后依次尝试 cwd、用户家目录、临时目录。 |
 | stdout | string | 输出 | 保存成功打印 `Saved full response: <绝对路径> (<N> bytes)`。 |
 | _meta.json | object | 输出 | 登记技能到 skills_called、最终相对路径到 data_files，并更新 last_used_at；首次创建会话时追加 index.jsonl。 |

@@ -20,7 +20,7 @@
 
 ## 采购脚本运行约定
 
-以下约定由同一业务封装实现，适用于本文件全部 14 个操作；各操作自己的字段与前检规则在各节定义。
+以下约定由同一业务封装实现，适用于本文件全部 16 个操作；各操作自己的字段与前检规则在各节定义。
 
 | 选项 / 约定 | 类型 | 说明 |
 |---|---|---|
@@ -578,6 +578,113 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alib
   -H "Content-Type: application/json" \
   -H "User-Agent: LinkFox-Skill/2.0" \
   -d '{"confirmGetPaymentUrl": true, "orderIdList": ["1234567890123456789"]}'
+```
+
+## 接口：查询订单列表（orderList）
+
+### 调用规范
+
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/alibaba1688/orderList`，POST JSON，鉴权及超时沿用公共规则。
+- 业务入口：`scripts/order_list.py`。每次调用前检查 `authorizedStores`；只读查询，无需写操作确认字段。
+- 使用当前 LinkFox 用户绑定的 1688 买家授权，包含在 1688 直接下单的订单；不受 ERP 本地订单记录或本技能下单历史限制。接口只返回当前授权与应用权限内 1688 允许查询的数据。
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `page` | integer | 否 | 从 1 开始，默认 1。 |
+| `pageSize` | integer | 否 | 1–20，默认 20；不自动裁剪超限值。 |
+| `orderStatus` | string | 否 | 原始订单状态，如 `waitbuyerpay`、`waitsellersend`、`waitbuyerreceive`、`success`、`cancel`；不传则不限。 |
+| `refundStatus` | string | 否 | 退款状态，如 `waitselleragree`、`refundsuccess`、`refundclose`。只筛选，不发起退款。 |
+| `createStartTime` | string | 否 | 下单开始时间；带时区的 ISO 8601（如 `2026-11-01T00:00:00+08:00`）或 1688 时间格式（如 `20261101000000000+0800`）。 |
+| `createEndTime` | string | 否 | 下单结束时间，格式同上，不能早于开始时间。 |
+| `modifyStartTime` | string | 否 | 修改开始时间，格式同上。 |
+| `modifyEndTime` | string | 否 | 修改结束时间，格式同上，不能早于修改开始时间。 |
+| `sellerLoginId` | string | 否 | 卖家登录名，仅作为筛选条件。 |
+| `sellerMemberId` | string | 否 | 卖家 memberId，仅作为筛选条件，不用于切换买家授权。 |
+| `productName` | string | 否 | 商品名称筛选。 |
+| `isHis` | boolean | 否 | 默认 `false` 查询当前表；`true` 查询历史订单表，两者分别分页，不自动合并。 |
+
+不要传入 token、`gatewayUserId` 或其他用户的身份。身份由网关和服务端解析，不用 `sellerMemberId`、上下文 `memberId` 代替买家授权。
+
+### 响应结构
+
+业务字段可能位于顶层或 `data` 包装，沿用公共响应码规则。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `page` | integer | 当前页码，从 1 开始。 |
+| `pageSize` | integer | 每页数量。 |
+| `totalRecord` | integer | 当前筛选和所选订单表的总记录数。 |
+| `hasNext` | boolean | 是否有下一页；翻页时保持其他筛选条件不变。 |
+| `isHis` | boolean | 本次是否查询历史表。 |
+| `orders` | array | 本页订单，结构同 `orderDetail`；列表未返回的收货或物流字段可为空，不会逐单补查。 |
+| `orders[].aliOrderId` | string | 1688 订单号，可传给详情、状态和物流查询。 |
+| `orders[].aliStatus` | string | 原始订单状态。 |
+| `orders[].normalizedStatus` | string | 归一化状态，无法识别的状态为 `unknown`。 |
+| `orders[].baseInfo` | object | 基础信息、供应商标识、时间、币种与金额。 |
+| `orders[].productItems` | array | 商品、SKU、数量和金额。 |
+
+空数组只表示本页在当前筛选与所选表下无结果；不推断账号从未下单，不自动试探其他筛选。上游失败不会转换成成功的空列表。单页结果不等于全部订单；当前表和历史表存在重复时按字符串订单号去重。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alibaba1688/orderList" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"page":1,"pageSize":20,"orderStatus":"waitsellersend","createStartTime":"2026-11-01T00:00:00+08:00","isHis":false}'
+```
+
+## 接口：查询订单详情（orderDetail）
+
+### 调用规范
+
+- **请求地址**：`${LINKFOX_TOOL_GATEWAY}/alibaba1688/orderDetail`，POST JSON，鉴权及超时沿用公共规则。
+- 业务入口：`scripts/order_detail.py`，自动授权前检；只读查询，无需写操作确认字段。
+- 按当前授权买家视角实时查询，订单不必由本系统或本技能创建。订单归属和可见范围由 1688 授权校验。
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `aliOrderId` | string | 是 | 1688 正整数订单号字符串，不得作为 JSON 数字传入；可来自列表、用户提供或已确认的创建结果。 |
+
+### 响应结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `aliOrderId` | string | 1688 订单号，与查询对象一致。 |
+| `aliStatus` | string | 原始状态。 |
+| `normalizedStatus` | string | `created`、`paid`、`shipped`、`completed`、`cancelled` 或 `unknown`。 |
+| `baseInfo.id` | string | 1688 订单号。 |
+| `baseInfo.status/businessType/tradeType` | string | 原始订单状态、业务类型和交易类型。 |
+| `baseInfo.sellerId/sellerLoginId` | string | 卖家标识。 |
+| `baseInfo.createTime/modifyTime/payTime/completeTime/receivingTime` | string / null | 上游原始时间，不补造缺失时间。 |
+| `baseInfo.currency` | string / null | 上游币种，不默认所有订单为人民币。 |
+| `baseInfo.totalAmount/shippingFee/sumProductPayment/refund` | number / null | 订单总额、运费、商品款和退款额，单位元；保留上游值，不套用预览汇总金额的“分”单位。 |
+| `baseInfo.refundStatus` | string / null | 退款状态。 |
+| `productItems[].productId/skuId/subItemId/specId` | string / null | 商品、SKU、子订单和规格标识，保持字符串。 |
+| `productItems[].name/status/refundStatus/unit` | string / null | 商品名、履约状态、退款状态和售卖单位。 |
+| `productItems[].quantity` | number / null | 数量可能含小数，结合售卖单位理解。 |
+| `productItems[].price/itemAmount/refund` | number / null | 单价、商品金额和退款额，单位元，保留上游值。 |
+| `productItems[].productImgUrl` | string[] / null | 商品图片链接。 |
+| `productItems[].skuInfos[].name/value` | string | 规格属性名称及值。 |
+| `nativeLogistics.contactPerson/mobile/telephone` | string / null | 收货人及联系方式，按需展示并脱敏。 |
+| `nativeLogistics.province/city/area/town/address/zip` | string / null | 收货地址与邮编，按需展示。 |
+| `nativeLogistics.logisticsItems[].id/status` | string / null | 物流单 ID 与状态。 |
+| `nativeLogistics.logisticsItems[].logisticsCompanyName/logisticsCompanyNo/logisticsBillNo` | string / null | 承运商名称、编码与运单号。 |
+| `nativeLogistics.logisticsItems[].deliveredTime/arriveTime` | string / null | 发货和到达时间。轨迹另查 `logisticsTrace`。 |
+
+未识别字段、令牌、内部上下文和原始响应不进入业务输出。没有订单或无权访问属于查询失败，不返回伪造的空详情。`1002` 为参数错误；`1003` 为上游或业务失败；`1005` 为授权失效。返回 `authorizeUrl` 时给用户手动打开并按授权流程核验，不自动重试查询或写操作。
+
+### curl 示例
+
+```bash
+curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/alibaba1688/orderDetail" \
+  -H "Authorization: ${LINKFOX_AGENT_API_KEY:-$LINKFOXAGENT_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"aliOrderId":"9007199254740993"}'
 ```
 
 ## 接口：查询订单状态（orderStatus）

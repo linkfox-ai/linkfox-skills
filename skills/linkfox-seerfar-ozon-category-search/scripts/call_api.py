@@ -75,8 +75,6 @@ def call_api(api_path, params):
         return e.code, payload
     except URLError as e:
         return None, {"error": f"Connection failed: {e.reason}"}
-    except OSError as e:
-        return None, {"error": f"Connection failed: {e}"}
 
 
 def _response_error(http_status, payload):
@@ -349,14 +347,14 @@ def run(api_path, slug, argv=None):
         print(f"Invalid parameter format: {e}", file=sys.stderr)
         sys.exit(1)
 
-    cache_path = _cache_path(slug, params) if use_cache else None
-    result = _load_cache(cache_path) if cache_path else None
+    cache_path = _cache_path(slug, params)
+    result = _load_cache(cache_path) if use_cache else None
     cache_hit = result is not None
     error = None
     if not cache_hit:
         http_status, result = call_api(api_path, params)
         error = _response_error(http_status, result)
-        if cache_path and error is None:
+        if use_cache and error is None:
             _save_cache(cache_path, result, http_status)
 
     serialized = json.dumps(result, ensure_ascii=False, indent=2)

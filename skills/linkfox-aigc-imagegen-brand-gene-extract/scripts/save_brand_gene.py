@@ -133,10 +133,29 @@ def _lf_ensure_session(ts):
     return root, session_dir
 
 
-def resolve_data_path(slug, ts, ext="json"):
+def _reuse_data_dir(data_dir):
+    """Validate the session data directory returned by an earlier --datadir call."""
+    if not _lf_os.path.isabs(data_dir):
+        raise ValueError("--data-dir must be the absolute path returned by --datadir")
+    data_dir = _lf_os.path.normpath(data_dir)
+    if _lf_os.path.basename(data_dir) != "data" or not _lf_os.path.isdir(data_dir):
+        raise ValueError("--data-dir must be an existing session data/ directory")
+    session_dir = _lf_os.path.dirname(data_dir)
+    with open(_lf_os.path.join(session_dir, "_meta.json"), encoding="utf-8") as f:
+        meta = _lf_json.load(f)
+    if not isinstance(meta, dict) or meta.get("session_id") != _lf_os.path.basename(session_dir):
+        raise ValueError("--data-dir does not match its session metadata")
+    return data_dir
+
+
+def resolve_data_path(slug, ts, ext="json", *, data_dir=None):
     """普通 skill 的原始数据落到 <session>/data/<slug>-<ts>.<ext>。"""
-    _, session_dir = _lf_ensure_session(ts)
-    sub = _lf_os.path.join(session_dir, "data")
+    if data_dir is None:
+        _, session_dir = _lf_ensure_session(ts)
+        sub = _lf_os.path.join(session_dir, "data")
+    else:
+        sub = data_dir
+        session_dir = _lf_os.path.dirname(sub)
     _lf_os.makedirs(sub, exist_ok=True)
     out = _lf_os.path.join(sub, f"{slug}-{int(ts * 1_000_000)}.{ext}")
     _lf_update_meta(session_dir, skill=slug, kind="data", file_rel=_lf_os.path.relpath(out, session_dir), ts=ts)
@@ -162,13 +181,16 @@ def main() -> int:
         help="Print session data/ absolute path and exit (for intermediate params files)",
     )
     parser.add_argument(
+        "--data-dir",
+        help="Reuse the absolute session data/ path returned by --datadir",
+    )
+    parser.add_argument(
         "input",
         nargs="?",
         help="JSON file to save; omit to read from stdin",
     )
     args = parser.parse_args()
     ts = time.time()
-
     if args.datadir:
         session = session_root(ts)
         data_dir = os.path.abspath(os.path.join(session, "data"))
@@ -176,13 +198,20 @@ def main() -> int:
         print(data_dir)
         return 0
 
+    data_dir = None
+    if args.data_dir:
+        try:
+            data_dir = _reuse_data_dir(args.data_dir)
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+
     if args.input:
         with open(args.input, encoding="utf-8") as f:
             payload = json.load(f)
     else:
         payload = json.load(sys.stdin)
 
-    out_path = resolve_data_path(SLUG, ts)
+    out_path = resolve_data_path(SLUG, ts, data_dir=data_dir)
     serialized = json.dumps(payload, ensure_ascii=False, indent=2)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(serialized)

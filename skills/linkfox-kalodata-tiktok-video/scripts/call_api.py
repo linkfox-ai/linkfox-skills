@@ -84,7 +84,6 @@ def _is_success_response(http_status, payload):
         http_status is None
         or not 200 <= http_status < 300
         or not isinstance(payload, dict)
-        or payload.get("error")
     ):
         return False
     errcode = payload.get("errcode")

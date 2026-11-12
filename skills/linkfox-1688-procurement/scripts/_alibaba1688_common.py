@@ -30,6 +30,8 @@ ENDPOINTS = {
     "orderPreview": "/alibaba1688/orderPreview",
     "createOrder": "/alibaba1688/createOrder",
     "paymentUrl": "/alibaba1688/paymentUrl",
+    "orderList": "/alibaba1688/orderList",
+    "orderDetail": "/alibaba1688/orderDetail",
     "orderStatus": "/alibaba1688/orderStatus",
     "logistics": "/alibaba1688/logistics",
     "logisticsTrace": "/alibaba1688/logisticsTrace",
@@ -140,7 +142,27 @@ def require_confirmation(operation, params):
     sys.exit(2)
 
 
+def _reject_query_parameter(operation, field, message):
+    print(json.dumps({"error": "invalid_parameter", "operation": operation,
+                      "field": field, "message": message}, ensure_ascii=False), file=sys.stderr)
+    sys.exit(2)
+
+
 def normalize_params(operation, params):
+    if operation == "orderList":
+        for field, default, maximum in (("page", 1, None), ("pageSize", 20, 20)):
+            value = params.get(field, default)
+            if type(value) is not int or value < 1 or (maximum is not None and value > maximum):
+                _reject_query_parameter(operation, field, f"{field} must be a positive integer" + (" between 1 and 20." if maximum else "."))
+            params[field] = value
+        if "isHis" in params and type(params["isHis"]) is not bool:
+            _reject_query_parameter(operation, "isHis", "isHis must be a JSON boolean.")
+    elif operation == "orderDetail":
+        order_id = params.get("aliOrderId")
+        if (not isinstance(order_id, str) or not order_id.isascii() or not order_id.isdigit()
+                or order_id.startswith("0") or len(order_id) > 19 or int(order_id) > 9223372036854775807):
+            _reject_query_parameter(operation, "aliOrderId", "aliOrderId must be a positive 1688 order ID string within the signed 64-bit range.")
+
     if operation == "createOrder":
         use_red_envelope = params.get("useRedEnvelope")
         if use_red_envelope is None or (isinstance(use_red_envelope, str) and not use_red_envelope.strip()):
