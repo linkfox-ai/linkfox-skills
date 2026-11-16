@@ -2,7 +2,7 @@
 name: linkfox-maidalv-product-tro-detection
 description: 通过卖大律根据产品图片和补充文本评估 TRO（临时限制令）及商标、专利、版权侵权风险，提供总体风险、高风险命中、低风险 IP 清单、TRO 原告与案件线索、风险评分和 AI 法律评估报告。适用于产品上架前侵权初筛、产品图片合规检查和 TRO 风险研究；即使未提及卖大律或 TRO，只要希望根据产品图片评估知识产权风险，也适用。不适用于以图找货源、专利全文或权利要求检索、Listing 优化及关键词分析。 新增支持用户明确提出的 POD 印花、图案图片检测，使用独立接口返回相似 IP 候选、0–1 相似度及可用 TRO 线索；普通产品侵权与 TRO 请求仍按原商标、专利、版权和 TRO 四项全检流程执行。
 ---
-# 卖大律产品侵权与 TRO 风险检测
+# 卖大律侵权TRO四项全检
 
 ## 适用范围
 
@@ -28,7 +28,8 @@ description: 通过卖大律根据产品图片和补充文本评估 TRO（临时
 
 | 接口 | 端点 | 对应脚本 | 说明 |
 |---|---|---|---|
-| 产品侵权与 TRO 检测（checkApiFlash） | POST `/maidalv/checkApiFlash` | `scripts/maidalv_check_api_flash.py` | 根据产品图片及文本返回侵权风险与 AI 法律报告。 |
+| 卖大律产品侵权TRO检测 | POST `/maidalv/checkApiFlash` | `scripts/maidalv_check_api_flash.py` | 根据产品图片及文本返回侵权风险与 AI 法律报告。 |
+| 卖大律POD图片侵权TRO检测 | POST `/maidalv/checkLite` | `scripts/maidalv_check_lite.py` | 根据POD图片检测侵权TRO |
 | 获取图片上传预签名（presignedPut） | POST `/oss/file/presignedPut` | `scripts/upload_image.py` | 申请上传地址，脚本随后向该地址 PUT 本地图片并输出公开 URL。 |
 
 两个接口均直接访问网关端点，不经统一转发；完整定义在 `references/api.md`。文件 PUT 是上传流程的外部素材传输，不另计 LinkFox 接口。

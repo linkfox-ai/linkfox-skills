@@ -18,7 +18,7 @@
 - **认证或用量错误**: HTTP 状态码为 `401` / `402`，按 onboarding.md 的指引处理
 - **其他情况**: 依据响应体的 `errmsg` 判断具体原因
 
-## 接口：产品侵权与 TRO 检测（checkApiFlash）
+## 接口：卖大律产品侵权TRO检测
 
 ### 调用规范
 
@@ -134,7 +134,7 @@ curl -sS -X POST "${LINKFOX_TOOL_GATEWAY:-https://tool-gateway.linkfox.com}/maid
   -d '{"mainProductImage":"https://example.com/product.jpg","referenceImages":["https://example.com/ref.jpg"],"ipKeywords":["apple","iphone"],"language":"zh"}'
 ```
 
-## 接口：POD 图片检测（checkLite）
+## 接口：卖大律POD图片侵权TRO检测
 
 ### 调用规范
 
